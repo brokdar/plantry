@@ -198,7 +198,7 @@ export function PlateCell({
 }
 
 /**
- * Replace and Different side on hover (fine pointers only: touch reaches
+ * Something else and Change side on hover (fine pointers only: touch reaches
  * them in the plate sheet). Out of the tab order: the keyboard has R and S.
  */
 function QuickActions({
@@ -222,8 +222,8 @@ function QuickActions({
         <button
           type="button"
           tabIndex={-1}
-          title={t("plan.review.different_side")}
-          aria-label={t("plan.review.different_side")}
+          title={t("plan.alt.change_side")}
+          aria-label={t("plan.alt.change_side")}
           className={button}
           onClick={() => onDifferentSide(cell)}
         >
@@ -234,8 +234,8 @@ function QuickActions({
         <button
           type="button"
           tabIndex={-1}
-          title={t("plan.review.replace")}
-          aria-label={t("plan.review.replace")}
+          title={t("plan.alt.something_else")}
+          aria-label={t("plan.alt.something_else")}
           className={button}
           onClick={() => onReplace(cell)}
         >

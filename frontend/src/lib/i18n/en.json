@@ -1493,8 +1493,8 @@
       "assistant": "Open or close the assistant",
       "this_panel": "Show these shortcuts",
       "drag": "Drag",
-      "replace": "Replace the meal",
-      "different_side": "Choose a different side",
+      "replace": "Something else for the meal",
+      "different_side": "Change the side",
       "accept": "Accept and shop"
     },
     "dnd": {
@@ -1600,12 +1600,10 @@
     "review": {
       "confirm": "Confirm",
       "unlock": "Unlock",
-      "replace": "Replace",
       "confirm_closure_one": "Confirms this plate.",
       "confirm_closure_other": "Confirms {{count}} plates of this batch.",
       "unlock_closure_one": "Unlocks this plate.",
       "unlock_closure_other": "Unlocks {{count}} plates of this batch.",
-      "different_side": "Different side",
       "regenerate_day": "Regenerate day",
       "regenerate_week": "Regenerate week",
       "accept_and_shop": "Accept and shop",

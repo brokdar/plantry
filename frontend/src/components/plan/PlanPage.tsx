@@ -267,22 +267,17 @@ function PlanView({
     return () => window.removeEventListener("keydown", listener)
   }, [])
 
-  /** Replace a draft plate (keyboard R, quick action): its batch closure. */
+  /** Something else (keyboard R, quick action): the plate sheet on the
+   *  meal's alternatives list. */
   function replace(cell: BoardCell) {
     if (!cell.plate) return
-    regenerate.mutate({
-      scope: { kind: "plate", plate_id: cell.plate.id },
-      start: win.start,
-    })
+    changeSheet({ key: cell.key, alt: "meal" })
   }
 
-  /** Different side (keyboard S, quick action): only the side. */
+  /** Change side (keyboard S, quick action): the side's alternatives. */
   function differentSide(cell: BoardCell) {
     if (cell.sideComponentId === null) return
-    regenerate.mutate({
-      scope: { kind: "side", component_id: cell.sideComponentId },
-      start: win.start,
-    })
+    changeSheet({ key: cell.key, alt: "side" })
   }
 
   /** Drops `?run=` once the run is over, so a reload doesn't announce it

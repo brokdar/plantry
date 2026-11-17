@@ -1,10 +1,18 @@
-import { screen, waitFor } from "@testing-library/react"
+import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import type { Plan } from "@/lib/api/plan"
 import type { Session } from "@/lib/api/sessions"
 import i18n from "@/lib/i18n"
-import { mockRemovedBatch, mockSession } from "@/test/fixtures"
+import { ApiError } from "@/lib/api/client"
+import {
+  edited,
+  mockPlan,
+  mockPlate,
+  mockRemovedBatch,
+  mockSession,
+} from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
 
 vi.mock("@/lib/api/sessions", () => ({
@@ -14,11 +22,19 @@ vi.mock("@/lib/api/sessions", () => ({
   deleteSession: vi.fn(),
 }))
 vi.mock("@/lib/api/plan", () => ({ restorePlan: vi.fn() }))
+vi.mock("@/lib/api/meal", () => ({ moveCook: vi.fn(), revertPlan: vi.fn() }))
+// The fixtures are AC-1's 31 Oct - 6 Nov; "today" is the window's start.
+vi.mock("@/lib/dates", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/dates")>()),
+  todayISO: () => "2026-10-31",
+}))
 const toastMock = vi.hoisted(() =>
   Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() })
 )
-vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
+const toastErrorMock = vi.hoisted(() => vi.fn())
+vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: toastErrorMock }))
 
+import { moveCook } from "@/lib/api/meal"
 import { restorePlan } from "@/lib/api/plan"
 import {
   addLeftovers,
@@ -47,7 +63,7 @@ const single: Session = {
 async function renderSection(
   session: Session,
   componentId: number,
-  opts: { freezing?: boolean; readOnly?: boolean } = {}
+  opts: { freezing?: boolean; readOnly?: boolean; plan?: Plan } = {}
 ) {
   const onOpenCell = vi.fn()
   const onClose = vi.fn()
@@ -59,6 +75,7 @@ async function renderSection(
       slotName={(id) => SLOTS[id]}
       freezing={opts.freezing ?? false}
       readOnly={opts.readOnly ?? false}
+      plan={opts.plan}
       onOpenCell={onOpenCell}
       onClose={onClose}
     />
@@ -333,5 +350,63 @@ describe("BatchSection on a leftover", () => {
     expect(screen.getByText("From Sun · Chili (2 of 3)")).toBeVisible()
     await userEvent.click(screen.getByRole("button", { name: "Open batch" }))
     expect(onOpenCell).toHaveBeenCalledWith("2026-11-01|3")
+  })
+})
+
+describe("BatchSection: Cook on another day", () => {
+  const sunday = mockSession
+  const free = (name: string) => screen.findByRole("button", { name })
+
+  it("is offered only with the board's plan", async () => {
+    await renderSection(sunday, 9)
+    expect(
+      screen.queryByRole("button", { name: "Cook on another day" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("lists the cells before the first meal and moves the cook with one call", async () => {
+    vi.mocked(moveCook).mockResolvedValue(
+      edited({ plates: [mockPlate()], session_ids: [7] })
+    )
+    const { onClose } = await renderSection(sunday, 9, { plan: mockPlan })
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cook on another day" })
+    )
+    const list = await screen.findByTestId("cell-list")
+    // Only Saturday and Sunday's earlier meals come before the first meal.
+    expect(
+      within(list)
+        .getAllByRole("button")
+        .map((b) => b.textContent)
+    ).toEqual([
+      "Sat breakfast",
+      "Sat lunch",
+      "Sat dinner",
+      "Sun breakfast",
+      "Sun lunch",
+    ])
+    await userEvent.click(await free("Sat lunch"))
+    await waitFor(() =>
+      expect(moveCook).toHaveBeenCalledWith(7, {
+        date: "2026-10-31",
+        slot_id: 2,
+      })
+    )
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect(toastMock).toHaveBeenCalledWith("Cooking moved", expect.anything())
+  })
+
+  it("shows the backend's refusal and keeps the dialog open", async () => {
+    vi.mocked(moveCook).mockRejectedValue(
+      new ApiError(400, "error.session.cook_after_meal")
+    )
+    const { onClose } = await renderSection(sunday, 9, { plan: mockPlan })
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cook on another day" })
+    )
+    await userEvent.click(await free("Sat lunch"))
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByTestId("move-cook")).toBeInTheDocument()
   })
 })

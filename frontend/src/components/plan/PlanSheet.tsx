@@ -27,6 +27,8 @@ import { useIsPhone } from "./use-is-phone"
 export interface SheetState {
   key: string
   picker?: PickerTarget
+  /** Open the plate sheet on an alternatives list (R, S, quick actions). */
+  alt?: "meal" | "side"
 }
 
 interface PlanSheetProps {
@@ -153,6 +155,7 @@ export function PlanSheet({
               onOpenCell={(key) => onChange({ key })}
               onMarkNoPlate={onMarkNoPlate}
               onRegenerateDay={onRegenerateDay}
+              initialAlt={state.alt}
               onClose={close}
             />
           ) : (

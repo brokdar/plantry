@@ -69,7 +69,7 @@ const toastMock = vi.hoisted(() =>
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
 import { getPlanRun, regeneratePlan } from "@/lib/api/generation"
-import { getRegeneratePreview } from "@/lib/api/meal"
+import { getAlternatives, getRegeneratePreview } from "@/lib/api/meal"
 import {
   acceptPlan,
   discardPlan,
@@ -480,30 +480,48 @@ describe("plate sheet review actions", () => {
 })
 
 describe("keyboard (F2-AC7)", () => {
-  it("R and S on a focused draft cell regenerate it; on a confirmed one nothing", async () => {
+  it("R and S on a focused draft cell open its alternatives lists; on a confirmed one nothing", async () => {
     const user = userEvent.setup()
     vi.mocked(getPlan).mockResolvedValue(sidedPlan)
+    vi.mocked(getAlternatives).mockResolvedValue({ alternatives: [] })
     renderWithRouter(<PlanPage />)
     ;(await cellButton(MONDAY_DINNER)).focus()
     await user.keyboard("r")
+    const first = await screen.findByTestId("alternatives")
+    expect(
+      within(first).getByRole("heading", { name: "Something else" })
+    ).toBeInTheDocument()
     await waitFor(() =>
-      expect(regeneratePlan).toHaveBeenLastCalledWith({
-        scope: { kind: "plate", plate_id: 3 },
-        start: WINDOW.from,
-      })
+      expect(getAlternatives).toHaveBeenLastCalledWith(
+        WINDOW.from,
+        expect.objectContaining({ plate_id: 3, what: "meal" })
+      )
+    )
+    await user.keyboard("{Escape}")
+    await waitFor(() =>
+      expect(screen.queryByTestId("alternatives")).not.toBeInTheDocument()
     )
     ;(await cellButton(MONDAY_DINNER)).focus()
     await user.keyboard("S")
+    const second = await screen.findByTestId("alternatives")
+    expect(second).toBeInTheDocument()
     await waitFor(() =>
-      expect(regeneratePlan).toHaveBeenLastCalledWith({
-        scope: { kind: "side", component_id: 50 },
-        start: WINDOW.from,
-      })
+      expect(getAlternatives).toHaveBeenLastCalledWith(
+        WINDOW.from,
+        expect.objectContaining({
+          what: "side",
+          plate_component_id: 50,
+        })
+      )
     )
-    expect(regeneratePlan).toHaveBeenCalledTimes(2)
+    expect(regeneratePlan).not.toHaveBeenCalled()
+    await user.keyboard("{Escape}")
+    await waitFor(() =>
+      expect(screen.queryByTestId("alternatives")).not.toBeInTheDocument()
+    )
     ;(await cellButton(/^Tuesday dinner, Tofu bowl/)).focus()
     await user.keyboard("r")
-    expect(regeneratePlan).toHaveBeenCalledTimes(2)
+    expect(screen.queryByTestId("alternatives")).not.toBeInTheDocument()
   })
 
   it("⌘/Ctrl+Enter accepts and shops", async () => {
@@ -531,8 +549,8 @@ describe("keyboard (F2-AC7)", () => {
     const dialog = await screen.findByRole("dialog", {
       name: "Keyboard shortcuts",
     })
-    expect(dialog).toHaveTextContent("Replace the meal")
-    expect(dialog).toHaveTextContent("Choose a different side")
+    expect(dialog).toHaveTextContent("Something else for the meal")
+    expect(dialog).toHaveTextContent("Change the side")
     expect(dialog).toHaveTextContent("Accept and shop")
   })
 })
@@ -664,11 +682,14 @@ describe("generation progress (D35)", () => {
 })
 
 describe("on the anchored board", () => {
-  it("R keeps the board on screen and the URL without start", async () => {
+  it("a regenerate keeps the board on screen and the URL without start", async () => {
     const user = userEvent.setup()
     renderWithRouter(<PlanPage />, "/plan")
-    ;(await cellButton(MONDAY_DINNER)).focus()
-    await user.keyboard("r")
+    await user.click(await cellButton(MONDAY_DINNER))
+    const sheet = await screen.findByRole("dialog", { name: "Chili" })
+    await user.click(
+      within(sheet).getByRole("button", { name: "Regenerate day" })
+    )
     await waitFor(() => expect(navigateMock).toHaveBeenCalled())
     const [{ to, search }] = navigateMock.mock.calls.at(-1) as [
       { to: string; search: (prev: object) => object },

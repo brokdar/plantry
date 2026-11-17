@@ -77,6 +77,7 @@ const toastMock = vi.hoisted(() =>
 )
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
+import { setAvailabilityOverride } from "@/lib/api/availability"
 import { revertPlan, setAway } from "@/lib/api/meal"
 import { clearPlan, getPlan, restorePlan } from "@/lib/api/plan"
 import { listSettings } from "@/lib/api/settings"
@@ -234,6 +235,63 @@ describe("PlanPage", () => {
     expect(lastToast().message).toBe("Marked as No plate")
     lastToast().opts.action.onClick()
     await waitFor(() => expect(revertPlan).toHaveBeenCalledWith(mockUndo))
+  })
+
+  it("the day menu's Away all day previews, marks the day away and offers Undo", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      cells: mockPlan.cells.map((c) =>
+        c.plate ? { ...c, plate: { ...c.plate, state: "draft" } } : c
+      ),
+    })
+    vi.mocked(setAway).mockResolvedValue(
+      edited({ removed: mockRemovedBatch.removed })
+    )
+    vi.mocked(revertPlan).mockResolvedValue({ plate_ids: [], session_ids: [] })
+    renderWithRouter(<PlanPage />)
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Monday 2" })
+    )
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Away all day" })
+    )
+    const input = { date: "2026-11-02" }
+    await waitFor(() => expect(setAway).toHaveBeenCalledWith(input, true))
+    await waitFor(() => expect(setAway).toHaveBeenCalledWith(input))
+    await waitFor(() => expect(toastMock).toHaveBeenCalled())
+    expect(lastToast().message).toBe("Away all day")
+    lastToast().opts.action.onClick()
+    await waitFor(() => expect(revertPlan).toHaveBeenCalledWith(mockUndo))
+  })
+
+  it("the day menu's Plan this day clears the day's No plate cells", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      cells: mockPlan.cells.map((c) =>
+        c.date === "2026-11-02"
+          ? { ...c, mode: "none", source: "default", plate: null }
+          : c
+      ),
+    })
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({
+      ...mockPlan.cells[0],
+      mode: "plan",
+    } as never)
+    renderWithRouter(<PlanPage />)
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Monday 2" })
+    )
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Plan this day" })
+    )
+    await waitFor(() =>
+      expect(setAvailabilityOverride).toHaveBeenCalledTimes(3)
+    )
+    expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-11-02", 1, {
+      mode: "plan",
+    })
   })
 
   it("teaches an empty window; Plan this week opens the wizard, or plan by hand focuses the first open cell", async () => {

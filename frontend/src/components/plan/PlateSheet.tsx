@@ -78,6 +78,9 @@ interface PlateSheetProps {
   onMarkNoPlate: (cell: BoardCell) => void
   /** Regenerate day, with its preview (PlanPage). */
   onRegenerateDay: (date: string) => void
+  /** Open straight on an alternatives list (keyboard R and S, the cell's
+   *  quick actions): the meal's, or its side's. */
+  initialAlt?: "meal" | "side"
   onClose: () => void
 }
 
@@ -103,6 +106,7 @@ export function PlateSheet({
   onOpenCell,
   onMarkNoPlate,
   onRegenerateDay,
+  initialAlt,
   onClose,
 }: PlateSheetProps) {
   const { t } = useTranslation()
@@ -119,7 +123,18 @@ export function PlateSheet({
   const [eaters, setEaters] = useState<number | null>(null)
   // Feedback is asked only once the plate's day has come.
   const [today] = useState(todayISO)
-  const [alt, setAlt] = useState<AlternativesTarget | null>(null)
+  const [alt, setAlt] = useState<AlternativesTarget | null>(() => {
+    if (initialAlt === "meal")
+      return { what: "meal", title: t("plan.alt.something_else") }
+    const side = components.find((c) => c.id === cell.sideComponentId)
+    return initialAlt === "side" && side
+      ? {
+          what: "side",
+          componentId: side.id,
+          title: t("plan.alt.change_side_of", { name: side.food_name }),
+        }
+      : null
+  })
   const { confirm, describe, dialog } = useAlsoChangedConfirm(plan, slotName)
   // The alternatives work on drafts only (confirmed: Unlock first).
   const canAlt = !readOnly && plate.state === "draft"

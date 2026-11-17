@@ -1493,8 +1493,8 @@
       "assistant": "Assistent öffnen oder schließen",
       "this_panel": "Diese Übersicht zeigen",
       "drag": "Ziehen",
-      "replace": "Mahlzeit ersetzen",
-      "different_side": "Andere Beilage wählen",
+      "replace": "Etwas anderes für die Mahlzeit",
+      "different_side": "Beilage ändern",
       "accept": "Übernehmen und einkaufen"
     },
     "dnd": {
@@ -1600,12 +1600,10 @@
     "review": {
       "confirm": "Bestätigen",
       "unlock": "Entsperren",
-      "replace": "Ersetzen",
       "confirm_closure_one": "Bestätigt diese Mahlzeit.",
       "confirm_closure_other": "Bestätigt {{count}} Mahlzeiten dieses Ansatzes.",
       "unlock_closure_one": "Entsperrt diese Mahlzeit.",
       "unlock_closure_other": "Entsperrt {{count}} Mahlzeiten dieses Ansatzes.",
-      "different_side": "Andere Beilage",
       "regenerate_day": "Tag neu planen",
       "regenerate_week": "Woche neu planen",
       "accept_and_shop": "Übernehmen und einkaufen",

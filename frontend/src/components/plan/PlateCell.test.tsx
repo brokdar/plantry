@@ -122,10 +122,10 @@ describe("PlateCell", () => {
         onDifferentSide={onDifferentSide}
       />
     )
-    await userEvent.click(screen.getByRole("button", { name: "Replace" }))
     await userEvent.click(
-      screen.getByRole("button", { name: "Different side" })
+      screen.getByRole("button", { name: "Something else" })
     )
+    await userEvent.click(screen.getByRole("button", { name: "Change side" }))
     expect(onReplace).toHaveBeenCalledWith(sided)
     expect(onDifferentSide).toHaveBeenCalledWith(sided)
     cleanup()
