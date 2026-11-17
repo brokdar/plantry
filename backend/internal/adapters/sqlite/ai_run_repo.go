@@ -206,6 +206,7 @@ func (r *AIRunRepo) FinishRun(ctx context.Context, end airun.RunEnd) error {
 		ScoreJson:         toNullStringEmpty(end.ScoreJSON),
 		Notes:             toNullStringEmpty(end.Notes),
 		ContainerID:       toNullStringEmpty(end.ContainerID),
+		ScopeJson:         toNullStringEmpty(end.ScopeJSON),
 		ID:                end.ID,
 	})
 	if err != nil {

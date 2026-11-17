@@ -416,11 +416,16 @@ func (s *Service) resolve(ctx context.Context, w window.Window, today time.Time,
 			j.rows, closure, err = s.d.Plates.DraftClosure(ctx, maxDate(w.Start, today), w.End)
 			cellsOf = func(availability.Cell) bool { return true }
 		case ScopeDay:
-			date := dateOnly(sc.Date)
-			if !w.Contains(date) || date.Before(today) {
-				return fmt.Errorf("%w: day %s", domain.ErrInvalidScope, date.Format(time.DateOnly))
+			// The day stays inside the day: only its own drafts go, through
+			// RemoveMeals at save, so other days keep their dishes (R1).
+			date, derr := dayInWindow(w, today, sc.Date)
+			if derr != nil {
+				return derr
 			}
-			j.rows, closure, err = s.d.Plates.DraftClosure(ctx, date, date)
+			closure = dayDrafts(plates, date)
+			for _, p := range closure {
+				j.rows.PlateIDs = append(j.rows.PlateIDs, p.ID)
+			}
 			cellsOf = func(c availability.Cell) bool { return c.Date.Equal(date) }
 		case ScopePlate:
 			p, err := s.scopePlate(ctx, w, today, sc.PlateID)
@@ -508,6 +513,91 @@ func (s *Service) resolve(ctx context.Context, w window.Window, today time.Time,
 		return nil
 	})
 	return j, err
+}
+
+// errDryRun ends a unit of work that only looks: what it wrote is undone.
+var errDryRun = errors.New("dry run")
+
+// dryRun runs fn in a unit of work that is always rolled back. It must not
+// run inside another unit of work: a nested InTx joins the outer one, which
+// would keep fn's writes.
+func (s *Service) dryRun(ctx context.Context, fn func(ctx context.Context) error) error {
+	err := s.d.Tx.InTx(ctx, func(ctx context.Context) error {
+		if err := fn(ctx); err != nil {
+			return err
+		}
+		return errDryRun
+	})
+	if errors.Is(err, errDryRun) {
+		return nil
+	}
+	return err
+}
+
+// removeDay removes a day scope's draft plates through RemoveMeals, so the
+// batches they leave re-anchor (R1) and shrink (D11). A plate that is gone
+// or no longer a draft means the plan changed since the scope resolved.
+func (s *Service) removeDay(ctx context.Context, ids []int64) (plate.MealResult, error) {
+	if len(ids) == 0 {
+		return plate.MealResult{}, nil
+	}
+	for _, id := range ids {
+		p, err := s.d.Plates.Get(ctx, id)
+		if errors.Is(err, domain.ErrNotFound) {
+			return plate.MealResult{}, fmt.Errorf("%w: plate %d is gone", domain.ErrStateMismatch, id)
+		}
+		if err != nil {
+			return plate.MealResult{}, err
+		}
+		if p.State != plate.StateDraft {
+			return plate.MealResult{}, fmt.Errorf("%w: plate %d is confirmed", domain.ErrStateMismatch, id)
+		}
+	}
+	return s.d.Plates.RemoveMeals(ctx, ids)
+}
+
+// movedNotes is a run note per batch the save moved, in plain words
+// ("Lasagne now cooked Thursday lunch"), from the state the chooser saw.
+func movedNotes(st State, moved []plate.AlsoChanged) string {
+	lang := "en"
+	if st.Profile.Locale == "de" {
+		lang = "de"
+	}
+	notes := make([]string, 0, len(moved))
+	for _, m := range moved {
+		name := fmt.Sprintf("#%d", m.SessionID)
+		if i := slices.IndexFunc(st.Sessions, func(ss Session) bool { return ss.ID == m.SessionID }); i >= 0 {
+			if f, ok := st.Foods[st.Sessions[i].FoodID]; ok {
+				name = f.Name
+			}
+		}
+		d, err := time.Parse(time.DateOnly, m.Date)
+		if err != nil {
+			continue
+		}
+		notes = append(notes, fmt.Sprintf(texts[lang][textCookMoved], name, weekdays[lang][d.Weekday()], slotName(st, m.SlotID)))
+	}
+	return joinNotes(notes...)
+}
+
+// dayInWindow is a day scope's date: in w and not before today.
+func dayInWindow(w window.Window, today, d time.Time) (time.Time, error) {
+	date := dateOnly(d)
+	if !w.Contains(date) || date.Before(today) {
+		return time.Time{}, fmt.Errorf("%w: day %s", domain.ErrInvalidScope, date.Format(time.DateOnly))
+	}
+	return date, nil
+}
+
+// dayDrafts are the draft plates of plates dated date.
+func dayDrafts(plates []plate.Plate, date time.Time) []plate.Plate {
+	var out []plate.Plate
+	for _, p := range plates {
+		if p.Date.Equal(date) && p.State == plate.StateDraft {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // dayEaters maps each date of cells to the most eaters a plate of that date
@@ -624,6 +714,11 @@ type scopeRecord struct {
 	ExploreQuota  int                `json:"explore_quota,omitempty"`
 	// Light are the light requests the run was started with.
 	Light []LightIntent `json:"light,omitempty"`
+	// AlsoChanged are the batches outside a day scope its removal moved
+	// (R1), and Undo the save's revert token; both are set when the run
+	// saved.
+	AlsoChanged []plate.AlsoChanged `json:"also_changed,omitempty"`
+	Undo        *plate.Undo         `json:"undo,omitempty"`
 }
 
 func (j job) record() scopeRecord {
@@ -709,7 +804,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	s.logStage(ctx, runID, started, StageResolving)
 	var routine []plate.SnapshotPlate
 	var stored []LightIntent
-	err := s.d.Tx.InTx(ctx, func(ctx context.Context) error {
+	build := func(ctx context.Context) error {
 		st, err := s.d.Builder.Build(ctx, j.w, j.today, j.from, j.to)
 		if err != nil {
 			return err
@@ -724,7 +819,21 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 			return base.Profile.HouseholdPortions
 		})
 		return err
-	})
+	}
+	var err error
+	if j.scope.Kind == ScopeDay {
+		// The chooser plans on the plan as it will be once the day's drafts
+		// are gone: batches re-anchored, shrunk or deleted. The removal is
+		// rolled back; the save repeats it, so a failed run changes nothing.
+		err = s.dryRun(ctx, func(ctx context.Context) error {
+			if _, err := s.removeDay(ctx, j.rows.PlateIDs); err != nil {
+				return err
+			}
+			return build(ctx)
+		})
+	} else {
+		err = s.d.Tx.InTx(ctx, build)
+	}
 	if err != nil {
 		return fail("resolving", err)
 	}
@@ -759,8 +868,16 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	saveCtx, cancelSave := context.WithTimeout(context.WithoutCancel(ctx), saveTimeout)
 	defer cancelSave()
 	gen := actor.With(saveCtx, actor.Generator, runID)
-	err = s.d.Tx.InTx(gen, func(ctx context.Context) error {
-		if !j.rows.Empty() {
+	var moved []plate.AlsoChanged
+	undo, err := s.d.Plates.Recorded(gen, func(ctx context.Context) error {
+		switch {
+		case j.scope.Kind == ScopeDay:
+			res, err := s.removeDay(ctx, j.rows.PlateIDs)
+			if err != nil {
+				return err
+			}
+			moved = res.AlsoChanged
+		case !j.rows.Empty():
 			if _, err := s.d.Plates.RemoveDrafts(ctx, j.rows); err != nil {
 				return err
 			}
@@ -781,10 +898,22 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	s.recordAfter(ctx, j)
 	score := ComputeScore(merged, j.target, issues, j.exploreQuota)
 	violations := violationsOf(issues)
-	end := RunEnd{Status: airun.StatusOK, Notes: prop.Notes, RepairAttempts: prop.RepairAttempts}
+	end := RunEnd{Status: airun.StatusOK, Notes: joinNotes(prop.Notes, movedNotes(base, moved)), RepairAttempts: prop.RepairAttempts}
 	if len(violations) > 0 {
 		end.Status = airun.StatusPartial
 	}
+	// The run's scope now also says what moved outside it and how to take
+	// the save back (day and plate scopes).
+	rec := j.record()
+	rec.AlsoChanged = moved
+	if (j.scope.Kind == ScopeDay || j.scope.Kind == ScopePlate) && undo.FirstEventID > 0 {
+		rec.Undo = &undo
+	}
+	rj, err := json.Marshal(rec)
+	if err != nil {
+		return fail("scoring", err)
+	}
+	end.ScopeJSON = string(rj)
 	vj, err := json.Marshal(violations)
 	if err != nil {
 		return fail("scoring", err)
@@ -853,6 +982,9 @@ type RunView struct {
 	Issues   []Issue
 	Score    *Score
 	Window   window.Window
+	// Undo reverts the save of a finished (ok or partial) day or plate
+	// regenerate; nil otherwise.
+	Undo *plate.Undo
 }
 
 // Counts are what a run wrote and the confirmed plates its scope kept.
@@ -893,6 +1025,9 @@ func (s *Service) Run(ctx context.Context, id int64) (*RunView, error) {
 			return nil, fmt.Errorf("run %d scope: %w", id, err)
 		}
 		v.Counts.KeptConfirmed = sc.KeptConfirmed
+		if v.Status == airun.StatusOK || v.Status == airun.StatusPartial {
+			v.Undo = sc.Undo
+		}
 	}
 	if rec.ViolationsJSON != "" {
 		if err := json.Unmarshal([]byte(rec.ViolationsJSON), &v.Issues); err != nil {

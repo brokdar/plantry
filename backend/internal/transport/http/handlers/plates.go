@@ -22,7 +22,7 @@ type platesService interface {
 	ReplaceComponent(ctx context.Context, plateID int64, sel plate.Selector, foodID int64, src plate.Source, qty *plate.PlateComponent) (plate.MealResult, error)
 	CopyMeal(ctx context.Context, plateID int64, to []plate.CellKey, as plate.CopyAs) (plate.MealResult, error)
 	Recorded(ctx context.Context, fn func(ctx context.Context) error) (plate.Undo, error)
-	Delete(ctx context.Context, id int64) (plate.PlanSnapshot, error)
+	RemoveMeals(ctx context.Context, ids []int64) (plate.MealResult, error)
 	AddComponent(ctx context.Context, plateID int64, pc plate.PlateComponent) (*plate.Plate, error)
 	SwapComponent(ctx context.Context, componentID, newFoodID int64, quantity *plate.PlateComponent) (*plate.Plate, error)
 	UpdateComponentQuantity(ctx context.Context, componentID int64, q plate.PlateComponent) (*plate.Plate, error)
@@ -241,12 +241,12 @@ func (h *PlateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	snap, err := h.svc.Delete(r.Context(), id)
+	res, err := h.svc.RemoveMeals(r.Context(), []int64{id})
 	if err != nil {
 		writePlateError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, removedResponse{Removed: snap})
+	writeJSON(w, http.StatusOK, res)
 }
 
 // AddComponent handles POST /api/plates/{id}/components and returns the plate.

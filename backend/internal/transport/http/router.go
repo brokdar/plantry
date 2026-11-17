@@ -159,6 +159,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				if h.PlanGenerate != nil {
 					r.Post("/generate", h.PlanGenerate.Generate)
 					r.Post("/regenerate", h.PlanGenerate.Regenerate)
+					r.Get("/regenerate/preview", h.PlanGenerate.RegeneratePreview)
 					r.Get("/runs/{id}", h.PlanGenerate.Run)
 					r.Get("/replan/preview", h.PlanGenerate.ReplanPreview)
 					r.Post("/replan", h.PlanGenerate.Replan)

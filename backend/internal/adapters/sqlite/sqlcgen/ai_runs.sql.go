@@ -297,8 +297,9 @@ UPDATE ai_runs SET
     violations_json    = ?,
     score_json         = ?,
     notes              = ?,
-    container_id       = ?
-WHERE id = ?
+    container_id       = ?,
+    scope_json         = COALESCE(?20, scope_json)
+WHERE id = ?21
 `
 
 type FinishAIRunParams struct {
@@ -321,6 +322,7 @@ type FinishAIRunParams struct {
 	ScoreJson         sql.NullString
 	Notes             sql.NullString
 	ContainerID       sql.NullString
+	ScopeJson         sql.NullString
 	ID                int64
 }
 
@@ -347,6 +349,7 @@ func (q *Queries) FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.R
 		arg.ScoreJson,
 		arg.Notes,
 		arg.ContainerID,
+		arg.ScopeJson,
 		arg.ID,
 	)
 }
