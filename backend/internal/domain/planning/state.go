@@ -152,6 +152,8 @@ type FoodFacts struct {
 	// NoCook: the food needs no cooking (see NoCook): a leaf eaten raw, or
 	// a recipe whose cook minutes are explicitly 0 and that is not a main.
 	NoCook bool
+	// Groups are the DGE food groups in a portion (leaf: 100 g), see FoodGroups.
+	Groups FoodGroups
 	// Sweet: a leaf that is mostly sugar (see IsSweet); never a kcal filler.
 	Sweet bool
 }

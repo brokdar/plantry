@@ -1,0 +1,77 @@
+package planning_test
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
+)
+
+// cooked reports whether the proposal cooks food id.
+func cooked(p planning.Proposal, id int64) bool {
+	for _, s := range p.Sessions {
+		if s.FoodID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func withGroups(s planning.State, id int64, g planning.FoodGroups) {
+	f := s.Foods[id]
+	f.Groups = g
+	s.Foods[id] = f
+}
+
+// The DGE rules rank below everything else: among mains that are otherwise
+// equal (batchCooker's Main 4..10 differ only by id), a fish or a legume main
+// is preferred once while the week has none, and a meat main that would take
+// the week past 300 g comes after the others.
+func TestHeuristic_DGETieBreak(t *testing.T) {
+	const (
+		meaty  = int64(104)
+		legume = int64(109)
+		fish   = int64(110)
+	)
+	t.Run("prefers one fish and one legume main when none is planned", func(t *testing.T) {
+		s := batchCooker()
+		base := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+		assert.False(t, cooked(base, fish) && cooked(base, legume), "without groups the late ids are not both picked")
+
+		withGroups(s, fish, planning.FoodGroups{FishG: 120})
+		withGroups(s, legume, planning.FoodGroups{LegumeG: 80})
+		p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+		assert.True(t, cooked(p, fish), "fish main")
+		assert.True(t, cooked(p, legume), "legume main")
+	})
+	t.Run("a dash of fish or legumes (under 50 g) is no pick", func(t *testing.T) {
+		s := batchCooker()
+		base := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+		withGroups(s, fish, planning.FoodGroups{FishG: 49})
+		withGroups(s, legume, planning.FoodGroups{LegumeG: 49})
+		p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+		assert.Equal(t, cooked(base, fish), cooked(p, fish))
+		assert.Equal(t, cooked(base, legume), cooked(p, legume))
+	})
+	t.Run("no fish pick for a vegetarian, legumes still", func(t *testing.T) {
+		s := batchCooker()
+		s.Profile.DietType = profile.DietVegetarian
+		for id := int64(101); id <= 110; id++ {
+			f := s.Foods[id]
+			f.DietClass = "vegetarian"
+			s.Foods[id] = f
+		}
+		withGroups(s, fish, planning.FoodGroups{FishG: 120})
+		withGroups(s, legume, planning.FoodGroups{LegumeG: 80})
+		p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+		assert.True(t, cooked(p, legume))
+	})
+	t.Run("a meat main past 300 g a week comes last", func(t *testing.T) {
+		s := batchCooker()
+		withGroups(s, meaty, planning.FoodGroups{MeatG: 100}) // x 4 reference portions = 400 g
+		p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+		assert.False(t, cooked(p, meaty))
+	})
+}

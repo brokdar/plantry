@@ -57,6 +57,9 @@ const (
 	CodeWeekCarbsRange    = "week_carbs_out_of_range"
 	CodeWeekFatRange      = "week_fat_out_of_range"
 	CodeMealNotLight      = "meal_not_light"
+	CodeWeekMeatAboveDGE  = "week_meat_above_dge"
+	CodeWeekFishBelowDGE  = "week_fish_below_dge"
+	CodeWeekLegumesBelow  = "week_legumes_below_dge"
 )
 
 // Issue is one finding of the checker (D22). Plates and sessions of a

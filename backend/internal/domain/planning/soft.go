@@ -81,11 +81,13 @@ func (x *index) week(ev Evaluation) *WeekEval {
 	}
 	var w WeekEval
 	fiberMissing := false
+	counted := map[string]bool{}
 	for _, d := range ev.Days {
 		if !d.Complete || !withPlate[d.Date] || d.NutritionMissing || d.Kcal <= 0 || d.TargetKcal == nil || *d.TargetKcal <= 0 {
 			continue
 		}
 		w.Days++
+		counted[d.Date] = true
 		w.AvgKcal += d.Kcal
 		w.TargetKcal += *d.TargetKcal
 		w.NormalTargetKcal += cmp.Or(d.NormalTargetKcal, *d.TargetKcal)
@@ -119,7 +121,70 @@ func (x *index) week(ev Evaluation) *WeekEval {
 		// A partial average would mislead: show none.
 		w.FiberG = 0
 	}
+	x.weekGroups(ev, counted, &w)
 	return &w
+}
+
+// weekGroups fills the DGE food-group figures of w from the plates of the
+// counted days. Grams are per eater (plate components are per eater).
+func (x *index) weekGroups(ev Evaluation, counted map[string]bool, w *WeekEval) {
+	var total FoodGroups
+	for _, p := range ev.Plates {
+		if !counted[p.Date] {
+			continue
+		}
+		var g FoodGroups
+		for _, c := range p.Components {
+			f, ok := x.food(c.FoodID)
+			if !ok {
+				continue
+			}
+			m := 0.0
+			switch {
+			case c.Portions != nil:
+				m = *c.Portions
+			case c.Grams != nil:
+				m = *c.Grams / 100
+			}
+			g = g.add(f.Groups.times(m))
+		}
+		total = total.add(g)
+		if g.FishG >= minMealG {
+			w.FishMeals++
+		}
+		if g.LegumeG >= minMealG {
+			w.LegumeMeals++
+		}
+	}
+	n := float64(w.Days)
+	w.MeatG = total.MeatG
+	w.ProduceGPerDay = total.ProduceG / n
+}
+
+// dgeIssues are the weekly DGE food-group soft issues (S7): meat above the
+// limit prorated to the counted days, no fish meal, no legume meal. They need
+// minDGEDays complete days, so a half-planned week raises none. No date and
+// no options. Meat and fish are skipped when the diet type rules them
+// out. Fruit and vegetables are display only (FoodGroups.ProduceG).
+func (x *index) dgeIssues(w *WeekEval) []Issue {
+	var out []Issue
+	if w.Days < minDGEDays {
+		return nil
+	}
+	dt := diet.Class(x.s.Profile.DietType)
+	meatOK := dt == "" || diet.Compatible(diet.Omnivore, dt)
+	fishOK := dt == "" || diet.Compatible(diet.Pescetarian, dt)
+	if meatOK && w.MeatG > DGEMeatMaxG*float64(w.Days)/weekDays {
+		out = append(out, issue("S7", CodeWeekMeatAboveDGE, SeveritySoft).
+			with("days", w.Days).with("meat_g", math.Round(w.MeatG)).with("max_g", math.Round(DGEMeatMaxG*float64(w.Days)/weekDays)))
+	}
+	if fishOK && w.FishMeals == 0 {
+		out = append(out, issue("S7", CodeWeekFishBelowDGE, SeveritySoft).with("days", w.Days).with("fish_meals", 0).with("min_meals", 1))
+	}
+	if w.LegumeMeals == 0 {
+		out = append(out, issue("S7", CodeWeekLegumesBelow, SeveritySoft).with("days", w.Days).with("legume_meals", 0).with("min_meals", 1))
+	}
+	return out
 }
 
 // softIssues reports the soft rules S2 (day kcal outside the band of its
@@ -187,6 +252,7 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 				with("band_low_pct", math.Round(x.pol.WeekLow*100)).with("band_high_pct", math.Round(x.pol.WeekHigh*100)))
 		}
 		out = append(out, x.weekMacroIssues(w)...)
+		out = append(out, x.dgeIssues(w)...)
 	}
 	return out
 }
