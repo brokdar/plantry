@@ -83,16 +83,18 @@ type Request struct {
 // Deps are the generation service's dependencies. Go runs a generation; nil
 // runs it in a goroutine (tests pass a synchronous one).
 type Deps struct {
-	Builder    *Builder
-	Plates     PlateService
-	PlateRows  PlateRows
-	Cells      Cells
-	Sessions   SessionRows
-	FoodRows   FoodRows
-	Settings   SettingsReader
-	RunLog     RunLog
-	Runs       Runs
-	Overrides  Overrides
+	Builder   *Builder
+	Plates    PlateService
+	PlateRows PlateRows
+	Cells     Cells
+	Sessions  SessionRows
+	FoodRows  FoodRows
+	Settings  SettingsReader
+	RunLog    RunLog
+	Runs      Runs
+	Overrides Overrides
+	// Light stores the light requests a successful run was given.
+	Light      LightStore
 	Tx         domain.Transactor
 	Progress   *Progress
 	Choosers   map[airun.Chooser]Chooser
@@ -698,12 +700,14 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	}
 	s.logStage(ctx, runID, started, StageResolving)
 	var routine []plate.SnapshotPlate
+	var stored []LightIntent
 	err := s.d.Tx.InTx(ctx, func(ctx context.Context) error {
 		st, err := s.d.Builder.Build(ctx, j.w, j.today, j.from, j.to)
 		if err != nil {
 			return err
 		}
-		st.Light = j.light
+		stored = st.Light
+		st.Light = MergeLight(stored, j.light)
 		base = Merge(st, j.target, Proposal{})
 		routine, err = s.d.Builder.ApplyRoutines(ctx, &base, j.target, func(d time.Time) float64 {
 			if n := j.eaters[d.Format(time.DateOnly)]; n > 0 {
@@ -730,7 +734,6 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		if err != nil {
 			return fail("choosing", err)
 		}
-		j.light = UnionLight(j.light, last.Light)
 	}
 
 	prop := last
@@ -754,8 +757,12 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 				return err
 			}
 		}
-		_, err := s.d.Plates.Apply(ctx, snap, plate.ApplyOptions{OnConflict: plate.ConflictFail})
-		return err
+		if _, err := s.d.Plates.Apply(ctx, snap, plate.ApplyOptions{OnConflict: plate.ConflictFail}); err != nil {
+			return err
+		}
+		// The light requests the plan now stands under are kept for the
+		// board, the chat and later runs.
+		return s.d.Light.Replace(ctx, j.today, LightDates(UnionLight(stored, merged.Light)), merged.Light)
 	})
 	if err != nil {
 		return fail("saving", changedDuringRun(err))
@@ -796,7 +803,6 @@ func (s *Service) recordAfter(ctx context.Context, j job) {
 		RecordEvaluationError(ctx, PhaseAfter, err)
 		return
 	}
-	st.Light = j.light
 	RecordEvaluation(ctx, PhaseAfter, func() Evaluation { return Evaluate(st, j.target) })
 }
 

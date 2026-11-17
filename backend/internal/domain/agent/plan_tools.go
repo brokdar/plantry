@@ -26,7 +26,7 @@ type PlanReader interface {
 
 // getPlanSchema: from and to (YYYY-MM-DD) narrow the cells, sessions, days
 // and issues to a date range of the window.
-const getPlanSchema = `{
+var getPlanSchema = `{
   "type":"object",
   "properties":{
     "from":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
@@ -63,6 +63,9 @@ func toolGetPlan(svc Services) Tool {
 			w, ok := windowFrom(ctx)
 			if !ok {
 				return nil, ToolEffectNone, fmt.Errorf("%w: no plan window in this conversation turn", domain.ErrInvalidInput)
+			}
+			if err := checkLight(ctx, svc, w, light); err != nil {
+				return nil, ToolEffectNone, err
 			}
 			p, err := svc.PlanView.Plan(ctx, &w.Start, todayFrom(ctx))
 			if err != nil {
@@ -504,6 +507,9 @@ func toolRegenerate(svc Services) Tool {
 			w, ok := windowFrom(ctx)
 			if !ok {
 				return nil, ToolEffectNone, fmt.Errorf("%w: no plan window in this conversation turn", domain.ErrInvalidInput)
+			}
+			if err := checkLight(ctx, svc, w, light); err != nil {
+				return nil, ToolEffectNone, err
 			}
 			sc, err := regenerateScope(ctx, svc, planning.ScopeKind(in.Kind), in.Date, in.PlateID, in.ComponentID)
 			if err != nil {

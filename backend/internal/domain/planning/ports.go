@@ -117,6 +117,16 @@ type Corrections interface {
 	UserReplacements(ctx context.Context, from, to time.Time) ([]Replacement, error)
 }
 
+// LightStore keeps the user's light requests per date (see LightIntent).
+type LightStore interface {
+	// List returns the intents dated in [from, to].
+	List(ctx context.Context, from, to time.Time) ([]LightIntent, error)
+	// Replace sets the intents of each of dates to those of intents dated
+	// then (none: cleared) and prunes the dates before today. It joins the
+	// unit of work in ctx.
+	Replace(ctx context.Context, today time.Time, dates []string, intents []LightIntent) error
+}
+
 // SessionRows reads persisted cook sessions (the session repository).
 type SessionRows interface {
 	ListInRange(ctx context.Context, from, to time.Time) ([]plate.CookSession, map[int64][]plate.Link, error)

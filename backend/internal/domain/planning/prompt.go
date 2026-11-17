@@ -33,7 +33,7 @@ const (
 
 // submitPlanSchema is submit_plan's input (spec §6.3, D14). No top-level
 // anyOf/oneOf/allOf: Anthropic rejects them.
-const submitPlanSchema = `{
+var submitPlanSchema = `{
   "type": "object",
   "properties": {
     "sessions": {
@@ -82,19 +82,7 @@ const submitPlanSchema = `{
         "required": ["date", "slot_id", "components", "reason"]
       }
     },
-    "light": {
-      "type": "array",
-      "description": "Light requests of the user (e.g. 'something light on weekdays'), one entry per day, structured; omit when there is none. scope meal: that lunch or dinner is lighter (at most 75% of its share) and the day keeps its target. scope day: only when the user explicitly asks to eat less that day; the day's target becomes 85%. Repeat the list in every evaluate_plan and submit_plan call.",
-      "items": {
-        "type": "object",
-        "properties": {
-          "date": {"type": "string", "description": "YYYY-MM-DD"},
-          "scope": {"type": "string", "enum": ["meal", "day"]},
-          "slot": {"type": "string", "enum": ["lunch", "dinner"], "description": "Required for scope meal."}
-        },
-        "required": ["date", "scope"]
-      }
-    },
+    ` + LightSchema(false) + `,
     "notes": {"type": "string", "description": "One or two sentences describing exactly the plan you submit (its recipes and days), nothing it does not contain."}
   },
   "required": ["sessions", "plates", "notes"]

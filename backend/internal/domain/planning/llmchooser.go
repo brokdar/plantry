@@ -237,7 +237,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			prop.RepairAttempts = attempt
 			// A light request stands for the whole run: a repair that
 			// forgets to repeat it keeps it.
-			in.State.Light = UnionLight(in.State.Light, prop.Light)
+			in.State.Light = MergeLight(in.State.Light, prop.Light)
 			prop.Light = in.State.Light
 			sig := signature(prop)
 			var fixes []string
@@ -263,7 +263,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			case needRepair && paid < maxRepairs:
 				paid++
 			default:
-				return withNotes(prop, append(slices.Clone(allFixes), runNotes...), advice, joinNotes(kcalNote(rep.s, in.Target), floorNote(rep.s, in.Target))), nil
+				return withNotes(prop, append(slices.Clone(allFixes), runNotes...), advice, joinNotes(lightNote(rep.s.Light, in.Locale), kcalNote(rep.s, in.Target), floorNote(rep.s, in.Target))), nil
 			}
 			noted := withNotes(prop, allFixes, advice, "")
 			last = &noted
@@ -429,6 +429,9 @@ func parseProposal(input json.RawMessage, in ChooseInput) (Proposal, error) {
 		return Proposal{}, fmt.Errorf("submit_plan input: %w", err)
 	}
 	light, err := ValidateLight(sp.Light)
+	if err == nil {
+		err = ResolveLight(in.State, light)
+	}
 	if err != nil {
 		return Proposal{}, err
 	}

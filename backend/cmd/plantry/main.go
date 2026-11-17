@@ -236,13 +236,16 @@ func run() error {
 	// their run rows (before the recorder and the database). Without a
 	// chooser in the request it uses the LLM when a provider is configured,
 	// else the heuristic (D11).
+	planLight := sqlite.NewPlanLightRepo(conn)
 	planBuilder := planning.NewBuilder(planning.BuilderDeps{
+		Light: planLight,
 		Foods: foodSvc, FoodRows: foodRepo, Nutrition: nutritionResolver, Cells: availabilitySvc,
 		Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
 		Settings: settingsSvc, Profile: profileSvc, Corrections: sqlite.NewPlateEventRepo(conn),
 	})
 	planningSvc := planning.NewService(planning.Deps{
 		Builder: planBuilder,
+		Light:   planLight,
 		Plates:  plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: availabilitySvc, Overrides: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
 		RunLog: planning.RecorderLog{Recorder: runRecorder}, Runs: aiRunRepo, Tx: txRunner,
 		Progress: planning.NewProgress(),
@@ -312,7 +315,8 @@ func run() error {
 		State: func(ctx context.Context, w window.Window, today time.Time) (planning.State, error) {
 			return planBuilder.Build(ctx, w, today, w.Start, w.End)
 		},
-		Tx: txRunner,
+		Light: planLight,
+		Tx:    txRunner,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)

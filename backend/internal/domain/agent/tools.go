@@ -98,6 +98,9 @@ type Services struct {
 	// the window) and Tx is the unit of work: apply_changes evaluates the
 	// plan with them and rolls a dry run back.
 	State func(ctx context.Context, w window.Window, today time.Time) (planning.State, error)
+	// Light stores the light requests apply_changes was given; nil: they
+	// apply to that call only.
+	Light planning.LightStore
 	Tx    domain.Transactor
 }
 

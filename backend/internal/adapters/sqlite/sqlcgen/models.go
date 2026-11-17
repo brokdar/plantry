@@ -238,6 +238,12 @@ type FoodsFt struct {
 	Name string
 }
 
+type PlanLight struct {
+	Date  string
+	Scope string
+	Slot  string
+}
+
 type Plate struct {
 	ID        int64
 	SlotID    int64

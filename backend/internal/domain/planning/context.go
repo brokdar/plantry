@@ -46,6 +46,8 @@ type BuilderDeps struct {
 	Profile   ProfileReader
 	// Corrections reads the user's recipe swaps (one bounded query).
 	Corrections Corrections
+	// Light reads the stored light requests of the window.
+	Light LightStore
 }
 
 // Builder reads the State of a window.
@@ -83,6 +85,9 @@ func (b *Builder) Build(ctx context.Context, w window.Window, today, from, to ti
 		s.SlotKind[sl.ID] = sl.Kind
 		s.SlotOrder[sl.ID] = sl.SortOrder
 		s.SlotNames[sl.ID] = sl.NameKey
+	}
+	if s.Light, err = b.d.Light.List(ctx, w.Start, w.End); err != nil {
+		return State{}, fmt.Errorf("read light requests: %w", err)
 	}
 
 	recipes, err := b.d.Foods.List(ctx, food.ListQuery{Kind: food.KindComposed, Limit: maxFoods, Today: today})

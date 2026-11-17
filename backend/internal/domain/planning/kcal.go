@@ -104,6 +104,11 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 		if s.lightDay(d) {
 			dk.Adjusted *= LightDayShare
 		}
+		if dk.Adjusted < dk.Scaled {
+			// A light day is never asked to go below the floor, so the week
+			// is not measured against a target the hard floor forbids.
+			dk.Adjusted = min(dk.Scaled, max(dk.Adjusted, x.pol.Floor(k, dk.FloorShare())))
+		}
 		for _, p := range s.Plates {
 			if dayOf(p.Date) != dayOf(d) {
 				continue

@@ -140,7 +140,7 @@ light_day
   waste_portions      0         0        0
   unknown_data_share  0         0        0
   input_tokens        3731      3731     0
-  output_tokens       1638      1638     0
+  output_tokens       1644      1644     0
   latency_ms          0         0        0
 
 light_meal_weekday_dinners
@@ -161,7 +161,7 @@ light_meal_weekday_dinners
   waste_portions      0         0        0
   unknown_data_share  0         0        0
   input_tokens        3775      3775     0
-  output_tokens       1511      1511     0
+  output_tokens       1527      1527     0
   latency_ms          0         0        0
 
 many_none_cells

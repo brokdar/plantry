@@ -203,6 +203,9 @@ func (h *planner) plan() (Proposal, error) {
 		}
 	}
 	h.topUpFloors()
+	if note := lightNote(h.s.Light, h.in.Locale); note != "" {
+		h.notes = append(h.notes, note)
+	}
 	if note := floorNote(Merge(h.s, h.in.Target, h.prop), h.in.Target); note != "" {
 		h.notes = append(h.notes, note)
 	}

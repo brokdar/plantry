@@ -101,7 +101,7 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 		Slots: slot.NewService(sqlite.NewSlotRepo(db)), Settings: set,
 		PlanView: testsvc.PlanView(db), Planner: e.planner, Cells: e.avail,
 		Changes: sqlite.NewAIChangeRepo(db),
-		State:   testsvc.PlanState(db), Tx: sqlite.NewTxRunner(db),
+		State:   testsvc.PlanState(db), Tx: sqlite.NewTxRunner(db), Light: sqlite.NewPlanLightRepo(db),
 	})
 	require.NoError(t, err)
 	e.changes = testsvc.Changes(db, e.plates, e.avail)

@@ -92,7 +92,9 @@ func newEnv(conn *sql.DB, cfg Config) *env {
 			Foods: foodSvc, FoodRows: foodRepo, Nutrition: food.NewNutritionResolver(foodRepo), Cells: avail,
 			Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
 			Settings: settingsSvc, Profile: profileSvc, Corrections: sqlite.NewPlateEventRepo(conn),
+			Light: sqlite.NewPlanLightRepo(conn),
 		}),
+		Light:  sqlite.NewPlanLightRepo(conn),
 		Plates: plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: avail, Overrides: avail, FoodRows: foodRepo, Settings: settingsSvc,
 		RunLog: e.runs, Runs: runRepo, Tx: tx, Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{
