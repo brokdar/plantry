@@ -32,9 +32,12 @@ type DayKcal struct {
 	FiberMissing bool
 	Target       float64
 	Scaled       float64
-	Gap          float64 // Scaled - Kcal; positive: under target
-	Planned      int
-	Meals        int
+	// Adjusted is Scaled, or LightDayShare of it on a light day: the target
+	// the day band is centred on (the floor stays on Scaled).
+	Adjusted float64
+	Gap      float64 // Adjusted - Kcal; positive: under target
+	Planned  int
+	Meals    int
 	// Complete: every planned (non-routine) meal of the day holds a plate.
 	Complete bool
 	// Proposed: the day holds a plate of the proposal.
@@ -97,6 +100,10 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 			continue
 		}
 		dk.Scaled = k * float64(dk.Planned) / float64(dk.Meals)
+		dk.Adjusted = dk.Scaled
+		if s.lightDay(d) {
+			dk.Adjusted *= LightDayShare
+		}
 		for _, p := range s.Plates {
 			if dayOf(p.Date) != dayOf(d) {
 				continue
@@ -115,7 +122,7 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 			}
 			dk.Proposed = dk.Proposed || (p.Proposed() && x.inTarget(p.Cell()))
 		}
-		dk.Gap = dk.Scaled - dk.Kcal
+		dk.Gap = dk.Adjusted - dk.Kcal
 		out = append(out, dk)
 	}
 	return out
@@ -157,7 +164,7 @@ func kcalNote(s State, t Target) string {
 	var parts []string
 	pol := PolicyOf(s.Profile)
 	for _, d := range DayKcals(s, t) {
-		if d.Complete && d.Proposed && d.Kcal < d.Scaled*pol.DayLow {
+		if d.Complete && d.Proposed && d.Kcal < d.Adjusted*pol.DayLow {
 			parts = append(parts, fmt.Sprintf("%s −%.0f kcal", d.Date.Weekday().String()[:3], d.Gap))
 		}
 	}

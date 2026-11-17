@@ -235,6 +235,10 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		var feedback string
 		if perr == nil {
 			prop.RepairAttempts = attempt
+			// A light request stands for the whole run: a repair that
+			// forgets to repeat it keeps it.
+			in.State.Light = UnionLight(in.State.Light, prop.Light)
+			prop.Light = in.State.Light
 			sig := signature(prop)
 			var fixes []string
 			prop, fixes = autofix(in, prop)
@@ -408,7 +412,8 @@ type submitPlan struct {
 		} `json:"components"`
 		Reason string `json:"reason"`
 	} `json:"plates"`
-	Notes string `json:"notes"`
+	Light []LightIntent `json:"light"`
+	Notes string        `json:"notes"`
 }
 
 // parseProposal maps submit_plan's input to a Proposal. Ids are not
@@ -423,7 +428,11 @@ func parseProposal(input json.RawMessage, in ChooseInput) (Proposal, error) {
 		}
 		return Proposal{}, fmt.Errorf("submit_plan input: %w", err)
 	}
-	p := Proposal{Notes: strings.TrimSpace(sp.Notes)}
+	light, err := ValidateLight(sp.Light)
+	if err != nil {
+		return Proposal{}, err
+	}
+	p := Proposal{Notes: strings.TrimSpace(sp.Notes), Light: light}
 	for i, s := range sp.Sessions {
 		if strings.TrimSpace(s.Key) == "" {
 			return Proposal{}, fmt.Errorf("sessions[%d].key is required", i)

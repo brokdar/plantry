@@ -30,12 +30,13 @@ const getPlanSchema = `{
   "type":"object",
   "properties":{
     "from":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
-    "to":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+    "to":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    ` + lightSchema + `
   },
   "additionalProperties":false
 }`
 
-const getPlanDescription = `Read the plan window (optionally only from..to, both inclusive, inside the window): every cell, the cook sessions, the checker's issues and the evaluation. Returns JSON {window:{start,end,today,shopping_day}, cells:[{date,slot_id,mode,preset_name?,note?,plate:{id,state draft|confirmed,eaters,reason?,components:[{id,food_id,name,portions?|amount+unit?,session_id?}]}|null}], sessions:[{id,food_id,name,cook_date,cook_slot_id,portions,frozen_portions,state,cooked,consumed,frozen_consumed,use_by,links:[{plate_id,component_id,portions,kind}],warnings:[{code,plate_id?}]}], issues:[issue], draft:{plates,sessions,run_id,notes}|null, evaluation (compact: only the requested range, kcal whole and other numbers one decimal, a field that is 0, false or empty left out so absent means 0 / false / none; complete and nutrition_complete show only when false):{days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete?,nutrition_missing?}], plates:[{date,slot_id,plate_id,eaters,kcal,protein_g,components:[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}] (food, role and session are in the cells), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only)} (weekly kcal ledger over the whole window, complete days only), issues:[issue], totals:{violations,warnings,soft}}}. kcal and protein are per eater, also per plate and per component. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[...]}: violations (H1-H9) are hard rules, soft issues (S2 day kcal outside the day band of target, S3 protein under 90% of the day target (g/kg) or the share under target, or the weekly average under target, S4 weekly average outside the week band, S5 weekly carb or fat share outside its range; only S2 and S3 carry computed options. an option's op is a ready apply_changes op. evaluation.issues is what the user sees; the top-level issues are the board's.`
+const getPlanDescription = `Read the plan window (optionally only from..to, both inclusive, inside the window): every cell, the cook sessions, the checker's issues and the evaluation. Returns JSON {window:{start,end,today,shopping_day}, cells:[{date,slot_id,mode,preset_name?,note?,plate:{id,state draft|confirmed,eaters,reason?,components:[{id,food_id,name,portions?|amount+unit?,session_id?}]}|null}], sessions:[{id,food_id,name,cook_date,cook_slot_id,portions,frozen_portions,state,cooked,consumed,frozen_consumed,use_by,links:[{plate_id,component_id,portions,kind}],warnings:[{code,plate_id?}]}], issues:[issue], draft:{plates,sessions,run_id,notes}|null, evaluation (compact: only the requested range, kcal whole and other numbers one decimal, a field that is 0, false or empty left out so absent means 0 / false / none; complete and nutrition_complete show only when false):{days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete?,nutrition_missing?}], plates:[{date,slot_id,plate_id,eaters,kcal,protein_g,components:[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}] (food, role and session are in the cells), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only)} (weekly kcal ledger over the whole window, complete days only; with light requests target_kcal is the target after them and normal_target_kcal the normal one, and a light day shows light (meal|day) and normal_target_kcal), issues:[issue], totals:{violations,warnings,soft}}}. Pass light to evaluate the plan under the user's light requests. kcal and protein are per eater, also per plate and per component. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[...]}: violations (H1-H9) are hard rules, soft issues (S2 day kcal outside the day band of target, S3 protein under 90% of the day target (g/kg) or the share under target, or the weekly average under target, S4 weekly average outside the week band, S5 weekly carb or fat share outside its range, S6 a light meal that is not lighter; only S2 and S3 carry computed options. an option's op is a ready apply_changes op. evaluation.issues is what the user sees; the top-level issues are the board's.`
 
 // toolGetPlan returns the chat window's plan: the same cells, sessions and
 // issues as GET /api/plan for that window, in a compact shape (D10), plus
@@ -47,12 +48,18 @@ func toolGetPlan(svc Services) Tool {
 		Schema:      json.RawMessage(getPlanSchema),
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
-				From string `json:"from"`
-				To   string `json:"to"`
+				From  string                 `json:"from"`
+				To    string                 `json:"to"`
+				Light []planning.LightIntent `json:"light"`
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
+			light, err := parseLight(in.Light)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			ctx = withLight(ctx, light)
 			w, ok := windowFrom(ctx)
 			if !ok {
 				return nil, ToolEffectNone, fmt.Errorf("%w: no plan window in this conversation turn", domain.ErrInvalidInput)
@@ -468,7 +475,8 @@ func toolRegenerate(svc Services) Tool {
         "date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$","description":"Required for kind day."},
         "plate_id":{"type":"integer","minimum":1,"description":"Required for kind plate."},
         "component_id":{"type":"integer","minimum":1,"description":"The side's plate component; required for kind side."},
-        "instruction":{"type":"string","maxLength":500,"description":"The user's wish for the new choice, e.g. 'something lighter'."}
+        "instruction":{"type":"string","maxLength":500,"description":"The user's wish for the new choice, e.g. 'something lighter'."},
+        ` + lightSchema + `
       },
       "additionalProperties":false
     }`)
@@ -479,14 +487,19 @@ func toolRegenerate(svc Services) Tool {
 		Schema: schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
-				Kind        string `json:"kind"`
-				Date        string `json:"date"`
-				PlateID     int64  `json:"plate_id"`
-				ComponentID int64  `json:"component_id"`
-				Instruction string `json:"instruction"`
+				Kind        string                 `json:"kind"`
+				Date        string                 `json:"date"`
+				PlateID     int64                  `json:"plate_id"`
+				ComponentID int64                  `json:"component_id"`
+				Instruction string                 `json:"instruction"`
+				Light       []planning.LightIntent `json:"light"`
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
+			}
+			light, err := parseLight(in.Light)
+			if err != nil {
+				return nil, ToolEffectNone, err
 			}
 			w, ok := windowFrom(ctx)
 			if !ok {
@@ -500,7 +513,7 @@ func toolRegenerate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			req := planning.Request{Start: w.Start, Today: todayFrom(ctx), Scope: sc, Instruction: in.Instruction}
+			req := planning.Request{Start: w.Start, Today: todayFrom(ctx), Scope: sc, Instruction: in.Instruction, Light: light}
 			var id int64
 			if sc.Kind == planning.ScopeWindow {
 				id, err = svc.Planner.Generate(ctx, req)

@@ -100,6 +100,9 @@ type contextRecord struct {
 	AvoidBatches []int64            `json:"avoid_batches"`
 	EatersByDate map[string]float64 `json:"eaters_by_date"`
 	Side         *sideRecord        `json:"side"`
+	// Light are the light requests the run started with (the chooser may add
+	// its own; every plan.evaluation step carries the ones it was made under).
+	Light []LightIntent `json:"light,omitempty"`
 	// Fixed rows: plates and sessions outside the target or confirmed (the
 	// chooser may not change them), and the totals they are counted from.
 	Plates struct {
@@ -138,6 +141,7 @@ func recordContext(ctx context.Context, in ChooseInput, chooser string, trimmed 
 	x := newIndex(s, in.Target)
 	var rec contextRecord
 	rec.Chooser = chooser
+	rec.Light = s.Light
 	rec.Window.Start, rec.Window.End = s.Window.Start.Format(time.DateOnly), s.Window.End.Format(time.DateOnly)
 	rec.Window.Today = s.Today.Format(time.DateOnly)
 	rec.Settings.MaxCookOccasionsPerDay, rec.Settings.VarietyWeeks, rec.Settings.BatchCooking = s.Settings.MaxCookOccasionsPerDay, s.Settings.VarietyWeeks, s.Settings.BatchCooking

@@ -24,7 +24,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h10"
+const HeuristicVersion = "h11"
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.
@@ -75,6 +75,9 @@ type Request struct {
 	// ExploreQuota is the number of explore recipes to include; nil follows
 	// plan.explore_per_week (D17).
 	ExploreQuota *int
+	// Light are the run's light requests (see LightIntent); the heuristic
+	// honours them and the LLM chooser is told them.
+	Light []LightIntent
 }
 
 // Deps are the generation service's dependencies. Go runs a generation; nil
@@ -207,7 +210,10 @@ type job struct {
 	eaters       map[string]float64
 	exploreQuota int
 	instruction  string
-	kept         int
+	// light are the request's light intents, then (after choosing) the
+	// chooser's too.
+	light []LightIntent
+	kept  int
 	// replacesBatch: a plate scope on a batch's cook plate replaces the batch.
 	replacesBatch bool
 }
@@ -276,6 +282,9 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held 
 		j.eaters = req.EatersByDate
 	}
 	j.exploreQuota, j.instruction = quota, req.Instruction
+	if j.light, err = ValidateLight(req.Light); err != nil {
+		return 0, fmt.Errorf("%w: %w", domain.ErrInvalidInput, err)
+	}
 	scopeJSON, err := json.Marshal(j.record())
 	if err != nil {
 		return 0, err
@@ -603,13 +612,15 @@ type scopeRecord struct {
 	KeptConfirmed int                `json:"kept_confirmed"`
 	EatersByDate  map[string]float64 `json:"eaters_by_date,omitempty"`
 	ExploreQuota  int                `json:"explore_quota,omitempty"`
+	// Light are the light requests the run was started with.
+	Light []LightIntent `json:"light,omitempty"`
 }
 
 func (j job) record() scopeRecord {
 	r := scopeRecord{
 		Kind: j.scope.Kind, PlateID: j.scope.PlateID, ComponentID: j.scope.ComponentID,
 		PlateIDs: nonNil(j.rows.PlateIDs), SessionIDs: nonNil(j.rows.SessionIDs), KeptConfirmed: j.kept,
-		EatersByDate: j.eaters, ExploreQuota: j.exploreQuota,
+		EatersByDate: j.eaters, ExploreQuota: j.exploreQuota, Light: j.light,
 	}
 	if j.scope.Kind == ScopeDay {
 		r.Date = j.scope.Date.Format(time.DateOnly)
@@ -692,6 +703,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		if err != nil {
 			return err
 		}
+		st.Light = j.light
 		base = Merge(st, j.target, Proposal{})
 		routine, err = s.d.Builder.ApplyRoutines(ctx, &base, j.target, func(d time.Time) float64 {
 			if n := j.eaters[d.Format(time.DateOnly)]; n > 0 {
@@ -718,6 +730,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		if err != nil {
 			return fail("choosing", err)
 		}
+		j.light = UnionLight(j.light, last.Light)
 	}
 
 	prop := last
@@ -783,6 +796,7 @@ func (s *Service) recordAfter(ctx context.Context, j job) {
 		RecordEvaluationError(ctx, PhaseAfter, err)
 		return
 	}
+	st.Light = j.light
 	RecordEvaluation(ctx, PhaseAfter, func() Evaluation { return Evaluate(st, j.target) })
 }
 

@@ -13,6 +13,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
 
 //go:embed library.json scenarios/*.json
@@ -120,6 +122,11 @@ type ProfileSpec struct {
 	CarbsPct           *float64 `json:"carbs_pct"`
 	MeatDaysPerWeekMax *int     `json:"meat_days_per_week_max"`
 	Notes              string   `json:"notes"`
+	// Goal (maintain, lose, gain), WeightKg and Sex (female, male) feed the
+	// nutrition policy.
+	Goal     string   `json:"goal"`
+	WeightKg *float64 `json:"weight_kg"`
+	Sex      string   `json:"sex"`
 }
 
 // PresetSpec is a one-plate preset of one recipe on one slot (a routine).
@@ -188,6 +195,8 @@ type Step struct {
 	UnlockConfirmed bool       `json:"unlock_confirmed"`
 	Spare           string     `json:"spare"`
 	Regenerate      bool       `json:"regenerate"`
+	// Light are generate's and regenerate_day's light requests.
+	Light []planning.LightIntent `json:"light"`
 }
 
 func (s Step) startsRun() bool {
@@ -218,6 +227,12 @@ type Expect struct {
 	// AllowMissingPlate: the run may end partial with only missing_plate
 	// (H1) violations, for a scenario with nothing left to fill a cell.
 	AllowMissingPlate bool `json:"allow_missing_plate"`
+	// AllowViolations are hard issue codes the run may end partial with
+	// (a floor the library cannot reach).
+	AllowViolations []string `json:"allow_violations"`
+	// Evaluation asserts on the saved plan's Evaluation (bands, floors,
+	// weekly ledger, notes).
+	Evaluation *EvalExpect `json:"evaluation"`
 	// MinPlates is the fewest plates the measured run must write.
 	MinPlates int `json:"min_plates"`
 	// MinRepeats is the fewest H8 repeats the measured run's score must

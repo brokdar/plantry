@@ -53,6 +53,9 @@ type State struct {
 	// Corrections are the user's recipe swaps of the 4 weeks before the
 	// window (D21): what the generator proposed and the user replaced.
 	Corrections []Replacement
+	// Light are the light requests of this run (see LightIntent); nil
+	// without any.
+	Light []LightIntent
 }
 
 // Cell is one resolved (date, slot) cell of the window.

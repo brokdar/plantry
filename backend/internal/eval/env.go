@@ -41,6 +41,10 @@ type env struct {
 	runs     *capturingLog
 	svc      *planning.Service
 	scripted *scriptedLLM
+	// after and notes are the measured run's closing Evaluation (nil when it
+	// stored none) and its run notes.
+	after *planning.Evaluation
+	notes string
 
 	slotIDs   map[string]int64
 	foodIDs   map[string]int64
@@ -227,6 +231,14 @@ func (e *env) seedProfile(ctx context.Context, ps ProfileSpec) error {
 	}
 	p.KcalTarget, p.ProteinPct, p.FatPct, p.CarbsPct = ps.KcalTarget, ps.ProteinPct, ps.FatPct, ps.CarbsPct
 	p.MeatDaysPerWeekMax = ps.MeatDaysPerWeekMax
+	if ps.Goal != "" {
+		p.Goal = profile.Goal(ps.Goal)
+	}
+	p.WeightKg = ps.WeightKg
+	if ps.Sex != "" {
+		sex := profile.Sex(ps.Sex)
+		p.Sex = &sex
+	}
 	if ps.Notes != "" {
 		p.SystemPrompt = &ps.Notes
 	}

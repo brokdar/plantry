@@ -88,6 +88,7 @@ func (x *index) week(ev Evaluation) *WeekEval {
 		w.Days++
 		w.AvgKcal += d.Kcal
 		w.TargetKcal += *d.TargetKcal
+		w.NormalTargetKcal += cmp.Or(d.NormalTargetKcal, *d.TargetKcal)
 		w.AvgProteinG += d.ProteinG
 		w.TargetProteinG += d.ProteinTargetG
 		w.CarbsPct += d.CarbsPct * d.Kcal
@@ -108,6 +109,9 @@ func (x *index) week(ev Evaluation) *WeekEval {
 	w.FatPct /= w.AvgKcal
 	w.AvgKcal /= n
 	w.TargetKcal /= n
+	if w.NormalTargetKcal /= n; math.Abs(w.NormalTargetKcal-w.TargetKcal) < 1e-9 {
+		w.NormalTargetKcal = 0
+	}
 	w.AvgProteinG /= n
 	w.TargetProteinG /= n
 	w.FiberG /= n
@@ -172,6 +176,7 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 			out = append(out, is)
 		}
 	}
+	out = append(out, x.lightIssues(ev)...)
 	// S4: the weekly average outside the policy's week band. No date and no
 	// options: the model decides which days to move.
 	if w := ev.Week; w != nil && w.Days >= minWeekDays {
@@ -297,7 +302,8 @@ func (c optCand) op(plateID *int64, date string, slot int64) OptionOp {
 func (x *index) editablePlates(day time.Time) []int {
 	var out []int
 	for i, p := range x.s.Plates {
-		if dayOf(p.Date) == dayOf(day) && !p.Confirmed && x.s.Window.Contains(p.Date) && !x.routine(p.Cell()) {
+		// A light meal stays light: no option or top-up adds to its plate.
+		if dayOf(p.Date) == dayOf(day) && !p.Confirmed && x.s.Window.Contains(p.Date) && !x.routine(p.Cell()) && !x.s.lightMeal(p.Date, p.SlotID) {
 			out = append(out, i)
 		}
 	}

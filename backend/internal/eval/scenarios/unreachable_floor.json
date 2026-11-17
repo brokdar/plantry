@@ -1,0 +1,22 @@
+{
+  "name": "unreachable_floor",
+  "description": "Policy: a 8000 kcal target (a floor of 6000 kcal a day) that the library's recipes cannot reach. Nothing lowers the floor: the days stay below it as a hard H9 and the run notes say so.",
+  "today": "2026-11-06",
+  "start": "2026-11-07",
+  "settings": {
+    "plan.shopping_day": "5", "plan.batch_cooking": "false", "plan.default_keep_days": "2",
+    "plan.max_cook_occasions_per_day": "2", "plan.variety_weeks": "2", "plan.freezing_enabled": "false"
+  },
+  "profile": {"diet_type": "omnivore", "household_portions": 1, "kcal_target": 8000, "goal": "maintain", "weight_kg": 80, "sex": "male"},
+  "slots": ["breakfast", "lunch", "dinner"],
+  "presets": [{"name": "Yoghurt", "slot": "breakfast", "recipe": "Joghurt mit Beeren"}],
+  "availability": {"defaults": [
+    {"weekdays": [0, 1, 2, 3, 4, 5, 6], "slot": "breakfast", "mode": "routine", "preset": "Yoghurt"}
+  ]},
+  "steps": [{"action": "generate"}],
+  "expect": {
+    "min_plates": 14,
+    "allow_violations": ["kcal_below_floor"],
+    "evaluation": {"issues_present": ["kcal_below_floor"], "notes_contain": ["Below the daily minimum"]}
+  }
+}

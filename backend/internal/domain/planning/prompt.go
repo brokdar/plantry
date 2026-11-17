@@ -18,7 +18,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p11"
+const PromptVersion = "p12"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -82,6 +82,19 @@ const submitPlanSchema = `{
         "required": ["date", "slot_id", "components", "reason"]
       }
     },
+    "light": {
+      "type": "array",
+      "description": "Light requests of the user (e.g. 'something light on weekdays'), one entry per day, structured; omit when there is none. scope meal: that lunch or dinner is lighter (at most 75% of its share) and the day keeps its target. scope day: only when the user explicitly asks to eat less that day; the day's target becomes 85%. Repeat the list in every evaluate_plan and submit_plan call.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "date": {"type": "string", "description": "YYYY-MM-DD"},
+          "scope": {"type": "string", "enum": ["meal", "day"]},
+          "slot": {"type": "string", "enum": ["lunch", "dinner"], "description": "Required for scope meal."}
+        },
+        "required": ["date", "scope"]
+      }
+    },
     "notes": {"type": "string", "description": "One or two sentences describing exactly the plan you submit (its recipes and days), nothing it does not contain."}
   },
   "required": ["sessions", "plates", "notes"]
@@ -95,7 +108,7 @@ func evaluatePlanTool() llm.Tool {
 		Description: "Dry run: same input as submit_plan, saves nothing. Returns JSON for the plan as it would stand, compact: only the days your plan puts a plate on, numbers rounded (kcal whole, the rest one decimal), and every field that is 0, false or empty left out (an absent field is 0 / false / none; complete and nutrition_complete show only when false: a planned meal of the day has no plate / a food lacks nutrition data): " +
 			"{days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete,nutrition_missing}], meat_days, meat_days_max, " +
 			"plates:[{date,slot_id,plate_id,eaters,kcal,protein_g,components (only on the plates you proposed, plate_id negative):[{food_id,name,role,portions|grams,kcal,protein_g,session_key}]}], issues:[{rule,code,severity violation|warning|soft,date,slot_id,params,options:[{action add|raise,food_id,name,date,slot_id,portions|grams,from,kcal_delta,protein_delta_g,day_kcal,day_protein_pct,cook_occasions,new_meat_day,op}]}], week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only)}, totals:{violations,warnings,soft}, autofix:[string] (only when Go corrected the plan)}. issues hold the hard violations and warnings of the whole plan and the soft issues (S2, S3) of the listed days only; totals count exactly the issues listed. " +
-			"Hard rules (violation) must be fixed before submit_plan; soft rules (S2 day kcal outside the day band of its target, S3 protein under 90% of the day's target (or the share under target), S4 the weekly average outside the week band, S5 weekly carb or fat share outside its range) should be fixed when an option fits; the week matters most. The kcal target is a target, not a limit. H9 (a day below its safety floor) is a hard rule. Call it as often as needed.",
+			"Hard rules (violation) must be fixed before submit_plan; soft rules (S2 day kcal outside the day band of its target, S3 protein under 90% of the day's target (or the share under target), S4 the weekly average outside the week band, S5 weekly carb or fat share outside its range, S6 a meal named in light that is not lighter) should be fixed when an option fits; the week matters most. With light requests the days list light (meal|day) and normal_target_kcal, and week.target_kcal is the target after them (week.normal_target_kcal the normal one). The kcal target is a target, not a limit. H9 (a day below its safety floor) is a hard rule. Call it as often as needed.",
 		Schema: json.RawMessage(submitPlanSchema),
 	}
 }
@@ -802,6 +815,9 @@ func writeTask(b *strings.Builder, in ChooseInput) {
 	}
 	if i := strings.TrimSpace(in.Instruction); i != "" {
 		fmt.Fprintf(b, "- The user's request for this plan: %s\n", oneLine(i))
+	}
+	for _, l := range in.State.Light {
+		fmt.Fprintf(b, "- Light request (keep it in light): %s %s%s\n", l.Date, l.Scope, strings.TrimSpace(" "+l.Slot))
 	}
 	fmt.Fprintf(b, "- Write notes and every reason in %s.\n", language(in.Locale))
 }
