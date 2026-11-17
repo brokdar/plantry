@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"runtime/debug"
 	"slices"
 	"sync"
@@ -821,14 +822,17 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		return err
 	}
 	var err error
+	var dryRemoval plate.MealResult
 	if j.scope.Kind == ScopeDay {
 		// The chooser plans on the plan as it will be once the day's drafts
 		// are gone: batches re-anchored, shrunk or deleted. The removal is
 		// rolled back; the save repeats it, so a failed run changes nothing.
 		err = s.dryRun(ctx, func(ctx context.Context) error {
-			if _, err := s.removeDay(ctx, j.rows.PlateIDs); err != nil {
-				return err
+			res, err := s.removeDay(ctx, j.rows.PlateIDs)
+			if err != nil {
+				return changedDuringRun(err)
 			}
+			dryRemoval = res
 			return build(ctx)
 		})
 	} else {
@@ -875,6 +879,12 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 			res, err := s.removeDay(ctx, j.rows.PlateIDs)
 			if err != nil {
 				return err
+			}
+			// The chooser planned on the dry run's plan. A removal that
+			// shrinks other batches or moves other cooks differently means a
+			// plate of an affected batch changed since.
+			if !reflect.DeepEqual(res.Removed, dryRemoval.Removed) || !reflect.DeepEqual(res.AlsoChanged, dryRemoval.AlsoChanged) {
+				return fmt.Errorf("%w: the day's batches changed", domain.ErrPlanChanged)
 			}
 			moved = res.AlsoChanged
 		case !j.rows.Empty():

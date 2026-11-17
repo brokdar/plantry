@@ -71,6 +71,9 @@ func newEnv(conn *sql.DB, cfg Config) *env {
 	plateSvc := plate.NewService(plate.Deps{
 		Plates: plateRepo, Sessions: sessionRepo, Slots: slotRepo, Foods: foodRepo, Cells: avail,
 		Profile: profileSvc, Settings: settingsSvc, Events: sqlite.NewPlateEventRepo(conn), Outcomes: runRepo, Tx: tx, EffectiveRole: shopping.RoleOf,
+		// e is assigned below, before any step runs; the closure reads
+		// e.today only when the plate service asks for the time, after the
+		// steps set it.
 		Now: func() time.Time {
 			if !e.today.IsZero() {
 				return e.today

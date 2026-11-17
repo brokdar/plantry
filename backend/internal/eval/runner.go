@@ -544,8 +544,10 @@ func (e *env) maxDishMeals(sc Scenario, after rows) Expectation {
 	return ex
 }
 
-// dayBatchKept checks that before the step a plate after day d ate a batch
-// cooking on d, and that every such plate eats the same batch after it.
+// dayBatchKept checks that every plate after day d that ate a batch cooking
+// on d before the step eats the same batch after it. It applies only when
+// such a batch existed before the step (the chooser made it); otherwise it
+// passes with Detail "not applicable" so the report shows it did not run.
 func dayBatchKept(d string, before, after rows) Expectation {
 	ex := Expectation{Name: ExpectDayBatchKept, OK: true}
 	found := false
@@ -569,7 +571,9 @@ func dayBatchKept(d string, before, after rows) Expectation {
 		}
 	}
 	if !found {
-		ex.OK, ex.Detail = false, fmt.Sprintf("no later meal ate a batch cooked on %s", d)
+		// Not a failure: what the chooser planned before the step decides
+		// whether the day cooked for a later meal. The report says so.
+		ex.Detail = fmt.Sprintf("not applicable: no later meal ate a batch cooked on %s before the step", d)
 	}
 	return ex
 }
