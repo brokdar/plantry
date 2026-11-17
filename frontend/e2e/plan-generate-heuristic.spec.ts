@@ -74,7 +74,7 @@ async function runFinished(post: Promise<APIResponse | Response>) {
 }
 
 test.describe("generated week on the heuristic", () => {
-  test("F2-AC4: generate, Replace, Different side, Regenerate day, Accept and shop, Undo", async ({
+  test("F2-AC4: generate, Regenerate day, Accept and shop, Undo", async ({
     page,
   }) => {
     const tag = uid()
@@ -159,39 +159,14 @@ test.describe("generated week on the heuristic", () => {
         await expect(padlock(cell)).toHaveCount(0)
       }
 
-      // Replace: the plate gives way to a new draft in its cell.
-      const target = generated[0]
-      let sheet = await openCellSheet(page, target.date, slot.id)
-      let post = waitForPost(page, "/api/plan/regenerate")
-      await sheet.getByRole("button", { name: "Replace" }).click()
-      await runFinished(post)
-      await expect
-        .poll(async () => (await slotPlates(start, slot.id)).map((p) => p.id))
-        .not.toContain(target.id)
-
-      // Different side, on a plate that has one.
+      // Replace and Different side are the alternatives lists now (no
+      // planner run): meal-alternatives.spec.ts covers them.
       let plates = await slotPlates(start, slot.id)
-      const withSide = plates.find(
-        (p) => p.date !== target.date && p.components.length > 1
-      )
-      expect(withSide, "a generated plate with a side").toBeTruthy()
-      const sideIds = withSide!.components.map((c) => c.id)
-      sheet = await openCellSheet(page, withSide!.date, slot.id)
-      post = waitForPost(page, "/api/plan/regenerate")
-      await sheet.getByRole("button", { name: "Different side" }).click()
-      await runFinished(post)
-      plates = await slotPlates(start, slot.id)
-      const afterSide = plates
-        .filter((p) => p.date === withSide!.date)
-        .flatMap((p) => p.components.map((c) => c.id))
-      expect(afterSide.length).toBeGreaterThan(0)
-      expect(afterSide).not.toEqual(sideIds)
-
       // Regenerate day: every draft plate of that day is replaced.
       const day = plates[plates.length - 1].date
       const dayIds = plates.filter((p) => p.date === day).map((p) => p.id)
-      sheet = await openCellSheet(page, day, slot.id)
-      post = waitForPost(page, "/api/plan/regenerate")
+      const sheet = await openCellSheet(page, day, slot.id)
+      const post = waitForPost(page, "/api/plan/regenerate")
       await sheet.getByRole("button", { name: "Regenerate day" }).click()
       await runFinished(post)
       plates = await slotPlates(start, slot.id)
