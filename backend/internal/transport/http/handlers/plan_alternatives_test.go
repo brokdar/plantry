@@ -55,6 +55,40 @@ func TestPlanAlternativesHTTP(t *testing.T) {
 	code, body = a.do(http.MethodPost, url, fmt.Sprintf(`{"plate_id":%d,"what":"main","constraints":{"search":"zzz-nothing"}}`, pid))
 	require.Equal(t, http.StatusOK, code, body)
 	assert.Equal(t, []any{}, body["alternatives"])
+	assert.Equal(t, map[string]any{"candidates": float64(0)}, body["empty_reason"], "nothing fits the constraints")
+
+	// A dinner eating the lunch batch does not cook: its alternatives cook at
+	// the lunch cell (cook_at), and POST /api/plates/{id}/replace takes the op.
+	// Future dates: the plate service's clock is the real one.
+	var dinner, sid int64
+	require.NoError(t, a.db.QueryRow(`SELECT id FROM time_slots WHERE name_key = 'slot.dinner'`).Scan(&dinner))
+	code, body = a.do(http.MethodPost, "/api/plates", fmt.Sprintf(`{"date":"2030-01-09","slot_id":%d,"components":[{"food_id":%d,"portions":1}]}`, lunch, food))
+	require.Equal(t, http.StatusCreated, code, body)
+	cooking := int64(body["id"].(float64))
+	require.NoError(t, a.db.QueryRow(`SELECT cook_session_id FROM plate_components WHERE plate_id = ?`, cooking).Scan(&sid))
+	code, body = a.do(http.MethodPost, "/api/plates", fmt.Sprintf(`{"date":"2030-01-09","slot_id":%d,"components":[{"food_id":%d,"portions":1,"cook_session_id":%d}]}`, dinner, food, sid))
+	require.Equal(t, http.StatusCreated, code, body)
+	leftover := int64(body["id"].(float64))
+	_, err = a.db.Exec(`UPDATE plates SET state = 'draft' WHERE date >= '2030-01-01'`)
+	require.NoError(t, err)
+	_, err = a.db.Exec(`UPDATE cook_sessions SET state = 'draft'`)
+	require.NoError(t, err)
+	code, body = a.do(http.MethodPost, "/api/plan/alternatives?start=2030-01-05&today=2030-01-05", fmt.Sprintf(`{"plate_id":%d,"what":"main","limit":1}`, leftover))
+	require.Equal(t, http.StatusOK, code, body)
+	alt := body["alternatives"].([]any)[0].(map[string]any)
+	require.Equal(t, "cook_at", alt["source"], "%v", alt)
+	op := alt["ops"].([]any)[0].(map[string]any)
+	require.Equal(t, "replace", op["op"])
+	cookAt := op["cook_at"].(map[string]any)
+	assert.Equal(t, map[string]any{"date": "2030-01-09", "slot_id": float64(lunch)}, cookAt)
+	code, body = a.do(http.MethodPost, fmt.Sprintf("/api/plates/%d/replace", leftover), fmt.Sprintf(`{"plate_component_id":%v,"food_id":%v,"cook_at":{"date":%q,"slot_id":%v},"portions":%v}`,
+		op["plate_component_id"], op["food_id"], cookAt["date"], cookAt["slot_id"], op["portions"]))
+	require.Equal(t, http.StatusOK, code, body)
+	var cookDate string
+	var cookSlot int64
+	require.NoError(t, a.db.QueryRow(`SELECT cs.cook_date, cs.cook_slot_id FROM plate_components pc JOIN cook_sessions cs ON cs.id = pc.cook_session_id WHERE pc.plate_id = ?`, leftover).Scan(&cookDate, &cookSlot))
+	assert.Equal(t, "2030-01-09", cookDate[:10])
+	assert.Equal(t, lunch, cookSlot, "the new dish cooks with the lunch")
 
 	for _, c := range []struct {
 		name, url, body string

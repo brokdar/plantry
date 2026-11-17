@@ -25,7 +25,7 @@ type planGenerateService interface {
 	PreviewDay(ctx context.Context, start, today, date time.Time) (*planning.DayPreview, error)
 	Replan(ctx context.Context, req planning.ReplanRequest) (*planning.ReplanResult, error)
 	WizardQuota(ctx context.Context, on bool) (int, error)
-	Alternatives(ctx context.Context, start, today time.Time, req planning.AltRequest) ([]planning.Alternative, error)
+	Alternatives(ctx context.Context, start, today time.Time, req planning.AltRequest) (planning.AltResult, error)
 }
 
 // PlanGenerateHandler starts generations and reports their runs (spec §3.2,
@@ -132,10 +132,6 @@ type alternativesRequest struct {
 	Limit            int                    `json:"limit"`
 }
 
-type alternativesResponse struct {
-	Alternatives []planning.Alternative `json:"alternatives"`
-}
-
 // Alternatives handles POST /api/plan/alternatives?start&today: the
 // verified ways to change one plate (planning.Alternatives). Writes nothing.
 func (h *PlanGenerateHandler) Alternatives(w http.ResponseWriter, r *http.Request) {
@@ -177,10 +173,10 @@ func (h *PlanGenerateHandler) Alternatives(w http.ResponseWriter, r *http.Reques
 		writePlanError(w, err)
 		return
 	}
-	if out == nil {
-		out = []planning.Alternative{}
+	if out.Alternatives == nil {
+		out.Alternatives = []planning.Alternative{}
 	}
-	writeJSON(w, http.StatusOK, alternativesResponse{Alternatives: out})
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (h *PlanGenerateHandler) request(w http.ResponseWriter, r *http.Request, start, chooser, instruction string) (planning.Request, bool) {

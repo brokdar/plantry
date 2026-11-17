@@ -20,5 +20,5 @@
     {"action": "generate"},
     {"action": "regenerate_day", "date": "2026-11-10"}
   ],
-  "expect": {"kept_confirmed": true, "min_plates": 2, "unchanged_outside": "2026-11-10"}
+  "expect": {"kept_confirmed": true, "min_plates": 2, "unchanged_outside": "2026-11-10", "alternatives": true}
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -34,7 +35,15 @@ const (
 	SourceFresh   = "fresh"
 	SourceSession = "session"
 	SourceLeaf    = "leaf"
+	// SourceCookAt cooks the recipe fresh on another cell that already cooks
+	// (or, failing that, an earlier day with a free occasion), so the day of
+	// the plate gets no new cooking occasion.
+	SourceCookAt = "cook_at"
 )
+
+// altSessionKey is the key of the session a cook_at candidate adds to the
+// copy it evaluates.
+const altSessionKey = "alt"
 
 const (
 	defaultAltLimit = 5
@@ -78,7 +87,10 @@ type Alternative struct {
 	Name      string `json:"name"`
 	Source    string `json:"source"`
 	SessionID *int64 `json:"session_id,omitempty"`
-	// TotalMinutes is the fresh cook's prep + cook minutes (0 otherwise).
+	// CookAt is the cell a cook_at source cooks on.
+	CookAt *OptionCell `json:"cook_at,omitempty"`
+	// TotalMinutes is the fresh or cook_at cook's prep + cook minutes (0
+	// otherwise).
 	TotalMinutes int     `json:"total_minutes"`
 	Kcal         float64 `json:"kcal"`
 	ProteinG     float64 `json:"protein_g"`
@@ -98,33 +110,52 @@ type Alternative struct {
 
 // altRank is the ranking key, compared field by field (lower first).
 type altRank struct {
-	newIssues  int
-	addsCook   bool
-	notSession bool
-	dishMeals  int
-	sameRole   bool
-	kcalFit    float64
-	lastEaten  int64 // unix days; never eaten sorts first
+	newIssues int
+	addsCook  bool
+	// source orders a session before a cook_at before a fresh cook or leaf.
+	source    int
+	dishMeals int
+	sameRole  bool
+	kcalFit   float64
+	lastEaten int64 // unix days; never eaten sorts first
+}
+
+// AltResult is the outcome of Alternatives. EmptyReason is set only when
+// no candidate is left.
+type AltResult struct {
+	Alternatives []Alternative `json:"alternatives"`
+	EmptyReason  *EmptyReason  `json:"empty_reason,omitempty"`
+}
+
+// EmptyReason says why nothing fits: how many candidates fit the position
+// and constraints (0: none, loosen a constraint) and how many of them each
+// new hard issue dropped, keyed "rule.code" (a candidate counts once, under
+// its first new hard issue).
+type EmptyReason struct {
+	Candidates int            `json:"candidates"`
+	Dropped    map[string]int `json:"dropped,omitempty"`
 }
 
 // Alternatives returns up to req.Limit candidates for req's plate, each
 // applied to a copy of s and re-evaluated: a candidate that adds a hard
 // issue is dropped. Ranked by fewest new soft issues, no new cooking
-// occasion (a session source first), the main's dish count after the change,
-// no second side of the same role, kcal fit to a light or hearty cell, then
-// the oldest last eaten. Pure: nothing writes.
-func Alternatives(s State, t Target, req AltRequest) ([]Alternative, error) {
+// occasion, source (a session, then a cook_at, then a fresh cook), the
+// main's dish count after the change, no second side of the same role, kcal
+// fit to a light or hearty cell, then the oldest last eaten. A recipe passing
+// both fresh and cook_at is listed once, by the better rank. Pure: nothing
+// writes.
+func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 	pi := slices.IndexFunc(s.Plates, func(p Plate) bool { return p.ID == req.PlateID })
 	if req.PlateID <= 0 || pi < 0 || !s.Window.Contains(s.Plates[pi].Date) {
-		return nil, fmt.Errorf("%w: plate %d", domain.ErrNotFound, req.PlateID)
+		return AltResult{}, fmt.Errorf("%w: plate %d", domain.ErrNotFound, req.PlateID)
 	}
 	p := s.Plates[pi]
 	if p.Confirmed {
-		return nil, fmt.Errorf("%w: plate %d is confirmed", domain.ErrInvalidInput, p.ID)
+		return AltResult{}, fmt.Errorf("%w: plate %d is confirmed", domain.ErrInvalidInput, p.ID)
 	}
 	old, drop, err := s.altTarget(p, req)
 	if err != nil {
-		return nil, err
+		return AltResult{}, err
 	}
 	limit := req.Limit
 	if limit <= 0 {
@@ -137,18 +168,22 @@ func Alternatives(s State, t Target, req AltRequest) ([]Alternative, error) {
 	x := newIndex(s, t)
 	baseCooks := x.occasions[dayOf(p.Date)]
 	var out []Alternative
-	for _, c := range s.altCandidates(x, p, old, req) {
-		a, ok := s.tryAlt(t, pi, old, drop, c, hard, soft, len(baseCooks))
-		if ok {
-			out = append(out, a)
+	cands := s.altCandidates(x, p, old, req)
+	dropped := map[string]int{}
+	for _, c := range cands {
+		a, why := s.tryAlt(t, pi, old, drop, c, hard, soft, len(baseCooks))
+		if why != "" {
+			dropped[why]++
+			continue
 		}
+		out = append(out, a)
 	}
 	slices.SortStableFunc(out, func(a, b Alternative) int {
 		ra, rb := a.rank, b.rank
 		return cmp.Or(
 			cmp.Compare(ra.newIssues, rb.newIssues),
 			boolCmp(ra.addsCook, rb.addsCook),
-			boolCmp(ra.notSession, rb.notSession),
+			cmp.Compare(ra.source, rb.source),
 			cmp.Compare(ra.dishMeals, rb.dishMeals),
 			boolCmp(ra.sameRole, rb.sameRole),
 			cmp.Compare(ra.kcalFit, rb.kcalFit),
@@ -157,17 +192,36 @@ func Alternatives(s State, t Target, req AltRequest) ([]Alternative, error) {
 			cmp.Compare(ptrVal(a.SessionID), ptrVal(b.SessionID)),
 		)
 	})
+	// One cooking way per recipe: the better of fresh and cook_at.
+	cooked := map[int64]bool{}
+	out = slices.DeleteFunc(out, func(a Alternative) bool {
+		if a.Source != SourceFresh && a.Source != SourceCookAt {
+			return false
+		}
+		if cooked[a.FoodID] {
+			return true
+		}
+		cooked[a.FoodID] = true
+		return false
+	})
 	if len(out) > limit {
 		out = out[:limit]
 	}
-	return out, nil
+	res := AltResult{Alternatives: out}
+	if len(out) == 0 {
+		res.EmptyReason = &EmptyReason{Candidates: len(cands)}
+		if len(dropped) > 0 {
+			res.EmptyReason.Dropped = dropped
+		}
+	}
+	return res, nil
 }
 
 // Alternatives builds the window at start (a shopping day) the way the
 // generator does, in one unit of work, and returns Alternatives for req over
 // every cell of the window (POST /api/plan/alternatives). Nothing writes.
-func (s *Service) Alternatives(ctx context.Context, start, today time.Time, req AltRequest) ([]Alternative, error) {
-	var out []Alternative
+func (s *Service) Alternatives(ctx context.Context, start, today time.Time, req AltRequest) (AltResult, error) {
+	var out AltResult
 	err := s.d.Tx.InTx(ctx, func(ctx context.Context) error {
 		sd, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanShoppingDay)
 		if err != nil {
@@ -259,7 +313,12 @@ func (s State) altTarget(p Plate, req AltRequest) (int, []int, error) {
 type altCand struct {
 	food    FoodFacts
 	session *Session
-	comp    Component
+	// grow is what an exactly covering session grows by when the plate
+	// joins it (D11).
+	grow float64
+	// cookAt is the cook cell of a cook_at candidate.
+	cookAt *plate.CellKey
+	comp   Component
 }
 
 // altCandidates lists the foods that fit req's position and constraints,
@@ -323,6 +382,11 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 		// Unknown minutes (0) never pass max_minutes, as in find_foods.
 		if !f.Composed() || req.Constraints.MaxMinutes <= 0 || (f.Minutes > 0 && f.Minutes <= req.Constraints.MaxMinutes) {
 			out = append(out, altCand{food: f, comp: comp})
+			if f.Composed() {
+				if k, ok := s.cookAtCell(x, p, id); ok {
+					out = append(out, altCand{food: f, cookAt: &k, comp: comp})
+				}
+			}
 		}
 		if !f.Composed() {
 			continue
@@ -333,16 +397,71 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 				ss.CookDate.AddDate(0, 0, x.keepDays(id)).Before(p.Date) {
 				continue
 			}
-			// A full batch cannot feed the cell.
-			if ss.Portions-x.usage(*ss).Total < comp.Multiplier()*p.Eaters {
+			// A batch that exactly covers its meals grows with the plate
+			// (D11); one with a surplus must hold the plate's portions.
+			need, spare := comp.Multiplier()*p.Eaters, ss.Portions-x.usage(*ss).Total
+			var grow float64
+			switch {
+			case math.Abs(spare) < plate.PortionEpsilon:
+				grow = need
+			case spare < need:
 				continue
 			}
 			sc := comp
 			sc.ID, sc.SessionID = 0, ss.ID
-			out = append(out, altCand{food: f, session: ss, comp: sc})
+			out = append(out, altCand{food: f, session: ss, grow: grow, comp: sc})
 		}
 	}
 	return out
+}
+
+// cookAtCell picks where a cook_at candidate of recipe foodID cooks for p
+// when p's own cell does not cook yet: the latest cell that already cooks on
+// or before p's cell, else the latest plan cell of an earlier day with a free
+// cooking occasion. Either lies in the window, not before today, within the
+// recipe's keep days of p, and is not p's cell.
+func (s State) cookAtCell(x *index, p Plate, foodID int64) (plate.CellKey, bool) {
+	own := idOf(p.Cell())
+	if x.occasions[own.day][own] {
+		return plate.CellKey{}, false
+	}
+	keep := x.keepDays(foodID)
+	var best, free *Cell
+	for i := range s.Cells {
+		c := &s.Cells[i]
+		k := c.Key()
+		if c.Mode != availability.ModePlan || idOf(k) == own || dayOf(c.Date) < dayOf(s.Today) ||
+			c.Date.AddDate(0, 0, keep).Before(p.Date) ||
+			!s.cookedBy(plate.CookSession{CookDate: c.Date, CookSlotID: c.SlotID}, p) {
+			continue
+		}
+		d := dayOf(c.Date)
+		switch {
+		case x.occasions[d][idOf(k)]:
+			best = c // cells are in (date, slot order) order: the last is the latest
+		case d < own.day && len(x.occasions[d]) < s.Settings.MaxCookOccasionsPerDay && !x.onlyConfirmed(k):
+			free = c
+		}
+	}
+	switch {
+	case best != nil:
+		return best.Key(), true
+	case free != nil:
+		return free.Key(), true
+	}
+	return plate.CellKey{}, false
+}
+
+// onlyConfirmed reports whether the cell holds plates and all are confirmed:
+// a draft cook there would sit among rows the user locked in.
+func (x *index) onlyConfirmed(k plate.CellKey) bool {
+	idx := x.byCell[idOf(k)]
+	for _, i := range idx {
+		if !x.s.Plates[i].Confirmed {
+			return false
+		}
+	}
+	return len(idx) > 0
 }
 
 // cookedBy reports whether ss cooks on or before p's cell.
@@ -399,7 +518,7 @@ func (c AltConstraints) matches(f FoodFacts, words [][]diet.Alt) bool {
 
 // tryAlt applies c to a copy of s, re-evaluates it and builds the result;
 // false when the change adds a hard issue.
-func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, hard, soft map[string]bool, baseCooks int) (Alternative, bool) {
+func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, hard, soft map[string]bool, baseCooks int) (Alternative, string) {
 	p := s.Plates[pi]
 	next := s
 	next.Plates = slices.Clone(s.Plates)
@@ -417,13 +536,28 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, hard, soft m
 	if old < 0 || c.session != nil {
 		np.Components = append(np.Components, c.comp)
 	}
+	switch {
+	case c.cookAt != nil:
+		next.Sessions = append(slices.Clone(s.Sessions), Session{
+			CookSession: plate.CookSession{FoodID: c.food.ID, CookDate: c.cookAt.Date, CookSlotID: c.cookAt.SlotID, Portions: c.comp.Multiplier() * p.Eaters},
+			Key:         altSessionKey,
+		})
+		np.Components[slices.IndexFunc(np.Components, func(comp Component) bool { return comp.FoodID == c.food.ID })].SessionKey = altSessionKey
+	case c.grow > 0:
+		next.Sessions = slices.Clone(s.Sessions)
+		for i := range next.Sessions {
+			if next.Sessions[i].ID == c.session.ID {
+				next.Sessions[i].Portions += c.grow
+			}
+		}
+	}
 	next.Plates[pi] = np
 
 	ev := Evaluate(next, t)
 	var newIssues []Issue
 	for _, is := range ev.Issues {
 		if is.Severity == SeverityViolation && !hard[issueID(is)] {
-			return Alternative{}, false
+			return Alternative{}, is.Rule + "." + is.Code
 		}
 		if is.Severity == SeveritySoft && !soft[softKey(is)] {
 			is.Options = nil
@@ -437,6 +571,9 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, hard, soft m
 		a.Source, a.SessionID = SourceSession, &id
 	case !c.food.Composed():
 		a.Source = SourceLeaf
+	case c.cookAt != nil:
+		a.Source, a.TotalMinutes = SourceCookAt, c.food.Minutes
+		a.CookAt = &OptionCell{Date: c.cookAt.Date.Format(time.DateOnly), SlotID: c.cookAt.SlotID}
 	default:
 		a.TotalMinutes = c.food.Minutes
 	}
@@ -457,27 +594,38 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, hard, soft m
 	if ev.Week != nil {
 		a.WeekPct = math.Round(ev.Week.Pct*10) / 10
 	}
-	a.Ops = s.altOps(p, old, drop, c)
+	a.Ops = s.altOps(p, old, drop, c, a.CookAt)
 	y := newIndex(next, t)
 	a.rank = altRank{
-		newIssues:  len(newIssues),
-		addsCook:   len(y.occasions[dayOf(p.Date)]) > baseCooks,
-		notSession: c.session == nil,
-		sameRole:   s.sameSideRole(np, c),
-		kcalFit:    y.kcalFit(np, a.Kcal),
-		dishMeals:  y.dishMeals()[c.food.ID],
-		lastEaten:  math.MinInt64,
+		newIssues: len(newIssues),
+		addsCook:  len(y.occasions[dayOf(p.Date)]) > baseCooks,
+		source:    sourceRank(a.Source),
+		sameRole:  s.sameSideRole(np, c),
+		kcalFit:   y.kcalFit(np, a.Kcal),
+		dishMeals: y.dishMeals()[c.food.ID],
+		lastEaten: math.MinInt64,
 	}
 	if c.food.LastEaten != nil {
 		a.rank.lastEaten = c.food.LastEaten.Unix() / 86400
 	}
-	return a, true
+	return a, ""
+}
+
+func sourceRank(src string) int {
+	switch src {
+	case SourceSession:
+		return 0
+	case SourceCookAt:
+		return 1
+	}
+	return 2
 }
 
 // altOps writes the change as apply_changes ops: a swap of the old
-// component (a fresh cook or a leaf), or an add eating from the batch plus a
-// remove of the old one; a meal swap also removes the other components.
-func (s State) altOps(p Plate, old int, drop []int, c altCand) []OptionOp {
+// component (a fresh cook or a leaf), a replace with cook_at (or an add with
+// cook_at), or an add eating from the batch plus a remove of the old one; a
+// meal swap also removes the other components.
+func (s State) altOps(p Plate, old int, drop []int, c altCand, cookAt *OptionCell) []OptionOp {
 	id := p.ID
 	quantity := func(op OptionOp) OptionOp {
 		if c.comp.Portions != nil {
@@ -489,6 +637,11 @@ func (s State) altOps(p Plate, old int, drop []int, c altCand) []OptionOp {
 	}
 	var ops []OptionOp
 	switch {
+	case cookAt != nil && old >= 0:
+		cid := p.Components[old].ID
+		ops = append(ops, quantity(OptionOp{Op: "replace", PlateID: &id, PlateComponentID: &cid, FoodID: c.food.ID, CookAt: cookAt}))
+	case cookAt != nil:
+		ops = append(ops, quantity(OptionOp{Op: "add", PlateID: &id, FoodID: c.food.ID, CookAt: cookAt}))
 	case old >= 0 && c.session == nil:
 		cid := p.Components[old].ID
 		ops = append(ops, quantity(OptionOp{Op: "swap", PlateComponentID: &cid, FoodID: c.food.ID}))
