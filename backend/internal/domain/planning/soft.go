@@ -149,36 +149,40 @@ func (x *index) weekGroups(ev Evaluation, counted map[string]bool, w *WeekEval) 
 			g = g.add(f.Groups.times(m))
 		}
 		total = total.add(g)
-		if g.FishG > 0 {
+		if g.FishG >= minMealG {
 			w.FishMeals++
 		}
-		if g.LegumeG > 0 {
+		if g.LegumeG >= minMealG {
 			w.LegumeMeals++
 		}
 	}
 	n := float64(w.Days)
-	w.MeatG = total.MeatG * weekDays / n
+	w.MeatG = total.MeatG
 	w.ProduceGPerDay = total.ProduceG / n
 }
 
-// dgeIssues are the weekly DGE food-group soft issues (S5 family, the
-// lowest priority): meat above 300 g, no fish meal, no legume meal. No date
-// and no options. Meat and fish are skipped when the diet type rules them
+// dgeIssues are the weekly DGE food-group soft issues (S7): meat above the
+// limit prorated to the counted days, no fish meal, no legume meal. They need
+// minDGEDays complete days, so a half-planned week raises none. No date and
+// no options. Meat and fish are skipped when the diet type rules them
 // out. Fruit and vegetables are display only (FoodGroups.ProduceG).
 func (x *index) dgeIssues(w *WeekEval) []Issue {
 	var out []Issue
+	if w.Days < minDGEDays {
+		return nil
+	}
 	dt := diet.Class(x.s.Profile.DietType)
 	meatOK := dt == "" || diet.Compatible(diet.Omnivore, dt)
 	fishOK := dt == "" || diet.Compatible(diet.Pescetarian, dt)
-	if meatOK && w.MeatG > DGEMeatMaxG {
-		out = append(out, issue("S5", CodeWeekMeatAboveDGE, SeveritySoft).
-			with("days", w.Days).with("meat_g", math.Round(w.MeatG)).with("max_g", DGEMeatMaxG))
+	if meatOK && w.MeatG > DGEMeatMaxG*float64(w.Days)/weekDays {
+		out = append(out, issue("S7", CodeWeekMeatAboveDGE, SeveritySoft).
+			with("days", w.Days).with("meat_g", math.Round(w.MeatG)).with("max_g", math.Round(DGEMeatMaxG*float64(w.Days)/weekDays)))
 	}
 	if fishOK && w.FishMeals == 0 {
-		out = append(out, issue("S5", CodeWeekFishBelowDGE, SeveritySoft).with("days", w.Days).with("fish_meals", 0).with("min_meals", 1))
+		out = append(out, issue("S7", CodeWeekFishBelowDGE, SeveritySoft).with("days", w.Days).with("fish_meals", 0).with("min_meals", 1))
 	}
 	if w.LegumeMeals == 0 {
-		out = append(out, issue("S5", CodeWeekLegumesBelow, SeveritySoft).with("days", w.Days).with("legume_meals", 0).with("min_meals", 1))
+		out = append(out, issue("S7", CodeWeekLegumesBelow, SeveritySoft).with("days", w.Days).with("legume_meals", 0).with("min_meals", 1))
 	}
 	return out
 }

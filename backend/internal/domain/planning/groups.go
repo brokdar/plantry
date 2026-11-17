@@ -8,15 +8,20 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 )
 
-// DGE weekly food rules (soft, S5). Source: DGE "Gut essen und trinken"
+// DGE weekly food rules (soft, S7). Source: DGE "Gut essen und trinken"
 // 2024, https://www.dge.de/gesunde-ernaehrung/gut-essen-und-trinken/dge-empfehlungen/
 // meat and sausage at most 300 g per week, fish 1-2 times per week, legumes
 // at least once per week, 5 portions of fruit and vegetables per day.
 const (
 	// DGEMeatMaxG is the weekly meat and sausage limit per eater.
 	DGEMeatMaxG = 300
-	// weekDays extrapolates a window with fewer complete days to a week.
+	// weekDays prorates the meat limit to the counted days of a window.
 	weekDays = 7
+	// minDGEDays is how many complete days the DGE week issues need.
+	minDGEDays = 5
+	// minMealG is the grams per eater of fish or legumes that make a plate a
+	// fish or legume meal: a dash of fish sauce or a spoon of hummus is not.
+	minMealG = 50
 )
 
 // FoodGroups is the grams of the DGE food groups in one portion of a

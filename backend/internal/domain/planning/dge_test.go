@@ -35,7 +35,7 @@ func dgeCodes(t *testing.T, ev planning.Evaluation) []string {
 	for _, is := range ev.Issues {
 		switch is.Code {
 		case planning.CodeWeekMeatAboveDGE, planning.CodeWeekFishBelowDGE, planning.CodeWeekLegumesBelow:
-			assert.Equal(t, "S5", is.Rule)
+			assert.Equal(t, "S7", is.Rule)
 			assert.Equal(t, planning.SeveritySoft, is.Severity)
 			assert.Empty(t, is.Date)
 			assert.Empty(t, is.Options)
@@ -66,14 +66,14 @@ func TestEvaluate_DGEWeek(t *testing.T) {
 		},
 		{
 			"meat above 300 g a week",
-			planning.FoodGroups{MeatG: 20, FishG: 50, LegumeG: 40},
+			planning.FoodGroups{MeatG: 20, FishG: 50, LegumeG: 50},
 			profile.DietOmnivore, nil,
 			[]string{planning.CodeWeekMeatAboveDGE},
 			420, 21, 21, 0,
 		},
 		{
 			"meat at the limit is fine",
-			planning.FoodGroups{MeatG: 300.0 / 21, FishG: 1, LegumeG: 1},
+			planning.FoodGroups{MeatG: 300.0 / 21, FishG: 50, LegumeG: 50},
 			profile.DietOmnivore, nil,
 			nil, 300, 21, 21, 0,
 		},
@@ -86,16 +86,23 @@ func TestEvaluate_DGEWeek(t *testing.T) {
 		},
 		{
 			"vegan with legumes: nothing",
-			planning.FoodGroups{LegumeG: 40},
+			planning.FoodGroups{LegumeG: 50},
 			profile.DietVegan, nil,
 			nil, 0, 0, 21, 0,
 		},
 		{
 			"pescetarian: fish rule applies",
-			planning.FoodGroups{LegumeG: 40},
+			planning.FoodGroups{LegumeG: 50},
 			profile.DietPescetarian, nil,
 			[]string{planning.CodeWeekFishBelowDGE},
 			0, 0, 21, 0,
+		},
+		{
+			"a dash of fish or legumes is no meal (under 50 g)",
+			planning.FoodGroups{FishG: 49.9, LegumeG: 49.9},
+			profile.DietOmnivore, nil,
+			[]string{planning.CodeWeekFishBelowDGE, planning.CodeWeekLegumesBelow},
+			0, 0, 0, 0,
 		},
 		{"too few days: no verdict", planning.FoodGroups{}, profile.DietOmnivore, []string{sat, sun, mon, tue, wed}, nil, 0, 0, 0, 0},
 	}
@@ -119,17 +126,35 @@ func TestEvaluate_DGEWeek(t *testing.T) {
 		})
 	}
 
-	t.Run("meat is extrapolated to seven days", func(t *testing.T) {
+	t.Run("meat is compared to a prorated limit, shown as the real sum", func(t *testing.T) {
 		s := baseState()
 		s.Profile.KcalTarget = f64(1500)
 		c := s.Foods[curry]
-		c.Groups = planning.FoodGroups{MeatG: 20, FishG: 1, LegumeG: 1}
+		c.Groups = planning.FoodGroups{MeatG: 20, FishG: 50, LegumeG: 50}
 		s.Foods[curry] = c
-		// four complete days (12 plates, 20 g each = 240 g) -> 420 g a week
+		// five complete days (15 plates, 20 g each = 300 g) against 300 x 5/7 = 214 g
+		ev, _ := weekOf(s, sat, sun)
+		require.NotNil(t, ev.Week)
+		assert.Equal(t, 5, ev.Week.Days)
+		assert.InDelta(t, 300, ev.Week.MeatG, 1e-6)
+		assert.Equal(t, []string{planning.CodeWeekMeatAboveDGE}, dgeCodes(t, ev))
+	})
+	t.Run("meat under the prorated limit is fine", func(t *testing.T) {
+		s := baseState()
+		s.Profile.KcalTarget = f64(1500)
+		c := s.Foods[curry]
+		c.Groups = planning.FoodGroups{MeatG: 13, FishG: 50, LegumeG: 50}
+		s.Foods[curry] = c
+		// five days: 195 g < 214 g (extrapolated to a week it would be 273 g)
+		ev, _ := weekOf(s, sat, sun)
+		assert.Empty(t, dgeCodes(t, ev))
+	})
+	t.Run("four days are no verdict, even with no fish", func(t *testing.T) {
+		s := baseState()
+		s.Profile.KcalTarget = f64(1500)
 		ev, _ := weekOf(s, sat, sun, mon)
 		require.NotNil(t, ev.Week)
 		assert.Equal(t, 4, ev.Week.Days)
-		assert.InDelta(t, 420, ev.Week.MeatG, 1e-6)
-		assert.Equal(t, []string{planning.CodeWeekMeatAboveDGE}, dgeCodes(t, ev))
+		assert.Empty(t, dgeCodes(t, ev))
 	})
 }

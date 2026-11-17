@@ -664,9 +664,11 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 }
 
 // dgeFitBucket is the kcal width within which the kcal fit counts as equal,
-// so the DGE keys decide only between recipes that fit the meal about as
-// well: they never trade kcal fit for a food group.
-const dgeFitBucket = 60
+// so the DGE keys decide only between recipes that fit the meal equally
+// well: they never trade kcal fit for a food group. It is deliberately
+// tight: any wider bucket (tried 2-60 kcal) re-ordered near-ties and
+// regressed macro_daily_pct of replan_one_day by about +3 points.
+const dgeFitBucket = 1
 
 // dgeState is the DGE weekly food-group standing of the plan so far, for
 // the tie-break of pickMain (see groups.go; soft, below kcal and protein).
@@ -682,31 +684,37 @@ type dgeState struct {
 func (h *planner) dgeState() dgeState {
 	t := diet.Class(h.s.Profile.DietType)
 	d := dgeState{needFish: t == "" || diet.Compatible(diet.Pescetarian, t), needLegume: true}
-	note := func(g FoodGroups, times float64) {
-		d.needFish = d.needFish && g.FishG == 0
-		d.needLegume = d.needLegume && g.LegumeG == 0
-		d.meatG += g.MeatG * times
+	// note takes the groups of one portion eaten (g) and the portions of
+	// meat that count against the week.
+	note := func(g FoodGroups, meatPortions float64) {
+		d.needFish = d.needFish && g.FishG < minMealG
+		d.needLegume = d.needLegume && g.LegumeG < minMealG
+		d.meatG += g.MeatG * meatPortions
 	}
 	for _, p := range h.s.Plates {
 		if !h.s.Window.Contains(p.Date) {
 			continue
 		}
+		var pg FoodGroups // the sum of the plate: a meal is judged on the plate
 		for _, c := range p.Components {
-			note(h.s.Foods[c.FoodID].Groups, c.Multiplier())
+			pg = pg.add(h.s.Foods[c.FoodID].Groups.times(c.Multiplier()))
 		}
+		note(pg, 1)
 	}
-	for id, n := range h.used {
+	for _, id := range slices.Sorted(maps.Keys(h.used)) { // sorted: float sums are order-dependent
 		f := h.s.Foods[id]
-		note(f.Groups, float64(n)*f.ReferencePortions)
+		note(f.Groups, float64(h.used[id])*f.ReferencePortions)
 	}
 	return d
 }
 
-// fish is 0 for a fish main while the week has none (1 otherwise).
-func (d dgeState) fish(f FoodFacts) float64 { return b2f(!(d.needFish && f.Groups.FishG > 0)) }
+// fish is 0 for a fish main (a fish meal, see minMealG) while the week has none (1 otherwise).
+func (d dgeState) fish(f FoodFacts) float64 { return b2f(!(d.needFish && f.Groups.FishG >= minMealG)) }
 
 // legume is 0 for a legume main while the week has none.
-func (d dgeState) legume(f FoodFacts) float64 { return b2f(!(d.needLegume && f.Groups.LegumeG > 0)) }
+func (d dgeState) legume(f FoodFacts) float64 {
+	return b2f(!(d.needLegume && f.Groups.LegumeG >= minMealG))
+}
 
 // meat is 1 for a recipe that takes the estimated week past the DGE limit.
 func (d dgeState) meat(f FoodFacts) float64 {

@@ -1,6 +1,9 @@
 package diet
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // Group is the food group a leaf counts toward in the DGE weekly food rules.
 // There is no food category in the library, so it is derived from the name
@@ -30,6 +33,7 @@ const (
 var legumes = foldKeywords([]string{
 	"bohne", "beans", "linse", "lentil", "kichererbse", "chickpea", "erbse",
 	"=peas", "tofu", "tempeh", "edamame", "hummus", "lupine", "lupin-",
+	"cannellini", "borlotti", "falafel",
 })
 
 // greenBeans are cut out of a name before the legume keywords run.
@@ -37,6 +41,38 @@ var greenBeans = []string{
 	" gruene bohne", " gruenen bohne", " green bean", " string bean", " prinzessbohne",
 	" buschbohne", " stangenbohne", " brechbohne",
 }
+
+// notLegumes are cut out of a name like greenBeans: herbs, seeds and
+// flavourings named after beans, and pea protein, an isolate and not a legume
+// meal (the English name never matched, so the German one agrees).
+var notLegumes = []string{
+	"bohnenkraut", "kaffeebohne", "kakaobohne", "tonkabohne", "coffee bean",
+	"cocoa bean", "cacao bean", "tonka bean", "erbsenprotein", "pea protein",
+}
+
+// plantMarkers make a name none: a plant-based stand-in for meat or fish.
+// Words match like keywords, phrases are looked for in the folded name.
+var (
+	plantWords   = foldKeywords([]string{"pflanzlich", "plantbased", "meatfree", "fleischlos", "fleischfrei"})
+	plantPhrases = []string{" plant based ", " meat free "}
+)
+
+// seasonings are broths, animal fats and oils, and fish and oyster sauces:
+// their words are dropped from a name before the meat and fish keywords run
+// ("Hühnerbrühe", "Gänseschmalz", "Lachsöl"), so only real food counts. Grams
+// of stock are mostly water and fat grams are negligible. "Gemüsebrühe mit
+// Huhn" still has its Huhn.
+var seasonings = foldKeywords([]string{
+	"brühe", "fond", "=stock", "=broth", "bouillon", "schmalz", "fett", "öl",
+	"lebertran", "fischsauce", "fischsosse", "austernsauce", "austernsosse",
+})
+
+// seasoningNouns are the English seasonings written as a separate word; the
+// word before them ("beef" in "beef broth") is dropped with them.
+var seasoningNouns = []string{"stock", "broth", "bouillon", "fat", "oil"}
+
+// seasoningPhrases are the same for names of several words.
+var seasoningPhrases = []string{" fish sauce ", " oyster sauce "}
 
 // Not meat: fats and binders whose grams are negligible.
 var notMeat = map[string]bool{"gelatin": true, "schmalz": true, "=lard": true}
@@ -74,9 +110,25 @@ func GroupOf(name string) Group {
 			rest = strings.ReplaceAll(rest, p.phrase, " ")
 		}
 	}
-	ws := strings.Fields(rest)
-	if anyMatch(ws, markers[0].keywords) || anyMatch(ws, markers[1].keywords) {
+	for _, p := range seasoningPhrases {
+		rest = strings.ReplaceAll(rest, p, " ")
+	}
+	var ws []string
+	for _, w := range strings.Fields(rest) {
+		switch {
+		case slices.Contains(seasoningNouns, w) && len(ws) > 0:
+			ws = ws[:len(ws)-1] // "Beef broth": the word before names the animal
+		case !anyMatch([]string{w}, seasonings):
+			ws = append(ws, w)
+		}
+	}
+	if anyMatch(ws, markers[0].keywords) || anyMatch(ws, markers[1].keywords) || anyMatch(ws, plantWords) {
 		return GroupNone
+	}
+	for _, p := range plantPhrases {
+		if strings.Contains(whole, p) {
+			return GroupNone
+		}
 	}
 	switch {
 	case anyMatch(ws, meatKeywords):
@@ -85,6 +137,9 @@ func GroupOf(name string) Group {
 		return GroupFish
 	}
 	for _, g := range greenBeans {
+		whole = strings.ReplaceAll(whole, g, " ")
+	}
+	for _, g := range notLegumes {
 		whole = strings.ReplaceAll(whole, g, " ")
 	}
 	if anyMatch(strings.Fields(whole), legumes) {

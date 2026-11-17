@@ -46,6 +46,15 @@ func TestHeuristic_DGETieBreak(t *testing.T) {
 		assert.True(t, cooked(p, fish), "fish main")
 		assert.True(t, cooked(p, legume), "legume main")
 	})
+	t.Run("a dash of fish or legumes (under 50 g) is no pick", func(t *testing.T) {
+		s := batchCooker()
+		base := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+		withGroups(s, fish, planning.FoodGroups{FishG: 49})
+		withGroups(s, legume, planning.FoodGroups{LegumeG: 49})
+		p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+		assert.Equal(t, cooked(base, fish), cooked(p, fish))
+		assert.Equal(t, cooked(base, legume), cooked(p, legume))
+	})
 	t.Run("no fish pick for a vegetarian, legumes still", func(t *testing.T) {
 		s := batchCooker()
 		s.Profile.DietType = profile.DietVegetarian
