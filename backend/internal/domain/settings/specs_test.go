@@ -66,6 +66,7 @@ func TestSettingsSpec_Phase1Defaults(t *testing.T) {
 		settings.KeyPlanFreezerKeepDays:        "90",
 		settings.KeyPlanVarietyWeeks:           "3",
 		settings.KeyPlanExplorePerWeek:         "0",
+		settings.KeyPlanMaxDishMealsPerWeek:    "3",
 		settings.KeyDiscoveryDailyEnabled:      "true",
 		settings.KeyAIRunRetentionDays:         "180",
 		settings.KeyAIReasoningEffortChat:      "low",
@@ -93,6 +94,7 @@ func TestSettingsSpec_Phase1IntRanges(t *testing.T) {
 		{settings.KeyPlanFreezerKeepDays, []string{"1", "365"}, []string{"0", "366"}},
 		{settings.KeyPlanVarietyWeeks, []string{"0", "8"}, []string{"-1", "9"}},
 		{settings.KeyPlanExplorePerWeek, []string{"0", "3"}, []string{"-1", "4"}},
+		{settings.KeyPlanMaxDishMealsPerWeek, []string{"1", "14"}, []string{"0", "15"}},
 		{settings.KeyAIRunRetentionDays, []string{"7", "3650"}, []string{"6", "3651"}},
 	}
 	for _, tc := range cases {

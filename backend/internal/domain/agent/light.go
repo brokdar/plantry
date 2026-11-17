@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"fmt"
+	"slices"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -61,5 +63,12 @@ func saveLight(ctx context.Context, svc Services, light []planning.LightIntent) 
 	if len(light) == 0 || svc.Light == nil {
 		return nil
 	}
-	return svc.Light.Replace(ctx, todayFrom(ctx), planning.LightDates(light), planning.MergeLight(nil, light))
+	dates := planning.LightDates(light)
+	first, _ := time.Parse(time.DateOnly, slices.Min(dates))
+	last, _ := time.Parse(time.DateOnly, slices.Max(dates))
+	stored, err := svc.Light.List(ctx, first, last)
+	if err != nil {
+		return err
+	}
+	return svc.Light.Replace(ctx, todayFrom(ctx), dates, planning.MergeLight(stored, light))
 }

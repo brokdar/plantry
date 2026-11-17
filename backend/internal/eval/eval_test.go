@@ -98,7 +98,7 @@ func TestHeuristicHasNoHardViolations(t *testing.T) {
 			assert.Contains(t, names(r.Expectations), ExpectNoViolations)
 			require.NotNil(t, r.Score)
 			assert.Empty(t, r.Score.HardViolations)
-			assert.Equal(t, "h13", r.PromptVersion)
+			assert.Equal(t, "h14", r.PromptVersion)
 			assert.Equal(t, Tokens{}, r.Tokens, "the heuristic calls no model")
 			if r.Scenario == "single_batch_cooker" {
 				// Z5 §17.2: no hard violation covers one cook a day (H2), no

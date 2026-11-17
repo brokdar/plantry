@@ -343,7 +343,7 @@ func StatePlate(p plate.Plate) Plate {
 		Components: make([]Component, len(p.Components)),
 	}
 	for i, c := range p.Components {
-		out.Components[i] = Component{ID: c.ID, FoodID: c.FoodID, Portions: c.Portions, Grams: c.Grams}
+		out.Components[i] = Component{ID: c.ID, FoodID: c.FoodID, Portions: c.Portions, Grams: c.Grams, Position: c.Position}
 		if c.CookSessionID != nil {
 			out.Components[i].SessionID = *c.CookSessionID
 		}
@@ -387,7 +387,11 @@ func ReadSettings(ctx context.Context, r SettingsReader) (Settings, error) {
 	if err != nil {
 		return Settings{}, fmt.Errorf("parse %s: %w", settings.KeyPlanBatchCooking, err)
 	}
-	return Settings{BatchSettings: batch, MaxCookOccasionsPerDay: maxCook, VarietyWeeks: variety, BatchCooking: batchCooking}, nil
+	maxDish, err := plate.IntSetting(ctx, r, settings.KeyPlanMaxDishMealsPerWeek)
+	if err != nil {
+		return Settings{}, err
+	}
+	return Settings{BatchSettings: batch, MaxCookOccasionsPerDay: maxCook, VarietyWeeks: variety, BatchCooking: batchCooking, MaxDishMealsPerWeek: maxDish}, nil
 }
 
 // routineBase is the id of the first routine plate in a state (D8): they

@@ -82,6 +82,7 @@ type Day struct {
 	TargetKcal *float64
 	Light      string
 	LightSlot  string
+	LightLevel string
 }
 
 // Targets are the profile's daily targets in kcal and grams.
@@ -344,7 +345,7 @@ func markLight(days []Day, led ledger) {
 		if !ok {
 			continue
 		}
-		days[i].TargetKcal, days[i].Light = de.TargetKcal, de.Light
+		days[i].TargetKcal, days[i].Light, days[i].LightLevel = de.TargetKcal, de.Light, de.LightLevel
 		if de.Light != planning.LightScopeMeal {
 			continue
 		}

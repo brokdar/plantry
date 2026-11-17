@@ -242,6 +242,7 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 		}
 	}
 	out = append(out, x.lightIssues(ev)...)
+	out = append(out, x.dishIssues()...)
 	// S4: the weekly average outside the policy's week band. No date and no
 	// options: the model decides which days to move.
 	if w := ev.Week; w != nil && w.Days >= MinWeekDays {

@@ -5,7 +5,8 @@
   "start": "2026-11-07",
   "settings": {
     "plan.shopping_day": "5", "plan.batch_cooking": "true", "plan.default_keep_days": "3",
-    "plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "true"
+    "plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "true",
+    "plan.max_dish_meals_per_week": "14"
   },
   "profile": {"diet_type": "omnivore", "household_portions": 1, "kcal_target": 2200},
   "slots": ["breakfast", "lunch", "dinner"],

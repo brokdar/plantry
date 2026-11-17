@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 )
 
 // DefaultRuns is how often each scenario runs (spec §8.4).
@@ -84,6 +86,7 @@ const (
 	ExpectExplorePlaced   = "explore_placed"
 	ExpectFrozenSpare     = "frozen_spare"
 	ExpectBatchMeals      = "batch_meals"
+	ExpectMaxDishMeals    = "max_dish_meals"
 )
 
 // Run runs every scenario cfg.Runs times, each on a fresh database, and
@@ -348,6 +351,7 @@ type componentRow struct {
 	FoodID    int64
 	Portions  *float64
 	SessionID *int64
+	Position  plate.Position
 }
 
 type sessionRow struct {
@@ -377,7 +381,7 @@ func (e *env) rows(ctx context.Context) (rows, error) {
 	for _, p := range ps {
 		pr := plateRow{Date: p.DateString(), SlotID: p.SlotID, Eaters: p.Eaters, State: p.State}
 		for _, c := range p.Components {
-			pr.Components = append(pr.Components, componentRow{FoodID: c.FoodID, Portions: c.Portions, SessionID: c.CookSessionID})
+			pr.Components = append(pr.Components, componentRow{FoodID: c.FoodID, Portions: c.Portions, SessionID: c.CookSessionID, Position: c.Position})
 		}
 		r.plates[p.ID] = pr
 	}
@@ -495,7 +499,47 @@ func (e *env) expect(sc Scenario, st Step, before, after rows, rec Record) []Exp
 		}
 		out = append(out, ex)
 	}
-	return out
+	// Every scenario: S8, no dish is the main of more lunches and dinners
+	// in the window than the setting allows (3 by default).
+	return append(out, e.maxDishMeals(sc, after))
+}
+
+// maxDishMeals checks that no food is the main of more lunch or dinner
+// plates in the window than plan.max_dish_meals_per_week.
+func (e *env) maxDishMeals(sc Scenario, after rows) Expectation {
+	limit := planning.DefaultMaxDishMeals
+	if v, err := strconv.Atoi(sc.Settings[settings.KeyPlanMaxDishMealsPerWeek]); err == nil {
+		limit = v
+	}
+	meals := map[int64]int{}
+	for _, p := range after.plates {
+		d, _ := time.Parse(time.DateOnly, p.Date)
+		if !e.window.Contains(d) || !e.mealSlot(p.SlotID) {
+			continue
+		}
+		for _, c := range p.Components {
+			if c.Position == plate.PositionMain {
+				meals[c.FoodID]++
+			}
+		}
+	}
+	ex := Expectation{Name: ExpectMaxDishMeals, OK: true}
+	for id, n := range meals {
+		if n > limit {
+			ex.OK, ex.Detail = false, fmt.Sprintf("food %d is the main of %d meals, want ≤ %d", id, n, limit)
+		}
+	}
+	return ex
+}
+
+// mealSlot reports whether id is the lunch or dinner slot.
+func (e *env) mealSlot(id int64) bool {
+	for _, name := range []string{"lunch", "dinner"} {
+		if s, err := e.slot(name); err == nil && s == id {
+			return true
+		}
+	}
+	return false
 }
 
 // batchMeals checks that one cook session the step created feeds at least

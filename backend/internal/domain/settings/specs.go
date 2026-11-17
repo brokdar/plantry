@@ -106,6 +106,16 @@ var registry = []Spec{
 		Max:      8,
 	},
 	{
+		// S8: a dish is the main of at most this many lunches or dinners a
+		// week (soft).
+		Key:      KeyPlanMaxDishMealsPerWeek,
+		Kind:     KindInt,
+		Default:  "3",
+		HasRange: true,
+		Min:      1,
+		Max:      14,
+	},
+	{
 		Key:      KeyPlanExplorePerWeek,
 		Kind:     KindInt,
 		Default:  "0",

@@ -379,7 +379,7 @@ func (h *planner) pickSupply(c plate.CellKey, eaters float64, skipAvoided bool) 
 		if skipAvoided && sup.proposed < 0 && h.avoidBatch[sup.food] {
 			continue
 		}
-		if h.supplyOverMeat(sup, c) {
+		if h.supplyOverMeat(sup, c) || h.supplyAtDishCap(sup, c) {
 			continue
 		}
 		room := sup.free
@@ -406,7 +406,7 @@ func (h *planner) growable(c plate.CellKey) *supply {
 		if sup.proposed < 0 {
 			continue
 		}
-		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) {
+		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) || h.supplyAtDishCap(sup, c) {
 			continue
 		}
 		if best == nil || plate.Before(best.cook.CookCell(), sup.cook.CookCell(), h.order) {
@@ -414,6 +414,12 @@ func (h *planner) growable(c plate.CellKey) *supply {
 		}
 	}
 	return best
+}
+
+// supplyAtDishCap reports whether a lunch or dinner on c eating from sup
+// would make its dish the main of more meals than S8 allows.
+func (h *planner) supplyAtDishCap(sup *supply, c plate.CellKey) bool {
+	return h.x.mealOf(c.SlotID) == mealFull && h.dishFull(sup.food)
 }
 
 // eat places a plate on c eating from sup (and its side); grow cooks the
@@ -581,11 +587,21 @@ func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freez
 		meat[dayOf(c.Date)] = true
 	}
 	limit := h.s.Profile.MeatDaysPerWeekMax
+	// S8: the batch stops growing once its dish is the main of as many
+	// lunches and dinners as the setting allows.
+	dishes := h.dishMeals(cook.FoodID)
+	if h.x.mealOf(c.SlotID) == mealFull {
+		dishes++
+	}
 	for _, o := range h.open {
 		if total+epsilon >= ref {
 			break
 		}
 		if h.done[idOf(o)] || !plate.Before(c, o, h.order) || h.isForced(o) {
+			continue
+		}
+		full := h.x.mealOf(o.SlotID) == mealFull
+		if full && dishes >= h.s.Settings.MaxDishMeals() {
 			continue
 		}
 		if omni && limit != nil && h.s.Window.Contains(o.Date) && !meat[dayOf(o.Date)] {
@@ -601,6 +617,9 @@ func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freez
 		n := h.eaters(o.Date)
 		out = append(out, covered{cell: o, eaters: n, frozen: frozen})
 		total += n
+		if full {
+			dishes++
+		}
 	}
 	return out
 }
@@ -655,8 +674,11 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		}
 		// A light cell asks for a recipe within its (reduced) share first.
 		heavy := light && share > 0 && f.Macros.Kcal > share
+		// S8: a dish already at its weekly cap comes only when nothing
+		// else qualifies.
+		atCap := h.x.mealOf(c.SlotID) == mealFull && h.dishFull(f.ID)
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
-			b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
+			b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
 			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
@@ -852,8 +874,12 @@ func (h *planner) kcalShare(c plate.CellKey) float64 {
 	switch {
 	case h.s.lightMeal(c.Date, c.SlotID):
 		return LightMealShare * *t / float64(meals)
+	case h.s.heartyMeal(c.Date, c.SlotID):
+		return HeartyMealShare * *t / float64(meals)
 	case h.s.lightDay(c.Date):
 		return *t / float64(n) * LightDayShare
+	case h.s.heartyDay(c.Date):
+		return *t / float64(n) * HeartyDayShare
 	}
 	return *t / float64(n)
 }

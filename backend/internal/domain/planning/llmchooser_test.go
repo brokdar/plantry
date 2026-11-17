@@ -490,7 +490,7 @@ func TestLLMChooser_StageAndReady(t *testing.T) {
 	// The empty first plan is H1-only: its repair is extra, then two repairs.
 	assert.Equal(t, 3, p.RepairAttempts)
 	assert.Equal(t, []planning.Stage{planning.StageRepairing, planning.StageRepairing, planning.StageRepairing}, stages)
-	assert.Equal(t, "p14", c.PromptVersion())
+	assert.Equal(t, "p15", c.PromptVersion())
 
 	require.NoError(t, c.Ready(context.Background()))
 	assert.ErrorIs(t, planning.NewLLMChooser(llm.StaticResolver(nil, "")).Ready(context.Background()), domain.ErrAIProviderMissing)
