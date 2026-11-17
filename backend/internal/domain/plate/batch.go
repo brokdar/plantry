@@ -196,11 +196,12 @@ func Sync(before, after Usage, portions, frozen float64) (float64, float64) {
 	return portions, frozen
 }
 
-const portionEpsilon = 1e-6
+// PortionEpsilon is the tolerance when comparing portion amounts.
+const PortionEpsilon = 1e-6
 
-func almostEqual(a, b float64) bool { return math.Abs(a-b) < portionEpsilon }
+func almostEqual(a, b float64) bool { return math.Abs(a-b) < PortionEpsilon }
 
-func exceeds(a, b float64) bool { return a-b >= portionEpsilon }
+func exceeds(a, b float64) bool { return a-b >= PortionEpsilon }
 
 // Exceeds reports whether a is more than b by the checker's tolerance, so
 // callers judge portions as H3 does.

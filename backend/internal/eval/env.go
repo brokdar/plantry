@@ -41,6 +41,7 @@ type env struct {
 	runRepo  *sqlite.AIRunRepo
 	runs     *capturingLog
 	svc      *planning.Service
+	builder  *planning.Builder
 	scripted *scriptedLLM
 	// after and notes are the measured run's closing Evaluation (nil when it
 	// stored none) and its run notes.
@@ -101,15 +102,16 @@ func newEnv(conn *sql.DB, cfg Config) *env {
 		e.scripted = newScriptedLLM(func(c llm.Client) llm.Client { return recorder.Meter(c, fakeProvider) }, cfg.model())
 		llmChooser = e.scripted
 	}
+	e.builder = planning.NewBuilder(planning.BuilderDeps{
+		Foods: foodSvc, FoodRows: foodRepo, Nutrition: food.NewNutritionResolver(foodRepo), Cells: avail,
+		Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
+		Settings: settingsSvc, Profile: profileSvc, Corrections: sqlite.NewPlateEventRepo(conn),
+		Light: sqlite.NewPlanLightRepo(conn),
+	})
 	e.svc = planning.NewService(planning.Deps{
-		Builder: planning.NewBuilder(planning.BuilderDeps{
-			Foods: foodSvc, FoodRows: foodRepo, Nutrition: food.NewNutritionResolver(foodRepo), Cells: avail,
-			Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
-			Settings: settingsSvc, Profile: profileSvc, Corrections: sqlite.NewPlateEventRepo(conn),
-			Light: sqlite.NewPlanLightRepo(conn),
-		}),
-		Light:  sqlite.NewPlanLightRepo(conn),
-		Plates: plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: avail, Overrides: avail, FoodRows: foodRepo, Settings: settingsSvc,
+		Builder: e.builder,
+		Light:   sqlite.NewPlanLightRepo(conn),
+		Plates:  plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: avail, Overrides: avail, FoodRows: foodRepo, Settings: settingsSvc,
 		RunLog: e.runs, Runs: runRepo, Tx: tx, Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{
 			airun.ChooserHeuristic: planning.Heuristic{},

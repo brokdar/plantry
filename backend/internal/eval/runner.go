@@ -88,6 +88,9 @@ const (
 	ExpectFrozenSpare     = "frozen_spare"
 	ExpectBatchMeals      = "batch_meals"
 	ExpectMaxDishMeals    = "max_dish_meals"
+	// ExpectAlternatives: every draft lunch or dinner main from today on
+	// gets at least one alternative with a different dish.
+	ExpectAlternatives = "alternatives"
 	// ExpectUnchangedOutside: no plate dated outside the regenerated day
 	// changed; ExpectDayBatchKept: a later meal of a batch cooked on that
 	// day still eats it.
@@ -197,6 +200,13 @@ func runOnce(ctx context.Context, cfg Config, d *dbs, lib Library, sc Scenario, 
 		return Record{}, err
 	}
 	rec.Expectations = append(rec.Expectations, e.expect(sc, sc.Steps[measured], before, after, rec)...)
+	if sc.Expect.Alternatives {
+		ex, err := e.alternatives(ctx, stepToday(sc, sc.Steps[measured]))
+		if err != nil {
+			return Record{}, err
+		}
+		rec.Expectations = append(rec.Expectations, ex)
+	}
 	return rec, nil
 }
 
@@ -673,4 +683,33 @@ func compare(name string, before, after rows, plates func(plateRow) bool, sessio
 		}
 	}
 	return x
+}
+
+// alternatives asks planning.Alternatives for the main of every draft lunch
+// or dinner plate from today on; each must offer a different dish.
+func (e *env) alternatives(ctx context.Context, today time.Time) (Expectation, error) {
+	ex := Expectation{Name: ExpectAlternatives, OK: true}
+	st, err := e.builder.Build(ctx, e.window, today, e.window.Start, e.window.End)
+	if err != nil {
+		return ex, err
+	}
+	asked := 0
+	for _, p := range st.Plates {
+		if p.Confirmed || p.Date.Before(today) || !e.mealSlot(p.SlotID) ||
+			!slices.ContainsFunc(p.Components, func(c planning.Component) bool { return c.Position == plate.PositionMain }) {
+			continue
+		}
+		asked++
+		res, err := e.svc.Alternatives(ctx, e.window.Start, today, planning.AltRequest{PlateID: p.ID, What: planning.AltMain})
+		if err != nil {
+			return ex, err
+		}
+		if len(res.Alternatives) == 0 {
+			ex.OK = false
+			ex.Detail = fmt.Sprintf("%s slot %d: nothing fits %+v", p.Date.Format(time.DateOnly), p.SlotID, *res.EmptyReason)
+			return ex, nil
+		}
+	}
+	ex.Detail = fmt.Sprintf("%d plates", asked)
+	return ex, nil
 }
