@@ -69,7 +69,16 @@ export interface PlanStats {
 }
 
 /** The hard rules of spec §6.4. */
-export type IssueRule = "H1" | "H2" | "H3" | "H4" | "H5" | "H6" | "H7" | "H8"
+export type IssueRule =
+  | "H1"
+  | "H2"
+  | "H3"
+  | "H4"
+  | "H5"
+  | "H6"
+  | "H7"
+  | "H8"
+  | "H9"
 
 /** The D22 codes the UI has copy for; H3/H4 reuse the session warning
  *  codes. */
@@ -82,6 +91,7 @@ export const KNOWN_ISSUE_CODES = [
   "diet_unknown",
   "variety_repeat",
   "variety_relaxed",
+  "kcal_below_floor",
   "leftover_before_cook",
   "past_keep_days",
   "deficit",

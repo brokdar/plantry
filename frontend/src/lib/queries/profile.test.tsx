@@ -49,6 +49,12 @@ describe("usePatchProfile", () => {
       diet_type: "vegan",
       meat_days_per_week_max: null,
       household_portions: 1,
+      goal: "maintain",
+      weight_kg: null,
+      height_cm: null,
+      birth_year: null,
+      sex: null,
+      activity_level: null,
     })
   })
 

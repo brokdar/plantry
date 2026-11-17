@@ -233,7 +233,42 @@
       "goal_effect": "Plantry aims for {{kcal}} kcal a day: {{protein}} % protein, {{fat}} % fat, {{carbs}} % carbs.",
       "goal_effect_kcal_only": "Plantry aims for {{kcal}} kcal a day.",
       "goal_effect_none": "No goal set. Plantry doesn't balance plates for nutrition.",
-      "macro_sum_invalid": "Protein, fat and carbs add up to more than 100 %."
+      "macro_sum_invalid": "Protein, fat and carbs add up to more than 100 %.",
+      "policy": {
+        "goal_label": "Goal",
+        "goal": {
+          "maintain": "Keep my weight",
+          "lose": "Lose weight",
+          "gain": "Gain weight"
+        },
+        "goal_effect": {
+          "maintain": "Your kcal target is the goal. A day within 10 % of it is fine; the week's average should land within 5 %.",
+          "lose": "Your kcal target is your deficit target. A day may run 10 % under or 5 % over it; the week's average should stay within 5 % under to 3 % over.",
+          "gain": "Your kcal target is your surplus target. A day may run 5 % under or 10 % over it; the week's average should stay within 3 % under to 5 % over."
+        },
+        "floor_note": "Plantry never plans a day below 75 % of its target, and with your sex set never below 1,200 kcal (female) or 1,500 kcal (male) a day. This is not medical advice.",
+        "body_label": "About you (optional)",
+        "body_effect": "Used only to suggest a kcal target and to set the minimum a day may hold.",
+        "weight": "Weight",
+        "height": "Height",
+        "birth_year": "Birth year",
+        "sex_label": "Sex",
+        "sex": {
+          "female": "Female",
+          "male": "Male",
+          "unset": "Not set"
+        },
+        "activity_label": "Activity level",
+        "activity": {
+          "1_4": "Mostly sitting",
+          "1_6": "Often on my feet",
+          "1_8": "Physically active"
+        },
+        "estimate": "Estimated need: about {{target}} kcal a day for your goal ({{maintenance}} kcal to keep your weight).",
+        "estimate_note": "An estimate (Mifflin-St Jeor x activity level). Real needs differ by 10-20 %; adjust by how your weight develops.",
+        "estimate_missing": "Enter weight, height, birth year and activity level to get a suggested kcal target.",
+        "suggest": "Use as my kcal target"
+      }
     },
     "meals": {
       "slots_label": "Meal slots",
@@ -1007,7 +1042,10 @@
       "invalid_macros": "Macro percentages must sum to 100 or less, and calorie target must be positive.",
       "invalid_diet_type": "Pick one of the listed diets.",
       "invalid_meat_days": "Meat days per week must be between 0 and 7.",
-      "invalid_household_portions": "Household portions must be more than 0 and at most 20."
+      "invalid_household_portions": "Household portions must be more than 0 and at most 20.",
+      "invalid_goal": "Pick one of the listed goals.",
+      "invalid_body_data": "Check weight, height, birth year, sex and activity level.",
+      "kcal_below_floor": "That kcal target is below the minimum Plantry plans for your sex (1,200 kcal female, 1,500 kcal male)."
     },
     "preset": {
       "in_use": "This preset still references a missing food."
@@ -1294,6 +1332,7 @@
     "kcal": "kcal",
     "g": "g",
     "kg": "kg",
+    "cm": "cm",
     "ml": "ml",
     "l": "l",
     "piece": "pcs",
@@ -1643,6 +1682,7 @@
       "diet_unknown": "The diet of this recipe is unknown.",
       "variety_repeat": "You had this recently, on {{last_eaten}}.",
       "variety_relaxed": "You had this recently, on {{last_eaten}}. There aren't enough other recipes to avoid it.",
+      "kcal_below_floor": "This day is under the minimum Plantry plans: {{kcal}} kcal, at least {{floor_kcal}} kcal are needed.",
       "leftover_before_cook": "Eaten before the batch is cooked.",
       "past_keep_days": "Eaten after the batch's keep days.",
       "deficit": "The batch is short of portions.",

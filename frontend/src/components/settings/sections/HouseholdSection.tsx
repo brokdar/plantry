@@ -22,6 +22,7 @@ import {
   DietTypePicker,
   NutritionGoalFields,
 } from "../ProfileEditor"
+import { BodyFields, GoalPicker } from "../NutritionPolicyFields"
 import { SettingRow } from "../SettingRow"
 
 const NO_LIMIT = "none"
@@ -51,6 +52,8 @@ function HouseholdFields({ profile }: { profile: Profile }) {
   const allergies = useProfileRow()
   const meat = useProfileRow()
   const goal = useProfileRow()
+  const mode = useProfileRow()
+  const body = useProfileRow()
 
   const restrictions = profile.dietary_restrictions ?? []
   const meatDays = profile.meat_days_per_week_max
@@ -154,6 +157,30 @@ function HouseholdFields({ profile }: { profile: Profile }) {
           </Select>
         </SettingRow>
       )}
+
+      <SettingRow
+        label={t("settings_page.household.policy.goal_label")}
+        description={
+          <>
+            {t(`settings_page.household.policy.goal_effect.${profile.goal}`)}{" "}
+            {t("settings_page.household.policy.floor_note")}
+          </>
+        }
+        saved={mode.saved}
+      >
+        <GoalPicker
+          value={profile.goal}
+          onChange={(next) => mode.save({ goal: next })}
+        />
+      </SettingRow>
+
+      <SettingRow
+        label={t("settings_page.household.policy.body_label")}
+        description={t("settings_page.household.policy.body_effect")}
+        saved={body.saved}
+      >
+        <BodyFields profile={profile} onSave={body.save} />
+      </SettingRow>
 
       <SettingRow
         label={t("settings_page.household.goal_label")}

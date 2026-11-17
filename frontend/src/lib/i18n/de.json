@@ -233,7 +233,42 @@
       "goal_effect": "Plantry zielt auf {{kcal}} kcal am Tag: {{protein}} % Eiweiß, {{fat}} % Fett, {{carbs}} % Kohlenhydrate.",
       "goal_effect_kcal_only": "Plantry zielt auf {{kcal}} kcal am Tag.",
       "goal_effect_none": "Kein Ziel gesetzt. Plantry gleicht die Mahlzeiten nicht nach Nährwerten ab.",
-      "macro_sum_invalid": "Eiweiß, Fett und Kohlenhydrate ergeben zusammen mehr als 100 %."
+      "macro_sum_invalid": "Eiweiß, Fett und Kohlenhydrate ergeben zusammen mehr als 100 %.",
+      "policy": {
+        "goal_label": "Ziel",
+        "goal": {
+          "maintain": "Gewicht halten",
+          "lose": "Abnehmen",
+          "gain": "Zunehmen"
+        },
+        "goal_effect": {
+          "maintain": "Dein Kalorienziel ist das Ziel. Ein Tag innerhalb von 10 % passt; der Wochendurchschnitt sollte innerhalb von 5 % liegen.",
+          "lose": "Dein Kalorienziel ist dein Defizitziel. Ein Tag darf 10 % darunter oder 5 % darüber liegen; der Wochendurchschnitt sollte zwischen 5 % darunter und 3 % darüber bleiben.",
+          "gain": "Dein Kalorienziel ist dein Überschussziel. Ein Tag darf 5 % darunter oder 10 % darüber liegen; der Wochendurchschnitt sollte zwischen 3 % darunter und 5 % darüber bleiben."
+        },
+        "floor_note": "Plantry plant keinen Tag unter 75 % seines Ziels und, wenn dein Geschlecht angegeben ist, nie unter 1.200 kcal (weiblich) oder 1.500 kcal (männlich) am Tag. Das ist keine medizinische Beratung.",
+        "body_label": "Über dich (optional)",
+        "body_effect": "Nur für den Vorschlag eines Kalorienziels und das Minimum, das ein Tag enthalten muss.",
+        "weight": "Gewicht",
+        "height": "Größe",
+        "birth_year": "Geburtsjahr",
+        "sex_label": "Geschlecht",
+        "sex": {
+          "female": "Weiblich",
+          "male": "Männlich",
+          "unset": "Keine Angabe"
+        },
+        "activity_label": "Aktivitätslevel",
+        "activity": {
+          "1_4": "Überwiegend sitzend",
+          "1_6": "Oft auf den Beinen",
+          "1_8": "Körperlich aktiv"
+        },
+        "estimate": "Geschätzter Bedarf: etwa {{target}} kcal am Tag für dein Ziel ({{maintenance}} kcal zum Gewicht halten).",
+        "estimate_note": "Eine Schätzung (Mifflin-St Jeor x Aktivitätslevel). Der tatsächliche Bedarf weicht um 10-20 % ab; passe ihn an deine Gewichtsentwicklung an.",
+        "estimate_missing": "Gib Gewicht, Größe, Geburtsjahr und Aktivitätslevel an, um ein Kalorienziel vorgeschlagen zu bekommen.",
+        "suggest": "Als Kalorienziel übernehmen"
+      }
     },
     "meals": {
       "slots_label": "Mahlzeiten",
@@ -1034,7 +1069,10 @@
       "invalid_macros": "Die Makroprozentsätze dürfen zusammen höchstens 100 ergeben, und das Kalorienziel muss positiv sein.",
       "invalid_diet_type": "Wähle eine der angebotenen Ernährungsweisen.",
       "invalid_meat_days": "Fleischtage pro Woche müssen zwischen 0 und 7 liegen.",
-      "invalid_household_portions": "Die Portionen im Haushalt müssen über 0 und höchstens 20 liegen."
+      "invalid_household_portions": "Die Portionen im Haushalt müssen über 0 und höchstens 20 liegen.",
+      "invalid_goal": "Wähle eines der angebotenen Ziele.",
+      "invalid_body_data": "Prüfe Gewicht, Größe, Geburtsjahr, Geschlecht und Aktivitätslevel.",
+      "kcal_below_floor": "Dieses Kalorienziel liegt unter dem Minimum, das Plantry für dein Geschlecht plant (1.200 kcal weiblich, 1.500 kcal männlich)."
     },
     "preset": {
       "in_use": "Dieses Preset verweist noch auf ein fehlendes Lebensmittel."
@@ -1294,6 +1332,7 @@
     "kcal": "kcal",
     "g": "g",
     "kg": "kg",
+    "cm": "cm",
     "ml": "ml",
     "l": "l",
     "piece": "Stk.",
@@ -1643,6 +1682,7 @@
       "diet_unknown": "Für dieses Rezept ist die Ernährungsform unbekannt.",
       "variety_repeat": "Das gab es zuletzt am {{last_eaten}}.",
       "variety_relaxed": "Das gab es zuletzt am {{last_eaten}}. Es gibt nicht genug andere Rezepte, um es zu vermeiden.",
+      "kcal_below_floor": "Dieser Tag liegt unter dem Minimum, das Plantry plant: {{kcal}} kcal, nötig sind mindestens {{floor_kcal}} kcal.",
       "leftover_before_cook": "Wird gegessen, bevor vorgekocht ist.",
       "past_keep_days": "Wird gegessen, wenn das Vorgekochte nicht mehr haltbar ist.",
       "deficit": "Es sind zu wenige Portionen vorgekocht.",
