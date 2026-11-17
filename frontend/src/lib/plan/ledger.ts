@@ -176,17 +176,19 @@ export function dayMeterTargets(
   return { ...targets, kcal: day.target_kcal }
 }
 
-/** The label of a day's light mark ("Light day", "Light: Dinner"); null on
+/** The label of a day's light mark ("Light day", "Light: Dinner", "Hearty:
+ *  Dinner" for a hearty request); null on
  *  a day without a light request. `slotName` resolves "dinner" to the
  *  slot's display name. */
 export function lightLabel(
-  day: Pick<PlanDay, "light" | "light_slot">,
+  day: Pick<PlanDay, "light" | "light_slot" | "light_level">,
   slotName: (short: string) => string,
   f: Formatter
 ): string | null {
-  if (day.light === "day") return f.t("plan.light.day")
+  const key = day.light_level === "hearty" ? "plan.hearty" : "plan.light"
+  if (day.light === "day") return f.t(`${key}.day`)
   if (day.light === "meal") {
-    return f.t("plan.light.meal", {
+    return f.t(`${key}.meal`, {
       slot: slotName(day.light_slot ?? ""),
     })
   }

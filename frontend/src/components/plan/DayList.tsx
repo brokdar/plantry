@@ -49,7 +49,9 @@ export function DayList({
                 {day.weekday}{" "}
                 <span className="tabular-nums">{day.dayNumber}</span>
               </h2>
-              {day.light && <LightMark label={day.light} showLabel />}
+              {day.light && (
+                <LightMark label={day.light} hearty={day.hearty} showLabel />
+              )}
               {day.nutrition && (
                 <DayMeter
                   day={day.nutrition}

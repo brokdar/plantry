@@ -61,6 +61,8 @@ export interface PlanDay {
   /** The lunch or dinner of a light meal (the slot's name without
    *  "slot."). */
   light_slot?: string
+  /** "hearty" when the request asks for more instead of less. */
+  light_level?: "hearty"
 }
 
 export type LightScope = "meal" | "day"
