@@ -69,6 +69,7 @@ func (h *planner) topUpFloors() {
 		return
 	}
 	h.topUpBase = map[[2]int]float64{}
+	h.adds = map[int]*dayAdds{}
 	y, days := h.dayAccounts()
 	for _, dk := range days {
 		if floor := y.pol.Floor(dk.Target, dk.FloorShare()); dk.Kcal < floor {
@@ -124,15 +125,62 @@ func (h *planner) dayAccounts() (*index, []DayKcal) {
 // verified no-cook foods.
 func (h *planner) liftDay(dk DayKcal, limit float64, roundUp bool) {
 	h.topUpDay(dk.Date, limit-dk.Kcal, roundUp)
-	for range maxFloorAdds {
-		if !h.addNoCook(dk.Date, false, nil, limit) {
-			break
-		}
+	for h.addNoCook(dk.Date, false, limit) {
 	}
 }
 
-// maxProteinAdds bounds the protein foods added to one day, one per plate.
-const maxProteinAdds = 2
+// The no-cook adds of one day over every pass (floor, protein, band, week):
+// at most maxFillerAdds plain fillers and maxProteinAdds protein adds, each
+// at most maxAddFillerGrams and fillerDayShare of the day's target, on
+// different plates before any plate takes a second. Past that the day stays
+// short and kcalNote says so.
+const (
+	maxFillerAdds     = 2
+	maxProteinAdds    = 1
+	maxAddFillerGrams = 200
+	fillerDayShare    = 0.2
+)
+
+// dayAdds counts a day's no-cook adds and the plates (slots) they went to.
+type dayAdds struct {
+	filler, protein int
+	used            map[int64]bool
+}
+
+func (h *planner) addsOf(date time.Time) *dayAdds {
+	a := h.adds[dayOf(date)]
+	if a == nil {
+		a = &dayAdds{used: map[int64]bool{}}
+		h.adds[dayOf(date)] = a
+	}
+	return a
+}
+
+// capAdd shrinks an add to the filler caps (grams, kcal) and reports false
+// when even the smallest size is over them.
+func (h *planner) capAdd(c optCand, maxKcal float64) (optCand, bool) {
+	f := h.s.Foods[c.opt.FoodID]
+	if f.Macros.Kcal <= 0 {
+		return c, false
+	}
+	switch {
+	case c.opt.Grams != nil:
+		g := min(*c.opt.Grams, maxAddFillerGrams, math.Floor(maxKcal/f.Macros.Kcal*100/roundGrams)*roundGrams)
+		if g < minAddGrams {
+			return c, false
+		}
+		c.opt.Grams, c.add.Grams = &g, &g
+		c.kcal, c.protein = f.Macros.Kcal*g/100, f.Macros.Protein*g/100
+	case c.opt.Portions != nil:
+		p := min(*c.opt.Portions, math.Floor(maxKcal/f.Macros.Kcal/roundPortions)*roundPortions)
+		if p < minAddPortions {
+			return c, false
+		}
+		c.opt.Portions, c.add.Portions = &p, &p
+		c.kcal, c.protein = f.Macros.Kcal*p, f.Macros.Protein*p
+	}
+	return c, true
+}
 
 // closeProteinGaps lifts every complete day under its g/kg protein target
 // (100 %, so the week average can reach it too; the checker's day floor is
@@ -149,26 +197,26 @@ func (h *planner) closeProteinGaps() {
 	}
 	y := newIndex(Merge(h.s, h.in.Target, h.prop), h.in.Target)
 	for _, dk := range y.dayAccounts(y.days) {
-		used := map[int64]bool{}
 		for range maxProteinAdds {
-			if !h.addNoCook(dk.Date, true, used, 0) {
+			if !h.addNoCook(dk.Date, true, 0) {
 				break
 			}
 		}
 	}
 }
 
-// maxFloorAdds bounds the no-cook foods added to one day.
-const maxFloorAdds = 3
-
 // addNoCook adds the best verified no-cook food to a day under limit kcal
 // (protein: a day still under its protein target; the candidates and the
 // re-check of S2's and S3's options) and reports whether it did. Raising a
 // component is left to topUpDay: it would have to move the component's
-// session too. A protein add goes on a plate whose slot is not in used (the
-// slot is marked), on the day's last plate first, and never repeats a food
-// of the day.
-func (h *planner) addNoCook(date time.Time, protein bool, used map[int64]bool, limit float64) bool {
+// session too. An add goes on a plate with no add of the day yet (the day's
+// last plate first; every plate once, then they stack), never repeats a food
+// of the day and never is a sweet; the day's caps hold over all passes.
+func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
+	adds := h.addsOf(date)
+	if (protein && adds.protein >= maxProteinAdds) || (!protein && adds.filler >= maxFillerAdds) {
+		return false
+	}
 	merged := Merge(h.s, h.in.Target, h.prop)
 	y := newIndex(merged, h.in.Target)
 	var dk *DayKcal
@@ -201,27 +249,25 @@ func (h *planner) addNoCook(date time.Time, protein bool, used map[int64]bool, l
 		return false
 	}
 	base := hardKeys(ev.Issues)
-	cands := slices.DeleteFunc(y.candidates(date, need), func(c optCand) bool { return c.comp >= 0 })
+	cands := slices.DeleteFunc(y.candidates(date, need), func(c optCand) bool {
+		return c.comp >= 0 || h.s.Foods[c.opt.FoodID].Sweet
+	})
+	for i := 0; i < len(cands); {
+		var ok bool
+		if cands[i], ok = h.capAdd(cands[i], dk.Adjusted*fillerDayShare); ok {
+			i++
+		} else {
+			cands = slices.Delete(cands, i, i+1)
+		}
+	}
+	cands = spreadAdds(y, merged, date, cands, adds.used)
 	if protein {
-		cands = spreadProteinAdds(y, merged, date, cands, used)
 		// Week band: the add must not push the running average above it.
 		if w := ev.Week; w != nil && w.TargetKcal > 0 {
 			cands = slices.DeleteFunc(cands, func(c optCand) bool {
 				return (w.AvgKcal+c.kcal/float64(w.Days))/w.TargetKcal > y.pol.WeekHigh+1e-9
 			})
 		}
-	}
-	if !protein {
-		// A food does not come twice a day.
-		held := map[int64]bool{}
-		for _, p := range merged.Plates {
-			if dayOf(p.Date) == dayOf(date) {
-				for _, c := range p.Components {
-					held[c.FoodID] = true
-				}
-			}
-		}
-		cands = slices.DeleteFunc(cands, func(c optCand) bool { return held[c.opt.FoodID] })
 	}
 	slices.SortStableFunc(cands, func(a, b optCand) int {
 		if protein {
@@ -235,14 +281,9 @@ func (h *planner) addNoCook(date time.Time, protein bool, used map[int64]bool, l
 			}
 			return cmp.Or(cmp.Compare(over(a), over(b)), cmp.Compare(b.protein, a.protein), cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal)))
 		}
-		fit := cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal))
-		if y.pol.ProteinGPerKg > 0 {
-			// With a protein target the kcal gap is filled with the most
-			// protein per kcal, so no candy uses up the room the protein
-			// pass needs.
-			return cmp.Or(cmp.Compare(b.protein/b.kcal, a.protein/a.kcal), fit)
-		}
-		return fit
+		// Sweets are out and the protein pass has its own add, so a filler
+		// is the food that fits the kcal gap best.
+		return cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal))
 	})
 	for _, c := range cands {
 		if _, ok := y.verify(c, h.in.Target, base, d, band, protein); !ok {
@@ -260,8 +301,11 @@ func (h *planner) addNoCook(date time.Time, protein bool, used map[int64]bool, l
 					pc.Grams = *c.opt.Grams
 				}
 				p.Components = append(p.Components, pc)
+				adds.used[at.SlotID] = true
 				if protein {
-					used[at.SlotID] = true
+					adds.protein++
+				} else {
+					adds.filler++
 				}
 				return true
 			}
@@ -270,15 +314,19 @@ func (h *planner) addNoCook(date time.Time, protein bool, used map[int64]bool, l
 	return false
 }
 
-// spreadProteinAdds puts every add candidate on each of the day's editable
-// plates whose slot has no protein add yet (the day's last plate first) and
-// drops foods the day already holds on any plate.
-func spreadProteinAdds(y *index, merged State, date time.Time, cands []optCand, used map[int64]bool) []optCand {
+// spreadAdds puts every add candidate on each of the day's editable plates
+// whose slot has no add yet (the day's last plate first; when every plate
+// has one, on all of them) and drops foods the day already holds on any
+// plate.
+func spreadAdds(y *index, merged State, date time.Time, cands []optCand, used map[int64]bool) []optCand {
 	var plates []int
 	for _, pi := range y.editablePlates(date) {
 		if !used[merged.Plates[pi].SlotID] {
 			plates = append(plates, pi)
 		}
+	}
+	if len(plates) == 0 {
+		plates = y.editablePlates(date)
 	}
 	slices.SortStableFunc(plates, func(a, b int) int {
 		return cmp.Compare(merged.SlotOrder[merged.Plates[b].SlotID], merged.SlotOrder[merged.Plates[a].SlotID])

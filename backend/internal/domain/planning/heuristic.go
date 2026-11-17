@@ -95,6 +95,8 @@ type planner struct {
 	// topUpBase is the portions of a component (plate, component index) before
 	// the kcal passes grew it: the 1.5x cap holds over all of them.
 	topUpBase map[[2]int]float64
+	// adds counts each day's no-cook adds over every pass (dayAdds).
+	adds map[int]*dayAdds
 	// choices log what was chosen per cell and why (the run's
 	// heuristic.choices step).
 	choices []heuristicChoice

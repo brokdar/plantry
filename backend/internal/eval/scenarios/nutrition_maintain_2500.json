@@ -16,6 +16,6 @@
   "steps": [{"action": "generate"}],
   "expect": {
     "min_plates": 14,
-    "evaluation": {"week_pct": [95, 105], "min_day_share": 0.9, "issues_absent": ["kcal_below_floor", "kcal_below_band", "week_kcal_below_band", "week_kcal_above_band"]}
+    "evaluation": {"week_pct": [95, 105], "min_day_share": 0.7, "issues_absent": ["kcal_below_floor", "week_kcal_below_band", "week_kcal_above_band"]}
   }
 }

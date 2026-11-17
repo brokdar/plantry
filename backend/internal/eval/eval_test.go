@@ -21,13 +21,13 @@ import (
 // The scenarios of spec §8.4 plus the confirmed-cook repros.
 var specScenarios = []string{
 	"away_thu_fri", "confirmed_cook_empty_cell", "confirmed_cook_no_surplus", "explore_quota", "family_daily", "light_day", "light_meal_weekday_dinners",
-	"many_none_cells", "nutrition_lose", "nutrition_maintain", "nutrition_maintain_2500", "protein_gap_week", "replan_one_day",
+	"many_none_cells", "nutrition_lose", "nutrition_maintain", "nutrition_maintain_1800", "nutrition_maintain_2500", "protein_gap_week", "replan_one_day",
 	"single_batch_cooker", "small_library_h8", "unreachable_floor", "vegetarian_variety", "walkthrough_batch_cooker",
 }
 
 // policyScenarios assert on the saved plan's Evaluation (bands, floors, the
 // weekly ledger, light intents); unreachable_floor ends partial on purpose.
-var policyScenarios = []string{"light_day", "light_meal_weekday_dinners", "nutrition_lose", "nutrition_maintain", "nutrition_maintain_2500", "protein_gap_week", "unreachable_floor"}
+var policyScenarios = []string{"light_day", "light_meal_weekday_dinners", "nutrition_lose", "nutrition_maintain", "nutrition_maintain_1800", "nutrition_maintain_2500", "protein_gap_week", "unreachable_floor"}
 
 func TestLoadScenarios(t *testing.T) {
 	all, err := LoadScenarios()

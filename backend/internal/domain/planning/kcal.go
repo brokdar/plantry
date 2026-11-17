@@ -169,7 +169,7 @@ func kcalNote(s State, t Target) string {
 	var parts []string
 	pol := PolicyOf(s.Profile)
 	for _, d := range DayKcals(s, t) {
-		if d.Complete && d.Proposed && d.Kcal < d.Adjusted*pol.DayLow {
+		if d.Complete && d.Proposed && !d.NutritionMissing && !s.lightDay(d.Date) && d.Kcal < d.Adjusted*pol.DayLow {
 			parts = append(parts, fmt.Sprintf("%s −%.0f kcal", d.Date.Weekday().String()[:3], d.Gap))
 		}
 	}
