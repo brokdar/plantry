@@ -297,7 +297,8 @@ test.describe("Plan board", () => {
       // Monday dinner (day 2) → Tuesday dinner (day 3).
       const moved = page.waitForResponse(
         (r) =>
-          /\/api\/plates\/\d+$/.test(r.url()) && r.request().method() === "PUT"
+          /\/api\/plates\/\d+\/move$/.test(r.url()) &&
+          r.request().method() === "POST"
       )
       await drag(
         page,
@@ -311,7 +312,7 @@ test.describe("Plan board", () => {
       // Tuesday dinner → the No plate cell: refused before any request.
       let requested = false
       page.on("request", (r) => {
-        if (r.method() === "PUT" && /\/api\/plates\//.test(r.url())) {
+        if (r.method() === "POST" && /\/api\/plates\/\d+\/move/.test(r.url())) {
           requested = true
         }
       })
@@ -372,13 +373,19 @@ test.describe("Plan board", () => {
       // The cook plate, day 1 dinner → day 0 dinner.
       const moved = page.waitForResponse(
         (r) =>
-          /\/api\/plates\/\d+$/.test(r.url()) && r.request().method() === "PUT"
+          /\/api\/plates\/\d+\/move$/.test(r.url()) &&
+          r.request().method() === "POST"
       )
       await drag(
         page,
         cell(page, s.days[1], s.dinner),
         cell(page, s.days[0], s.dinner)
       )
+      // Moving the cook plate changes the batch's cooking: the dry run says
+      // so before anything is written.
+      const preview = page.getByTestId("also-changed")
+      await expect(preview).toContainText("will now be cooked")
+      await preview.getByRole("button", { name: "Confirm" }).click()
       expect((await moved).ok()).toBeTruthy()
 
       await expect(cell(page, s.days[0], s.dinner)).toContainText(

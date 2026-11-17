@@ -32,10 +32,13 @@ const AI_SERIAL_SPECS = [
 
 // Specs that write the profile or plan settings through the UI. Those are
 // global: the anchor moves every window other specs open, so they run last,
-// alone, after the other projects.
+// alone, after the other projects. `meal-away.spec.ts` is here for another
+// global: Away all day writes a cell for every slot, other specs' slots
+// included, and their slot cleanup would make its Undo stale.
 const GLOBAL_SETTINGS_SPECS = [
   "assistant-drafts.spec.ts",
   "discovery-explore-plan.spec.ts",
+  "meal-away.spec.ts",
   "plan-anchor-settings.spec.ts",
   "plan-generate-heuristic.spec.ts",
   "plan-replan.spec.ts",

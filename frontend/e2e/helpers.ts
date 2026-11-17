@@ -87,6 +87,8 @@ export interface SeedComposedInput {
   name: string
   role: string
   reference_portions?: number
+  prep_minutes?: number
+  cook_minutes?: number
   /** Days a cooked batch keeps (1–7); null uses the plan default. */
   keep_days?: number
   /** Can be frozen (needs `plan.freezing_enabled` to count). */
