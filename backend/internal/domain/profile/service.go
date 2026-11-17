@@ -140,12 +140,19 @@ const (
 	MinBirthYear = 1900
 	maxWeightKg  = 500
 	maxHeightCm  = 280
+	// MinProteinGPerKg is the DGE adult reference value; MaxProteinGPerKg is an
+	// upper bound that was not verified against a primary source.
+	MinProteinGPerKg = 0.8
+	MaxProteinGPerKg = 2.2
 )
 
 func validateBody(p *Profile) error {
 	bad := func(msg string) error { return fmt.Errorf("%w: %s", domain.ErrInvalidBodyData, msg) }
 	if p.WeightKg != nil && (*p.WeightKg <= 0 || *p.WeightKg > maxWeightKg) {
 		return bad("weight_kg out of range")
+	}
+	if p.ProteinGPerKg != nil && (*p.ProteinGPerKg < MinProteinGPerKg || *p.ProteinGPerKg > MaxProteinGPerKg) {
+		return bad("protein_g_per_kg must be between 0.8 and 2.2")
 	}
 	if p.HeightCm != nil && (*p.HeightCm <= 0 || *p.HeightCm > maxHeightCm) {
 		return bad("height_cm out of range")

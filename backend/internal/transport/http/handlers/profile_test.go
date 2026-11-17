@@ -130,7 +130,7 @@ func TestProfileHandler_NutritionPolicyFields(t *testing.T) {
 	assert.Nil(t, body["weight_kg"])
 	assert.Nil(t, body["sex"])
 
-	code, body := putProfile(t, r, `{"goal":"lose","weight_kg":82.5,"height_cm":180,"birth_year":1985,"sex":"male","activity_level":1.6,"kcal_target":1900}`)
+	code, body := putProfile(t, r, `{"goal":"lose","weight_kg":82.5,"height_cm":180,"birth_year":1985,"sex":"male","activity_level":1.6,"protein_g_per_kg":1.8,"kcal_target":1900}`)
 	require.Equal(t, http.StatusOK, code, body)
 	assert.Equal(t, "lose", body["goal"])
 	assert.Equal(t, 82.5, body["weight_kg"])
@@ -138,6 +138,7 @@ func TestProfileHandler_NutritionPolicyFields(t *testing.T) {
 	assert.Equal(t, float64(1985), body["birth_year"])
 	assert.Equal(t, "male", body["sex"])
 	assert.Equal(t, 1.6, body["activity_level"])
+	assert.Equal(t, 1.8, body["protein_g_per_kg"])
 
 	// An absent goal keeps the stored one; body fields are a full replace.
 	code, body = putProfile(t, r, `{"kcal_target":1900}`)
@@ -146,6 +147,7 @@ func TestProfileHandler_NutritionPolicyFields(t *testing.T) {
 	assert.Nil(t, body["weight_kg"])
 	assert.Nil(t, body["sex"])
 	assert.Nil(t, body["activity_level"])
+	assert.Nil(t, body["protein_g_per_kg"])
 }
 
 func TestProfileHandler_Update_InvalidNutritionPolicyFields(t *testing.T) {
@@ -162,6 +164,8 @@ func TestProfileHandler_Update_InvalidNutritionPolicyFields(t *testing.T) {
 		{"birth year future", `{"birth_year":2999}`, "error.profile.invalid_body_data"},
 		{"sex", `{"sex":"x"}`, "error.profile.invalid_body_data"},
 		{"activity", `{"activity_level":1.5}`, "error.profile.invalid_body_data"},
+		{"protein factor below the DGE floor", `{"protein_g_per_kg":0.7}`, "error.profile.invalid_body_data"},
+		{"protein factor above the bound", `{"protein_g_per_kg":2.3}`, "error.profile.invalid_body_data"},
 		{"kcal below the female floor", `{"sex":"female","kcal_target":1100}`, "error.profile.kcal_below_floor"},
 		{"kcal below the male floor", `{"sex":"male","kcal_target":1400}`, "error.profile.kcal_below_floor"},
 	}

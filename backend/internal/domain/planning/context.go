@@ -235,7 +235,7 @@ const ExploreTag = "explore"
 // facts maps a food to what the planner reads about it.
 func facts(f *food.Food, d food.Detailed, timesEaten int, likes, dislikes map[string]bool) FoodFacts {
 	ff := BaseFacts(f)
-	ff.Macros, ff.NutritionComplete, ff.TimesEaten8Weeks = d.Macros, d.Complete, timesEaten
+	ff.Macros, ff.NutritionComplete, ff.FiberMissing, ff.TimesEaten8Weeks = d.Macros, d.Complete, d.FiberMissing, timesEaten
 	if f.ReferencePortions != nil && *f.ReferencePortions > 0 {
 		ff.ReferencePortions = *f.ReferencePortions
 	}
@@ -302,7 +302,7 @@ func StateProfile(p *profile.Profile) Profile {
 		KcalTarget: p.KcalTarget, ProteinPct: p.ProteinPct, FatPct: p.FatPct, CarbsPct: p.CarbsPct,
 		DietType: p.DietType, MeatDaysPerWeekMax: p.MeatDaysPerWeekMax, HouseholdPortions: p.HouseholdPortions,
 		Locale: p.Locale, Restrictions: p.DietaryRestrictions,
-		Goal: p.Goal, Sex: p.Sex,
+		Goal: p.Goal, Sex: p.Sex, WeightKg: p.WeightKg, BirthYear: p.BirthYear, ProteinGPerKg: p.ProteinGPerKg,
 	}
 	if p.SystemPrompt != nil {
 		out.Notes = *p.SystemPrompt

@@ -20,7 +20,10 @@ type Profile struct {
 	// Optional body data. They only feed the kcal-target estimate in the
 	// UI and the sex-based safety floor; nothing requires them. BirthYear
 	// rather than age: a stored age goes stale.
-	WeightKg      *float64
+	WeightKg *float64
+	// ProteinGPerKg overrides the goal's default protein factor (0.8-2.2 g/kg
+	// body weight); it needs WeightKg to take effect.
+	ProteinGPerKg *float64
 	HeightCm      *float64
 	BirthYear     *int
 	Sex           *Sex

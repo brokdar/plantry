@@ -369,6 +369,7 @@ type UserProfile struct {
 	BirthYear           sql.NullInt64
 	Sex                 sql.NullString
 	ActivityLevel       sql.NullFloat64
+	ProteinGPerKg       sql.NullFloat64
 }
 
 type VariantGroup struct {

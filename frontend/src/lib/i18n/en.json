@@ -252,6 +252,8 @@
         "weight": "Weight",
         "height": "Height",
         "birth_year": "Birth year",
+        "protein_per_kg": "Protein per kg (optional)",
+        "protein_per_kg_hint": "Default from your goal: 1.0 g/kg to maintain, 1.6 g/kg to lose or gain. Set it higher (up to 2.2) if you train. Needs your weight; the lowest allowed is 0.8 g/kg (DGE).",
         "sex_label": "Sex",
         "sex": {
           "female": "Female",

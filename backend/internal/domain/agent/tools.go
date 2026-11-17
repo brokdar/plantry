@@ -317,7 +317,7 @@ func toolGetProfile(svc Services) Tool {
 	schema := json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)
 	return Tool{
 		Name:        "get_profile",
-		Description: "Read the user's profile: kcal/macro targets, dietary restrictions, free-form preferences, and any custom system prompt. Returns JSON {kcal_target, protein_pct, fat_pct, carbs_pct (numbers or null), dietary_restrictions:[string], preferences:{key:value}, system_prompt, locale, household_portions}.",
+		Description: "Read the user's profile: kcal/macro targets, dietary restrictions, free-form preferences, and any custom system prompt. Returns JSON {kcal_target, protein_pct, fat_pct, carbs_pct, protein_g_per_kg, weight_kg (numbers or null), dietary_restrictions:[string], preferences:{key:value}, system_prompt, locale, household_portions}.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, _ json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			p, err := svc.Profile.Get(ctx)
@@ -529,6 +529,8 @@ func profileMap(p *profile.Profile) map[string]any {
 	return map[string]any{
 		"kcal_target":          p.KcalTarget,
 		"protein_pct":          p.ProteinPct,
+		"protein_g_per_kg":     p.ProteinGPerKg,
+		"weight_kg":            p.WeightKg,
 		"fat_pct":              p.FatPct,
 		"carbs_pct":            p.CarbsPct,
 		"dietary_restrictions": p.DietaryRestrictions,

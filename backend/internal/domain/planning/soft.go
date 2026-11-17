@@ -80,6 +80,7 @@ func (x *index) week(ev Evaluation) *WeekEval {
 		withPlate[p.Date] = true
 	}
 	var w WeekEval
+	fiberMissing := false
 	for _, d := range ev.Days {
 		if !d.Complete || !withPlate[d.Date] || d.NutritionMissing || d.Kcal <= 0 || d.TargetKcal == nil || *d.TargetKcal <= 0 {
 			continue
@@ -87,13 +88,33 @@ func (x *index) week(ev Evaluation) *WeekEval {
 		w.Days++
 		w.AvgKcal += d.Kcal
 		w.TargetKcal += *d.TargetKcal
+		w.AvgProteinG += d.ProteinG
+		w.TargetProteinG += d.ProteinTargetG
+		w.CarbsPct += d.CarbsPct * d.Kcal
+		w.FatPct += d.FatPct * d.Kcal
+		w.FiberG += d.FiberG
+		fiberMissing = fiberMissing || d.FiberMissing
 	}
 	if w.Days == 0 {
 		return nil
 	}
+	n := float64(w.Days)
 	w.Pct = w.AvgKcal / w.TargetKcal * 100
-	w.AvgKcal /= float64(w.Days)
-	w.TargetKcal /= float64(w.Days)
+	if w.TargetProteinG > 0 {
+		w.ProteinPct = w.AvgProteinG / w.TargetProteinG * 100
+	}
+	// The macro shares are weighted by the days' kcal.
+	w.CarbsPct /= w.AvgKcal
+	w.FatPct /= w.AvgKcal
+	w.AvgKcal /= n
+	w.TargetKcal /= n
+	w.AvgProteinG /= n
+	w.TargetProteinG /= n
+	w.FiberG /= n
+	if fiberMissing {
+		// A partial average would mislead: show none.
+		w.FiberG = 0
+	}
 	return &w
 }
 
@@ -104,6 +125,7 @@ func (x *index) week(ev Evaluation) *WeekEval {
 func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 	var out []Issue
 	proteinTarget := x.s.Profile.ProteinPct
+	perKg := x.pol.ProteinGPerKg > 0
 	withPlate := map[string]bool{}
 	for _, p := range ev.Plates {
 		withPlate[p.Date] = true
@@ -133,7 +155,16 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 				out = append(out, is)
 			}
 		}
-		if proteinTarget != nil && *proteinTarget > 0 && d.ProteinPct < *proteinTarget-ProteinMarginPts {
+		if perKg {
+			// The g/kg target replaces the share margin.
+			if lo := d.ProteinTargetG * ProteinDayMin; d.ProteinG < lo {
+				is := issue("S3", CodeProteinLow, SeveritySoft).onDate(day).
+					with("protein_g", math.Round(d.ProteinG*10)/10).with("target_g", math.Round(d.ProteinTargetG*10)/10).
+					with("min_g", math.Round(lo*10)/10).with("protein_pct", math.Round(d.ProteinPct*10)/10)
+				is.Options = x.options(ev, t, d, day, true)
+				out = append(out, is)
+			}
+		} else if proteinTarget != nil && *proteinTarget > 0 && d.ProteinPct < *proteinTarget-ProteinMarginPts {
 			is := issue("S3", CodeProteinLow, SeveritySoft).onDate(day).
 				with("protein_pct", math.Round(d.ProteinPct*10)/10).with("target_pct", *proteinTarget).
 				with("min_pct", *proteinTarget-ProteinMarginPts)
@@ -149,6 +180,31 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 				with("days", w.Days).with("avg_kcal", math.Round(w.AvgKcal)).with("target_kcal", math.Round(w.TargetKcal)).
 				with("pct", math.Round(w.Pct*10)/10).
 				with("band_low_pct", math.Round(x.pol.WeekLow*100)).with("band_high_pct", math.Round(x.pol.WeekHigh*100)))
+		}
+		out = append(out, x.weekMacroIssues(w)...)
+	}
+	return out
+}
+
+// weekMacroIssues are the weekly soft issues of the protein average (against
+// the g/kg target) and of the carb and fat shares (against the policy's
+// ranges). No date and no options: the model decides which days to change.
+func (x *index) weekMacroIssues(w *WeekEval) []Issue {
+	var out []Issue
+	if x.pol.ProteinGPerKg > 0 && w.TargetProteinG > 0 && w.ProteinPct < ProteinWeekMin*100-1e-9 {
+		out = append(out, issue("S3", CodeWeekProteinLow, SeveritySoft).
+			with("days", w.Days).with("avg_protein_g", math.Round(w.AvgProteinG*10)/10).
+			with("target_protein_g", math.Round(w.TargetProteinG*10)/10).with("pct", math.Round(w.ProteinPct*10)/10))
+	}
+	for _, m := range []struct {
+		code      string
+		pct       float64
+		low, high float64
+	}{{CodeWeekCarbsRange, w.CarbsPct, x.pol.CarbsLow, x.pol.CarbsHigh}, {CodeWeekFatRange, w.FatPct, x.pol.FatLow, x.pol.FatHigh}} {
+		if m.pct < m.low-1e-9 || m.pct > m.high+1e-9 {
+			out = append(out, issue("S5", m.code, SeveritySoft).
+				with("days", w.Days).with("pct", math.Round(m.pct*10)/10).
+				with("range_low_pct", math.Round(m.low)).with("range_high_pct", math.Round(m.high)))
 		}
 	}
 	return out
@@ -359,7 +415,8 @@ func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, tar
 	if after.Kcal > 0 {
 		pct = after.ProteinG * proteinKcalPerG / after.Kcal * 100
 	}
-	if protein && pct <= d.ProteinPct {
+	perKg := x.pol.ProteinGPerKg > 0
+	if protein && ((perKg && after.ProteinG <= d.ProteinG) || (!perKg && pct <= d.ProteinPct)) {
 		return Option{}, false
 	}
 	if !protein && target > 0 && math.Abs(target-after.Kcal) >= math.Abs(target-d.Kcal) {
@@ -367,6 +424,9 @@ func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, tar
 	}
 	o := c.opt
 	o.inBand, o.shareGap = target <= 0 || after.Kcal >= target*x.pol.DayLow, pct-d.ProteinPct
+	if perKg {
+		o.shareGap = after.ProteinG - d.ProteinG
+	}
 	o.Date, o.SlotID = p.Date.Format(time.DateOnly), p.SlotID
 	if !p.Proposed() {
 		id := p.ID

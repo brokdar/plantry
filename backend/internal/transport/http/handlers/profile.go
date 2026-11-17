@@ -33,6 +33,7 @@ type profileRequest struct {
 	// Goal keeps the stored value when absent; the body fields are a full replace.
 	Goal          *profile.Goal `json:"goal"`
 	WeightKg      *float64      `json:"weight_kg"`
+	ProteinGPerKg *float64      `json:"protein_g_per_kg"`
 	HeightCm      *float64      `json:"height_cm"`
 	BirthYear     *int          `json:"birth_year"`
 	Sex           *profile.Sex  `json:"sex"`
@@ -53,6 +54,7 @@ type profileResponse struct {
 	HouseholdPortions   float64        `json:"household_portions"`
 	Goal                string         `json:"goal"`
 	WeightKg            *float64       `json:"weight_kg"`
+	ProteinGPerKg       *float64       `json:"protein_g_per_kg"`
 	HeightCm            *float64       `json:"height_cm"`
 	BirthYear           *int           `json:"birth_year"`
 	Sex                 *profile.Sex   `json:"sex"`
@@ -87,6 +89,7 @@ func toProfileResponse(p *profile.Profile) profileResponse {
 		HouseholdPortions:   p.HouseholdPortions,
 		Goal:                string(p.Goal),
 		WeightKg:            p.WeightKg,
+		ProteinGPerKg:       p.ProteinGPerKg,
 		HeightCm:            p.HeightCm,
 		BirthYear:           p.BirthYear,
 		Sex:                 p.Sex,
@@ -138,6 +141,7 @@ func (h *ProfileHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Locale:              locale,
 			MeatDaysPerWeekMax:  req.MeatDaysPerWeekMax,
 			WeightKg:            req.WeightKg,
+			ProteinGPerKg:       req.ProteinGPerKg,
 			HeightCm:            req.HeightCm,
 			BirthYear:           req.BirthYear,
 			Sex:                 req.Sex,

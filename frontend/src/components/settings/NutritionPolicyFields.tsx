@@ -143,7 +143,19 @@ export function BodyFields({
           step={1}
           onCommit={(birth_year) => onSave({ birth_year })}
         />
+        <BodyNumber
+          label={t("settings_page.household.policy.protein_per_kg")}
+          unit="g/kg"
+          value={profile.protein_g_per_kg}
+          min={0.8}
+          max={2.2}
+          step={0.1}
+          onCommit={(protein_g_per_kg) => onSave({ protein_g_per_kg })}
+        />
       </div>
+      <p className="text-small text-ink-muted">
+        {t("settings_page.household.policy.protein_per_kg_hint")}
+      </p>
       <OptionCards
         name="body-sex"
         legend={t("settings_page.household.policy.sex_label")}
