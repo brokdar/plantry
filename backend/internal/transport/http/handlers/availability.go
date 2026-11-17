@@ -54,10 +54,44 @@ type setOverrideRequest struct {
 }
 
 // setOverrideResponse carries the cell and, when remove_plate deleted the
-// cell's plate, the snapshot that restores it (POST /api/plan/restore).
+// cell's plate, the snapshot that restores it (POST /api/plan/restore), and
+// the batches whose cook moved off the cell (empty when none did).
 type setOverrideResponse struct {
-	Cell    availabilityCellJSON `json:"cell"`
-	Removed *plate.PlanSnapshot  `json:"removed"`
+	Cell        availabilityCellJSON `json:"cell"`
+	Removed     *plate.PlanSnapshot  `json:"removed"`
+	AlsoChanged []plate.AlsoChanged  `json:"also_changed"`
+}
+
+type awayCellJSON struct {
+	Date   string `json:"date"`
+	SlotID int64  `json:"slot_id"`
+}
+
+type awayRequest struct {
+	Cells []awayCellJSON `json:"cells"`
+	Date  *string        `json:"date"`
+	Note  *string        `json:"note"`
+}
+
+// overrideJSON is a cell's stored override; null in awayBeforeJSON means
+// the cell had none.
+type overrideJSON struct {
+	Mode     string  `json:"mode"`
+	PresetID *int64  `json:"preset_id"`
+	Note     *string `json:"note"`
+}
+
+type awayBeforeJSON struct {
+	Date     string        `json:"date"`
+	SlotID   int64         `json:"slot_id"`
+	Override *overrideJSON `json:"override"`
+}
+
+type awayResponse struct {
+	Cells       []availabilityCellJSON `json:"cells"`
+	Before      []awayBeforeJSON       `json:"before"`
+	Removed     plate.PlanSnapshot     `json:"removed"`
+	AlsoChanged []plate.AlsoChanged    `json:"also_changed"`
 }
 
 func availabilityError(w http.ResponseWriter, err error) {
@@ -163,7 +197,7 @@ func (h *AvailabilityHandler) PutOverride(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	cell, removed, err := h.svc.SetOverride(r.Context(), availability.OverrideInput{
+	cell, res, err := h.svc.SetOverrideMeals(r.Context(), availability.OverrideInput{
 		Date: date, SlotID: slotID, Mode: availability.Mode(req.Mode),
 		PresetID: req.PresetID, Note: req.Note, RemovePlate: req.RemovePlate,
 	})
@@ -171,7 +205,69 @@ func (h *AvailabilityHandler) PutOverride(w http.ResponseWriter, r *http.Request
 		availabilityError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, setOverrideResponse{Cell: toAvailabilityCellJSON(cell), Removed: removed})
+	out := setOverrideResponse{Cell: toAvailabilityCellJSON(cell), AlsoChanged: []plate.AlsoChanged{}}
+	if res != nil {
+		out.AlsoChanged = res.AlsoChanged
+		if len(res.Removed.Plates) > 0 {
+			out.Removed = &res.Removed
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// PostAway handles POST /api/availability/away?today=: the cells (or, with
+// date alone, every active slot of that date that is not routine) become
+// No plate and their plates are removed in one unit of work.
+func (h *AvailabilityHandler) PostAway(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
+	var req awayRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	in := availability.AwayInput{Note: req.Note, Today: today}
+	if len(req.Cells) == 0 && req.Date == nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	for _, c := range req.Cells {
+		d, err := time.Parse(time.DateOnly, c.Date)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "error.invalid_body")
+			return
+		}
+		in.Cells = append(in.Cells, plate.CellKey{Date: d, SlotID: c.SlotID})
+	}
+	if req.Date != nil && len(in.Cells) == 0 {
+		d, err := time.Parse(time.DateOnly, *req.Date)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "error.invalid_body")
+			return
+		}
+		in.Date = &d
+	}
+	res, err := h.svc.SetAway(r.Context(), in)
+	if err != nil {
+		availabilityError(w, err)
+		return
+	}
+	out := awayResponse{
+		Cells: make([]availabilityCellJSON, len(res.Cells)), Before: make([]awayBeforeJSON, len(res.Before)),
+		Removed: res.Removed, AlsoChanged: res.AlsoChanged,
+	}
+	for i, c := range res.Cells {
+		out.Cells[i] = toAvailabilityCellJSON(c)
+	}
+	for i, b := range res.Before {
+		out.Before[i] = awayBeforeJSON{Date: b.Date.Format(time.DateOnly), SlotID: b.SlotID}
+		if o := b.Override; o != nil {
+			out.Before[i].Override = &overrideJSON{Mode: string(o.Mode), PresetID: o.PresetID, Note: o.Note}
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // DeleteOverride handles DELETE /api/availability/{date}/{slotId}. Idempotent.

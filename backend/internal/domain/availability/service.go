@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -166,11 +167,22 @@ func (s *Service) CellMode(ctx context.Context, date time.Time, slotID int64) (s
 	return string(m), err
 }
 
-// SetOverride writes the override of one cell. Setting "none" on a cell that
-// holds a plate fails with ErrCellHasPlate unless in.RemovePlate is set; then
-// the plate is deleted through the plate service in the same unit of work and
-// the snapshot that restores it is returned (nil when nothing was removed).
+// SetOverride writes the override of one cell: SetOverrideMeals with the
+// removal's snapshot only (nil when no plate was removed).
 func (s *Service) SetOverride(ctx context.Context, in OverrideInput) (Cell, *plate.PlanSnapshot, error) {
+	cell, res, err := s.SetOverrideMeals(ctx, in)
+	if err != nil || res == nil || len(res.Removed.Plates) == 0 {
+		return cell, nil, err
+	}
+	return cell, &res.Removed, nil
+}
+
+// SetOverrideMeals writes the override of one cell. Setting "none" on a cell
+// that holds a plate fails with ErrCellHasPlate unless in.RemovePlate is set;
+// then the plate is removed through plate.Service.RemoveMealsAt in the same
+// unit of work, which also re-anchors the batches cooking there (R1). The
+// result is nil unless the mode is "none".
+func (s *Service) SetOverrideMeals(ctx context.Context, in OverrideInput) (Cell, *plate.MealResult, error) {
 	if in.Date.IsZero() {
 		return Cell{}, nil, fmt.Errorf("%w: date required", domain.ErrInvalidInput)
 	}
@@ -180,28 +192,30 @@ func (s *Service) SetOverride(ctx context.Context, in OverrideInput) (Cell, *pla
 		return Cell{}, nil, err
 	}
 	var note *string
-	if in.Mode == ModeNone && in.Note != nil {
-		n := strings.TrimSpace(*in.Note)
-		if utf8.RuneCountInString(n) > MaxNoteLen {
-			return Cell{}, nil, fmt.Errorf("%w: note longer than %d characters", domain.ErrInvalidInput, MaxNoteLen)
-		}
-		if n != "" {
-			note = &n
+	if in.Mode == ModeNone {
+		if note, err = normaliseNote(in.Note); err != nil {
+			return Cell{}, nil, err
 		}
 	}
 
-	var removed *plate.PlanSnapshot
+	var res *plate.MealResult
 	err = s.tx.InTx(ctx, func(ctx context.Context) error {
-		if in.Mode == ModeNone {
-			r, err := s.removeCellPlate(ctx, date, in.SlotID, in.RemovePlate)
-			if err != nil {
+		if in.Mode == ModeNone && !in.RemovePlate {
+			if err := s.refuseCellPlate(ctx, date, in.SlotID); err != nil {
 				return err
 			}
-			removed = r
 		}
-		return s.repo.UpsertOverride(ctx, Override{
+		if err := s.repo.UpsertOverride(ctx, Override{
 			Date: date, SlotID: in.SlotID, Mode: in.Mode, PresetID: in.PresetID, Note: note,
-		})
+		}); err != nil {
+			return err
+		}
+		if in.Mode != ModeNone {
+			return nil
+		}
+		r, err := s.removeMeals(ctx, []plate.CellKey{{Date: date, SlotID: in.SlotID}})
+		res = &r
+		return err
 	})
 	if err != nil {
 		return Cell{}, nil, err
@@ -209,7 +223,118 @@ func (s *Service) SetOverride(ctx context.Context, in OverrideInput) (Cell, *pla
 	return Cell{
 		Date: date, SlotID: in.SlotID, Mode: in.Mode, Source: SourceOverride,
 		PresetID: in.PresetID, PresetName: presetName, Note: note,
-	}, removed, nil
+	}, res, nil
+}
+
+// AwayInput names the cells to mark away: Cells, or with no cells every
+// active slot of Date whose mode is not routine. Today bounds them: a cell
+// before it is ErrPastCell.
+type AwayInput struct {
+	Cells []plate.CellKey
+	Date  *time.Time
+	Note  *string
+	Today time.Time
+}
+
+// CellOverride is a cell's override as it was before a change; Override nil
+// means the cell had none.
+type CellOverride struct {
+	Date     time.Time
+	SlotID   int64
+	Override *Override
+}
+
+// AwayResult is what SetAway did: the cells after, each cell's override
+// before, the plates removed (Removed restores them through Apply) and the
+// batches whose cook moved.
+type AwayResult struct {
+	Cells       []Cell
+	Before      []CellOverride
+	Removed     plate.PlanSnapshot
+	AlsoChanged []plate.AlsoChanged
+}
+
+// SetAway marks cells "none" and removes their plates in one unit of work
+// (plate.Service.RemoveMealsAt, so a batch cooking there re-anchors to its
+// earliest remaining meal). A cell that already has a "none" override keeps
+// its note unless in.Note is given. Confirmed plates follow the plate
+// service's actor guard.
+func (s *Service) SetAway(ctx context.Context, in AwayInput) (AwayResult, error) {
+	note, err := normaliseNote(in.Note)
+	if err != nil {
+		return AwayResult{}, err
+	}
+	today := dateOnly(in.Today)
+	var res AwayResult
+	err = s.tx.InTx(ctx, func(ctx context.Context) error {
+		cells, err := s.awayCells(ctx, in)
+		if err != nil {
+			return err
+		}
+		res = AwayResult{Cells: make([]Cell, 0, len(cells)), Before: make([]CellOverride, 0, len(cells))}
+		for _, c := range cells {
+			if c.Date.Before(today) {
+				return fmt.Errorf("%w: %s", domain.ErrPastCell, c.Date.Format(dateLayout))
+			}
+			if _, err := s.validateCell(ctx, c.SlotID, ModeNone, nil, domain.ErrAvailabilitySlotUnknown); err != nil {
+				return err
+			}
+			prev, err := s.repo.GetOverride(ctx, c.Date, c.SlotID)
+			if err != nil {
+				return err
+			}
+			res.Before = append(res.Before, CellOverride{Date: c.Date, SlotID: c.SlotID, Override: prev})
+			n := note
+			if n == nil && prev != nil && prev.Mode == ModeNone {
+				n = prev.Note
+			}
+			if err := s.repo.UpsertOverride(ctx, Override{Date: c.Date, SlotID: c.SlotID, Mode: ModeNone, Note: n}); err != nil {
+				return err
+			}
+			res.Cells = append(res.Cells, Cell{Date: c.Date, SlotID: c.SlotID, Mode: ModeNone, Source: SourceOverride, Note: n})
+		}
+		removed, err := s.removeMeals(ctx, cells)
+		if err != nil {
+			return err
+		}
+		res.Removed, res.AlsoChanged = removed.Removed, removed.AlsoChanged
+		return nil
+	})
+	if err != nil {
+		return AwayResult{}, err
+	}
+	return res, nil
+}
+
+// awayCells resolves AwayInput to distinct cells: the given ones, or every
+// active slot of Date that does not resolve to routine.
+func (s *Service) awayCells(ctx context.Context, in AwayInput) ([]plate.CellKey, error) {
+	var out []plate.CellKey
+	if len(in.Cells) == 0 {
+		if in.Date == nil {
+			return nil, fmt.Errorf("%w: cells or date required", domain.ErrInvalidInput)
+		}
+		day, err := s.Resolve(ctx, *in.Date, *in.Date)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range day {
+			if c.Mode != ModeRoutine {
+				out = append(out, plate.CellKey{Date: c.Date, SlotID: c.SlotID})
+			}
+		}
+		return out, nil
+	}
+	for _, c := range in.Cells {
+		if c.Date.IsZero() {
+			return nil, fmt.Errorf("%w: date required", domain.ErrInvalidInput)
+		}
+		k := plate.CellKey{Date: dateOnly(c.Date), SlotID: c.SlotID}
+		if !slices.ContainsFunc(out, k.Equal) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
 }
 
 // NoneOverride returns the note of the cell's "none" override. ok is false
@@ -271,31 +396,48 @@ func (s *Service) ClearOverride(ctx context.Context, date time.Time, slotID int6
 	return s.repo.DeleteOverride(ctx, dateOnly(date), slotID)
 }
 
-// removeCellPlate deletes the cell's plate when remove is set and returns the
-// snapshot that restores it, or nil when the cell is empty. Without remove, a
-// plate in the cell is an error.
-func (s *Service) removeCellPlate(ctx context.Context, date time.Time, slotID int64, remove bool) (*plate.PlanSnapshot, error) {
+// refuseCellPlate fails with ErrCellHasPlate when the cell holds a plate.
+func (s *Service) refuseCellPlate(ctx context.Context, date time.Time, slotID int64) error {
 	if s.plates == nil {
-		return nil, errors.New("availability: plate service not wired")
+		return errPlatesNotWired
 	}
 	day, err := s.plates.Range(ctx, date, date)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, p := range day {
-		if p.SlotID != slotID {
-			continue
+		if p.SlotID == slotID {
+			return fmt.Errorf("%w: plate %d", domain.ErrCellHasPlate, p.ID)
 		}
-		if !remove {
-			return nil, fmt.Errorf("%w: plate %d", domain.ErrCellHasPlate, p.ID)
-		}
-		snap, err := s.plates.Delete(ctx, p.ID)
-		if err != nil {
-			return nil, err
-		}
-		return &snap, nil
 	}
-	return nil, nil
+	return nil
+}
+
+// removeMeals removes the plates on cells, which are "none" by now, through
+// the plate service.
+func (s *Service) removeMeals(ctx context.Context, cells []plate.CellKey) (plate.MealResult, error) {
+	if s.plates == nil {
+		return plate.MealResult{}, errPlatesNotWired
+	}
+	return s.plates.RemoveMealsAt(ctx, cells)
+}
+
+var errPlatesNotWired = errors.New("availability: plate service not wired")
+
+// normaliseNote trims a "none" note; empty becomes nil, longer than
+// MaxNoteLen characters is invalid.
+func normaliseNote(in *string) (*string, error) {
+	if in == nil {
+		return nil, nil
+	}
+	n := strings.TrimSpace(*in)
+	if utf8.RuneCountInString(n) > MaxNoteLen {
+		return nil, fmt.Errorf("%w: note longer than %d characters", domain.ErrInvalidInput, MaxNoteLen)
+	}
+	if n == "" {
+		return nil, nil
+	}
+	return &n, nil
 }
 
 // validateCell checks the slot, mode and preset of a default or override and

@@ -559,3 +559,28 @@ func TestReplan_FreezerKeepDaysLimitsFreezingACookedBatch(t *testing.T) {
 	require.NoError(t, err)
 	assert.InDelta(t, 0, e.session(e.monBatch).FrozenPortions, 1e-9)
 }
+
+// Writing the No-plate overrides goes through availability.SetOverride, so a
+// cooked-ahead batch whose empty cook cell turns No plate re-anchors to its
+// earliest meal (R1: a batch never cooks on a "none" cell). Decision: kept.
+func TestReplan_NoneCookCellReanchorsACookedAheadBatch(t *testing.T) {
+	e := newSvcEnv(t)
+	wed, thu, fri := "2030-03-06", "2030-03-07", "2030-03-08"
+	p := e.userPlate(thu, e.dinner, e.mains[4])
+	sid := *p.Components[0].CookSessionID
+	_, err := e.plates.AddLeftovers(e.ctx, sid, []plate.CellKey{ck(fri, e.dinner)})
+	require.NoError(t, err)
+	// Cooked ahead on Wed lunch, which holds no plate.
+	e.exec(`UPDATE cook_sessions SET cook_date = ?, cook_slot_id = ? WHERE id = ?`, wed, e.lunch, sid)
+
+	_, err = e.svc.Replan(e.ctx, planning.ReplanRequest{
+		ReplanQuery: planning.ReplanQuery{From: day(wed), To: day(fri), Today: day(wed), NoneCells: []plate.CellKey{ck(wed, e.lunch)}},
+		Spare:       planning.SpareKeep,
+	})
+
+	require.NoError(t, err)
+	v, err := e.plates.Session(e.ctx, sid)
+	require.NoError(t, err)
+	assert.True(t, ck(thu, e.dinner).Equal(v.CookCell()), "the batch cooks at its first meal, not on the No-plate cell: %v", v.CookCell())
+	require.Len(t, v.Links, 2)
+}

@@ -3,6 +3,7 @@ package availability_test
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -158,14 +159,18 @@ func (p *fakePlates) Range(_ context.Context, from, to time.Time) ([]plate.Plate
 	return out, nil
 }
 
-func (p *fakePlates) Delete(_ context.Context, id int64) (plate.PlanSnapshot, error) {
-	for i, pl := range p.plates {
-		if pl.ID == id {
-			p.plates = append(p.plates[:i], p.plates[i+1:]...)
-			return plate.PlanSnapshot{Plates: []plate.SnapshotPlate{{Date: pl.DateString(), SlotID: pl.SlotID, Components: []plate.SnapshotComponent{}}}}, nil
+func (p *fakePlates) RemoveMealsAt(_ context.Context, cells []plate.CellKey) (plate.MealResult, error) {
+	res := plate.MealResult{Removed: plate.PlanSnapshot{Plates: []plate.SnapshotPlate{}}, AlsoChanged: []plate.AlsoChanged{}}
+	kept := p.plates[:0]
+	for _, pl := range p.plates {
+		if slices.ContainsFunc(cells, pl.Cell().Equal) {
+			res.Removed.Plates = append(res.Removed.Plates, plate.SnapshotPlate{Date: pl.DateString(), SlotID: pl.SlotID, Components: []plate.SnapshotComponent{}})
+			continue
 		}
+		kept = append(kept, pl)
 	}
-	return plate.PlanSnapshot{}, domain.ErrNotFound
+	p.plates = kept
+	return res, nil
 }
 
 type fakeTx struct {

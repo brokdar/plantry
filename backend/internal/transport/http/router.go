@@ -259,6 +259,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/", h.Availability.List)
 				r.Get("/defaults", h.Availability.GetDefaults)
 				r.Put("/defaults", h.Availability.PutDefaults)
+				r.Post("/away", h.Availability.PostAway)
 				r.Put("/{date}/{slotId}", h.Availability.PutOverride)
 				r.Delete("/{date}/{slotId}", h.Availability.DeleteOverride)
 			})

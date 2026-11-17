@@ -521,11 +521,11 @@ func (x *index) h8() []Issue {
 // per eater fall below the policy's floor (75 % of its scaled target, and the
 // absolute floor for a known sex, scaled the same way) is a violation. Days
 // without a kcal target, with missing nutrition data or without a plate of
-// the target are not judged.
+// the target are not judged, nor are days away (DayKcal.Away).
 func (x *index) h9() []Issue {
 	var out []Issue
 	for _, dk := range x.dayAccounts(x.days) {
-		if dk.Target <= 0 || !dk.Complete || dk.NutritionMissing || dk.Kcal <= 0 || !x.plateInTarget(dk.Date) {
+		if dk.Target <= 0 || !dk.Complete || dk.Away || dk.NutritionMissing || dk.Kcal <= 0 || !x.plateInTarget(dk.Date) {
 			continue
 		}
 		floor := x.pol.Floor(dk.Target, dk.Share())

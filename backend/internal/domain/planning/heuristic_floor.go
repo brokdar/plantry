@@ -116,7 +116,7 @@ func (h *planner) topUpFloors() {
 func (h *planner) dayAccounts() (*index, []DayKcal) {
 	y := newIndex(Merge(h.s, h.in.Target, h.prop), h.in.Target)
 	days := slices.DeleteFunc(y.dayAccounts(y.days), func(dk DayKcal) bool {
-		return !dk.Complete || dk.NutritionMissing || dk.Kcal <= 0
+		return !dk.Complete || dk.Away || dk.NutritionMissing || dk.Kcal <= 0
 	})
 	return y, days
 }
@@ -223,7 +223,7 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 	for _, a := range y.dayAccounts([]time.Time{date}) {
 		dk = &a
 	}
-	if dk == nil || !dk.Complete || dk.NutritionMissing || dk.Kcal <= 0 {
+	if dk == nil || !dk.Complete || dk.Away || dk.NutritionMissing || dk.Kcal <= 0 {
 		return false
 	}
 	ev := Evaluate(merged, h.in.Target)

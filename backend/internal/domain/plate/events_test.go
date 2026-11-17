@@ -503,11 +503,8 @@ func TestEvents_NoPlateIDReuse(t *testing.T) {
 
 func TestEvents_AtUsesClock(t *testing.T) {
 	e := newEnv(t)
-	before := time.Now().UTC().Add(-time.Second)
 	e.create(mon, e.dinner, nil, grams(e.rice, 100))
-	at := e.events()[0].At
-	assert.False(t, at.Before(before.Truncate(time.Second)))
-	assert.False(t, at.After(time.Now().UTC().Add(time.Second)))
+	assert.True(t, testNow.UTC().Truncate(time.Second).Equal(e.events()[0].At))
 }
 
 func ptrDay(s string) *time.Time {
