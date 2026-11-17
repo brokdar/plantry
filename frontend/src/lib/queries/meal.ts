@@ -20,7 +20,12 @@ import { addPlateComponent, deletePlateComponent } from "@/lib/api/plates"
 import { toastError } from "@/lib/toast"
 
 import { mealKeys } from "./keys"
-import { invalidatePlanViews, mergeUndo, useRevertUndo } from "./plan"
+import {
+  emptyUndo,
+  invalidatePlanViews,
+  mergeUndo,
+  useRevertUndo,
+} from "./plan"
 
 // Meal-level actions (meal editing slice 5). Each hook owns its invalidation
 // and error toast and offers one Undo through the revert token. `describe`
@@ -129,7 +134,10 @@ export function useAlternatives(
  * Applies an alternative's ops as one action with one Undo. A swap, or an
  * add from a batch with the remove of what it replaces, is one replace;
  * an add alone adds; every other remove follows. The calls run in order
- * and the Undo covers the whole sequence (first to last token).
+ * and the Undo covers the whole sequence (first to last token). When a
+ * later call fails, the calls before it stay committed: the Undo covers that
+ * applied part, worded "Only part of the change was applied", and the error
+ * shows as well.
  */
 export function useApplyAlternative(describe?: DescribeAlsoChanged) {
   const qc = useQueryClient()
@@ -145,19 +153,36 @@ export function useApplyAlternative(describe?: DescribeAlsoChanged) {
     }) => {
       const tokens: Undo[] = []
       const also: AlsoChanged[] = []
-      for (const call of alternativeCalls(plateId, alt)) {
-        const res = await call()
-        tokens.push(res.undo)
-        also.push(...(res.also_changed ?? []))
+      let failure: unknown
+      try {
+        for (const call of alternativeCalls(plateId, alt)) {
+          const res = await call()
+          tokens.push(res.undo)
+          also.push(...(res.also_changed ?? []))
+        }
+      } catch (err) {
+        // Calls before the failing one are committed: keep their tokens so
+        // the applied part can still be undone.
+        if (!tokens.some((u) => !emptyUndo(u))) throw err
+        failure = err
       }
-      return { undo: mergeUndo(tokens), also_changed: also }
+      return { undo: mergeUndo(tokens), also_changed: also, failure }
     },
     onSuccess: (res) => {
-      offerRevert(
-        res.undo,
-        t("plan.meal.undo.replaced"),
-        describe?.(res.also_changed)
-      )
+      if (res.failure !== undefined) {
+        offerRevert(
+          res.undo,
+          t("plan.meal.undo.partial"),
+          describe?.(res.also_changed)
+        )
+        toastError(res.failure, t)
+      } else {
+        offerRevert(
+          res.undo,
+          t("plan.meal.undo.replaced"),
+          describe?.(res.also_changed)
+        )
+      }
       return invalidatePlanViews(qc)
     },
     onError: (err) => {

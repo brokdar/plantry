@@ -152,6 +152,19 @@ describe("AlternativesPanel", () => {
     expect(toastMock).toHaveBeenCalledWith("Meal changed", expect.anything())
   })
 
+  it("disables the chips and rows while a row is being applied", async () => {
+    vi.mocked(replaceComponent).mockReturnValue(new Promise(() => {}))
+    renderPanel()
+    const list = await screen.findAllByTestId("alt-row")
+    await userEvent.click(list[0])
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Quicker" })).toBeDisabled()
+    )
+    expect(screen.getByRole("button", { name: "Vegetarian" })).toBeDisabled()
+    for (const row of screen.getAllByTestId("alt-row"))
+      expect(row).toBeDisabled()
+  })
+
   it("says so when nothing fits", async () => {
     vi.mocked(getAlternatives).mockResolvedValue({ alternatives: [] })
     renderPanel()

@@ -1,4 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react"
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -90,6 +96,34 @@ describe("useAlsoChangedConfirm", () => {
     })
     await userEvent.click(screen.getByRole("button", { name: "go" }))
     await userEvent.click(await screen.findByRole("button", { name: "Cancel" }))
+    expect(commit).not.toHaveBeenCalled()
+  })
+
+  it("ignores a second call while the preview is in flight or the dialog is open", async () => {
+    const commit = vi.fn()
+    let resolve!: (l: AlsoChanged[]) => void
+    const preview = vi.fn(
+      () => new Promise<AlsoChanged[]>((r) => (resolve = r))
+    )
+    render(<Host preview={preview} commit={commit} />, {
+      wrapper: createHookWrapper(),
+    })
+    const go = screen.getByRole("button", { name: "go" })
+    await userEvent.click(go)
+    await userEvent.click(go)
+    expect(preview).toHaveBeenCalledTimes(1)
+
+    resolve([cooked])
+    await screen.findByTestId("also-changed")
+    // The open dialog blocks a further call, then Cancel frees the hook.
+    fireEvent.click(go)
+    expect(preview).toHaveBeenCalledTimes(1)
+    await userEvent.click(await screen.findByRole("button", { name: "Cancel" }))
+    await waitFor(() =>
+      expect(screen.queryByTestId("also-changed")).not.toBeInTheDocument()
+    )
+    await userEvent.click(go)
+    expect(preview).toHaveBeenCalledTimes(2)
     expect(commit).not.toHaveBeenCalled()
   })
 

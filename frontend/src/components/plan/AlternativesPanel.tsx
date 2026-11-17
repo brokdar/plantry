@@ -124,7 +124,9 @@ export function AlternativesPanel({
             size="sm"
             variant={chips.has(c) ? "default" : "outline"}
             aria-pressed={chips.has(c)}
-            disabled={c === "lighter" && lighter === undefined}
+            disabled={
+              apply.isPending || (c === "lighter" && lighter === undefined)
+            }
             className="h-9 rounded-tag"
             onClick={() => toggle(c)}
           >
@@ -144,7 +146,7 @@ export function AlternativesPanel({
       ) : (
         <ul className="flex flex-col gap-2">
           {list.data.map((alt) => (
-            <li key={`${alt.food_id}-${alt.session_id ?? 0}`}>
+            <li key={`${alt.food_id}-${alt.source}-${alt.session_id ?? 0}`}>
               <button
                 type="button"
                 data-testid="alt-row"

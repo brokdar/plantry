@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
@@ -194,6 +196,7 @@ func TestMealHTTP_DryRunPreviewsWithoutWriting(t *testing.T) {
 	code, body := a.do(http.MethodPost, fmt.Sprintf("/api/cook-sessions/%d/leftovers", sid), fmt.Sprintf(`{"cells":[{"date":"2030-01-08","slot_id":%d}]}`, a.dinner))
 	require.Less(t, code, 300, body)
 	occ, _ := a.plateOn("2030-01-09", a.dinner, a.curry)
+	lastEvent, sessions := a.eventMark()
 
 	// The cooking meal moved past its leftover moves the cook: the preview
 	// lists that and writes nothing.
@@ -226,4 +229,26 @@ func TestMealHTTP_DryRunPreviewsWithoutWriting(t *testing.T) {
 	for _, c := range body["items"].([]any) {
 		assert.Equal(t, "plan", c.(map[string]any)["mode"], "an away dry run writes no override")
 	}
+	nowEvent, nowSessions := a.eventMark()
+	assert.Equal(t, lastEvent, nowEvent, "no dry run logs an event")
+	assert.Equal(t, sessions, nowSessions, "no dry run leaves a session behind")
+
+	// Only move, replace and away preview; the plate update ignores the
+	// parameter and writes.
+	code, body = a.do(http.MethodPut, fmt.Sprintf("/api/plates/%d?dry_run=1", id), `{"date":"2030-01-10"}`)
+	require.Equal(t, http.StatusOK, code, body)
+	code, body = a.do(http.MethodGet, fmt.Sprintf("/api/plates/%d", id), "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, "2030-01-10", body["date"], "dry_run does not apply to PUT /plates/{id}")
+	putEvent, _ := a.eventMark()
+	assert.Greater(t, putEvent, lastEvent)
+}
+
+// eventMark is the highest plate event id and the cook session count.
+func (a *planAPI) eventMark() (lastEvent int64, sessions int) {
+	a.t.Helper()
+	last, err := sqlite.NewPlateEventRepo(a.db).LastID(context.Background())
+	require.NoError(a.t, err)
+	require.NoError(a.t, a.db.QueryRow(`SELECT COUNT(*) FROM cook_sessions`).Scan(&sessions))
+	return last, sessions
 }

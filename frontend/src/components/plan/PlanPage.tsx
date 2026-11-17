@@ -267,17 +267,20 @@ function PlanView({
     return () => window.removeEventListener("keydown", listener)
   }, [])
 
+  const altSeq = useRef(0)
+  const nextAltSeq = () => ++altSeq.current
+
   /** Something else (keyboard R, quick action): the plate sheet on the
    *  meal's alternatives list. */
   function replace(cell: BoardCell) {
     if (!cell.plate) return
-    changeSheet({ key: cell.key, alt: "meal" })
+    changeSheet({ key: cell.key, alt: "meal", altSeq: nextAltSeq() })
   }
 
   /** Change side (keyboard S, quick action): the side's alternatives. */
   function differentSide(cell: BoardCell) {
     if (cell.sideComponentId === null) return
-    changeSheet({ key: cell.key, alt: "side" })
+    changeSheet({ key: cell.key, alt: "side", altSeq: nextAltSeq() })
   }
 
   /** Drops `?run=` once the run is over, so a reload doesn't announce it

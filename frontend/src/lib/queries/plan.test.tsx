@@ -369,6 +369,46 @@ describe("usePlanDay", () => {
   })
 })
 
+describe("usePlanDay partial failure", () => {
+  const noneCells = [0, 1, 2].map((i) => ({
+    ...mockPlan.cells[0],
+    slot_id: 100 + i,
+    mode: "none" as const,
+    source: "default" as const,
+  }))
+
+  it("reports how many cells were set when a later one fails", async () => {
+    vi.mocked(setAvailabilityOverride)
+      .mockResolvedValueOnce({ cell: {} as never, removed: null })
+      .mockRejectedValueOnce(new ApiError(500, "error.internal"))
+    const { result } = renderHook(() => usePlanDay(), {
+      wrapper: createHookWrapper(),
+    })
+    await act(async () => {
+      await result.current.mutateAsync(noneCells)
+    })
+    expect(setAvailabilityOverride).toHaveBeenCalledTimes(2)
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "1 of 3 meals set back to plan"
+    )
+  })
+
+  it("a failure on the first cell is just the error", async () => {
+    vi.mocked(setAvailabilityOverride).mockRejectedValueOnce(
+      new ApiError(500, "error.internal")
+    )
+    const { result } = renderHook(() => usePlanDay(), {
+      wrapper: createHookWrapper(),
+    })
+    await act(async () => {
+      await result.current.mutateAsync(noneCells).catch(() => {})
+    })
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastMock.error).not.toHaveBeenCalled()
+  })
+})
+
 describe("No plate cell actions", () => {
   const none = {
     ...mockPlan.cells[0],

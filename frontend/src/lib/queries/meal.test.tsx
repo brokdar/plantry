@@ -31,6 +31,7 @@ import {
   moveCook,
   movePlate,
   replaceComponent,
+  revertPlan,
   setAway,
 } from "@/lib/api/meal"
 import { addPlateComponent, deletePlateComponent } from "@/lib/api/plates"
@@ -297,8 +298,25 @@ describe("useApplyAlternative", () => {
     expect(lastToast().message).toBe("Meal changed")
   })
 
-  it("a failure part-way refreshes the views and shows the error", async () => {
-    vi.mocked(replaceComponent).mockResolvedValue(result())
+  it("a failure on the first call shows the error and offers no Undo", async () => {
+    vi.mocked(replaceComponent).mockRejectedValue(
+      new ApiError(500, "error.internal")
+    )
+    const { result: r } = renderHook(() => useApplyAlternative(), {
+      wrapper: createHookWrapper(),
+    })
+    r.current.mutate({
+      plateId: 5,
+      alt: alt([{ op: "swap", plate_component_id: 11, food_id: 9 }]),
+    })
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    expect(toastMock).not.toHaveBeenCalled()
+  })
+
+  it("a failure part-way keeps the applied calls undoable and shows the error", async () => {
+    vi.mocked(replaceComponent).mockResolvedValue(
+      result({ first_event_id: 10, last_event_id: 12, cells: [] })
+    )
     vi.mocked(deletePlateComponent).mockRejectedValue(
       new ApiError(500, "error.internal")
     )
@@ -313,6 +331,20 @@ describe("useApplyAlternative", () => {
       ]),
     })
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
-    expect(toastMock).not.toHaveBeenCalled()
+    expect(lastToast().message).toBe("Only part of the change was applied")
+
+    // The Undo reverts the range of the call that did commit.
+    const action = (
+      toastMock.mock.calls.at(-1)![1] as { action: { onClick: () => void } }
+    ).action
+    vi.mocked(revertPlan).mockResolvedValue({ plate_ids: [], session_ids: [] })
+    action.onClick()
+    await waitFor(() =>
+      expect(revertPlan).toHaveBeenCalledWith({
+        first_event_id: 10,
+        last_event_id: 12,
+        cells: [],
+      })
+    )
   })
 })

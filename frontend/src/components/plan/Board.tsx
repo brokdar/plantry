@@ -67,6 +67,8 @@ export function Board({
   const move = useMovePlate(describe)
   const restore = useRestorePlan()
   const copy = useRef(false)
+  // The cell the menu opened at: focus returns there when the menu closes.
+  const menuTarget = useRef<string | null>(null)
   const [drop, setDrop] = useState<Drop | null>(null)
 
   const sensors = useSensors(
@@ -111,6 +113,7 @@ export function Board({
         return
       }
       const r = e.over!.rect
+      menuTarget.current = to.key
       setDrop({ from, to, x: r.left + r.width / 2, y: r.top + r.height / 2 })
       return
     }
@@ -148,6 +151,15 @@ export function Board({
         <DropdownMenuContent
           data-testid="occupied-menu"
           className="max-w-[calc(100vw-2rem)]"
+          onCloseAutoFocus={(e) => {
+            // The menu's trigger is an invisible marker: focus the cell.
+            const cell = document.querySelector<HTMLElement>(
+              `[data-cell-key="${menuTarget.current}"] [data-cell-focus]`
+            )
+            if (!cell) return
+            e.preventDefault()
+            cell.focus()
+          }}
         >
           <DropdownMenuGroup>
             <DropdownMenuItem

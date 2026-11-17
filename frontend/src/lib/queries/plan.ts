@@ -267,14 +267,36 @@ export function usePlanDay() {
   const qc = useQueryClient()
   const { t } = useTranslation()
   return useMutation({
+    // The calls are sequential and not rolled back: when one fails, the cells
+    // before it stay set to Plan and the result says how many.
     mutationFn: async (cells: PlanCell[]) => {
-      for (const c of cells) if (c.mode === "none") await planCell(c)
+      const todo = cells.filter((c) => c.mode === "none")
+      let done = 0
+      try {
+        for (const c of todo) {
+          await planCell(c)
+          done++
+        }
+      } catch (err) {
+        if (done === 0) throw err
+        return { done, total: todo.length, failure: err }
+      }
+      return { done, total: todo.length, failure: undefined }
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
+      if (res.failure !== undefined) {
+        toastError(res.failure, t)
+        toast.error(
+          t("plan.meal.day_partial", { done: res.done, total: res.total })
+        )
+      }
       void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
       return invalidatePlanViews(qc)
     },
-    onError: (err) => toastError(err, t),
+    onError: (err) => {
+      void invalidatePlanViews(qc)
+      toastError(err, t)
+    },
   })
 }
 

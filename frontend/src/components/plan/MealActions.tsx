@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 
 import { MoreHorizontal } from "lucide-react"
@@ -53,13 +53,23 @@ export function useAlsoChangedConfirm(
   const lines = (list: AlsoChanged[]) =>
     alsoChangedLines(list, plan, t, i18n, slotName)
 
+  // A second call while a preview is in flight or the dialog is open is
+  // ignored (a double click or a second drop must not stack another action).
+  const previewing = useRef(false)
+
   function confirm(preview: () => Promise<AlsoChanged[]>, commit: () => void) {
+    if (previewing.current || pending) return
+    previewing.current = true
     preview().then(
       (list) => {
+        previewing.current = false
         if (list.length === 0) commit()
         else setPending({ lines: lines(list), commit })
       },
-      (err) => toastError(err, t)
+      (err) => {
+        previewing.current = false
+        toastError(err, t)
+      }
     )
   }
 

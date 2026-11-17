@@ -29,6 +29,9 @@ export interface SheetState {
   picker?: PickerTarget
   /** Open the plate sheet on an alternatives list (R, S, quick actions). */
   alt?: "meal" | "side"
+  /** Bumped on every R/S so an already open sheet re-opens on the list
+   *  (the plate sheet keeps its list in local state, keyed by this). */
+  altSeq?: number
 }
 
 interface PlanSheetProps {
@@ -144,7 +147,7 @@ export function PlanSheet({
             />
           ) : cell.plate ? (
             <PlateSheet
-              key={cell.plate.id}
+              key={`${cell.plate.id}:${state.alt ?? ""}:${state.altSeq ?? 0}`}
               cell={cell as BoardCell & { plate: Plate }}
               plan={plan}
               readOnly={board.readOnly}

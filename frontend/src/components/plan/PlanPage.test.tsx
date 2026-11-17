@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react"
+import { fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -19,6 +19,7 @@ vi.mock("@/lib/api/plan", () => ({
   restorePlan: vi.fn(),
 }))
 vi.mock("@/lib/api/meal", () => ({
+  getAlternatives: vi.fn(),
   setAway: vi.fn(),
   revertPlan: vi.fn(),
   getRegeneratePreview: vi.fn(),
@@ -78,7 +79,7 @@ const toastMock = vi.hoisted(() =>
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
 import { setAvailabilityOverride } from "@/lib/api/availability"
-import { revertPlan, setAway } from "@/lib/api/meal"
+import { getAlternatives, revertPlan, setAway } from "@/lib/api/meal"
 import { clearPlan, getPlan, restorePlan } from "@/lib/api/plan"
 import { listSettings } from "@/lib/api/settings"
 
@@ -235,6 +236,37 @@ describe("PlanPage", () => {
     expect(lastToast().message).toBe("Marked as No plate")
     lastToast().opts.action.onClick()
     await waitFor(() => expect(revertPlan).toHaveBeenCalledWith(mockUndo))
+  })
+
+  it("R on a cell switches an already open plate sheet to the list, again after Back", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      cells: mockPlan.cells.map((c) =>
+        c.plate ? { ...c, plate: { ...c.plate, state: "draft" } } : c
+      ),
+    })
+    vi.mocked(getAlternatives).mockResolvedValue({ alternatives: [] })
+    renderWithRouter(<PlanPage />)
+    const cell = await screen.findByRole("button", {
+      name: "Monday lunch, Chili, leftover 2 of 3, draft",
+    })
+    await user.click(cell)
+    const sheet = await screen.findByTestId("plan-sheet")
+    expect(within(sheet).queryByTestId("alternatives")).not.toBeInTheDocument()
+
+    // The open sheet traps focus, so the key goes straight to the cell.
+    fireEvent.keyDown(cell, { key: "r" })
+    expect(await within(sheet).findByTestId("alternatives")).toBeInTheDocument()
+
+    await user.click(within(sheet).getByRole("button", { name: "Back" }))
+    await waitFor(() =>
+      expect(
+        within(sheet).queryByTestId("alternatives")
+      ).not.toBeInTheDocument()
+    )
+    fireEvent.keyDown(cell, { key: "r" })
+    expect(await within(sheet).findByTestId("alternatives")).toBeInTheDocument()
   })
 
   it("the day menu's Away all day previews, marks the day away and offers Undo", async () => {

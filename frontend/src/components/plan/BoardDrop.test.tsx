@@ -177,4 +177,16 @@ describe("Board drop", () => {
     )
     expect(movePlate).not.toHaveBeenCalled()
   })
+
+  it("closing the menu returns focus to the target cell", async () => {
+    const { container } = renderBoard()
+    drop(cellAt(SUNDAY_DINNER), cellAt(MONDAY_LUNCH))
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Cancel" })
+    )
+    const target = container.querySelector(
+      `[data-cell-key="${MONDAY_LUNCH}"] [data-cell-focus]`
+    )
+    await waitFor(() => expect(target).toHaveFocus())
+  })
 })

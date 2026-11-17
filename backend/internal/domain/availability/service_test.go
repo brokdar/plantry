@@ -607,3 +607,33 @@ func TestAvailabilityClearOverride_Idempotent(t *testing.T) {
 	assert.Empty(t, f.repo.overrides)
 	require.NoError(t, f.svc.ClearOverride(context.Background(), day(monday), slotLunch))
 }
+
+func TestAvailabilityRevert_SkipsACellWhoseSlotIsGone(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	none := &plate.CellOverride{Mode: string(availability.ModeNone)}
+	require.NoError(t, f.svc.RestoreOverride(ctx, day(monday), slotLunch, &availability.Override{Mode: availability.ModeNone}))
+	const deleted int64 = 99 // a slot that no longer exists: no row, no override
+
+	_, err := f.svc.Revert(ctx, plate.Undo{Cells: []plate.CellUndo{
+		{Date: monday, SlotID: deleted, After: none},
+		{Date: monday, SlotID: slotLunch, After: none},
+	}})
+
+	require.NoError(t, err)
+	got, err := f.repo.GetOverride(ctx, day(monday), slotLunch)
+	require.NoError(t, err)
+	assert.Nil(t, got, "the cell that still exists is restored")
+}
+
+func TestAvailabilityRevert_EditedCellIsStale(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	none := &plate.CellOverride{Mode: string(availability.ModeNone)}
+
+	_, err := f.svc.Revert(ctx, plate.Undo{Cells: []plate.CellUndo{
+		{Date: monday, SlotID: slotLunch, After: none},
+	}})
+
+	assert.ErrorIs(t, err, domain.ErrPlanChangeStale)
+}
