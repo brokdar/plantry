@@ -50,7 +50,7 @@ func TestTool_ApplyChanges_Schema(t *testing.T) {
 	}
 	item := opItemProps(t)
 	enum := item["op"].(map[string]any)["enum"].([]any)
-	want := []string{"add", "swap", "set_quantity", "remove", "create_plate", "delete_plate", "set_portions", "set_eaters", "set_availability"}
+	want := []string{"add", "swap", "set_quantity", "remove", "create_plate", "delete_plate", "set_portions", "set_eaters", "set_availability", "move", "replace", "away", "move_cook", "copy"}
 	if len(enum) != len(want) {
 		t.Fatalf("op enum = %v, want %v", enum, want)
 	}

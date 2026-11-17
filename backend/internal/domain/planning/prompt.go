@@ -203,7 +203,7 @@ func writeSummaryCells(b *strings.Builder, x *index) {
 	for _, c := range s.Cells {
 		var parts []string
 		for _, pi := range x.byCell[idOf(c.Key())] {
-			parts = append(parts, summaryPlate(s, s.Plates[pi]))
+			parts = append(parts, summaryPlate(x, s.Plates[pi]))
 		}
 		content := strings.Join(parts, "; ")
 		if content == "" {
@@ -216,7 +216,11 @@ func writeSummaryCells(b *strings.Builder, x *index) {
 	}
 }
 
-func summaryPlate(s State, p Plate) string {
+// summaryPlate renders one plate: each component with its position and, for
+// a recipe, its batch role (cook: this meal is the batch's cooking meal,
+// leftover, frozen).
+func summaryPlate(x *index, p Plate) string {
+	s := x.s
 	state := "draft"
 	if p.Confirmed {
 		state = "confirmed"
@@ -231,11 +235,17 @@ func summaryPlate(s State, p Plate) string {
 			qty = num(*c.Grams) + " g/eater"
 		}
 		parts[i] = fmt.Sprintf("%s (component_id %d, food_id %d", foodName(s, c.FoodID), c.ID, c.FoodID)
+		if c.Position != "" {
+			parts[i] += ", " + string(c.Position)
+		}
 		if qty != "" {
 			parts[i] += ", " + qty
 		}
 		if c.SessionID != 0 {
 			parts[i] += fmt.Sprintf(", session_id %d", c.SessionID)
+			if role := batchRole(x, p, c.SessionID); role != "" {
+				parts[i] += " " + role
+			}
 		}
 		parts[i] += ")"
 	}
@@ -913,4 +923,23 @@ func writeKeepTable(b *strings.Builder, in ChooseInput) {
 		}
 		fmt.Fprintf(b, "- keep_days %d: %s\n", k, strings.Join(parts, ", "))
 	}
+}
+
+// batchRole is a component's role in its batch: "cook" when the plate is on
+// the batch's cook cell, else "leftover" or "frozen" (plate.Classify); empty
+// for a session the state does not hold.
+func batchRole(x *index, p Plate, sessionID int64) string {
+	for _, ss := range x.s.Sessions {
+		if ss.ID != sessionID || ss.Proposed() {
+			continue
+		}
+		switch plate.Classify(p.Cell(), ss.CookSession, x.keepDays(ss.FoodID)) {
+		case plate.KindFresh:
+			return "cook"
+		case plate.KindFrozen:
+			return "frozen"
+		}
+		return "leftover"
+	}
+	return ""
 }

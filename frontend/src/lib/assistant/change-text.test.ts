@@ -6,7 +6,12 @@ import de from "@/lib/i18n/de.json"
 import en from "@/lib/i18n/en.json"
 import { mockChange } from "@/test/fixtures"
 
-import { CHANGE_TEXT_KEYS, changeSentence, statusKey } from "./change-text"
+import {
+  CHANGE_TEXT_KEYS,
+  changeSentence,
+  hiddenOpCount,
+  statusKey,
+} from "./change-text"
 
 type Copy = Record<string, string>
 
@@ -73,6 +78,108 @@ describe("change text", () => {
         })
       )
     ).toBe("Chili 6 portions (2026-11-03)")
+  })
+
+  it("spells out the meal ops", () => {
+    const t = i18next.t.bind(i18next)
+    const line = (op: Record<string, unknown>) =>
+      changeSentence(
+        t,
+        i18next,
+        mockChange({
+          text_key: "apply_changes",
+          params: { count: 1, ops: [op] },
+        })
+      )
+    const move = {
+      op: "move",
+      food: "Chili",
+      date: "2026-11-03",
+      slot_key: "slot.lunch",
+      to_date: "2026-11-04",
+      to_slot_key: "slot.dinner",
+    }
+    expect(line(move)).toBe("Chili to Wednesday dinner")
+    expect(line({ ...move, occupant: "swap", other: "Curry" })).toBe(
+      "Chili and Curry swapped (Tuesday lunch, Wednesday dinner)"
+    )
+    expect(line({ ...move, occupant: "drop", other: "Curry" })).toBe(
+      "Chili to Wednesday dinner, Curry removed"
+    )
+    expect(line({ ...move, occupant: "to", other: "Curry" })).toBe(
+      "Chili to Wednesday dinner, Curry moved on"
+    )
+    expect(
+      line({ op: "replace", food: "Chili", to: "Dal", date: "2026-11-03" })
+    ).toBe("Chili to Dal (Tuesday)")
+    expect(
+      line({
+        op: "away",
+        date: "2026-11-04",
+        cells: [
+          { date: "2026-11-04", slot_key: "slot.lunch" },
+          { date: "2026-11-04", slot_key: "slot.dinner" },
+        ],
+      })
+    ).toBe("away: Wednesday lunch, Wednesday dinner")
+    expect(
+      line({
+        op: "move_cook",
+        food: "Chili",
+        date: "2026-11-03",
+        from_date: "2026-11-04",
+      })
+    ).toBe("Chili now cooked Tuesday")
+    expect(
+      line({
+        op: "copy",
+        food: "Chili",
+        date: "2026-11-03",
+        dates: ["2026-11-04", "2026-11-05"],
+        as: "leftover",
+      })
+    ).toBe("Chili as leftovers on Wednesday, Thursday")
+    expect(
+      line({ op: "copy", food: "Chili", dates: ["2026-11-04"], as: "fresh" })
+    ).toBe("Chili cooked again on Wednesday")
+  })
+
+  it("every op key has en and de copy", () => {
+    const keys = [
+      "op_move",
+      "op_move_swap",
+      "op_move_drop",
+      "op_move_to",
+      "op_replace",
+      "op_away",
+      "op_move_cook",
+      "op_copy_leftover",
+      "op_copy_fresh",
+      "show_less",
+    ]
+    for (const copy of [en.assistant.change, de.assistant.change]) {
+      for (const key of keys) expect(has(copy as Copy, key), key).toBe(true)
+    }
+  })
+
+  it("lists every op when asked, without the more tail", () => {
+    const t = i18next.t.bind(i18next)
+    const ops = ["Gurke", "Reis", "Dal", "Brot", "Tee"].map((food) => ({
+      op: "add",
+      food,
+      date: "2026-11-03",
+    }))
+    const change = mockChange({
+      text_key: "apply_changes",
+      params: { count: 5, ops },
+    })
+    expect(hiddenOpCount(change)).toBe(2)
+    expect(changeSentence(t, i18next, change, { omitMore: true })).toBe(
+      "5 changes: add Gurke (Tuesday); add Reis (Tuesday); add Dal (Tuesday)"
+    )
+    expect(changeSentence(t, i18next, change, { allOps: true })).toContain(
+      "add Tee (Tuesday)"
+    )
   })
 
   it("renders dates as weekdays and slots by name", () => {

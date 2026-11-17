@@ -228,7 +228,7 @@ func TestChange_UndoSetAvailabilityNone(t *testing.T) {
 
 	ch := e.changeOp(ctx, "set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none"}`, p.DateString(), p.SlotID))
 	assert.Equal(t, "apply_changes", ch.TextKey)
-	require.NotNil(t, ch.CellBefore)
+	require.Len(t, ch.Cells, 1)
 	assert.Contains(t, ch.PlateIDs, p.ID, "the removed draft plate is part of the change")
 
 	_, err = e.changes.Undo(context.Background(), ch.ID)

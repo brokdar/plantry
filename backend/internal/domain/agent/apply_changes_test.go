@@ -128,16 +128,6 @@ func TestApplyChanges_FailingOpRollsBackTheBatch(t *testing.T) {
 	assert.InDelta(t, p.Eaters, got.Eaters, 1e-9, "the first op was rolled back")
 }
 
-func TestApplyChanges_AtMostOneAvailabilityOp(t *testing.T) {
-	e := newPlanToolEnv(t)
-	week := e.week()
-	_, err := e.exec("apply_changes", fmt.Sprintf(`{"ops":[
-		{"op":"set_availability","date":%q,"slot_id":%d,"mode":"none"},
-		{"op":"set_availability","date":%q,"slot_id":%d,"mode":"none"}]}`,
-		week[0].DateString(), week[0].SlotID, week[1].DateString(), week[1].SlotID))
-	require.ErrorIs(t, err, domain.ErrInvalidInput)
-}
-
 // The Friday salad case: a second recipe on a day that already cooks is a
 // second cooking occasion (H2) unless it is cooked together with the existing
 // batch. cook_at puts it on the existing cook cell, so H2 stays quiet.
