@@ -23,6 +23,7 @@ process.env.E2E_SITE_PORT = String(SITE_PORT)
 // one spec's provider/model override corrupts another spec's chat stream.
 const AI_SERIAL_SPECS = [
   "assistant-panel.spec.ts",
+  "assistant-move.spec.ts",
   "discovery.spec.ts",
   "settings-ai.spec.ts",
   "keyboard-shortcuts.spec.ts",

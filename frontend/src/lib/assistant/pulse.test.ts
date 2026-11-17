@@ -30,7 +30,7 @@ describe("cellInChange", () => {
     )
   })
 
-  it("falls back to the date only for a change without rows", () => {
+  it("falls back to the date for a change without rows or an empty cell", () => {
     const none = mockChange({
       plate_ids: [],
       session_ids: [],
@@ -43,7 +43,10 @@ describe("cellInChange", () => {
       session_ids: [],
       dates: ["2026-11-03"],
     })
-    expect(cellInChange(cell({}), rows)).toBe(false)
+    // An empty cell on a touched date: a move's source, an away cell.
+    expect(cellInChange(cell({}), rows)).toBe(true)
+    expect(cellInChange(cell({ date: "2026-11-04" }), rows)).toBe(false)
+    expect(cellInChange(cell({ plate: { id: 13 } as never }), rows)).toBe(false)
   })
 
   it("matches nothing without a change", () => {
