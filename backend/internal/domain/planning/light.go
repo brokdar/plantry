@@ -28,14 +28,14 @@ const (
 	MaxLightDays = 3
 	// LightMealShare: a light meal holds at most this share of the meal's
 	// normal share of the day's target (the target split evenly over the
-	// planned meals); the day's target is unchanged, the other meals carry
-	// the rest.
+	// planned meals); the day's target moves down by the missing quarter
+	// (Policy.shiftedTarget).
 	LightMealShare = 0.75
 	// LightDayShare: a light day's target is this share of the normal one
 	// and its band is centred there. The floors (H9) are not lowered.
 	LightDayShare = 0.85
 	// HeartyMealShare: a hearty meal holds at least this share of the
-	// meal's normal share; the day's target is unchanged.
+	// meal's normal share; the day's target moves up by the extra quarter.
 	HeartyMealShare = 1.25
 	// HeartyDayShare: a hearty day's target is this share of the normal one
 	// and its band is centred there.
@@ -202,7 +202,7 @@ func LightSchema(withClear bool) string {
 	}
 	return fmt.Sprintf(`"light":{
       "type":"array","maxItems":14,
-      "description":"The user's light (or hearty) requests, structured; omit when there is none. Requests are stored: a meal entry replaces the stored request of that date and slot, a day entry that date's day request; everything else stored stays and every evaluation already stands under it, so list only what the user asked for now. scope meal: that lunch or dinner is lighter (at most 75%% of its even share of the day's target; level hearty: at least 125%%) and the day keeps its target. scope day: ONLY when the user explicitly asks to eat less (hearty: more) that day; the day's target becomes 85%% (hearty: 115%%); at most %d light or hearty days per plan window (a lasting change is the profile's goal). Dates must lie in the plan window.%s",
+      "description":"The user's light (or hearty) requests, structured; omit when there is none. Requests are stored: a meal entry replaces the stored request of that date and slot, a day entry that date's day request; everything else stored stays and every evaluation already stands under it, so list only what the user asked for now. scope meal: that lunch or dinner is lighter (at most 75%% of its even share of the day's target; level hearty: at least 125%%) and the day's target moves by that meal's share, within the normal day band. scope day: ONLY when the user explicitly asks to eat less (hearty: more) that day; the day's target becomes 85%% (hearty: 115%%); at most %d light or hearty days per plan window (a lasting change is the profile's goal). Dates must lie in the plan window.%s",
       "items":{
         "type":"object","required":["date","scope"],
         "properties":{

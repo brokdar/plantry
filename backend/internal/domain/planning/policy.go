@@ -137,6 +137,17 @@ func (p Policy) Floor(target, share float64) float64 {
 	return max(p.FloorShare*target*share, p.FloorKcal*share)
 }
 
+// shiftedTarget is a day's scaled target moved by its light and hearty
+// meals: a light meal by -(1-LightMealShare) and a hearty one by
+// +(HeartyMealShare-1) of its normal share (scaled / active meals). The sum
+// stays inside the day band, so a meal intent never takes a day further than
+// a normal day may deviate; only the day scope goes beyond.
+func (p Policy) shiftedTarget(scaled float64, active, light, hearty int) float64 {
+	share := scaled / float64(active)
+	shift := float64(hearty)*(HeartyMealShare-1)*share - float64(light)*(1-LightMealShare)*share
+	return min(max(scaled+shift, p.DayLow*scaled), p.DayHigh*scaled)
+}
+
 // Describe is the policy as the prompts tell it to the model: the target is
 // a target, the week matters most, the floors are hard.
 func (p Policy) Describe() string {
@@ -149,9 +160,9 @@ func (p Policy) Describe() string {
 		p.Goal, pct(p.WeekLow), pct(p.WeekHigh), pct(p.DayLow), pct(p.DayHigh), floor)
 	out += fmt.Sprintf(" Priority when rules conflict: 1 hard rules, 2 weekly kcal, 3 day kcal band, 4 protein, 5 food-group rules (the DGE weekly food rules below, soft issues S7), 6 preferences and effort, 7 carb and fat ranges (soft issues S5: last, never at the cost of kcal or protein). Carbs and fat are judged on the weekly average only: carbs %.0f-%.0f%% and fat %.0f-%.0f%% of energy.",
 		p.CarbsLow, p.CarbsHigh, p.FatLow, p.FatHigh)
-	out += fmt.Sprintf(" Light requests are structured, never prose: a list of {date, scope meal|day, slot lunch|dinner for a meal}. \"Something light\" means scope meal: that lunch or dinner holds at most %d%% of its normal share of the day's target, the day keeps its target and the other meals carry the rest (soft issue S6 when it is not lighter). Only an explicit request to eat less for the day or the week is scope day: that day's target becomes %d%% and its band is centred there. Never go below the floors (H9); when a floor stopped a lighter day, say so in the reply.",
+	out += fmt.Sprintf(" Light requests are structured, never prose: a list of {date, scope meal|day, slot lunch|dinner for a meal}. \"Something light\" means scope meal: that lunch or dinner holds at most %d%% of its normal share of the day's target (soft issue S6 when it is not lighter). A light or hearty meal moves the day's target by that meal's share, within the normal day band; the floors (the absolute ones never move) and protein stay. Only an explicit request to eat less for the day or the week is scope day: that day's target becomes %d%% and its band is centred there; to eat less for a whole day use the day scope. Never go below the floors (H9); when a floor stopped a lighter day, say so in the reply.",
 		pct(LightMealShare), pct(LightDayShare))
-	out += fmt.Sprintf(" The opposite is level hearty on the same entry: a hearty meal holds at least %d%% of its normal share (soft issue S6b when it does not), a hearty day's target becomes %d%%; light and hearty days count together against the cap.",
+	out += fmt.Sprintf(" The opposite is level hearty on the same entry: a hearty meal holds at least %d%% of its normal share (soft issue S6b when it does not) and raises the day's target the same way, a hearty day's target becomes %d%%; light and hearty days count together against the cap.",
 		pct(HeartyMealShare), pct(HeartyDayShare))
 	out += " Dish repeats (soft issue S8 dish_repeats_exceeded, ranked with preferences): one dish should be the main of at most the user's limit of lunches and dinners a week (the issue's max, 3 by default); leftovers count as meals."
 	out += " DGE weekly food rules (soft issues week_meat_above_dge, week_fish_below_dge, week_legumes_below_dge; rule S7, priority 5: prefer them, never at the cost of kcal, protein or the user's wishes; they are judged only on 5 or more complete days): meat and sausage at most 300 g per person per week (the limit shrinks in proportion to the days, 300 x days / 7), fish once a week or more, legumes (beans, lentils, chickpeas, peas, tofu) at least once a week (a fish or legume meal has at least 50 g of it per person), plenty of fruit and vegetables every day (week.days, meat_g, fish_meals, legume_meals, produce_g_per_day are shown, no issue for produce)."
