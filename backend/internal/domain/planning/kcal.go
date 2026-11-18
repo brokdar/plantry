@@ -33,8 +33,9 @@ type DayKcal struct {
 	FiberMissing bool
 	Target       float64
 	Scaled       float64
-	// Adjusted is Scaled, or LightDayShare of it on a light day: the target
-	// the day band is centred on (the floor stays on Scaled).
+	// Adjusted is Scaled, or LightDayShare of it on a light day, or Scaled
+	// shifted by the day's light and hearty meals (see shiftedTarget): the
+	// target the day band is centred on. The floor stays on Scaled.
 	Adjusted float64
 	Gap      float64 // Adjusted - Kcal; positive: under target
 	Planned  int
@@ -54,6 +55,13 @@ type DayKcal struct {
 	// and the weekly averages do not judge the day (light and routine cells
 	// do not count).
 	Away bool
+}
+
+// Floor is the lowest kcal per person the day may hold (H9): 75 % of the
+// scaled (normal) target, whatever light or hearty meals or an eat-less day
+// moved the day's target to; the absolute floor never moves.
+func (d DayKcal) Floor(p Policy) float64 {
+	return p.Floor(d.Target, d.Share())
 }
 
 // Active is the number of meals the day's targets are judged on: the
@@ -87,7 +95,7 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 	var out []DayKcal
 	for _, d := range days {
 		dk := DayKcal{Date: d, Target: k, Complete: true}
-		meals, away := 0, 0
+		meals, away, lightMeals, heartyMeals := 0, 0, 0, 0
 		for _, c := range s.Cells {
 			if dayOf(c.Date) != dayOf(d) {
 				continue
@@ -103,6 +111,12 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 				continue
 			}
 			dk.Planned++
+			switch {
+			case s.lightMeal(c.Date, c.SlotID):
+				lightMeals++
+			case s.heartyMeal(c.Date, c.SlotID):
+				heartyMeals++
+			}
 			if len(x.byCell[idOf(c.Key())]) == 0 {
 				if c.Mode == availability.ModeRoutine {
 					dk.Unplated++
@@ -122,6 +136,8 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 			dk.Adjusted *= LightDayShare
 		case s.heartyDay(d):
 			dk.Adjusted *= HeartyDayShare
+		case lightMeals+heartyMeals > 0:
+			dk.Adjusted = x.pol.shiftedTarget(dk.Scaled, dk.Active(), lightMeals, heartyMeals)
 		}
 		if dk.Adjusted < dk.Scaled {
 			// A light day is never asked to go below the floor, so the week

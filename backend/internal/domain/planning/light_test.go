@@ -66,12 +66,12 @@ func TestEvaluate_LightMeal(t *testing.T) {
 	for _, d := range ev.Days {
 		if d.Date == mon {
 			assert.Equal(t, "meal", d.Light)
-			assert.InDelta(t, 1500, *d.TargetKcal, 0.01, "the day target is unchanged")
-			assert.Zero(t, d.NormalTargetKcal)
+			assert.InDelta(t, 1375, *d.TargetKcal, 0.01, "a light meal moves the day target by 25 % of its share")
+			assert.InDelta(t, 1500, d.NormalTargetKcal, 0.01)
 		}
 	}
 
-	t.Run("a lighter meal clears the issue, the day keeps its target", func(t *testing.T) {
+	t.Run("a lighter meal clears the issue, the day target follows", func(t *testing.T) {
 		// Dinner of 375 kcal exactly: soup at 0.75 portions of 500 is too
 		// fiddly, so use a 300 kcal recipe and 600 kcal at lunch.
 		s := lightState()
@@ -91,9 +91,8 @@ func TestEvaluate_LightMeal(t *testing.T) {
 		prop.Light = []planning.LightIntent{light}
 		ev := planning.Evaluate(planning.Merge(s, tgt, prop), tgt)
 		assert.Empty(t, codeDates(ev.Issues, "S6", planning.CodeMealNotLight))
-		// 1300 of 1500 is 87 %: a light meal does not lower the day's target,
-		// so the other meals must carry the rest.
-		assert.Equal(t, []string{mon}, codeDates(ev.Issues, "S2", planning.CodeKcalBelowBand))
+		// 1300 of the shifted 1375 is 95 %: inside the band centred there.
+		assert.Empty(t, codeDates(ev.Issues, "S2", planning.CodeKcalBelowBand))
 	})
 
 	t.Run("without intents nothing changes", func(t *testing.T) {

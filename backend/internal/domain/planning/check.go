@@ -540,10 +540,14 @@ func (x *index) h9() []Issue {
 		if dk.Target <= 0 || !dk.Complete || dk.Away || dk.NutritionMissing || dk.Kcal <= 0 || !x.plateInTarget(dk.Date) {
 			continue
 		}
-		floor := x.pol.Floor(dk.Target, dk.Share())
+		floor := dk.Floor(x.pol)
 		if dk.Kcal < floor {
-			out = append(out, issue("H9", CodeKcalBelowFloor, SeverityViolation).onDate(dk.Date).
-				with("kcal", math.Round(dk.Kcal)).with("floor_kcal", math.Round(floor)).with("target_kcal", math.Round(dk.Scaled)))
+			is := issue("H9", CodeKcalBelowFloor, SeverityViolation).onDate(dk.Date).
+				with("kcal", math.Round(dk.Kcal)).with("floor_kcal", math.Round(floor)).with("target_kcal", math.Round(dk.Scaled))
+			if dk.Adjusted != dk.Scaled {
+				is = is.with("shifted_target_kcal", math.Round(dk.Adjusted))
+			}
+			out = append(out, is)
 		}
 	}
 	return out

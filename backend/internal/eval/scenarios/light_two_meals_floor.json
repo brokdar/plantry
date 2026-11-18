@@ -1,0 +1,96 @@
+{
+  "name": "light_two_meals_floor",
+  "description": "Two light meals on a day (lunch and dinner, scope meal) plus a small routine breakfast: the shift is capped at the day band (-10 %, target 1800), the H9 floor does not follow it and stays at 75 % of the normal target (1500). The two light caps and the breakfast cannot reach it, so the days stay below the floor as a hard H9 (params target_kcal 2000 and shifted_target_kcal 1800), and the run notes say so; nothing lowers the floor or the protein target.",
+  "today": "2026-11-06",
+  "start": "2026-11-07",
+  "settings": {
+    "plan.shopping_day": "5",
+    "plan.batch_cooking": "false",
+    "plan.default_keep_days": "2",
+    "plan.max_cook_occasions_per_day": "2",
+    "plan.variety_weeks": "2",
+    "plan.freezing_enabled": "false"
+  },
+  "profile": {
+    "diet_type": "omnivore",
+    "household_portions": 1,
+    "kcal_target": 2000,
+    "goal": "maintain",
+    "weight_kg": 70
+  },
+  "slots": [
+    "breakfast",
+    "lunch",
+    "dinner"
+  ],
+  "presets": [
+    {
+      "name": "Yoghurt",
+      "slot": "breakfast",
+      "recipe": "Joghurt mit Beeren"
+    }
+  ],
+  "availability": {
+    "defaults": [
+      {
+        "weekdays": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "slot": "breakfast",
+        "mode": "routine",
+        "preset": "Yoghurt"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "action": "generate",
+      "instruction": "light lunch and dinner on Tuesday and Wednesday",
+      "light": [
+        {
+          "date": "2026-11-10",
+          "scope": "meal",
+          "slot": "lunch"
+        },
+        {
+          "date": "2026-11-10",
+          "scope": "meal",
+          "slot": "dinner"
+        },
+        {
+          "date": "2026-11-11",
+          "scope": "meal",
+          "slot": "lunch"
+        },
+        {
+          "date": "2026-11-11",
+          "scope": "meal",
+          "slot": "dinner"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "min_plates": 14,
+    "allow_violations": [
+      "kcal_below_floor"
+    ],
+    "evaluation": {
+      "issues_present": [
+        "kcal_below_floor"
+      ],
+      "issues_absent": [
+        "meal_not_light"
+      ],
+      "notes_contain": [
+        "Below the daily minimum"
+      ]
+    }
+  }
+}
