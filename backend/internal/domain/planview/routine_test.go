@@ -59,23 +59,25 @@ func TestPlan_DishRepeatsCountOnlyFullMealSlots(t *testing.T) {
 		}
 		return false
 	}
-	run := func(slotID, foodID int64) *Plan {
+	run := func(slotID int64, breakfastActive bool) *Plan {
 		f := newFixture()
 		for i := range f.slots {
 			f.slots[i].Kind = slot.KindMeal
 			if f.slots[i].ID == breakfast {
 				f.slots[i].Kind = slot.KindLight
+				f.slots[i].Active = breakfastActive
 			}
 		}
-		sid := f.session(foodID, "2026-11-01", slotID, 8)
+		sid := f.session(chiliID, "2026-11-01", slotID, 8)
 		for _, d := range []string{"2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"} {
-			f.composed(d, slotID, foodID, sid)
+			f.composed(d, slotID, chiliID, sid)
 		}
 		start := date("2026-10-31")
 		p, err := f.service().Plan(ctx, &start, date("2026-11-04"))
 		require.NoError(t, err)
 		return p
 	}
-	assert.False(t, s8(run(breakfast, omeletID)), "light breakfast repeats are routine")
-	assert.True(t, s8(run(lunch, chiliID)), "lunch repeats still raise S8")
+	assert.False(t, s8(run(breakfast, true)), "light breakfast repeats are routine")
+	assert.False(t, s8(run(breakfast, false)), "inactive light slot repeats are routine too")
+	assert.True(t, s8(run(lunch, true)), "lunch repeats still raise S8")
 }

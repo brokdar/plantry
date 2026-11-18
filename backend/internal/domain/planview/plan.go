@@ -215,6 +215,7 @@ type env struct {
 	shoppingDay int
 	batch       plate.BatchSettings
 	order       plate.SlotOrder
+	kinds       map[int64]slot.Kind // every slot, inactive ones too
 	active      []slot.TimeSlot
 }
 
@@ -232,9 +233,11 @@ func (s *Service) loadEnv(ctx context.Context) (env, error) {
 		return e, fmt.Errorf("list slots: %w", err)
 	}
 	e.order = make(plate.SlotOrder, len(all))
+	e.kinds = make(map[int64]slot.Kind, len(all))
 	e.active = []slot.TimeSlot{}
 	for _, sl := range all {
 		e.order[sl.ID] = sl.SortOrder
+		e.kinds[sl.ID] = sl.Kind
 		if sl.Active {
 			e.active = append(e.active, sl)
 		}

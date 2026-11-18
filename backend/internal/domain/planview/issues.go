@@ -12,7 +12,6 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -86,10 +85,9 @@ func (s *Service) checkState(ctx context.Context, in checkInput) (planning.State
 		Profile:  planning.StateProfile(in.profile),
 	}
 	st.SlotNames = make(map[int64]string, len(in.env.active))
-	st.SlotKind = make(map[int64]slot.Kind, len(in.env.active))
+	st.SlotKind = in.env.kinds
 	for _, sl := range in.env.active {
 		st.SlotNames[sl.ID] = sl.NameKey
-		st.SlotKind[sl.ID] = sl.Kind
 	}
 	if st.Light, err = s.d.Light.List(ctx, in.w.Start, in.w.End); err != nil {
 		return planning.State{}, fmt.Errorf("read light requests: %w", err)
