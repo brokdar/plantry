@@ -21,13 +21,14 @@ const (
 	refL700
 	refD917
 	refD1100
+	refD790
 )
 
 func refState(t *testing.T) planning.State {
 	t.Helper()
 	s := lightState()
 	s.Profile.KcalTarget = f64(2200)
-	for id, kcal := range map[int64]float64{refB310: 310, refL550: 550, refD620: 620, refD550: 550, refL700: 700, refD917: 917, refD1100: 1100} {
+	for id, kcal := range map[int64]float64{refB310: 310, refL550: 550, refD620: 620, refD550: 550, refL700: 700, refD917: 917, refD1100: 1100, refD790: 790} {
 		s.Foods[id] = recipe(id, "ref", food.RoleMain, "vegan", kcal)
 	}
 	return s
@@ -48,7 +49,10 @@ func refDay(t *testing.T, s planning.State, date string, light []planning.LightI
 }
 
 // Tuesday with lunch and dinner light: the shift -16.7 % is capped at -10 %,
-// the target is 1980 and the floor 1485 (75 % of it).
+// the target is 1980 and the band 1782-2178; the safety floor stays on the
+// normal target, 75 % of 2200 = 1650. With breakfast 310 and lunch at its
+// light cap 550 the dinner must hold 790 kcal; its own light cap is 550, so
+// a dinner within it cannot satisfy H9 (S6 stays soft, H9 holds).
 func TestMealShift_ReferenceLighterTuesday(t *testing.T) {
 	s := refState(t)
 	light := []planning.LightIntent{{Date: tue, Scope: "meal", Slot: "lunch"}, {Date: tue, Scope: "meal", Slot: "dinner"}}
@@ -57,16 +61,25 @@ func TestMealShift_ReferenceLighterTuesday(t *testing.T) {
 	d := dayEval(t, ev, tue)
 	assert.InDelta(t, 1980, *d.TargetKcal, 0.01)
 	assert.InDelta(t, 2200, d.NormalTargetKcal, 0.01)
-	// 310 + 550 + 620 = 1480, five kcal under the floor 1485 (and the
-	// dinner is over its light cap of 550): not free of H9.
-	got := codeDates(ev.Issues, "H9", planning.CodeKcalBelowFloor)
-	assert.Equal(t, []string{tue}, got)
+	// 310 + 550 + 620 = 1480 is under the floor 1650.
+	require.Equal(t, []string{tue}, codeDates(ev.Issues, "H9", planning.CodeKcalBelowFloor))
 	for _, is := range ev.Issues {
 		if is.Code == planning.CodeKcalBelowFloor {
-			assert.InDelta(t, 1485, is.Params["floor_kcal"], 0.01)
+			assert.InDelta(t, 1650, is.Params["floor_kcal"], 0.01)
 			assert.InDelta(t, 1480, is.Params["kcal"], 0.01)
+			assert.InDelta(t, 2200, is.Params["target_kcal"], 0.01)
+			assert.InDelta(t, 1980, is.Params["shifted_target_kcal"], 0.01)
 		}
 	}
+
+	// 310 + 550 + 550 (dinner at its light cap) = 1410: still H9.
+	ev = refDay(t, s, tue, light, map[int64]int64{breakfast: refB310, lunch: refL550, dinner: refD550})
+	assert.Equal(t, []string{tue}, codeDates(ev.Issues, "H9", planning.CodeKcalBelowFloor))
+
+	// 310 + 550 + 790 = 1650 is the minimum dinner free of H9 (over its light cap).
+	ev = refDay(t, s, tue, light, map[int64]int64{breakfast: refB310, lunch: refL550, dinner: refD790})
+	assert.Empty(t, codeDates(ev.Issues, "H9", planning.CodeKcalBelowFloor))
+	assert.NotEmpty(t, codeDates(ev.Issues, "S6", planning.CodeMealNotLight), "the dinner is over its light cap")
 }
 
 // Saturday as a short day (breakfast No plate, target 1467): a hearty dinner
@@ -85,5 +98,5 @@ func TestMealShift_ReferenceHeartySaturday(t *testing.T) {
 	assert.Empty(t, codeDates(ev.Issues, "S6b", planning.CodeMealNotHearty), "917 meets 125 % of 733")
 	assert.Empty(t, codeDates(ev.Issues, "S2", planning.CodeKcalBelowBand))
 	assert.Empty(t, codeDates(ev.Issues, "S2", planning.CodeKcalAboveBand), "1617 is inside the band 1452-1775")
-	assert.Empty(t, codeDates(ev.Issues, "H9", planning.CodeKcalBelowFloor))
+	assert.Empty(t, codeDates(ev.Issues, "H9", planning.CodeKcalBelowFloor), "1617 is over the normal floor 1467 x 75 %")
 }

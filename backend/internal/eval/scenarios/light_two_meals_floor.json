@@ -1,6 +1,6 @@
 {
   "name": "light_two_meals_floor",
-  "description": "Two light meals on a day (lunch and dinner, scope meal) plus a small routine breakfast: the shift is capped at the day band (-10 %, target 1800), the H9 floor follows it (1350 instead of 1500). The two light caps and the breakfast cannot reach it, so the days stay below the floor as a hard H9 with the numbers, and the run notes say so; nothing lowers the floor or the protein target.",
+  "description": "Two light meals on a day (lunch and dinner, scope meal) plus a small routine breakfast: the shift is capped at the day band (-10 %, target 1800), the H9 floor does not follow it and stays at 75 % of the normal target (1500). The two light caps and the breakfast cannot reach it, so the days stay below the floor as a hard H9 (params target_kcal 2000 and shifted_target_kcal 1800), and the run notes say so; nothing lowers the floor or the protein target.",
   "today": "2026-11-06",
   "start": "2026-11-07",
   "settings": {

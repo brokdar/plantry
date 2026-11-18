@@ -1,6 +1,6 @@
 {
   "name": "light_meal_weekday_dinners",
-  "description": "Light intent: \"something light on weekdays\" means the weekday dinners (scope meal). Each is at most 75 % of its share while the day target stays: the other meals carry the rest and the week stays on target.",
+  "description": "Light intent: \"something light on weekdays\" means the weekday dinners (scope meal). Each is at most 75 % of its share and the day target moves down by the light meal's share within the day band: the other meals carry the rest and the week stays on target.",
   "today": "2026-11-06",
   "start": "2026-11-07",
   "settings": {

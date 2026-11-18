@@ -54,9 +54,9 @@ func TestMealIntents_ShiftTheDayTarget(t *testing.T) {
 	})
 }
 
-// H9 follows the shifted target; the absolute floor never moves.
-func TestMealIntents_FloorFollowsShift(t *testing.T) {
-	floorOf := func(t *testing.T, s planning.State, in planning.LightIntent) (float64, bool) {
+// H9 stays on the normal target, light or hearty; so does the absolute floor.
+func TestMealIntents_FloorStaysOnNormalTarget(t *testing.T) {
+	h9 := func(t *testing.T, s planning.State, in planning.LightIntent) planning.Issue {
 		t.Helper()
 		// Rice in every cell: 600 kcal a day, far under any floor.
 		tgt := windowTarget(s)
@@ -68,27 +68,28 @@ func TestMealIntents_FloorFollowsShift(t *testing.T) {
 		ev := planning.Evaluate(planning.Merge(s, tgt, prop), tgt)
 		for _, is := range ev.Issues {
 			if is.Code == planning.CodeKcalBelowFloor && is.Date == mon {
-				return is.Params["floor_kcal"].(float64), true
+				return is
 			}
 		}
-		return 0, false
+		t.Fatal("no H9 on Monday")
+		return planning.Issue{}
 	}
 
 	s := lightState()
 	s.Profile.KcalTarget = f64(2000) // meal 667; normal floor 1500
-	got, ok := floorOf(t, s, meal("dinner", false))
-	require.True(t, ok)
-	assert.InDelta(t, 0.75*(2000-0.25*2000.0/3), got, 1, "75 % of the shifted target 1833")
-	got, ok = floorOf(t, s, meal("dinner", true))
-	require.True(t, ok)
-	assert.InDelta(t, 0.75*(2000+0.25*2000.0/3), got, 1, "75 % of the raised target 2167")
+	is := h9(t, s, meal("dinner", false))
+	assert.InDelta(t, 1500, is.Params["floor_kcal"], 0.01, "75 % of the normal target, not of 1833")
+	assert.InDelta(t, 2000, is.Params["target_kcal"], 0.01)
+	assert.InDelta(t, 1833, is.Params["shifted_target_kcal"], 1, "the model can quote both")
+	is = h9(t, s, meal("dinner", true))
+	assert.InDelta(t, 1500, is.Params["floor_kcal"], 0.01, "75 % of the normal target, not of 2167")
+	assert.InDelta(t, 2167, is.Params["shifted_target_kcal"], 1)
 
 	male := profile.SexMale
 	s.Profile.Sex = &male // absolute floor 1500
 	s.Profile.KcalTarget = f64(1800)
-	got, ok = floorOf(t, s, meal("dinner", false))
-	require.True(t, ok)
-	assert.InDelta(t, 1500, got, 0.01, "the absolute floor does not move")
+	is = h9(t, s, meal("dinner", false))
+	assert.InDelta(t, 1500, is.Params["floor_kcal"], 0.01, "the absolute floor does not move")
 }
 
 func TestMealIntents_ProteinTargetUnchanged(t *testing.T) {

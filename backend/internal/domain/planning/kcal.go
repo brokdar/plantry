@@ -35,14 +35,11 @@ type DayKcal struct {
 	Scaled       float64
 	// Adjusted is Scaled, or LightDayShare of it on a light day, or Scaled
 	// shifted by the day's light and hearty meals (see shiftedTarget): the
-	// target the day band is centred on. The floor stays on Scaled, except
-	// for a meal shift (MealShifted).
+	// target the day band is centred on. The floor stays on Scaled.
 	Adjusted float64
-	// MealShifted: Adjusted is moved by meal intents, so the floor follows it.
-	MealShifted bool
-	Gap         float64 // Adjusted - Kcal; positive: under target
-	Planned     int
-	Meals       int
+	Gap      float64 // Adjusted - Kcal; positive: under target
+	Planned  int
+	Meals    int
 	// Complete: every planned (non-routine) meal of the day holds a plate.
 	Complete bool
 	// Proposed: the day holds a plate of the proposal.
@@ -61,12 +58,9 @@ type DayKcal struct {
 }
 
 // Floor is the lowest kcal per person the day may hold (H9): 75 % of the
-// scaled target, or of the shifted one when light or hearty meals moved it;
-// the absolute floor never moves.
+// scaled (normal) target, whatever light or hearty meals or an eat-less day
+// moved the day's target to; the absolute floor never moves.
 func (d DayKcal) Floor(p Policy) float64 {
-	if d.MealShifted {
-		return max(p.FloorShare*d.Adjusted, p.FloorKcal*d.Share())
-	}
 	return p.Floor(d.Target, d.Share())
 }
 
@@ -144,7 +138,6 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 			dk.Adjusted *= HeartyDayShare
 		case lightMeals+heartyMeals > 0:
 			dk.Adjusted = x.pol.shiftedTarget(dk.Scaled, dk.Active(), lightMeals, heartyMeals)
-			dk.MealShifted = true
 		}
 		if dk.Adjusted < dk.Scaled {
 			// A light day is never asked to go below the floor, so the week
