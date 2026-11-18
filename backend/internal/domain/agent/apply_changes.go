@@ -193,7 +193,9 @@ func toolApplyChanges(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			ws := windowsFor(w, opDates(in.Ops))
-			before, err := evalWindows(ctx, svc, ws)
+			// The baseline stands under the stored light only: an intent this
+			// call adds must show its own S6/S6b as new (audit B2).
+			before, err := evalWindows(withLight(ctx, nil), svc, ws)
 			if err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("read the plan before the change: %w", err)
 			}
@@ -752,8 +754,10 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 		out["issues_unchecked_reason"] = "dates outside the evaluated windows: " + strings.Join(outside, ", ")
 	}
 	delta := deltaOf(issueMap(before.Issues), issueMap(now.Issues))
-	for _, k := range []string{"new", "resolved"} {
-		delta[k] = planning.Compact(delta[k])
+	for _, k := range []string{"new", "resolved", "worsened"} {
+		if _, ok := delta[k]; ok {
+			delta[k] = planning.Compact(delta[k])
+		}
 	}
 	out["issues"] = delta
 	if plates, ok := out["plates"].([]effectPlate); ok {

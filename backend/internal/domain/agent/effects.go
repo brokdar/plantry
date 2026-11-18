@@ -61,6 +61,20 @@ type effectIssue struct {
 	Options []planning.Option `json:"options,omitempty"`
 }
 
+// effectWorsened is an issue open before and after a write whose numbers got
+// worse: Before and After are its params then and now.
+type effectWorsened struct {
+	Rule     string         `json:"rule"`
+	Code     string         `json:"code"`
+	Severity string         `json:"severity"`
+	Date     string         `json:"date,omitempty"`
+	SlotID   *int64         `json:"slot_id,omitempty"`
+	PlateID  *int64         `json:"plate_id,omitempty"`
+	Session  *int64         `json:"session_id,omitempty"`
+	Before   map[string]any `json:"before,omitempty"`
+	After    map[string]any `json:"after,omitempty"`
+}
+
 // changeEffect reads the affected plates and sessions after a write, plus the
 // checker issues and session warnings (H3/H4: deficit, frozen_deficit, ...)
 // that touch them. It never fails the tool: a read that fails is logged and
@@ -202,13 +216,23 @@ func issueDelta(ctx context.Context, svc Services, out map[string]any) {
 	out["issues"] = res
 }
 
-// deltaOf is the issues now that base lacked (new) and base's that are gone
-// (resolved), each list capped at maxEffectIssues, with the open total.
+// deltaOf is the issues now that base lacked (new), base's that are gone
+// (resolved) and those open in both whose numbers got worse (worsened, only
+// when there are any), each list capped at maxEffectIssues, with the open
+// total.
 func deltaOf(base, now map[string]planning.Issue) map[string]any {
 	newIs, resolved := []effectIssue{}, []effectIssue{}
+	var worse []effectWorsened
 	for k, is := range now {
-		if _, had := base[k]; !had {
+		had, ok := base[k]
+		switch {
+		case !ok:
 			newIs = append(newIs, toEffectIssue(is))
+		case worsened(had, is):
+			worse = append(worse, effectWorsened{
+				Rule: is.Rule, Code: is.Code, Severity: string(is.Severity), Date: is.Date,
+				SlotID: is.SlotID, PlateID: is.PlateID, Session: is.SessionID, Before: had.Params, After: is.Params,
+			})
 		}
 	}
 	for k, is := range base {
@@ -227,7 +251,73 @@ func deltaOf(base, now map[string]planning.Issue) map[string]any {
 		}
 		res[name] = list
 	}
+	if len(worse) > 0 {
+		slices.SortFunc(worse, func(a, b effectWorsened) int {
+			return cmp.Or(cmp.Compare(a.Date, b.Date), cmp.Compare(a.Rule, b.Rule), cmp.Compare(a.Code, b.Code))
+		})
+		if len(worse) > maxEffectIssues {
+			res["worsened_more"] = len(worse) - maxEffectIssues
+			worse = worse[:maxEffectIssues]
+		}
+		res["worsened"] = worse
+	}
 	return res
+}
+
+// badness is how bad an open issue is, larger is worse, from the numbers in
+// its params; false for an issue without a measure (a rule that is either
+// broken or not).
+func badness(is planning.Issue) (float64, bool) {
+	p := func(k string) float64 {
+		switch v := is.Params[k].(type) {
+		case float64:
+			return v
+		case int:
+			return float64(v)
+		}
+		return 0
+	}
+	switch is.Code {
+	case planning.CodeKcalBelowBand:
+		return p("band_low_kcal") - p("kcal"), true
+	case planning.CodeKcalAboveBand:
+		return p("kcal") - p("band_high_kcal"), true
+	case planning.CodeKcalBelowFloor:
+		return p("floor_kcal") - p("kcal"), true
+	case planning.CodeProteinLow:
+		return p("min_g") - p("protein_g"), true
+	case planning.CodeMealNotLight:
+		return p("kcal") - p("max_kcal"), true
+	case planning.CodeMealNotHearty:
+		return p("min_kcal") - p("kcal"), true
+	case planning.CodeWeekMeatAboveDGE:
+		return p("meat_g") - p("max_g"), true
+	case planning.CodeMeatDaysExceeded:
+		return p("days") - p("max"), true
+	case planning.CodeWeekKcalBelowBand:
+		return p("band_low_pct") - p("pct"), true
+	case planning.CodeWeekKcalAboveBand:
+		return p("pct") - p("band_high_pct"), true
+	case planning.CodeWeekProteinLow:
+		return p("target_protein_g") - p("avg_protein_g"), true
+	case planning.CodeWeekCarbsRange, planning.CodeWeekFatRange:
+		return max(p("range_low_pct")-p("pct"), p("pct")-p("range_high_pct")), true
+	case planning.CodeTooManyCookOccasions:
+		return p("count") - p("max"), true
+	case planning.CodeDishRepeats:
+		return p("meals") - p("max"), true
+	}
+	return 0, false
+}
+
+// worsened reports whether an issue open before and after got worse.
+func worsened(before, after planning.Issue) bool {
+	b, ok := badness(before)
+	if !ok {
+		return false
+	}
+	a, _ := badness(after)
+	return a > b+1e-9
 }
 
 func toEffectIssue(is planning.Issue) effectIssue {

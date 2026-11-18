@@ -233,6 +233,7 @@ func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessag
 	if len(input) == 0 {
 		input = json.RawMessage("{}")
 	}
+	input = unwrapParams(input)
 	result, err := s.schemas[name].Validate(gojsonschema.NewBytesLoader(input))
 	if err != nil {
 		return nil, ToolEffectNone, fmt.Errorf("%w: schema validation: %v", domain.ErrInvalidInput, err)
@@ -247,6 +248,21 @@ func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessag
 		return nil, ToolEffectNone, fmt.Errorf("%w: %s", domain.ErrInvalidInput, msg)
 	}
 	return t.Handler(ctx, input)
+}
+
+// unwrapParams returns the object inside a sole {"params": {...}} input: a
+// model sometimes wraps its arguments that way (audit B7). No tool has a
+// `params` field of its own, so any other input is returned as it is.
+func unwrapParams(input json.RawMessage) json.RawMessage {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(input, &m) != nil || len(m) != 1 {
+		return input
+	}
+	inner, ok := m["params"]
+	if !ok || len(inner) == 0 || inner[0] != '{' {
+		return input
+	}
+	return inner
 }
 
 func schemaErrors(r *gojsonschema.Result) string {

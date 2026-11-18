@@ -395,3 +395,48 @@ func (x *index) lightOf(date time.Time) (scope, level string) {
 	}
 	return "", ""
 }
+
+// lightMeals names the light and hearty meals of date with their slot
+// ("light dinner"), in cell order.
+func (x *index) lightMeals(date time.Time) []string {
+	var out []string
+	for _, c := range x.s.Cells {
+		if dayOf(c.Date) != dayOf(date) {
+			continue
+		}
+		switch {
+		case x.s.lightMeal(c.Date, c.SlotID):
+			out = append(out, "light "+slotName(x.s, c.SlotID))
+		case x.s.heartyMeal(c.Date, c.SlotID):
+			out = append(out, "hearty "+slotName(x.s, c.SlotID))
+		}
+	}
+	return out
+}
+
+// markIntent sets the intent of pe, the evaluation of plate p, when its meal
+// is light or hearty, with the cap or minimum S6/S6b judge it by.
+func (x *index) markIntent(pe *PlateEval, p Plate) {
+	level := ""
+	switch {
+	case x.s.lightMeal(p.Date, p.SlotID):
+		level = LevelLight
+	case x.s.heartyMeal(p.Date, p.SlotID):
+		level = LevelHearty
+	default:
+		return
+	}
+	pe.Intent = level
+	var dk *DayKcal
+	for _, a := range x.dayAccounts([]time.Time{p.Date}) {
+		dk = &a
+	}
+	if dk == nil || dk.Target <= 0 {
+		return
+	}
+	if level == LevelHearty {
+		pe.MinKcal = math.Round(HeartyMealShare * dk.normalShare())
+		return
+	}
+	pe.MaxKcal = math.Round(dk.mealCap())
+}

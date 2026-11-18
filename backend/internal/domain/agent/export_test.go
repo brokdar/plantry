@@ -20,3 +20,18 @@ var (
 	ChatIssues = chatIssues
 	ChatFacts  = chatFacts
 )
+
+// DeltaOf and MealResult expose the issue diff and the meal ops' also_changed
+// part to the external tests.
+var (
+	DeltaOf    = deltaOf
+	MealResult = mealResult
+)
+
+// BatchDates is the dates a batch has collected.
+func BatchDates(b *batch) []string { return b.aff.Dates }
+
+// NewBatch is an empty batch.
+func NewBatch() *batch { return &batch{} }
+
+var IssueKey = issueKey
