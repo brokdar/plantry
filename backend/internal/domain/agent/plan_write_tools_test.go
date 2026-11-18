@@ -105,7 +105,7 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 		State:   testsvc.PlanState(db), Tx: sqlite.NewTxRunner(db), Light: sqlite.NewPlanLightRepo(db),
 	})
 	require.NoError(t, err)
-	e.changes = testsvc.Changes(db, e.plates, e.avail)
+	e.changes = agent.NewChanges(sqlite.NewAIChangeRepo(db), e.plates, e.avail, sqlite.NewPlanLightRepo(db), sqlite.NewTxRunner(db), func() time.Time { return planToday })
 	e.ctx = agent.WithWindow(agent.WithToday(ctx, planToday), window.Window{Start: planStart, End: planStart.AddDate(0, 0, 6)})
 
 	id, err := e.planner.Generate(ctx, planning.Request{Start: planStart, Today: planToday, Chooser: airun.ChooserHeuristic})

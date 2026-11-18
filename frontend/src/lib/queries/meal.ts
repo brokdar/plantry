@@ -202,14 +202,15 @@ export function alternativeCalls(plateId: number, alt: Alternative): Step[] {
   const add = ops.find((o) => o.op === "add")
   let replacedId: number | undefined
   if (replace) {
-    // A cook_at alternative: exactly one replace that also names the cell
-    // the new dish cooks on.
+    // A cook_at alternative names the cell the new dish cooks on; a session
+    // alternative the batch it eats from. Either is exactly one replace.
     replacedId = replace.plate_component_id
     steps.push(() =>
       replaceComponent(plateId, {
         plate_component_id: replace.plate_component_id,
         food_id: replace.food_id,
         cook_at: replace.cook_at,
+        ...(replace.session_id ? { session_id: replace.session_id } : {}),
         ...qty(replace),
       })
     )
@@ -223,35 +224,19 @@ export function alternativeCalls(plateId: number, alt: Alternative): Step[] {
       })
     )
   } else if (add) {
-    // An add from a batch replaces the component its first remove drops.
-    const remove = add.session_id
-      ? ops.find((o) => o.op === "remove")
-      : undefined
-    if (remove) {
-      replacedId = remove.plate_component_id
-      steps.push(() =>
-        replaceComponent(plateId, {
-          plate_component_id: remove.plate_component_id,
-          food_id: add.food_id,
-          session_id: add.session_id,
-          ...qty(add),
-        })
+    steps.push(() =>
+      addPlateComponent(
+        plateId,
+        add.amount != null && add.unit
+          ? { food_id: add.food_id, amount: add.amount, unit: add.unit }
+          : {
+              food_id: add.food_id,
+              portions: add.portions,
+              cook_session_id: add.session_id,
+              cook_at: add.cook_at,
+            }
       )
-    } else {
-      steps.push(() =>
-        addPlateComponent(
-          plateId,
-          add.amount != null && add.unit
-            ? { food_id: add.food_id, amount: add.amount, unit: add.unit }
-            : {
-                food_id: add.food_id,
-                portions: add.portions,
-                cook_session_id: add.session_id,
-                cook_at: add.cook_at,
-              }
-        )
-      )
-    }
+    )
   }
   for (const o of ops) {
     if (o.op !== "remove" || o.plate_component_id === replacedId) continue

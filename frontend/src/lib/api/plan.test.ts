@@ -21,6 +21,7 @@ describe("KNOWN_ISSUE_CODES", () => {
         "diet_unknown",
         "variety_repeat",
         "variety_relaxed",
+        "variety_repeat_week",
         "kcal_below_floor",
         ...session,
       ].sort()

@@ -13,10 +13,10 @@ import (
 const createAIChange = `-- name: CreateAIChange :one
 INSERT INTO ai_changes (
     run_id, step_seq, tool, text_key, params_json, run_ids_json, dates_json,
-    plate_ids_json, session_ids_json, first_event_id, last_event_id, availability_before_json
+    plate_ids_json, session_ids_json, first_event_id, last_event_id, availability_before_json, light_before_json
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, run_id, step_seq, tool, text_key, params_json, run_ids_json, dates_json, plate_ids_json, session_ids_json, first_event_id, last_event_id, availability_before_json, created_at, undone_at
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, run_id, step_seq, tool, text_key, params_json, run_ids_json, dates_json, plate_ids_json, session_ids_json, first_event_id, last_event_id, availability_before_json, created_at, undone_at, light_before_json
 `
 
 type CreateAIChangeParams struct {
@@ -32,6 +32,7 @@ type CreateAIChangeParams struct {
 	FirstEventID           sql.NullInt64
 	LastEventID            sql.NullInt64
 	AvailabilityBeforeJson sql.NullString
+	LightBeforeJson        sql.NullString
 }
 
 func (q *Queries) CreateAIChange(ctx context.Context, arg CreateAIChangeParams) (AiChange, error) {
@@ -48,6 +49,7 @@ func (q *Queries) CreateAIChange(ctx context.Context, arg CreateAIChangeParams) 
 		arg.FirstEventID,
 		arg.LastEventID,
 		arg.AvailabilityBeforeJson,
+		arg.LightBeforeJson,
 	)
 	var i AiChange
 	err := row.Scan(
@@ -66,12 +68,13 @@ func (q *Queries) CreateAIChange(ctx context.Context, arg CreateAIChangeParams) 
 		&i.AvailabilityBeforeJson,
 		&i.CreatedAt,
 		&i.UndoneAt,
+		&i.LightBeforeJson,
 	)
 	return i, err
 }
 
 const getAIChange = `-- name: GetAIChange :one
-SELECT id, run_id, step_seq, tool, text_key, params_json, run_ids_json, dates_json, plate_ids_json, session_ids_json, first_event_id, last_event_id, availability_before_json, created_at, undone_at FROM ai_changes WHERE id = ?
+SELECT id, run_id, step_seq, tool, text_key, params_json, run_ids_json, dates_json, plate_ids_json, session_ids_json, first_event_id, last_event_id, availability_before_json, created_at, undone_at, light_before_json FROM ai_changes WHERE id = ?
 `
 
 func (q *Queries) GetAIChange(ctx context.Context, id int64) (AiChange, error) {
@@ -93,12 +96,13 @@ func (q *Queries) GetAIChange(ctx context.Context, id int64) (AiChange, error) {
 		&i.AvailabilityBeforeJson,
 		&i.CreatedAt,
 		&i.UndoneAt,
+		&i.LightBeforeJson,
 	)
 	return i, err
 }
 
 const listAIChangesByConversation = `-- name: ListAIChangesByConversation :many
-SELECT c.id, c.run_id, c.step_seq, c.tool, c.text_key, c.params_json, c.run_ids_json, c.dates_json, c.plate_ids_json, c.session_ids_json, c.first_event_id, c.last_event_id, c.availability_before_json, c.created_at, c.undone_at FROM ai_changes c
+SELECT c.id, c.run_id, c.step_seq, c.tool, c.text_key, c.params_json, c.run_ids_json, c.dates_json, c.plate_ids_json, c.session_ids_json, c.first_event_id, c.last_event_id, c.availability_before_json, c.created_at, c.undone_at, c.light_before_json FROM ai_changes c
 JOIN ai_runs r ON r.id = c.run_id
 WHERE r.conversation_id = ?
 ORDER BY c.id
@@ -129,6 +133,7 @@ func (q *Queries) ListAIChangesByConversation(ctx context.Context, conversationI
 			&i.AvailabilityBeforeJson,
 			&i.CreatedAt,
 			&i.UndoneAt,
+			&i.LightBeforeJson,
 		); err != nil {
 			return nil, err
 		}

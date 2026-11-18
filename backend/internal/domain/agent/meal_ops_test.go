@@ -571,6 +571,9 @@ func TestFindAlternatives_GrowingSessionAppliesAsEvaluated(t *testing.T) {
 	require.NoError(t, err)
 	out := e.mustExec("apply_changes", `{"ops":`+string(ops)+`}`)
 
+	ops0 := pick["ops"].([]any)
+	require.Len(t, ops0, 1, "a session alternative is one replace")
+	assert.Equal(t, "replace", ops0[0].(map[string]any)["op"])
 	after := e.session(v.ID)
 	assert.InDelta(t, v.Portions+need, after.Portions, plate.PortionEpsilon, "grown by the plate's portions")
 	assert.InDelta(t, after.Consumed, after.Portions, plate.PortionEpsilon, "still exactly covers its meals")
@@ -579,6 +582,40 @@ func TestFindAlternatives_GrowingSessionAppliesAsEvaluated(t *testing.T) {
 	for _, is := range news {
 		assert.NotEqual(t, "H3", is.(map[string]any)["rule"], "%v", is)
 	}
+	got, err := e.plates.Get(context.Background(), target.ID)
+	require.NoError(t, err)
+	assert.True(t, slices.ContainsFunc(got.Components, func(c plate.PlateComponent) bool {
+		return c.FoodID == int64(pick["food_id"].(float64)) && c.Position == plate.PositionMain
+	}), "the batch's food took the main position")
+}
+
+// A dish the plan already cooks this week, cooked fresh a second time on the
+// saved plan, is the warning variety_repeat_week, not a hard variety_repeat
+// (the user chose the dish).
+func TestApplyChanges_WindowRepeatIsAWarning(t *testing.T) {
+	e := newPlanToolEnv(t)
+	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "3"))
+	a, b := e.twoDinners()
+	var main plate.PlateComponent
+	for _, c := range a.Components {
+		if c.Position == plate.PositionMain {
+			main = c
+		}
+	}
+	require.NotZero(t, main.ID)
+
+	res := e.mustExec("apply_changes", fmt.Sprintf(`{"dry_run":true,"ops":[{"op":"replace","plate_id":%d,"position":"main","food_id":%d}]}`, b.ID, main.FoodID))
+	issues := res["after"].(map[string]any)["issues"].(map[string]any)
+	var codes []string
+	for _, is := range issues["new"].([]any) {
+		m := is.(map[string]any)
+		codes = append(codes, m["code"].(string))
+		if m["code"] == "variety_repeat_week" {
+			assert.Equal(t, "warning", m["severity"])
+		}
+	}
+	assert.Contains(t, codes, "variety_repeat_week")
+	assert.NotContains(t, codes, "variety_repeat")
 }
 
 func sqliteChange(e *planToolEnv, id int64) (*agent.Change, error) {

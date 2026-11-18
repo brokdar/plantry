@@ -1,9 +1,9 @@
 -- name: CreateAIChange :one
 INSERT INTO ai_changes (
     run_id, step_seq, tool, text_key, params_json, run_ids_json, dates_json,
-    plate_ids_json, session_ids_json, first_event_id, last_event_id, availability_before_json
+    plate_ids_json, session_ids_json, first_event_id, last_event_id, availability_before_json, light_before_json
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetAIChange :one

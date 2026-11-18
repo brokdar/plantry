@@ -196,13 +196,15 @@ export type AlternativeOp =
       position?: string
     }
   | {
-      /** A cook_at alternative: the food cooks on `cook_at` and takes the
-       *  component's place, one `POST /api/plates/{id}/replace`. */
+      /** A cook_at alternative (the food cooks on `cook_at`) or a session
+       *  alternative (it eats from `session_id`) takes the component's place,
+       *  one `POST /api/plates/{id}/replace`. */
       op: "replace"
       plate_id?: number
       plate_component_id: number
       food_id: number
-      cook_at: MealCell
+      cook_at?: MealCell
+      session_id?: number
       portions?: number
       amount?: number
       unit?: string

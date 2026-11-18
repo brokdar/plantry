@@ -1696,6 +1696,7 @@
       "diet_unknown": "The diet of this recipe is unknown.",
       "variety_repeat": "You had this recently, on {{last_eaten}}.",
       "variety_relaxed": "You had this recently, on {{last_eaten}}. There aren't enough other recipes to avoid it.",
+      "variety_repeat_week": "Already on this week's plan, on {{last_eaten}}.",
       "kcal_below_floor": "This day is under the minimum Plantry plans: {{kcal}} kcal, at least {{floor_kcal}} kcal are needed.",
       "leftover_before_cook": "Eaten before the batch is cooked.",
       "past_keep_days": "Eaten after the batch's keep days.",
@@ -1863,6 +1864,7 @@
         "H5": "meat-day limit",
         "H8": "eaten recently",
         "H9": "day would fall under its minimum",
+        "nutrition_missing": "would have no nutrition data",
         "other": "{{rule}}",
         "entry": "{{why}} ({{count}})"
       },
