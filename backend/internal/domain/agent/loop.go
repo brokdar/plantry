@@ -156,6 +156,10 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 				// not an interrupted stream.
 				key = "error.ai.provider_error"
 			}
+			if f := llm.FailureOf(res.err); f != llm.FailureOther {
+				// A limit, a rejected key or a timeout tells the user what to do.
+				key = "error.ai." + string(f)
+			}
 			return fail(key, res.err)
 		}
 		if res.resp == nil {
@@ -416,6 +420,30 @@ func persistMessage(ctx context.Context, repo Repository, convID int64, role Rol
 	})
 }
 
+// PlainMessage is the sentence the chat shows for an error key: what happened
+// and what to do, without the raw error (provider text, ids, internals). The
+// frontend translates the key; this text is for the stored transcript row.
+func PlainMessage(key string) string {
+	switch key {
+	case "error.ai.rate_limited":
+		return "The AI provider is busy or its limit is reached. Wait a minute and try again."
+	case "error.ai.key_rejected":
+		return "The AI provider rejected the API key. Check the key in Settings."
+	case "error.ai.timeout":
+		return "The assistant took too long to answer. Please try again."
+	case "error.ai.refused":
+		return "The assistant declined this request, so nothing was changed. Rephrase it or plan without the assistant."
+	case "error.ai.provider_error":
+		return "The assistant could not be reached. Try again."
+	case "error.ai.iterations_exceeded":
+		return "The assistant ran too many steps. Try a simpler request."
+	case "error.ai.stream_interrupted":
+		return "The connection to the assistant was interrupted. Try again."
+	default:
+		return "Something went wrong. Try again."
+	}
+}
+
 // keyedError carries the i18n message key the loop emitted for a fatal error.
 // It wraps the original error, so errors.Is and Error() are unchanged.
 type keyedError struct {
@@ -437,12 +465,14 @@ func ErrorEmitted(err error) bool {
 // key for the caller to return.
 func emitAndPersistError(ctx context.Context, out chan<- llm.Event, repo Repository, convID int64, key string, err error) error {
 	send(ctx, out, llm.Event{Type: llm.EventError, Payload: llm.StreamErrorPayload{
-		MessageKey: key, Message: err.Error(),
+		MessageKey: key, Message: PlainMessage(key),
 	}})
-	// Persist best-effort; swallow secondary errors.
+	// Persist best-effort; swallow secondary errors. The transcript shows the
+	// row as it is, so it holds the plain sentence, not the provider's text
+	// (the run log keeps that).
 	b, _ := json.Marshal([]llm.ContentBlock{{
 		Type: llm.ContentTypeText,
-		Text: err.Error(),
+		Text: PlainMessage(key),
 	}})
 	_ = repo.AppendMessage(context.Background(), &Message{
 		ConversationID: convID,

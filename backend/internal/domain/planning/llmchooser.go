@@ -166,7 +166,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			if last != nil {
 				partial = *last
 			}
-			return partial, fmt.Errorf("%w: %w", domain.ErrAIProviderFailed, err)
+			return partial, fmt.Errorf("%w: %w", failureSentinel(err), err)
 		}
 		if resp.StopReason == llm.StopReasonRefusal {
 			// The model declined: no repair can change that, and nothing is
@@ -295,6 +295,21 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		}
 		req.Messages = append(req.Messages, repairMessage(resp.Message, feedback))
 	}
+}
+
+// failureSentinel is the domain error for a failed provider call: a limit and
+// a rejected key get their own (the user acts differently on each), a
+// timeout stays ErrAIProviderFailed and ends the run as a timeout when it is
+// a deadline.
+func failureSentinel(err error) error {
+	switch llm.FailureOf(err) {
+	case llm.FailureRateLimited:
+		return domain.ErrAIRateLimited
+	case llm.FailureKeyRejected:
+		return domain.ErrAIKeyRejected
+	case llm.FailureTimeout, llm.FailureOther:
+	}
+	return domain.ErrAIProviderFailed
 }
 
 // skeleton reports whether the first reply is a plan still to complete:

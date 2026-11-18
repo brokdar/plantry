@@ -68,9 +68,9 @@ var providerFailures = []struct {
 	key  string
 }{
 	{"generic", errors.New("read tcp 10.0.0.2:5555: connection reset by peer"), "error.ai.stream_interrupted"},
-	{"rate limit", apiErr{429}, "error.ai.provider_error"},
-	{"timeout", fmt.Errorf("Post \"https://api.example/v1/messages\": %w", context.DeadlineExceeded), "error.ai.stream_interrupted"},
-	{"key rejected", apiErr{401}, "error.ai.provider_error"},
+	{"rate limit", apiErr{429}, "error.ai.rate_limited"},
+	{"timeout", fmt.Errorf("Post \"https://api.example/v1/messages\": %w", context.DeadlineExceeded), "error.ai.timeout"},
+	{"key rejected", apiErr{401}, "error.ai.key_rejected"},
 }
 
 // i18nHas reports whether the frontend has text for key in both languages.
@@ -154,7 +154,18 @@ func TestChatFailure_ProviderErrorOnFirstCall(t *testing.T) {
 			evts, err := chat(context.Background(), svc, "plan my week", nil)
 
 			require.Error(t, err)
-			assert.Equal(t, tc.key, failureEvent(t, evts).MessageKey)
+			ev := failureEvent(t, evts)
+			assert.Equal(t, tc.key, ev.MessageKey)
+			// What the user can read, live and in the stored transcript, holds
+			// no provider text, address or id.
+			var stored string
+			require.NoError(t, db.QueryRow(`SELECT content FROM ai_messages WHERE role = 'error'`).Scan(&stored))
+			for _, text := range []string{ev.Message, stored} {
+				assert.NotEmpty(t, text)
+				for _, jargon := range []string{"anthropic", "req_0123", "some_error", "connection reset", "10.0.0.2", "api.example", "429", "401"} {
+					assert.NotContains(t, text, jargon)
+				}
+			}
 			status, key, steps := chatRunSteps(t, db)
 			assert.Equal(t, "error", status)
 			assert.Equal(t, tc.key, key)

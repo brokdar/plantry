@@ -30,6 +30,8 @@ var sentinelStatus = map[error]int{
 	domain.ErrAIProviderFailed:          http.StatusBadGateway,
 	domain.ErrAIInvalidPlan:             http.StatusBadGateway,
 	domain.ErrAIRefused:                 http.StatusBadGateway,
+	domain.ErrAIRateLimited:             http.StatusBadGateway,
+	domain.ErrAIKeyRejected:             http.StatusBadGateway,
 	domain.ErrAIPastDate:                http.StatusBadRequest,
 	domain.ErrAIPreferenceReserved:      http.StatusBadRequest,
 	domain.ErrAIUnlockNeedsUser:         http.StatusConflict,

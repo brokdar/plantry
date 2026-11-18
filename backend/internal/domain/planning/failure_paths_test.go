@@ -58,9 +58,9 @@ var genProviderFailures = []struct {
 	key  string
 }{
 	{"generic", errors.New("read tcp 10.0.0.2:5555: connection reset by peer"), "error.ai.provider_error"},
-	{"rate limit", genAPIErr{429}, "error.ai.provider_error"},
+	{"rate limit", genAPIErr{429}, "error.ai.rate_limited"},
 	{"timeout", fmt.Errorf("Post \"https://api.example/v1/messages\": %w", context.DeadlineExceeded), "error.plan.timeout"},
-	{"key rejected", genAPIErr{401}, "error.ai.provider_error"},
+	{"key rejected", genAPIErr{401}, "error.ai.key_rejected"},
 }
 
 // translated reports whether the frontend has text for key in both languages.
