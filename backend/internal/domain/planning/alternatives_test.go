@@ -134,12 +134,11 @@ func TestAlternatives(t *testing.T) {
 				require.NotNil(t, first.SessionID)
 				assert.EqualValues(t, 2, *first.SessionID)
 				assert.Zero(t, first.TotalMinutes)
-				require.Len(t, first.Ops, 2)
-				assert.Equal(t, "add", first.Ops[0].Op)
+				require.Len(t, first.Ops, 1, "one replace keeps the position")
+				assert.Equal(t, "replace", first.Ops[0].Op)
 				assert.EqualValues(t, 2, *first.Ops[0].SessionID)
 				assert.EqualValues(t, altSunLunch, *first.Ops[0].PlateID)
-				assert.Equal(t, "remove", first.Ops[1].Op)
-				assert.EqualValues(t, 110, *first.Ops[1].PlateComponentID)
+				assert.EqualValues(t, 110, *first.Ops[0].PlateComponentID)
 				assert.Equal(t, -1, indexOf(out, soup, planning.SourceFresh), "cook_at beats a fresh cook that adds an occasion")
 			},
 		},
@@ -470,4 +469,41 @@ func TestAlternatives_CookAtCell(t *testing.T) {
 			assert.Equal(t, at(sat, breakfast), c)
 		}
 	})
+}
+
+// A candidate whose nutrition data is incomplete would leave the plate and
+// its day without a kcal figure: dropped, and counted as nutrition_missing.
+func TestAlternatives_DropsIncompleteNutrition(t *testing.T) {
+	const mystery int64 = 77
+	s := altState()
+	m := recipe(mystery, "Mystery stew", food.RoleMain, "omnivore", 0)
+	m.NutritionComplete = false
+	s.Foods[mystery] = m
+
+	req := planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain, Constraints: planning.AltConstraints{Search: "mystery"}}
+	res, err := planning.Alternatives(s, windowTarget(s), req)
+	require.NoError(t, err)
+	assert.Empty(t, res.Alternatives)
+	require.NotNil(t, res.EmptyReason)
+	assert.Positive(t, res.EmptyReason.Candidates)
+	assert.Equal(t, map[string]int{"nutrition_missing": res.EmptyReason.Candidates}, res.EmptyReason.Dropped)
+
+	assert.NotContains(t, altIDs(alts(t, s, planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain})), mystery)
+}
+
+// A repeat inside the window is a warning, so a dish already cooked this week
+// is still offered.
+func TestAlternatives_KeepsADishAlreadyInTheWindow(t *testing.T) {
+	s := altState()
+	out := alts(t, s, planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain})
+	i := cookedAt(out, curry)
+	if i < 0 {
+		i = indexOf(out, curry, planning.SourceSession)
+	}
+	assert.GreaterOrEqual(t, i, 0, "curry cooks Saturday lunch and is still offered")
+	for _, a := range out {
+		for _, is := range a.NewIssues {
+			assert.NotEqual(t, planning.SeverityViolation, is.Severity)
+		}
+	}
 }

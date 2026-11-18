@@ -326,7 +326,7 @@ func run() error {
 	}
 	agentSvc := agent.NewService(aiRepo, llmResolver, tools, profileSvc, settingsSvc,
 		agent.PlanContext{Build: planBuilder.Build, Summary: planning.RenderPlanSummary}, time.Now).WithRecorder(runRecorder)
-	aiHandler := handlers.NewAIHandler(agentSvc, agent.NewChanges(changeRepo, plateSvc, availabilitySvc, txRunner, time.Now), llmResolver)
+	aiHandler := handlers.NewAIHandler(agentSvc, agent.NewChanges(changeRepo, plateSvc, availabilitySvc, planLight, txRunner, time.Now), llmResolver)
 
 	// Run log read side: runs, insights and prices. Costs are computed on
 	// read from the built-in table plus ai.price_overrides.

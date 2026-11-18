@@ -115,6 +115,8 @@ type altRank struct {
 	// source orders a session before a cook_at before a fresh cook or leaf.
 	source    int
 	dishMeals int
+	// weekCook: the food already has a cook in the window (variety_repeat_week).
+	weekCook  bool
 	sameRole  bool
 	kcalFit   float64
 	lastEaten int64 // unix days; never eaten sorts first
@@ -140,7 +142,8 @@ type EmptyReason struct {
 // applied to a copy of s and re-evaluated: a candidate that adds a hard
 // issue is dropped. Ranked by fewest new soft issues, no new cooking
 // occasion, source (a session, then a cook_at, then a fresh cook), the
-// main's dish count after the change, no second side of the same role, kcal
+// main's dish count after the change, a recipe with no cook yet in the window
+// before one that has (variety_repeat_week), no second side of the same role, kcal
 // fit to a light or hearty cell, then the oldest last eaten. A recipe passing
 // both fresh and cook_at is listed once, by the better rank. Pure: nothing
 // writes.
@@ -167,11 +170,17 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 	hard, soft := hardKeys(base.Issues), softKeys(base.Issues)
 	x := newIndex(s, t)
 	baseCooks := x.occasions[dayOf(p.Date)]
+	cookedInWindow := map[int64]bool{}
+	for _, ev := range x.cooks {
+		if s.Window.Contains(ev.cell.Date) {
+			cookedInWindow[ev.foodID] = true
+		}
+	}
 	var out []Alternative
 	cands := s.altCandidates(x, p, old, req)
 	dropped := map[string]int{}
 	for _, c := range cands {
-		a, why := s.tryAlt(t, pi, old, drop, c, hard, soft, len(baseCooks))
+		a, why := s.tryAlt(t, pi, old, drop, c, base, hard, soft, len(baseCooks), cookedInWindow)
 		if why != "" {
 			dropped[why]++
 			continue
@@ -185,6 +194,7 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 			boolCmp(ra.addsCook, rb.addsCook),
 			cmp.Compare(ra.source, rb.source),
 			cmp.Compare(ra.dishMeals, rb.dishMeals),
+			boolCmp(ra.weekCook, rb.weekCook),
 			boolCmp(ra.sameRole, rb.sameRole),
 			cmp.Compare(ra.kcalFit, rb.kcalFit),
 			cmp.Compare(ra.lastEaten, rb.lastEaten),
@@ -518,7 +528,7 @@ func (c AltConstraints) matches(f FoodFacts, words [][]diet.Alt) bool {
 
 // tryAlt applies c to a copy of s, re-evaluates it and builds the result;
 // false when the change adds a hard issue.
-func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, hard, soft map[string]bool, baseCooks int) (Alternative, string) {
+func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluation, hard, soft map[string]bool, baseCooks int, cookedInWindow map[int64]bool) (Alternative, string) {
 	p := s.Plates[pi]
 	next := s
 	next.Plates = slices.Clone(s.Plates)
@@ -554,6 +564,9 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, hard, soft m
 	next.Plates[pi] = np
 
 	ev := Evaluate(next, t)
+	if why := newNutritionGap(base, ev, p); why != "" {
+		return Alternative{}, why
+	}
 	var newIssues []Issue
 	for _, is := range ev.Issues {
 		if is.Severity == SeverityViolation && !hard[issueID(is)] {
@@ -603,12 +616,43 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, hard, soft m
 		sameRole:  s.sameSideRole(np, c),
 		kcalFit:   y.kcalFit(np, a.Kcal),
 		dishMeals: y.dishMeals()[c.food.ID],
+		weekCook:  c.session == nil && c.food.Composed() && cookedInWindow[c.food.ID],
 		lastEaten: math.MinInt64,
 	}
 	if c.food.LastEaten != nil {
 		a.rank.lastEaten = c.food.LastEaten.Unix() / 86400
 	}
 	return a, ""
+}
+
+// altNutritionMissing is the drop key of a candidate whose incomplete
+// nutrition data turns a complete plate or day into an unjudgeable one.
+const altNutritionMissing = "nutrition_missing"
+
+// newNutritionGap returns altNutritionMissing when the change leaves p's
+// plate or its day short of nutrition data that base had.
+func newNutritionGap(base, ev Evaluation, p Plate) string {
+	complete := func(e Evaluation) bool {
+		for _, pe := range e.Plates {
+			if pe.PlateID == p.ID {
+				return !slices.ContainsFunc(pe.Components, func(c ComponentEval) bool { return !c.NutritionComplete })
+			}
+		}
+		return true
+	}
+	missing := func(e Evaluation) bool {
+		date := p.Date.Format(time.DateOnly)
+		for _, d := range e.Days {
+			if d.Date == date {
+				return d.NutritionMissing
+			}
+		}
+		return false
+	}
+	if (complete(base) && !complete(ev)) || (!missing(base) && missing(ev)) {
+		return altNutritionMissing
+	}
+	return ""
 }
 
 func sourceRank(src string) int {
@@ -623,7 +667,8 @@ func sourceRank(src string) int {
 
 // altOps writes the change as apply_changes ops: a swap of the old
 // component (a fresh cook or a leaf), a replace with cook_at (or an add with
-// cook_at), or an add eating from the batch plus a remove of the old one; a
+// cook_at), or a replace eating from the batch (an add when nothing is
+// replaced); a
 // meal swap also removes the other components.
 func (s State) altOps(p Plate, old int, drop []int, c altCand, cookAt *OptionCell) []OptionOp {
 	id := p.ID
@@ -645,6 +690,10 @@ func (s State) altOps(p Plate, old int, drop []int, c altCand, cookAt *OptionCel
 	case old >= 0 && c.session == nil:
 		cid := p.Components[old].ID
 		ops = append(ops, quantity(OptionOp{Op: "swap", PlateComponentID: &cid, FoodID: c.food.ID}))
+	case old >= 0:
+		// A batch source replaces in place, so the position is kept.
+		cid, sid := p.Components[old].ID, c.session.ID
+		ops = append(ops, quantity(OptionOp{Op: "replace", PlateID: &id, PlateComponentID: &cid, FoodID: c.food.ID, SessionID: &sid}))
 	default:
 		op := quantity(OptionOp{Op: "add", PlateID: &id, FoodID: c.food.ID})
 		if c.session != nil {
@@ -652,10 +701,6 @@ func (s State) altOps(p Plate, old int, drop []int, c altCand, cookAt *OptionCel
 			op.SessionID = &sid
 		}
 		ops = append(ops, op)
-		if old >= 0 {
-			cid := p.Components[old].ID
-			ops = append(ops, OptionOp{Op: "remove", PlateComponentID: &cid})
-		}
 	}
 	for _, i := range drop {
 		cid := p.Components[i].ID

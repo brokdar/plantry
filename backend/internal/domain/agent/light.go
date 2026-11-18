@@ -70,5 +70,10 @@ func saveLight(ctx context.Context, svc Services, light []planning.LightIntent) 
 	if err != nil {
 		return err
 	}
-	return svc.Light.Replace(ctx, todayFrom(ctx), dates, planning.MergeLight(stored, light))
+	merged := planning.MergeLight(stored, light)
+	if err := svc.Light.Replace(ctx, todayFrom(ctx), dates, merged); err != nil {
+		return err
+	}
+	noteLight(ctx, dates, lightOn(stored, dates), lightOn(merged, dates))
+	return nil
 }

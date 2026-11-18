@@ -803,3 +803,46 @@ func TestMoveMeal_AnUnnamedPastKeepLinkIsUntouchedWhenTheCookMoves(t *testing.T)
 	assert.Equal(t, sid, *wedPlate.Components[0].CookSessionID, "still in the batch")
 	assert.Equal(t, day(mon), e.session(sid).CookDate, "the cook went to the earliest meal")
 }
+
+// Design rule 1a for the other operations: a link a meal operation creates
+// never relies on the freezer silently, so with freezing on they fail with
+// the keep-time error exactly as with freezing off.
+func TestMoveCook_DoesNotFreezeSilently(t *testing.T) {
+	e := newEnv(t)
+	_, sid := e.batch()
+	e.freezableChili()
+	before := e.week()
+
+	_, err := e.svc.MoveCook(e.ctx, sid, cell("2026-10-31", e.dinner))
+
+	require.ErrorIs(t, err, domain.ErrInvalidInput)
+	assert.Contains(t, err.Error(), "past the keeping time")
+	assert.Equal(t, before, e.week())
+}
+
+func TestReplaceComponent_FromASessionDoesNotFreezeSilently(t *testing.T) {
+	e := newEnv(t)
+	e.freezableChili()
+	e.exec(`UPDATE foods SET freezable = 1 WHERE id = ?`, e.curry)
+	curry := e.create(sun, e.lunch, nil, composed(e.curry, 1))
+	csid := sessionOf(curry, 0)
+	thu := e.create(thu, e.dinner, nil, composed(e.chili, 1))
+	before := e.week()
+
+	_, err := e.svc.ReplaceComponent(e.ctx, thu.ID, plate.Selector{Position: plate.PositionMain}, e.curry, plate.Source{SessionID: csid}, nil)
+
+	require.ErrorIs(t, err, domain.ErrSessionPastKeepDays)
+	assert.Equal(t, before, e.week())
+}
+
+func TestCopyMeal_AsLeftoverDoesNotFreezeSilently(t *testing.T) {
+	e := newEnv(t)
+	sunPlate, _ := e.batch()
+	e.freezableChili()
+	before := e.week()
+
+	_, err := e.svc.CopyMeal(e.ctx, sunPlate.ID, []plate.CellKey{cell(thu, e.lunch)}, plate.CopyLeftover)
+
+	require.ErrorIs(t, err, domain.ErrSessionPastKeepDays)
+	assert.Equal(t, before, e.week())
+}

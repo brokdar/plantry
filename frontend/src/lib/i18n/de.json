@@ -1696,6 +1696,7 @@
       "diet_unknown": "Für dieses Rezept ist die Ernährungsform unbekannt.",
       "variety_repeat": "Das gab es zuletzt am {{last_eaten}}.",
       "variety_relaxed": "Das gab es zuletzt am {{last_eaten}}. Es gibt nicht genug andere Rezepte, um es zu vermeiden.",
+      "variety_repeat_week": "Steht diese Woche schon auf dem Plan, am {{last_eaten}}.",
       "kcal_below_floor": "Dieser Tag liegt unter dem Minimum, das Plantry plant: {{kcal}} kcal, nötig sind mindestens {{floor_kcal}} kcal.",
       "leftover_before_cook": "Wird gegessen, bevor vorgekocht ist.",
       "past_keep_days": "Wird gegessen, wenn das Vorgekochte nicht mehr haltbar ist.",
