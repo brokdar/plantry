@@ -220,16 +220,19 @@ func platesOf(plan map[string]any) []map[string]any {
 	return out
 }
 
-func TestTool_GetProfile_HasHouseholdPortions(t *testing.T) {
+// The chat has no tool for what its prompt already holds (slots, profile).
+func TestToolSet_NoListSlotsNoGetProfile(t *testing.T) {
 	e := newPlateToolEnv(t)
-	got := e.mustExec(t, "get_profile", `{}`)
-	assert.Equal(t, 2.0, got["household_portions"])
+	for _, name := range []string{"list_slots", "get_profile"} {
+		_, err := e.exec(t, name, `{}`)
+		require.ErrorIs(t, err, agent.ErrToolNotFound, name)
+	}
 }
 
 func TestPrompt_SaysPortionsPerEater(t *testing.T) {
-	prompt := agent.ComposePrompt(nil, "", time.Time{})
+	prompt, _ := agent.ComposePrompt(nil, "", "", time.Time{})
 	assert.Contains(t, prompt, "portions per eater")
-	assert.Equal(t, "v17", agent.PromptVersion)
+	assert.Equal(t, "v18", agent.PromptVersion)
 }
 
 // B2-AC6: the chat modes and week ids are gone from the agent package.
@@ -329,8 +332,9 @@ func TestTool_RecordPreference_ReservedKeys(t *testing.T) {
 	}
 	got := e.mustExec(t, "record_preference", `{"key":"prefers_quick_meals","value":true}`)
 	assert.Equal(t, true, got["recorded"])
-	prof := e.mustExec(t, "get_profile", `{}`)
-	prefs := prof["preferences"].(map[string]any)
+	p, err := profile.NewService(sqlite.NewProfileRepo(e.db)).Get(e.ctx)
+	require.NoError(t, err)
+	prefs := p.Preferences
 	assert.Equal(t, true, prefs["prefers_quick_meals"])
 	assert.NotContains(t, prefs, "likes")
 	assert.NotContains(t, prefs, "likes.extra")

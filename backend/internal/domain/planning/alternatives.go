@@ -30,6 +30,13 @@ const (
 	AltAdd = "add"
 )
 
+// Light asks (AltRequest.Light): candidates that make the plate's meal
+// lighter (within the S6 cap) or heartier (at least the S6b minimum).
+const (
+	AltLighter  = "lighter"
+	AltHeartier = "heartier"
+)
+
 // Alternative sources.
 const (
 	SourceFresh   = "fresh"
@@ -59,6 +66,10 @@ type AltRequest struct {
 	Constraints AltConstraints
 	// Limit is the number of results: default 5, at most 10.
 	Limit int
+	// Light is "lighter" or "heartier" (a lunch or dinner plate): the meal
+	// is evaluated as a light (hearty) meal and only candidates whose plate
+	// meets its cap (minimum) are kept. Empty: no such filter.
+	Light string
 }
 
 // AltConstraints narrow the candidates. Zero values do not filter.
@@ -89,12 +100,19 @@ type Alternative struct {
 	SessionID *int64 `json:"session_id,omitempty"`
 	// CookAt is the cell a cook_at source cooks on.
 	CookAt *OptionCell `json:"cook_at,omitempty"`
+	// Role is the candidate's role (a leaf's effective role).
+	Role string `json:"role,omitempty"`
 	// TotalMinutes is the fresh or cook_at cook's prep + cook minutes (0
 	// otherwise).
-	TotalMinutes int     `json:"total_minutes"`
-	Kcal         float64 `json:"kcal"`
-	ProteinG     float64 `json:"protein_g"`
-	DayKcal      float64 `json:"day_kcal"`
+	TotalMinutes int `json:"total_minutes"`
+	// FoodKcal and FoodProteinG are the new component alone, PlateKcal and
+	// PlateProteinG the whole plate after the change, DayKcal its day; all
+	// per eater.
+	FoodKcal      float64 `json:"food_kcal"`
+	FoodProteinG  float64 `json:"food_protein_g"`
+	PlateKcal     float64 `json:"plate_kcal"`
+	PlateProteinG float64 `json:"plate_protein_g"`
+	DayKcal       float64 `json:"day_kcal"`
 	// DayPct and WeekPct are the day's kcal against its target and the
 	// weekly ledger's pct (0 without a target).
 	DayPct           float64 `json:"day_pct"`
@@ -106,12 +124,17 @@ type Alternative struct {
 	Ops []OptionOp `json:"ops"`
 
 	rank altRank
+	// plateKcal is PlateKcal unrounded, for the light filter.
+	plateKcal float64
 }
 
 // altRank is the ranking key, compared field by field (lower first).
 type altRank struct {
 	newIssues int
 	addsCook  bool
+	// sideFit puts a composed side of the replaced side's role (0) before
+	// every other candidate (1) when a side is replaced; 0 otherwise.
+	sideFit int
 	// source orders a session before a cook_at before a fresh cook or leaf.
 	source    int
 	dishMeals int
@@ -125,8 +148,29 @@ type altRank struct {
 // AltResult is the outcome of Alternatives. EmptyReason is set only when
 // no candidate is left.
 type AltResult struct {
+	// Current is the food the alternatives replace (nil for an add).
+	Current      *AltCurrent   `json:"current,omitempty"`
 	Alternatives []Alternative `json:"alternatives"`
-	EmptyReason  *EmptyReason  `json:"empty_reason,omitempty"`
+	// Hint says what the request left out: a meal swap drops the plate's
+	// other components.
+	Hint        string       `json:"hint,omitempty"`
+	EmptyReason *EmptyReason `json:"empty_reason,omitempty"`
+}
+
+// AltCurrent is the component an alternative replaces, with the plate it sits
+// on (per eater). MaxKcal or MinKcal is the cap or minimum of a light or hearty
+// meal.
+type AltCurrent struct {
+	FoodID       int64   `json:"food_id"`
+	Name         string  `json:"name"`
+	Role         string  `json:"role,omitempty"`
+	TotalMinutes int     `json:"total_minutes"`
+	FoodKcal     float64 `json:"food_kcal"`
+	PlateKcal    float64 `json:"plate_kcal"`
+	DayKcal      float64 `json:"day_kcal"`
+	Intent       string  `json:"intent,omitempty"`
+	MaxKcal      float64 `json:"max_kcal"`
+	MinKcal      float64 `json:"min_kcal"`
 }
 
 // EmptyReason says why nothing fits: how many candidates fit the position
@@ -136,6 +180,9 @@ type AltResult struct {
 type EmptyReason struct {
 	Candidates int            `json:"candidates"`
 	Dropped    map[string]int `json:"dropped,omitempty"`
+	// Why says in plain words, with the numbers, what blocked the
+	// candidates (the best a blocked one would have reached).
+	Why []string `json:"why,omitempty"`
 }
 
 // Alternatives returns up to req.Limit candidates for req's plate, each
@@ -144,9 +191,9 @@ type EmptyReason struct {
 // occasion, source (a session, then a cook_at, then a fresh cook), the
 // main's dish count after the change, a recipe with no cook yet in the window
 // before one that has (variety_repeat_week), no second side of the same role, kcal
-// fit to a light or hearty cell, then the oldest last eaten. A recipe passing
-// both fresh and cook_at is listed once, by the better rank. Pure: nothing
-// writes.
+// fit to a light or hearty cell, then the oldest last eaten; when a side is
+// replaced a composed side of the same role comes first. A food is listed once,
+// by its best-ranked source. Pure: nothing writes.
 func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 	pi := slices.IndexFunc(s.Plates, func(p Plate) bool { return p.ID == req.PlateID })
 	if req.PlateID <= 0 || pi < 0 || !s.Window.Contains(s.Plates[pi].Date) {
@@ -166,6 +213,13 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 	}
 	limit = min(limit, maxAltLimit)
 
+	var lightMax, lightMin float64
+	if req.Light != "" {
+		var err error
+		if s, lightMax, lightMin, err = s.withAltLight(t, p, req.Light); err != nil {
+			return AltResult{}, err
+		}
+	}
 	base := Evaluate(s, t)
 	hard, soft := hardKeys(base.Issues), softKeys(base.Issues)
 	x := newIndex(s, t)
@@ -179,10 +233,22 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 	var out []Alternative
 	cands := s.altCandidates(x, p, old, req)
 	dropped := map[string]int{}
+	blocked := map[string]Issue{} // per drop key the blocking issue that came closest
+	lightBest := math.NaN()       // the plate kcal closest to the light cap or minimum
 	for _, c := range cands {
-		a, why := s.tryAlt(t, pi, old, drop, c, base, hard, soft, len(baseCooks), cookedInWindow)
+		a, why, by := s.tryAlt(t, pi, old, drop, c, base, hard, soft, len(baseCooks), cookedInWindow)
 		if why != "" {
 			dropped[why]++
+			if by != nil && closer(why, *by, blocked[why]) {
+				blocked[why] = *by
+			}
+			continue
+		}
+		if (lightMax > 0 && a.plateKcal > lightMax+1e-9) || (lightMin > 0 && a.plateKcal < lightMin-1e-9) {
+			dropped[lightDropKey(req.Light)]++
+			if math.IsNaN(lightBest) || (req.Light == AltLighter && a.plateKcal < lightBest) || (req.Light == AltHeartier && a.plateKcal > lightBest) {
+				lightBest = a.plateKcal
+			}
 			continue
 		}
 		out = append(out, a)
@@ -192,6 +258,7 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 		return cmp.Or(
 			cmp.Compare(ra.newIssues, rb.newIssues),
 			boolCmp(ra.addsCook, rb.addsCook),
+			cmp.Compare(ra.sideFit, rb.sideFit),
 			cmp.Compare(ra.source, rb.source),
 			cmp.Compare(ra.dishMeals, rb.dishMeals),
 			boolCmp(ra.weekCook, rb.weekCook),
@@ -202,29 +269,177 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 			cmp.Compare(ptrVal(a.SessionID), ptrVal(b.SessionID)),
 		)
 	})
-	// One cooking way per recipe: the better of fresh and cook_at.
-	cooked := map[int64]bool{}
+	// One way per food: the best-ranked of its sources (a batch, cook_at,
+	// fresh).
+	listed := map[int64]bool{}
 	out = slices.DeleteFunc(out, func(a Alternative) bool {
-		if a.Source != SourceFresh && a.Source != SourceCookAt {
-			return false
-		}
-		if cooked[a.FoodID] {
+		if listed[a.FoodID] {
 			return true
 		}
-		cooked[a.FoodID] = true
+		listed[a.FoodID] = true
 		return false
 	})
 	if len(out) > limit {
 		out = out[:limit]
 	}
 	res := AltResult{Alternatives: out}
+	if old >= 0 {
+		res.Current = altCurrent(s, base, p, old)
+	}
+	if len(drop) > 0 {
+		res.Hint = mealHint(s, base, p, drop)
+	}
 	if len(out) == 0 {
 		res.EmptyReason = &EmptyReason{Candidates: len(cands)}
 		if len(dropped) > 0 {
 			res.EmptyReason.Dropped = dropped
 		}
+		res.EmptyReason.Why = dropWords(len(cands), dropped, blocked, req.Light, lightMax, lightMin, lightBest)
 	}
 	return res, nil
+}
+
+// lightDropKey is the dropped key of a candidate that misses the light ask.
+func lightDropKey(light string) string {
+	if light == AltHeartier {
+		return "S6b." + CodeMealNotHearty
+	}
+	return "S6." + CodeMealNotLight
+}
+
+// withAltLight returns s with the plate's meal marked light (hearty) for the
+// ask, and the cap (minimum) of that meal per eater.
+func (s State) withAltLight(t Target, p Plate, light string) (State, float64, float64, error) {
+	var level string
+	switch light {
+	case AltLighter:
+	case AltHeartier:
+		level = LevelHearty
+	default:
+		return s, 0, 0, fmt.Errorf("%w: light must be lighter or heartier", domain.ErrInvalidInput)
+	}
+	var name string
+	for _, n := range lightSlots {
+		if s.slotIs(p.SlotID, n) {
+			name = n
+		}
+	}
+	if name == "" {
+		return s, 0, 0, fmt.Errorf("%w: light applies to a lunch or dinner plate", domain.ErrInvalidInput)
+	}
+	s.Light = MergeLight(s.Light, []LightIntent{{Date: p.Date.Format(time.DateOnly), Scope: LightScopeMeal, Slot: name, Level: level}})
+	var dk *DayKcal
+	for _, a := range newIndex(s, t).dayAccounts([]time.Time{p.Date}) {
+		dk = &a
+	}
+	if dk == nil || dk.Target <= 0 {
+		return s, 0, 0, fmt.Errorf("%w: light needs a kcal target in the profile", domain.ErrInvalidInput)
+	}
+	if level == LevelHearty {
+		return s, 0, HeartyMealShare * dk.normalShare(), nil
+	}
+	return s, dk.mealCap(), 0, nil
+}
+
+// altCurrent describes the component at old of p and its plate.
+func altCurrent(s State, base Evaluation, p Plate, old int) *AltCurrent {
+	comp := p.Components[old]
+	f := s.Foods[comp.FoodID]
+	cur := &AltCurrent{FoodID: comp.FoodID, Name: f.Name, Role: string(roleOf(f))}
+	if f.Composed() {
+		cur.TotalMinutes = f.Minutes
+	}
+	for _, pe := range base.Plates {
+		if pe.PlateID != p.ID {
+			continue
+		}
+		cur.PlateKcal = math.Round(pe.Kcal)
+		if old < len(pe.Components) {
+			cur.FoodKcal = math.Round(pe.Components[old].Kcal)
+		}
+		cur.Intent, cur.MaxKcal, cur.MinKcal = pe.Intent, pe.MaxKcal, pe.MinKcal
+	}
+	for _, d := range base.Days {
+		if d.Date == p.Date.Format(time.DateOnly) {
+			cur.DayKcal = math.Round(d.Kcal)
+		}
+	}
+	return cur
+}
+
+// mealHint says what a meal swap drops: the plate's other components.
+func mealHint(s State, base Evaluation, p Plate, drop []int) string {
+	var names []string
+	kcal := 0.0
+	for _, pe := range base.Plates {
+		if pe.PlateID != p.ID {
+			continue
+		}
+		for _, j := range drop {
+			if j < len(pe.Components) {
+				names = append(names, pe.Components[j].Name)
+				kcal += pe.Components[j].Kcal
+			}
+		}
+	}
+	return fmt.Sprintf("what=meal also removes %s (%.0f kcal per eater) from the plate; what=main keeps them", strings.Join(names, ", "), kcal)
+}
+
+// closer reports whether blocking issue is a closer miss than the one kept
+// (the zero Issue: none yet) for the drop key why: for the floor, the day that
+// came nearest to it.
+func closer(why string, is, kept Issue) bool {
+	if kept.Rule == "" {
+		return true
+	}
+	if why == "H9."+CodeKcalBelowFloor {
+		k, _ := is.Params["kcal"].(float64)
+		kk, _ := kept.Params["kcal"].(float64)
+		return k > kk
+	}
+	return false
+}
+
+// dropWords turns what blocked the candidates into plain sentences with the
+// numbers the model needs to decide (the floor and the day it would reach,
+// the cap and the plate it would reach).
+func dropWords(candidates int, dropped map[string]int, blocked map[string]Issue, light string, lightMax, lightMin, lightBest float64) []string {
+	if candidates == 0 {
+		return []string{"no food fits the position and the constraints: loosen one"}
+	}
+	keys := make([]string, 0, len(dropped))
+	for k := range dropped {
+		keys = append(keys, k)
+	}
+	slices.SortFunc(keys, func(a, b string) int { return cmp.Or(cmp.Compare(dropped[b], dropped[a]), cmp.Compare(a, b)) })
+	num := func(is Issue, k string) float64 {
+		switch v := is.Params[k].(type) {
+		case float64:
+			return v
+		case int:
+			return float64(v)
+		}
+		return 0
+	}
+	var out []string
+	for _, k := range keys {
+		n, is := dropped[k], blocked[k]
+		switch k {
+		case "H9." + CodeKcalBelowFloor:
+			out = append(out, fmt.Sprintf("H9: %d would leave the day under its kcal floor; the best reaches %.0f kcal, the floor is %.0f kcal", n, num(is, "kcal"), num(is, "floor_kcal")))
+		case "H2." + CodeTooManyCookOccasions:
+			out = append(out, fmt.Sprintf("H2: %d would add a cooking occasion to a day that already has its maximum (%.0f of %.0f)", n, num(is, "count"), num(is, "max")))
+		case "S6." + CodeMealNotLight:
+			out = append(out, fmt.Sprintf("light: %d would keep the meal over its cap of %.0f kcal; the lightest plate is %.0f kcal", n, lightMax, lightBest))
+		case "S6b." + CodeMealNotHearty:
+			out = append(out, fmt.Sprintf("hearty: %d would keep the meal under its minimum of %.0f kcal; the heartiest plate is %.0f kcal", n, lightMin, lightBest))
+		case altNutritionMissing:
+			out = append(out, fmt.Sprintf("%d lack nutrition data, so the plate or day could not be judged", n))
+		default:
+			out = append(out, fmt.Sprintf("%s: %d candidates dropped", k, n))
+		}
+	}
+	return out
 }
 
 // Alternatives builds the window at start (a shopping day) the way the
@@ -489,9 +704,9 @@ func fitsPosition(f FoodFacts, what string, kind mealKind) bool {
 	case AltMeal, AltMain:
 		return f.Composed() && isMain(f.Role, kind)
 	case AltSide:
-		return sideRole(role)
+		return sideRole(role) && (f.Composed() || f.NoCook)
 	case AltAdd:
-		return sideRole(role) || role == food.RoleDessert || role == food.RoleDrink || f.NoCook
+		return (f.Composed() || f.NoCook) && (sideRole(role) || role == food.RoleDessert || role == food.RoleDrink || f.NoCook)
 	}
 	return false
 }
@@ -528,7 +743,7 @@ func (c AltConstraints) matches(f FoodFacts, words [][]diet.Alt) bool {
 
 // tryAlt applies c to a copy of s, re-evaluates it and builds the result;
 // false when the change adds a hard issue.
-func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluation, hard, soft map[string]bool, baseCooks int, cookedInWindow map[int64]bool) (Alternative, string) {
+func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluation, hard, soft map[string]bool, baseCooks int, cookedInWindow map[int64]bool) (Alternative, string, *Issue) {
 	p := s.Plates[pi]
 	next := s
 	next.Plates = slices.Clone(s.Plates)
@@ -565,19 +780,23 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 
 	ev := Evaluate(next, t)
 	if why := newNutritionGap(base, ev, p); why != "" {
-		return Alternative{}, why
+		return Alternative{}, why, nil
 	}
 	var newIssues []Issue
 	for _, is := range ev.Issues {
 		if is.Severity == SeverityViolation && !hard[issueID(is)] {
-			return Alternative{}, is.Rule + "." + is.Code
+			return Alternative{}, is.Rule + "." + is.Code, &is
 		}
 		if is.Severity == SeveritySoft && !soft[softKey(is)] {
 			is.Options = nil
 			newIssues = append(newIssues, is)
 		}
 	}
-	a := Alternative{FoodID: c.food.ID, Name: c.food.Name, Source: SourceFresh, NewIssues: newIssues}
+	m := c.comp.Multiplier()
+	a := Alternative{
+		FoodID: c.food.ID, Name: c.food.Name, Source: SourceFresh, NewIssues: newIssues, Role: string(roleOf(c.food)),
+		FoodKcal: math.Round(c.food.Macros.Kcal * m), FoodProteinG: math.Round(c.food.Macros.Protein*m*10) / 10,
+	}
 	switch {
 	case c.session != nil:
 		id := c.session.ID
@@ -593,7 +812,7 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 	date := p.Date.Format(time.DateOnly)
 	for _, pe := range ev.Plates {
 		if pe.PlateID == p.ID {
-			a.Kcal, a.ProteinG = math.Round(pe.Kcal), math.Round(pe.ProteinG*10)/10
+			a.PlateKcal, a.PlateProteinG, a.plateKcal = math.Round(pe.Kcal), math.Round(pe.ProteinG*10)/10, pe.Kcal
 		}
 	}
 	for _, d := range ev.Days {
@@ -614,7 +833,7 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 		addsCook:  len(y.occasions[dayOf(p.Date)]) > baseCooks,
 		source:    sourceRank(a.Source),
 		sameRole:  s.sameSideRole(np, c),
-		kcalFit:   y.kcalFit(np, a.Kcal),
+		kcalFit:   y.kcalFit(np, a.PlateKcal),
 		dishMeals: y.dishMeals()[c.food.ID],
 		weekCook:  c.session == nil && c.food.Composed() && cookedInWindow[c.food.ID],
 		lastEaten: math.MinInt64,
@@ -622,7 +841,19 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 	if c.food.LastEaten != nil {
 		a.rank.lastEaten = c.food.LastEaten.Unix() / 86400
 	}
-	return a, ""
+	if old >= 0 && !isMainComp(s, p, old) {
+		oldRole := roleOf(s.Foods[p.Components[old].FoodID])
+		if !c.food.Composed() || roleOf(c.food) != oldRole {
+			a.rank.sideFit = 1
+		}
+	}
+	return a, "", nil
+}
+
+// isMainComp reports whether component i of p is its main.
+func isMainComp(s State, p Plate, i int) bool {
+	c := p.Components[i]
+	return c.Position == plate.PositionMain || (c.Position == "" && c.FoodID == s.mainOf(p))
 }
 
 // altNutritionMissing is the drop key of a candidate whose incomplete

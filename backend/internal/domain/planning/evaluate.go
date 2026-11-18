@@ -3,6 +3,7 @@ package planning
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"slices"
 	"time"
 
@@ -111,19 +112,33 @@ type DayEval struct {
 	// NormalTargetKcal is the target without the light request; only on a
 	// light day. Light is "day" or "meal" when the day was asked for light
 	// (or hearty: LightLevel is then "hearty").
-	NormalTargetKcal float64  `json:"normal_target_kcal,omitempty"`
-	Light            string   `json:"light,omitempty"`
-	LightLevel       string   `json:"light_level,omitempty"`
-	ProteinG         float64  `json:"protein_g"`
-	ProteinTargetG   float64  `json:"protein_target_g,omitempty"`
-	ProteinPct       float64  `json:"protein_pct"`
-	FatPct           float64  `json:"fat_pct"`
-	CarbsPct         float64  `json:"carbs_pct"`
-	FiberG           float64  `json:"-"`
-	FiberMissing     bool     `json:"-"`
-	Meat             bool     `json:"meat"`
-	MeatFoods        []string `json:"meat_foods"`
-	CookOccasions    int      `json:"cook_occasions"`
+	NormalTargetKcal float64 `json:"normal_target_kcal,omitempty"`
+	Light            string  `json:"light,omitempty"`
+	LightLevel       string  `json:"light_level,omitempty"`
+	// LightMeals names the marked meals with their slot ("light dinner",
+	// "hearty lunch"), so a "meal" mark is not anonymous.
+	LightMeals []string `json:"light_meals,omitempty"`
+	// BandLow and BandHigh are the S2 band around TargetKcal, FloorKcal the
+	// H9 floor (it stays on the normal target) and RoomKcal what the day
+	// still holds before the band top (0 over it); all kcal per eater, only
+	// with a kcal target.
+	BandLow        float64  `json:"band_low,omitempty"`
+	BandHigh       float64  `json:"band_high,omitempty"`
+	FloorKcal      float64  `json:"floor_kcal,omitempty"`
+	RoomKcal       float64  `json:"room_kcal,omitempty"`
+	ProteinG       float64  `json:"protein_g"`
+	ProteinTargetG float64  `json:"protein_target_g,omitempty"`
+	ProteinPct     float64  `json:"protein_pct"`
+	FatPct         float64  `json:"fat_pct"`
+	CarbsPct       float64  `json:"carbs_pct"`
+	FiberG         float64  `json:"-"`
+	FiberMissing   bool     `json:"-"`
+	Meat           bool     `json:"meat"`
+	MeatFoods      []string `json:"meat_foods"`
+	CookOccasions  int      `json:"cook_occasions"`
+	// CookSlots names the slots that cook that day (the chat prompt's day
+	// table); not part of the stored or model-facing evaluation.
+	CookSlots []string `json:"-"`
 	// Complete: every planned, non-routine meal of the day holds a plate
 	// (not to be confused with NutritionMissing).
 	Complete bool `json:"complete"`
@@ -144,6 +159,11 @@ type PlateEval struct {
 	Kcal       float64         `json:"kcal"`
 	ProteinG   float64         `json:"protein_g"`
 	Components []ComponentEval `json:"components"`
+	// Intent is "light" or "hearty" on a meal marked so; MaxKcal (light) or
+	// MinKcal (hearty) is the meal's cap or minimum per eater (S6/S6b).
+	Intent  string  `json:"intent,omitempty"`
+	MaxKcal float64 `json:"max_kcal,omitempty"`
+	MinKcal float64 `json:"min_kcal,omitempty"`
 }
 
 // ComponentEval is one food on a plate: its portions (composed) or grams
@@ -200,6 +220,7 @@ func Evaluate(s State, t Target) Evaluation {
 			}
 			pe.Components = append(pe.Components, ce)
 		}
+		x.markIntent(&pe, p)
 		ev.Plates = append(ev.Plates, pe)
 	}
 
@@ -222,14 +243,23 @@ func Evaluate(s State, t Target) Evaluation {
 			MeatFoods: []string{}, Complete: dk.Complete, NutritionMissing: dk.NutritionMissing, Away: dk.Away,
 			CookOccasions: len(x.occasions[dayOf(dk.Date)]),
 		}
+		for _, c := range s.Cells {
+			if dayOf(c.Date) == dayOf(dk.Date) && x.occasions[dayOf(dk.Date)][idOf(c.Key())] {
+				de.CookSlots = append(de.CookSlots, slotName(s, c.SlotID))
+			}
+		}
 		if hasTarget {
 			sc := dk.Adjusted
 			de.TargetKcal = &sc
 			if dk.Adjusted != dk.Scaled {
 				de.NormalTargetKcal = dk.Scaled
 			}
+			de.BandLow, de.BandHigh = math.Round(sc*x.pol.DayLow), math.Round(sc*x.pol.DayHigh)
+			de.FloorKcal = math.Round(dk.Floor(x.pol))
+			de.RoomKcal = math.Max(0, de.BandHigh-math.Round(dk.Kcal))
 		}
 		de.Light, de.LightLevel = x.lightOf(dk.Date)
+		de.LightMeals = x.lightMeals(dk.Date)
 		if t := x.pol.ProteinTargetG(dk.Share()); t > 0 {
 			de.ProteinTargetG = t
 		}

@@ -84,7 +84,13 @@ func (o changeOp) occupant(ctx context.Context) (plate.Occupant, error) {
 func mealResult(out map[string]any, res plate.MealResult, b *batch) map[string]any {
 	for _, a := range res.AlsoChanged {
 		b.aff.Sessions = append(b.aff.Sessions, a.SessionID)
-		b.aff.Dates = append(b.aff.Dates, a.Date, a.FromDate)
+		// cooks_fresh and batch_resized have no from_date: an empty date would
+		// read as outside the evaluated windows.
+		for _, d := range []string{a.Date, a.FromDate} {
+			if d != "" {
+				b.aff.Dates = append(b.aff.Dates, d)
+			}
+		}
 		if a.PlateID != 0 && !slices.Contains(b.aff.Plates, a.PlateID) {
 			b.aff.Plates = append(b.aff.Plates, a.PlateID)
 		}

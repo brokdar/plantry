@@ -24,9 +24,16 @@ import (
 // is per generated token, the cap only prevents cut-offs.
 const chatMaxTokens = 16000
 
+// chatProgrammatic is false (D4): the chat agent never gets the code
+// execution tool or allowed callers, whatever ai.programmatic_tools says. The
+// definitions cost about 21 % of every request and 0 of 30 audited chats used
+// them; the planner keeps programmatic tool calling. The loop's plumbing stays
+// for a chat use case that needs it.
+const chatProgrammatic = false
+
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v17"
+const PromptVersion = "v18"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
@@ -154,7 +161,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	history = append(history, llm.Message{Role: llm.RoleUser, Content: userBlocks})
 
 	// Compose system prompt.
-	prompt, st, err := s.buildSystemPrompt(ctx, req, w)
+	prompt, cut, st, err := s.buildSystemPrompt(ctx, req, w)
 	if err != nil {
 		return err
 	}
@@ -186,6 +193,12 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		}()
 	}
 
+	if cut > 0 {
+		// Never cut silently: the model works with a damaged prompt then.
+		slog.WarnContext(ctx, "agent.prompt.truncated", append(airun.FromContext(ctx).LogAttrs(), "conversation_id", conv.ID,
+			"prompt_chars", len(prompt), "cut_chars", cut, "budget_chars", promptCharBudget)...)
+	}
+
 	// Drive the loop. Tools read today (D25), the window and the turn from
 	// ctx.
 	ctx = withWindow(withToday(ctx, req.Today), w)
@@ -199,7 +212,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		Effort:         s.effort(ctx),
 		MaxTokens:      chatMaxTokens,
 	}
-	if s.programmatic(ctx) {
+	if chatProgrammatic {
 		runReq.CodeExecution = true
 		switch {
 		case conv.ContainerID == "":
@@ -218,16 +231,6 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		runReq.Tools = withoutCallers(runReq.Tools)
 	}
 	return Run(ctx, runReq, client, s.tools, s.repo, out)
-}
-
-// programmatic reads ai.programmatic_tools; an unreadable setting means off.
-func (s *Service) programmatic(ctx context.Context) bool {
-	v, err := s.settings.Get(ctx, settings.KeyAIProgrammaticTools)
-	if err != nil {
-		slog.WarnContext(ctx, "agent.programmatic.setting", "error", err)
-		return false
-	}
-	return v.Raw == "true"
 }
 
 // effort reads ai.reasoning_effort.chat; an unreadable setting means the
@@ -341,19 +344,20 @@ func (s *Service) CheckStart(ctx context.Context, start time.Time) error {
 	return err
 }
 
-// buildSystemPrompt renders the system prompt and returns the window's state
-// it was built from.
-func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w window.Window) (string, planning.State, error) {
+// buildSystemPrompt renders the system prompt and returns the bytes its
+// budget cut off (0: none) and the window's state it was built from.
+func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w window.Window) (string, int, planning.State, error) {
 	p, err := s.profile.Get(ctx)
 	if err != nil {
-		return "", planning.State{}, err
+		return "", 0, planning.State{}, err
 	}
 	today := req.Today
 	st, err := s.plan.Build(ctx, w, today, w.Start, w.End)
 	if err != nil {
-		return "", planning.State{}, err
+		return "", 0, planning.State{}, err
 	}
-	return ComposePrompt(p, s.plan.Summary(st, chatIssues(st))+chatFacts(st), today), st, nil
+	prompt, cut := ComposePrompt(p, chatFacts(st), s.plan.Summary(st, chatIssues(st)), today)
+	return prompt, cut, st, nil
 }
 
 type todayKey struct{}
@@ -395,6 +399,6 @@ func (s *Service) DebugSystemPrompt(ctx context.Context, req ChatRequest) (strin
 	if err != nil {
 		return "", err
 	}
-	prompt, _, err := s.buildSystemPrompt(ctx, req, w)
+	prompt, _, _, err := s.buildSystemPrompt(ctx, req, w)
 	return prompt, err
 }

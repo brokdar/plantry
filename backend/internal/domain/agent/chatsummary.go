@@ -33,9 +33,11 @@ func chatIssues(st planning.State) []planning.Issue { return chatView(st).Issues
 func evaluateAsSeen(st planning.State) planning.Evaluation { return chatView(st) }
 
 // chatFacts renders what the summary lacks: each food on a plate of the
-// window with its role, a recipe's total minutes (prep + cook, when known)
-// and kcal and protein per portion (a leaf: per 100 g), and every day's kcal
-// per eater against the target.
+// window with its role, diet class, a recipe's total minutes (prep + cook,
+// when known) and kcal and protein per portion (a leaf: per 100 g), and every
+// day's kcal per eater with its target, band, floor, room to the band top,
+// the slots that cook and the light or hearty meals. The prompt puts it before
+// the cells, so a cut never takes the computed facts.
 func chatFacts(st planning.State) string {
 	var foods []int64
 	seen := map[int64]bool{}
@@ -59,7 +61,7 @@ func chatFacts(st planning.State) string {
 	}
 	slices.Sort(foods)
 	var b strings.Builder
-	b.WriteString("\nFoods on the plan (role, a recipe's total minutes, kcal and protein per portion; leaf foods per 100 g; other foods' minutes: find_foods or find_alternatives):\n")
+	b.WriteString("\nFoods on the plan (role, diet class, a recipe's total minutes, kcal and protein per portion, a leaf per 100 g; other foods: find_foods):\n")
 	for _, id := range foods {
 		f := st.Foods[id]
 		role := string(f.Role)
@@ -74,32 +76,45 @@ func chatFacts(st planning.State) string {
 		if f.Composed() && f.Minutes > 0 {
 			minutes = fmt.Sprintf(" | %d min", f.Minutes)
 		}
-		fmt.Fprintf(&b, "food_id %d %s | %s%s | %.0f kcal, %.0f g protein %s\n", f.ID, f.Name, role, minutes, f.Macros.Kcal, f.Macros.Protein, per)
+		class := ""
+		if f.DietClass != "" {
+			class = " | " + string(f.DietClass)
+		}
+		fmt.Fprintf(&b, "food_id %d %s | %s%s%s | %.0f kcal, %.0f g protein %s\n", f.ID, f.Name, role, class, minutes, f.Macros.Kcal, f.Macros.Protein, per)
 	}
 	// Day figures come from the evaluation; the day's target is scaled to its
-	// planned meals (a "No plate" meal asks less).
+	// planned meals (a "No plate" meal asks less) and moved by light meals.
 	target := ""
 	if k := st.Profile.KcalTarget; k != nil && *k > 0 {
-		target = fmt.Sprintf(" (target %.0f; a day with a No-plate meal shows its scaled target)", *k)
+		target = fmt.Sprintf(" (normal target %.0f)", *k)
 	}
 	withPlates := map[string]bool{}
 	ev := planning.Evaluate(st, planning.WindowTarget(st))
 	for _, p := range ev.Plates {
 		withPlates[p.Date] = true
 	}
-	b.WriteString("\nKcal per eater and day" + target + ":\n")
+	b.WriteString("\nKcal per eater and day" + target + "; then target if moved, S2 band, H9 floor, room to the band top, cooking slots, light or hearty meals:\n")
 	for _, d := range ev.Days {
 		if !withPlates[d.Date] {
 			continue
 		}
-		mark := ""
+		fmt.Fprintf(&b, "%s: %.0f kcal", d.Date, d.Kcal)
 		if d.NutritionMissing {
-			mark = " (some nutrition data missing)"
+			b.WriteString(" (some nutrition data missing)")
 		}
 		if d.TargetKcal != nil && st.Profile.KcalTarget != nil && math.Abs(*d.TargetKcal-*st.Profile.KcalTarget) > 0.5 {
-			mark = fmt.Sprintf(" against %.0f%s", *d.TargetKcal, mark)
+			fmt.Fprintf(&b, " | target %.0f", *d.TargetKcal)
 		}
-		fmt.Fprintf(&b, "%s: %.0f kcal%s\n", d.Date, d.Kcal, mark)
+		if d.BandHigh > 0 {
+			fmt.Fprintf(&b, " | band %.0f-%.0f | floor %.0f | room %.0f", d.BandLow, d.BandHigh, d.FloorKcal, d.RoomKcal)
+		}
+		if len(d.CookSlots) > 0 {
+			b.WriteString(" | cooks " + strings.Join(d.CookSlots, ", "))
+		}
+		if len(d.LightMeals) > 0 {
+			b.WriteString(" | " + strings.Join(d.LightMeals, ", "))
+		}
+		b.WriteByte('\n')
 	}
 	return b.String()
 }

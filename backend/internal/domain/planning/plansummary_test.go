@@ -30,9 +30,27 @@ func summaryState() planning.State {
 			ID: 12, Date: day(sat), SlotID: breakfast, Eaters: 1,
 			Components: []planning.Component{{ID: 22, FoodID: oats, Portions: ptr(1.0)}, {ID: 23, FoodID: egg, Grams: ptr(60.0)}},
 		},
+		{
+			ID: 13, Date: day(sun), SlotID: lunch, Eaters: 1,
+			Components: []planning.Component{{ID: 24, FoodID: chili, Portions: ptr(1.0), SessionID: 4}},
+		},
 	}
 	setMode(&s, plate.CellKey{Date: day(sat), SlotID: lunch}, availability.ModeNone)
 	return s
+}
+
+// A session whose meals all sit on its own cook cell adds nothing to the cell
+// line and is left out of the session list.
+func TestRenderPlanSummary_SkipsSessionsOfTheirOwnCell(t *testing.T) {
+	s := summaryState()
+	s.Sessions = append(s.Sessions, planning.Session{
+		CookSession: plate.CookSession{ID: 5, FoodID: oats, CookDate: day(sat), CookSlotID: breakfast, Portions: 1},
+	})
+	s.Plates[1].Components[0].SessionID = 5
+	got := planning.RenderPlanSummary(s, nil)
+	assert.NotContains(t, got, "session_id 5 | food_id")
+	assert.Contains(t, got, ", session_id 5 cook)", "the cell line still names it")
+	assert.Contains(t, got, "session_id 4 | food_id", "a batch that feeds another cell stays")
 }
 
 // B3-AC1 (summary half): dates, shopping day, plates with ids/state/eaters,
@@ -55,7 +73,7 @@ func TestRenderPlanSummary(t *testing.T) {
 		"60 g/eater",
 		"| none | no plate, leave empty",
 		"session_id 4 | food_id ",
-		"portions 4, frozen 1 | eaten 2, of which frozen 0 | keeps until 2026-11-10",
+		"portions 4, frozen 1 | eaten 3, of which frozen 0 | keeps until 2026-11-10",
 		"Issues:\n- H2 too_many_cooks (violation) " + sat + " count=2\n",
 	} {
 		assert.Contains(t, got, want)

@@ -20,7 +20,7 @@
         {
           "delay_ms": 200,
           "type": "tool_call_start",
-          "payload": { "id": "tu_1", "name": "list_slots" }
+          "payload": { "id": "tu_1", "name": "find_foods" }
         },
         {
           "delay_ms": 200,
@@ -35,7 +35,7 @@
           {
             "type": "tool_use",
             "tool_use_id": "tu_1",
-            "tool_name": "list_slots",
+            "tool_name": "find_foods",
             "tool_input": {}
           }
         ]

@@ -170,7 +170,7 @@ test("streams text without tool names, keeps history and starts new conversation
     ).toBeVisible({ timeout: 10_000 })
     // The tool the script calls is never named in the panel (D16).
     await expect(page.getByTestId("assistant-panel")).not.toContainText(
-      "list_slots"
+      "find_foods"
     )
     await convRefetch
     // Chips are for an empty conversation only.

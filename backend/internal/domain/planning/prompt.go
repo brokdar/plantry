@@ -212,7 +212,17 @@ func writeSummaryCells(b *strings.Builder, x *index) {
 				content = "no plate, leave empty"
 			}
 		}
-		fmt.Fprintf(b, "%s | %d %s | %s | %s\n", weekdayDate(c.Date), c.SlotID, slotName(s, c.SlotID), c.Mode, content)
+		mode := string(c.Mode)
+		switch {
+		case c.Mode == availability.ModeRoutine:
+			// A routine cell's cook is its preset's: never a cooking occasion.
+			mode += ", not cooking"
+		case s.lightMeal(c.Date, c.SlotID):
+			mode += ", light meal"
+		case s.heartyMeal(c.Date, c.SlotID):
+			mode += ", hearty meal"
+		}
+		fmt.Fprintf(b, "%s | %d %s | %s | %s\n", weekdayDate(c.Date), c.SlotID, slotName(s, c.SlotID), mode, content)
 	}
 }
 
@@ -257,7 +267,9 @@ func summaryPlate(x *index, p Plate) string {
 }
 
 // writeSummarySessions lists the sessions that cook in the window or feed a
-// plate in it, with what their links consume.
+// plate in it, with what their links consume. A session whose meals all sit on
+// its own cook cell adds nothing to the cell line (it shows session_id and
+// cook), so only the batches that feed another cell are listed.
 func writeSummarySessions(b *strings.Builder, x *index) {
 	s := x.s
 	linked := map[int64]bool{}
@@ -274,6 +286,9 @@ func writeSummarySessions(b *strings.Builder, x *index) {
 	var lines []string
 	for _, ss := range s.Sessions {
 		if ss.Proposed() || (!s.Window.Contains(ss.CookDate) && !linked[ss.ID]) {
+			continue
+		}
+		if onlyOwnCell(x, ss) {
 			continue
 		}
 		use := x.usage(ss)
@@ -299,6 +314,21 @@ func writeSummarySessions(b *strings.Builder, x *index) {
 		b.WriteString(l)
 		b.WriteByte('\n')
 	}
+}
+
+// onlyOwnCell reports whether every plate eating ss sits on ss's cook cell.
+func onlyOwnCell(x *index, ss Session) bool {
+	links := x.links[ss.ref()]
+	if len(links) == 0 {
+		return false
+	}
+	own := idOf(ss.CookCell())
+	for _, l := range links {
+		if idOf(l.Cell) != own {
+			return false
+		}
+	}
+	return true
 }
 
 func writeIssues(b *strings.Builder, issues []Issue) {
