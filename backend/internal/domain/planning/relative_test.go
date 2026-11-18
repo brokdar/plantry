@@ -211,3 +211,33 @@ func TestJudgeRelative(t *testing.T) {
 		})
 	}
 }
+
+func TestWays_DayGoals(t *testing.T) {
+	// Saturday holds 2050 kcal of 2000: lower_day aims at 85 % (band 1530 to
+	// 1870, floor 1500); raise_day at 115 % (band 2070 to 2530).
+	for goal, in := range map[string]func(planning.WayResult, planning.Way){
+		planning.GoalLowerDay: func(res planning.WayResult, w planning.Way) {
+			assert.LessOrEqual(t, w.After.DayKcal, res.BandHigh+0.5, w.What)
+			assert.GreaterOrEqual(t, w.After.DayKcal, res.FloorKcal, w.What)
+			assert.Contains(t, w.Light, planning.LightIntent{Date: sat, Scope: "day"})
+		},
+		planning.GoalRaiseDay: func(res planning.WayResult, w planning.Way) {
+			assert.GreaterOrEqual(t, w.After.DayKcal, res.BandLow-0.5, w.What)
+			assert.LessOrEqual(t, w.After.DayKcal, res.BandHigh+0.5, w.What)
+			assert.Contains(t, w.Light, planning.LightIntent{Date: sat, Scope: "day", Level: "hearty"})
+		},
+	} {
+		t.Run(goal, func(t *testing.T) {
+			res := ways(t, relState(false), planning.WayRequest{Date: sat, Goal: goal})
+			require.NotEmpty(t, res.Ways, res.EmptyWhy)
+			for _, w := range res.Ways {
+				assert.True(t, w.Reaches, w.What)
+				assert.NotEmpty(t, w.Ops)
+				in(res, w)
+			}
+			assert.Empty(t, res.Offers)
+		})
+	}
+	_, err := planning.Ways(relState(false), windowTarget(relState(false)), planning.WayRequest{Goal: planning.GoalLowerDay})
+	assert.Error(t, err, "a day goal needs a date")
+}

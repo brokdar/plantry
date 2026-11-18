@@ -241,3 +241,69 @@ func TestFindAlternatives_MisplacedLimitIsRedirected(t *testing.T) {
 	_, _, _, err = e.ts.Execute(ctx, "find_alternatives", json.RawMessage(fmt.Sprintf(`{"plate_id":%d,"what":"main","limit":3}`, p.ID)))
 	require.NoError(t, err)
 }
+
+// E008: lower_day and raise_day come with a next step, every way passes its
+// dry run and lands the day in the adjusted range.
+func TestFindWays_DayGoalsAndNextStep(t *testing.T) {
+	e := relEnv(t)
+	ctx, _ := e.chat()
+	dates := map[string]bool{}
+	for _, p := range e.draftMeals() {
+		dates[p.DateString()] = true
+	}
+	checked, nothing := 0, 0
+	for date := range dates {
+		for _, goal := range []string{"lower_day", "raise_day"} {
+			out, _, _, err := e.ts.Execute(ctx, "find_ways", json.RawMessage(fmt.Sprintf(`{"goal":%q,"date":%q}`, goal, date)))
+			require.NoError(t, err, "%s %s", goal, date)
+			var res map[string]any
+			require.NoError(t, json.Unmarshal(out, &res))
+			next, _ := res["next"].(string)
+			ways := relMaps(res["ways"])
+			if len(ways) == 0 {
+				assert.Contains(t, next, "nothing")
+				assert.NotEmpty(t, res["empty_reason"])
+				nothing++
+				continue
+			}
+			assert.Contains(t, next, "apply ways[0] now")
+			for _, way := range ways {
+				got, err := e.applyWayCtx(ctx, res, way)
+				require.NoError(t, err, "%s %s: %v", goal, date, way["what"])
+				req := got["request"].(map[string]any)
+				assert.Equal(t, true, req["satisfied"], "%v", req["why"])
+				assert.Equal(t, true, req["reached_band"], "%v", req["why"])
+				for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
+					assert.NotEqual(t, "violation", is["severity"])
+				}
+				checked++
+			}
+		}
+	}
+	assert.Positive(t, checked)
+	t.Logf("%d day ways checked, %d day requests without a way", checked, nothing)
+}
+
+func TestFindWays_NextStepWithAnOffer(t *testing.T) {
+	// An offer alone: explain and ask; ways and an offer: apply and mention.
+	e := relEnv(t)
+	ctx, _ := e.chat()
+	for _, p := range e.draftMeals() {
+		out, _, _, err := e.ts.Execute(ctx, "find_ways", json.RawMessage(fmt.Sprintf(`{"goal":"lighter","plate_id":%d}`, p.ID)))
+		require.NoError(t, err)
+		var res map[string]any
+		require.NoError(t, json.Unmarshal(out, &res))
+		next, _ := res["next"].(string)
+		hasWays, hasOffer := len(relMaps(res["ways"])) > 0, res["offer"] != nil
+		switch {
+		case hasWays && hasOffer:
+			assert.Contains(t, next, "present offer[0] as a choice")
+		case hasWays:
+			assert.NotContains(t, next, "offer")
+		case hasOffer:
+			assert.Contains(t, next, "only when the user says yes")
+		default:
+			assert.Contains(t, next, "nothing to apply")
+		}
+	}
+}

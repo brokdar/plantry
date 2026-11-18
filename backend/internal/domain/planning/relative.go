@@ -25,6 +25,11 @@ const (
 	GoalLighter     = "lighter"
 	GoalHeartier    = "heartier"
 	GoalMoreProtein = "more_protein"
+	// GoalLowerDay and GoalRaiseDay: an explicit "eat less (more) on this
+	// day": the day's target moves by its day intent (LightDayShare,
+	// HeartyDayShare) and the ways bring the day into the new band.
+	GoalLowerDay = "lower_day"
+	GoalRaiseDay = "raise_day"
 
 	// RelMinKcal and RelMinShare: a meaningful change of a meal's energy is
 	// at least RelMinShare of the meal or RelMinKcal, whichever is smaller.
@@ -171,8 +176,10 @@ type waySearch struct {
 	date       string
 	capKcal    float64
 	minKcal    float64
+	bandHigh   float64
 	base       Evaluation
 	hard, soft map[string]bool
+	warn       map[string]bool
 	baseFig    WayFigures // the target plate's figures; day request: unused
 	household  diet.Class
 	tried      int
@@ -187,11 +194,12 @@ type waySearch struct {
 func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 	w := &waySearch{t: t, goal: req.Goal, pi: -1}
 	switch req.Goal {
-	case GoalLighter, GoalHeartier, GoalMoreProtein:
+	case GoalLighter, GoalHeartier, GoalMoreProtein, GoalLowerDay, GoalRaiseDay:
 	default:
-		return WayResult{}, fmt.Errorf("%w: goal must be lighter, heartier or more_protein", domain.ErrInvalidInput)
+		return WayResult{}, fmt.Errorf("%w: goal must be lighter, heartier, more_protein, lower_day or raise_day", domain.ErrInvalidInput)
 	}
-	if req.PlateID != 0 {
+	dayGoal := req.Goal == GoalLowerDay || req.Goal == GoalRaiseDay
+	if req.PlateID != 0 && !dayGoal {
 		w.pi = slices.IndexFunc(s.Plates, func(p Plate) bool { return p.ID == req.PlateID })
 		if w.pi < 0 || !s.Window.Contains(s.Plates[w.pi].Date) {
 			return WayResult{}, fmt.Errorf("%w: plate %d", domain.ErrNotFound, req.PlateID)
@@ -202,7 +210,7 @@ func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 		}
 		w.date = p.Date.Format(time.DateOnly)
 	} else {
-		if req.Goal != GoalMoreProtein {
+		if req.Goal == GoalLighter || req.Goal == GoalHeartier {
 			return WayResult{}, fmt.Errorf("%w: goal %s needs plate_id (one meal)", domain.ErrInvalidInput, req.Goal)
 		}
 		d, err := time.Parse(time.DateOnly, req.Date)
@@ -216,7 +224,18 @@ func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 	}
 	res := WayResult{Goal: req.Goal, Date: w.date}
 	var intent *LightIntent
-	if req.Goal != GoalMoreProtein {
+	if dayGoal {
+		in := LightIntent{Date: w.date, Scope: LightScopeDay}
+		if req.Goal == GoalRaiseDay {
+			in.Level = LevelHearty
+		}
+		if err := ResolveLight(s, []LightIntent{in}); err != nil {
+			return WayResult{}, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
+		}
+		s.Light = MergeLight(s.Light, []LightIntent{in})
+		intent = &in
+	}
+	if req.Goal == GoalLighter || req.Goal == GoalHeartier {
 		p := s.Plates[w.pi]
 		var err error
 		light := AltLighter
@@ -239,6 +258,12 @@ func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 	}
 	w.base = Evaluate(s, t)
 	w.hard, w.soft = hardKeys(w.base.Issues), softKeys(w.base.Issues)
+	w.warn = map[string]bool{}
+	for _, is := range w.base.Issues {
+		if is.Severity == SeverityWarning {
+			w.warn[issueID(is)] = true
+		}
+	}
 	if w.pi >= 0 {
 		res.PlateID = s.Plates[w.pi].ID
 		w.baseFig = w.figures(w.base, res.PlateID)
@@ -248,6 +273,11 @@ func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 	}
 	if d, ok := w.dayEval(w.base); ok {
 		res.FloorKcal, res.BandLow, res.BandHigh = math.Round(d.FloorKcal), math.Round(d.BandLow), math.Round(d.BandHigh)
+		w.bandHigh = d.BandHigh
+		if dayGoal {
+			w.capKcal, w.minKcal = d.BandHigh, d.BandLow
+			res.MaxKcal, res.MinKcal = res.BandHigh, res.BandLow
+		}
 	}
 
 	var found, offers []Way
@@ -292,7 +322,7 @@ func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 			if way.Reaches {
 				offer(e, r.ev)
 			}
-		case way.Meaningful:
+		case way.Meaningful && (way.Reaches || !w.dayGoal()):
 			found = append(found, way)
 		}
 	}
@@ -314,6 +344,9 @@ func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 	slices.SortStableFunc(offers, func(a, b Way) int { return a.cmp(b) })
 	if len(offers) > maxOffers {
 		offers = offers[:maxOffers]
+	}
+	if w.dayGoal() && len(found) == 0 {
+		found = w.dayGreedy(s, intent)
 	}
 	res.Ways, res.Offers = found, offers
 	if len(found) == 0 {
@@ -387,7 +420,7 @@ func (w *waySearch) check(next State) wayCheck {
 			default:
 				r.other = true
 			}
-		case is.Severity == SeveritySoft && !w.soft[softKey(is)]:
+		case (is.Severity == SeveritySoft && !w.soft[softKey(is)]) || (is.Severity == SeverityWarning && !w.warn[issueID(is)]):
 			is.Options = nil
 			r.newSoft = append(r.newSoft, is)
 		}
@@ -399,6 +432,8 @@ func (w *waySearch) check(next State) wayCheck {
 	}
 	return r
 }
+
+func (w *waySearch) dayGoal() bool { return w.goal == GoalLowerDay || w.goal == GoalRaiseDay }
 
 func (w *waySearch) dayEval(ev Evaluation) (DayEval, bool) {
 	for _, d := range ev.Days {
@@ -473,6 +508,28 @@ func JudgeRelative(goal string, meal bool, maxKcal, minKcal float64, before, aft
 		}
 		return changed, reached, why
 	}
+	switch goal {
+	case GoalLowerDay:
+		changed = MeaningfulKcal(before.DayKcal, before.DayKcal-after.DayKcal)
+		reached = maxKcal <= 0 || after.DayKcal <= maxKcal+0.5
+		switch {
+		case !changed:
+			why = fmt.Sprintf("the day holds %.0f kcal after, %.0f before: not lower by a meaningful amount (at least %.0f kcal)", after.DayKcal, before.DayKcal, math.Min(RelMinKcal, RelMinShare*before.DayKcal))
+		case !reached:
+			why = fmt.Sprintf("lower, but not in the lowered range yet: the day holds %.0f kcal (was %.0f), the range tops at %.0f kcal", after.DayKcal, before.DayKcal, maxKcal)
+		}
+		return changed, reached, why
+	case GoalRaiseDay:
+		changed = MeaningfulKcal(before.DayKcal, after.DayKcal-before.DayKcal)
+		reached = minKcal <= 0 || after.DayKcal >= minKcal-0.5
+		switch {
+		case !changed:
+			why = fmt.Sprintf("the day holds %.0f kcal after, %.0f before: not higher by a meaningful amount (at least %.0f kcal)", after.DayKcal, before.DayKcal, math.Min(RelMinKcal, RelMinShare*before.DayKcal))
+		case !reached:
+			why = fmt.Sprintf("higher, but not in the raised range yet: the day holds %.0f kcal (was %.0f), the range starts at %.0f kcal", after.DayKcal, before.DayKcal, minKcal)
+		}
+		return changed, reached, why
+	}
 	gain, what := after.DayProteinG-before.DayProteinG, "day"
 	if meal {
 		gain, what = after.MealProteinG-before.MealProteinG, "meal"
@@ -491,6 +548,10 @@ func (w *waySearch) progress(a Way) float64 {
 		return a.Before.MealKcal - a.After.MealKcal
 	case GoalHeartier:
 		return a.After.MealKcal - a.Before.MealKcal
+	case GoalLowerDay:
+		return a.Before.DayKcal - a.After.DayKcal
+	case GoalRaiseDay:
+		return a.After.DayKcal - a.Before.DayKcal
 	}
 	if w.pi >= 0 {
 		return a.After.MealProteinG - a.Before.MealProteinG
@@ -513,6 +574,9 @@ func (w *waySearch) way(e wayEdit, r wayCheck, intent *LightIntent) Way {
 		a.Before.DayKcal, a.Before.DayProteinG = w.figures(w.base, 0).DayKcal, w.figures(w.base, 0).DayProteinG
 	}
 	changed, reached, _ := JudgeRelative(w.goal, w.pi >= 0, w.capKcal, w.minKcal, before, after)
+	if w.goal == GoalRaiseDay && w.bandHigh > 0 && after.DayKcal > w.bandHigh+0.5 {
+		reached = false
+	}
 	a.Meaningful, a.Reaches = changed, changed && reached
 	if a.Reaches && intent != nil {
 		a.Light = append(a.Light, *intent)
@@ -554,6 +618,8 @@ func (w *waySearch) noWayWhy(res WayResult) string {
 			res.Before.MealKcal, math.Min(RelMinKcal, RelMinShare*res.Before.MealKcal), res.Before.DayKcal, res.FloorKcal, math.Max(0, res.Before.DayKcal-res.FloorKcal), res.MaxKcal)
 	case GoalHeartier:
 		return fmt.Sprintf("This meal cannot get meaningfully heartier on its own without taking the day (%.0f kcal) over its band top of %.0f kcal.", res.Before.DayKcal, res.BandHigh)
+	case GoalLowerDay, GoalRaiseDay:
+		return fmt.Sprintf("No single change of one meal brings the day (%.0f kcal) into its adjusted range of %.0f to %.0f kcal without breaking the energy floor of %.0f kcal.", res.Before.DayKcal, res.BandLow, res.BandHigh, res.FloorKcal)
 	}
 	return "no verified change adds enough protein without breaking a hard rule"
 }
@@ -582,6 +648,18 @@ func (w *waySearch) primary(s State) []wayEdit {
 			out = append(out, w.leanEdits(s, pi)...)
 			out = append(out, w.swapEdits(s, p, AltMain, 0)...)
 			out = append(out, w.swapEdits(s, p, AltMeal, 0)...)
+		case GoalLowerDay:
+			out = append(out, w.quantityEdits(s, pi, -1)...)
+			out = append(out, w.removeEdits(s, pi)...)
+			out = append(out, w.leanEdits(s, pi)...)
+			out = append(out, w.swapEdits(s, p, AltMain, 0)...)
+		case GoalRaiseDay:
+			out = append(out, w.quantityEdits(s, pi, +1)...)
+			// A side or bread that belongs to the dish, no gap fillers.
+			for _, c := range w.sideCands(s, p, (w.minKcal-w.figures(w.base, 0).DayKcal)/2, false) {
+				out = append(out, w.addEdit(s, pi, c, ""))
+			}
+			out = append(out, w.swapEdits(s, p, AltMain, 0)...)
 		case GoalHeartier:
 			out = append(out, w.quantityEdits(s, pi, +1)...)
 			out = append(out, w.addEdits(s, pi, w.minKcal-w.baseFig.MealKcal+1, false)...)
@@ -882,7 +960,7 @@ func (w *waySearch) addCands(s State, p Plate, want float64, protein bool) []add
 	var out []addCand
 	for _, id := range s.NoCook {
 		f, ok := s.Foods[id]
-		if !ok || onPlate[id] || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet || !fitsDiet(f.DietClass, w.household) {
+		if !ok || onPlate[id] || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet || !fitsDiet(f.DietClass, w.household) || (f.Composed() && f.Role == food.RoleStandalone) {
 			continue
 		}
 		var best *addCand
@@ -995,7 +1073,7 @@ func (w *waySearch) otherPlates(s State, target Plate, up bool) []int {
 // the day under it, more food there (a raised main, then up to wayCompSteps
 // add-ons); heartier and the day over it, less food there.
 func (w *waySearch) compensate(e wayEdit, ev Evaluation) []wayEdit {
-	if w.pi < 0 || w.goal == GoalMoreProtein {
+	if w.pi < 0 || w.goal == GoalMoreProtein || w.dayGoal() {
 		return nil
 	}
 	up := w.goal == GoalLighter
@@ -1251,4 +1329,62 @@ func MealLimit(s State, t Target, plateID int64, goal string) (maxKcal, minKcal 
 	}
 	_, maxKcal, minKcal, err = s.withAltLight(t, s.Plates[pi], light)
 	return maxKcal, minKcal, err
+}
+
+// dayGreedy builds a way of up to three edits, each on a component not
+// yet changed and each the one that brings the day closest to the aim of its
+// adjusted range (the lower third for a raise, the upper third for a lower),
+// until the day is inside the range: a day goal that no single change reaches.
+func (w *waySearch) dayGreedy(s State, intent *LightIntent) []Way {
+	cur := wayEdit{s: s, kind: "day"}
+	used := map[int64]bool{} // components an earlier edit of the way changed
+	for range wayCompSteps {
+		best, bestScore := wayEdit{}, math.Inf(1)
+		for _, e := range w.primary(cur.s) {
+			if slices.ContainsFunc(e.ops, func(o OptionOp) bool { return o.PlateComponentID != nil && used[*o.PlateComponentID] }) {
+				continue
+			}
+			r := w.check(e.s)
+			if r.other || r.floor {
+				continue
+			}
+			d, ok := w.dayEval(r.ev)
+			if !ok || d.BandHigh <= 0 {
+				continue
+			}
+			aim := dayAim(d)
+			if w.goal == GoalLowerDay {
+				aim = d.BandHigh - (d.BandHigh-d.BandLow)/3
+			}
+			sc := math.Abs(d.Kcal - aim)
+			for _, is := range r.newSoft {
+				if is.Rule != "S2" {
+					sc += 400
+				}
+			}
+			if sc < bestScore {
+				best, bestScore = e, sc
+			}
+		}
+		if len(best.ops) == 0 {
+			return nil
+		}
+		for _, o := range best.ops {
+			if o.PlateComponentID != nil {
+				used[*o.PlateComponentID] = true
+			}
+		}
+		cur.s = best.s
+		cur.ops = append(slices.Clone(cur.ops), best.ops...)
+		cur.what = append(slices.Clone(cur.what), best.what...)
+		cur.cost += best.cost
+		r := w.check(cur.s)
+		if r.other || r.floor {
+			return nil
+		}
+		if way := w.way(cur, r, intent); way.Reaches {
+			return []Way{way}
+		}
+	}
+	return nil
 }

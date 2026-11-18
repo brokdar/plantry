@@ -194,8 +194,8 @@ func TestPrompt_OversizedProfileCutsOnRuneBoundary(t *testing.T) {
 func TestPrompt_V18(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
-		"Playbook, light, hearty or more protein", "Playbook, replace a dish", "Playbook, away",
-		"find_ways with the goal", "what main", "check a fix from the issue's options",
+		"Playbook, light, hearty, more protein, lower or raise a day", "Playbook, replace a dish", "Playbook, away",
+		"call find_ways (goal, plate_id or date)", "what main", "check a fix from the issue's options",
 		"Cooking occasions per day", "a routine cell add none",
 		"worsened", "Report a worsened issue like a new one",
 	} {
@@ -209,7 +209,7 @@ func TestPrompt_V18(t *testing.T) {
 		}
 	}
 	// E006: the relative-request playbook names no rule code and no dry run.
-	a := strings.Index(prompt, "Playbook, light, hearty or more protein")
+	a := strings.Index(prompt, "Playbook, light, hearty, more protein, lower or raise a day")
 	block := prompt[a : a+strings.Index(prompt[a:], "Playbook, replace a dish")]
 	for _, bad := range []string{"S6", "H9", "dry run", "dry_run"} {
 		if strings.Contains(block, bad) {
