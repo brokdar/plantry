@@ -149,7 +149,13 @@ func issueKey(is planning.Issue) string {
 		}
 		return *p
 	}
-	return fmt.Sprintf("%s|%s|%s|%d|%d|%d", is.Rule, is.Code, is.Date, n(is.SlotID), n(is.PlateID), n(is.SessionID))
+	// An add-on warning names the food: a second one on the same plate is a new
+	// warning, not the old one.
+	food := ""
+	if is.Rule == "S9" {
+		food = fmt.Sprint(is.Params["food_id"])
+	}
+	return fmt.Sprintf("%s|%s|%s|%d|%d|%d|%s", is.Rule, is.Code, is.Date, n(is.SlotID), n(is.PlateID), n(is.SessionID), food)
 }
 
 type issueBaselineKey struct{}

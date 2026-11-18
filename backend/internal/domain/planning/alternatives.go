@@ -74,6 +74,8 @@ type AltRequest struct {
 	// floor (the compound ways of Ways make that up on another meal; their
 	// own check drops the ones that do not).
 	TolerateFloor bool
+	// NoLimit lists every verified candidate (Ways picks among them itself).
+	NoLimit bool
 }
 
 // AltConstraints narrow the candidates. Zero values do not filter.
@@ -122,6 +124,10 @@ type Alternative struct {
 	DayPct           float64 `json:"day_pct"`
 	WeekPct          float64 `json:"week_pct"`
 	CookOccasionsDay int     `json:"cook_occasions_day"`
+	// Recommended marks the first alternative (one per result); Because
+	// says why in one phrase.
+	Recommended bool   `json:"recommended,omitempty"`
+	Because     string `json:"recommended_because,omitempty"`
 	// NewIssues are the soft issues the change adds (without options).
 	NewIssues []Issue `json:"new_issues"`
 	// Ops are the apply_changes ops that make the change, in order.
@@ -285,8 +291,15 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 		listed[a.FoodID] = true
 		return false
 	})
-	if len(out) > limit {
+	if len(out) > limit && !req.NoLimit {
 		out = out[:limit]
+	}
+	if len(out) > 0 {
+		out[0].Recommended = true
+		out[0].Because = "the best-ranked candidate: no new hard issue, the fewest new warnings, no extra cooking where possible"
+		if len(out[0].NewIssues) > 0 {
+			out[0].Because = "the best-ranked candidate, but it creates a new warning (see new_issues)"
+		}
 	}
 	res := AltResult{Alternatives: out}
 	if old >= 0 {
@@ -585,6 +598,9 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 		if onPlate[id] || !fitsPosition(f, req.What, kind) || !fitsDiet(f.DietClass, household) ||
 			(req.Constraints.Diet != "" && !fitsDiet(f.DietClass, diet.Class(req.Constraints.Diet))) ||
 			!req.Constraints.matches(f, words) {
+			continue
+		}
+		if req.What == AltAdd && !f.Composed() && !s.addOnFits(p, f, slotName(s, p.SlotID)) {
 			continue
 		}
 		comp := Component{FoodID: id, Proposed: true}

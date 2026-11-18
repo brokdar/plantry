@@ -68,6 +68,23 @@ func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 			var res map[string]any
 			require.NoError(t, json.Unmarshal(out, &res))
 			var all []map[string]any
+			// Exactly one way or offer is recommended, with its reason.
+			rec := 0
+			for _, k := range []string{"ways", "offer"} {
+				if res[k] == nil {
+					continue
+				}
+				for _, w := range relMaps(res[k]) {
+					if w["recommended"] == true {
+						rec++
+						assert.NotEmpty(t, w["recommended_because"])
+					}
+				}
+			}
+			if res["ways"] != nil && len(relMaps(res["ways"])) > 0 || res["offer"] != nil {
+				assert.Equal(t, 1, rec, "%s plate %d: exactly one recommended", goal, p.ID)
+				assert.NotEmpty(t, res["next"])
+			}
 			for _, w := range relMaps(res["ways"]) {
 				assert.NotEqual(t, "compound", w["kind"], "a compound way is never a default")
 				assert.Nil(t, w["changes_other_meal"])
@@ -94,8 +111,11 @@ func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 			for _, way := range all {
 				got, err := e.applyWayCtx(ctx, res, way)
 				require.NoError(t, err, "plate %d %s: %v", p.ID, goal, way["what"])
-				for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
+				fresh := relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"])
+				for _, is := range fresh {
 					assert.NotEqual(t, "violation", is["severity"], "%s %v adds %v", goal, way["what"], is["label"])
+					// A new warning is allowed only when the way says so.
+					assert.Contains(t, fmt.Sprint(way["why"]), "new warning", "%s %v creates %v without saying", goal, way["what"], is["label"])
 				}
 				req := got["request"].(map[string]any)
 				assert.Equal(t, true, req["satisfied"], "%s %v: %v", goal, way["what"], req["why"])

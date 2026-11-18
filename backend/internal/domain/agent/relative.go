@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,13 +22,14 @@ const findWaysSchema = `{
     "goal":{"type":"string","enum":["lighter","heartier","more_protein","lower_day","raise_day"],"description":"lighter|heartier: one lunch or dinner plate (plate_id); more_protein: one plate (plate_id) or the whole day (date); lower_day|raise_day: the whole day (date), an explicit eat less (more) that day"},
     "plate_id":{"type":"integer","minimum":1},
     "date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$","description":"more_protein, lower_day, raise_day: the day"},
-    "limit":{"type":"integer","minimum":1,"maximum":4}
+    "limit":{"type":"integer","minimum":1,"maximum":4},
+    "target_kcal":{"type":"number","minimum":1,"description":"lower_day: the kcal the user named for the day, when they named one"}
   },
   "additionalProperties":false
 }`
 
-const findWaysDescription = `Find verified ways to meet a relative request ("make dinner lighter", "heartier", "more protein") in one call. goal: lighter, heartier (one lunch or dinner plate), more_protein (a plate, or the day with date; at least 10 g more), lower_day or raise_day (the day with date: an explicit "eat less (more) on Monday"; the day is marked light (hearty) and the ways bring it into the adjusted range). The food must change in the asked direction by a meaningful amount (at least 10% of the meal or 80 kcal, the smaller): a meal that already meets its cap or minimum still has to change. ways change ONLY the named meal (a smaller or larger portion, leaving out or adding a side or add-on, a lighter or heartier main), the day stays above its floor (heartier: in its band); the first one goes as far as that allows, so reaches_cap false means lighter (heartier) but not yet a light (hearty) meal, why says by how much. offer holds at most two compound ways that also change another meal of the day (a bigger portion of its main and a matching side or bread, or a smaller one) so the named meal reaches its cap or minimum, and may end that meal's light mark: never apply an offer unasked, present it as a choice. Every way was applied to a copy and checked like apply_changes before it is listed. RULE: a request that names a meal or a day and a direction is carried out in the same turn with the first way (the result says what to do in next), and the offer, if any, is mentioned as a choice; a request that names neither ("make the plan healthier") gets one question first. Saves nothing.
-Returns JSON {next (what to do now), goal:{kind, plate_id?, date?} (pass it as it is to apply_changes), max_kcal? (light cap), min_kcal? (hearty minimum), before:{meal_kcal, meal_protein_g, day_kcal, day_protein_g} (per eater), floor_kcal, band_low, band_high (the day), ways:[{kind portion|remove|add|swap, what (the change in words), reaches_cap (more_protein: always true; lower_day and raise_day: the day is in the adjusted range), why?, ops (apply_changes ops), light? (marks to pass with the ops), before and after:{meal_kcal, meal_protein_g, day_kcal, day_protein_g}, new_issues?}], offer?:[the same with changes_other_meal true, kind compound and moved (what changes on the other meal)], empty_reason? (no way changes only this meal, with the numbers)}. To take a way or an offer, call apply_changes with its ops, its light and the goal exactly as returned; the result's request says whether it is satisfied.`
+const findWaysDescription = `Find verified ways to meet a relative request ("make dinner lighter", "heartier", "more protein") in one call. goal: lighter, heartier (one lunch or dinner plate), more_protein (a plate, or the day with date; at least 10 g more), lower_day or raise_day (the day with date: an explicit "eat less (more) on Monday"; the day is marked light (hearty) and the ways bring it into the adjusted range). The food must change in the asked direction by a meaningful amount (at least 10% of the meal or 80 kcal, the smaller): a meal that already meets its cap or minimum still has to change. ways change ONLY the named meal (a smaller or larger portion, leaving out or adding a side or add-on, a lighter or heartier main), the day stays above its floor (heartier: in its band); the first one goes as far as that allows, so reaches_cap false means lighter (heartier) but not yet a light (hearty) meal, why says by how much. offer holds at most two compound ways that also change another meal of the day (a bigger portion of its main and a matching side or bread, or a smaller one) so the named meal reaches its cap or minimum, and may end that meal's light mark: never apply an offer unasked, present it as a choice. Every way was applied to a copy and checked like apply_changes before it is listed. RECOMMENDATION: exactly one way or offer is marked recommended with recommended_because: present it as your recommendation in one phrase. Nothing here adds a food the user removed, a cheese, or a protein that does not fit the dish. RULE: a request that names a meal or a day and a direction is carried out in the same turn with the first way (the result says what to do in next), and the offer, if any, is mentioned as a choice; a request that names neither ("make the plan healthier") gets one question first. Saves nothing.
+Returns JSON {next (what to do now), impossible? (the number the user named cannot be met: ways is empty, offer[0] is the nearest safe option), goal:{kind, plate_id?, date?} (pass it as it is to apply_changes), max_kcal? (light cap), min_kcal? (hearty minimum), before:{meal_kcal, meal_protein_g, day_kcal, day_protein_g} (per eater), floor_kcal, band_low, band_high (the day), ways:[{kind portion|remove|add|swap, what (the change in words), reaches_cap (more_protein: always true; lower_day and raise_day: the day is in the adjusted range), why?, ops (apply_changes ops), light? (marks to pass with the ops), before and after:{meal_kcal, meal_protein_g, day_kcal, day_protein_g}, new_issues?}], offer?:[the same with changes_other_meal true, kind compound and moved (what changes on the other meal)], empty_reason? (no way changes only this meal, with the numbers)}. To take a way or an offer, call apply_changes with its ops, its light and the goal exactly as returned; the result's request says whether it is satisfied.`
 
 func toolFindWays(svc Services) Tool {
 	return Tool{
@@ -40,6 +42,8 @@ func toolFindWays(svc Services) Tool {
 				PlateID int64  `json:"plate_id"`
 				Date    string `json:"date"`
 				Limit   int    `json:"limit"`
+				// TargetKcal is the number the user named for a day.
+				TargetKcal float64 `json:"target_kcal"`
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
@@ -56,7 +60,8 @@ func toolFindWays(svc Services) Tool {
 				return nil, ToolEffectNone, fmt.Errorf("read the plan: %w", err)
 			}
 			st.Light = planning.MergeLight(st.Light, lightFrom(ctx))
-			res, err := planning.Ways(st, planning.WindowTarget(st), planning.WayRequest{PlateID: in.PlateID, Date: in.Date, Goal: in.Goal, Limit: 8})
+			st.Avoid, st.PairAddOns = svc.Removed.avoid(ctx), true
+			res, err := planning.Ways(st, planning.WindowTarget(st), planning.WayRequest{PlateID: in.PlateID, Date: in.Date, Goal: in.Goal, Limit: 8, TargetKcal: in.TargetKcal})
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -87,8 +92,9 @@ func toolFindWays(svc Services) Tool {
 				}
 				return out
 			}
-			ways, offers = verify(res.Ways, limit), verify(res.Offers, 2)
-			out := map[string]any{"next": nextStep(ways, offers), "goal": goal, "before": res.Before, "ways": nonNil(ways)}
+			ways, offers = planning.DemoteUnclean(verify(res.Ways, limit)), planning.DemoteUnclean(verify(res.Offers, 2))
+			recommend(ways, offers)
+			out := map[string]any{"next": nextStep(ways, offers, res), "goal": goal, "before": res.Before, "ways": nonNil(ways)}
 			if len(offers) > 0 {
 				out["offer"] = offers
 			}
@@ -147,11 +153,35 @@ func checkWay(ctx context.Context, svc Services, w window.Window, goal applyGoal
 		return way, way.What + ": " + err.Error()
 	}
 	was := issueMap(run.before.Issues)
+	var fresh []planning.Issue
 	for _, is := range run.after.Issues {
-		if _, old := was[issueKey(is)]; !old && is.Severity == planning.SeverityViolation {
+		if _, old := was[issueKey(is)]; old {
+			continue
+		}
+		if is.Severity == planning.SeverityViolation {
 			return way, fmt.Sprintf("%s: it adds a hard issue (%s)", way.What, planning.PlainText(is.Code).Label)
 		}
+		is.Options = nil
+		fresh = append(fresh, is)
 	}
+	// A weekly food limit (meat, fish, legumes), a dish repeat or an add-on rule
+	// the write makes worse is a warning too.
+	way.Worsened = nil
+	if iss, ok := run.result["after"].(map[string]any)["issues"].(map[string]any); ok {
+		if l, ok := iss["worsened"].([]any); ok {
+			for _, x := range l {
+				m, _ := x.(map[string]any)
+				if rule, _ := m["rule"].(string); rule == "S7" || rule == "S8" || rule == "S9" {
+					code, _ := m["code"].(string)
+					if lbl := planning.PlainText(code).Label; !slices.Contains(way.Worsened, lbl) {
+						way.Worsened = append(way.Worsened, lbl)
+					}
+				}
+			}
+		}
+	}
+	// What the write itself reports as new is the truth about warnings.
+	way.NewIssues, way.Why = fresh, strings.Join(slicesDeleteFlag(way.Why), "")
 	// The figures are the ones the write would show.
 	way.Before = planning.FiguresOf(run.before, way.PlateID, date)
 	way.After = planning.FiguresOf(run.after, way.PlateID, date)
@@ -297,14 +327,25 @@ func indexPlate(st planning.State, id int64) int {
 
 // nextStep tells the model what to do with the result, computed here so it
 // reads it at the moment of choice.
-func nextStep(ways, offers []planning.Way) string {
+func nextStep(ways, offers []planning.Way, res planning.WayResult) string {
 	switch {
+	case res.Impossible:
+		return fmt.Sprintf("change nothing: say why with the numbers (%s); offer offer[0] as the nearest safe option and ask whether to do it", res.EmptyWhy)
 	case len(ways) > 0 && len(offers) > 0:
-		return "apply ways[0] now with apply_changes (its ops, light and goal as returned), tell the user what changed with before and after, say if it is not yet a light (hearty) meal, and present offer[0] as a choice you recommend: apply it only when the user says yes"
+		return "apply ways[0] now with apply_changes (its ops, light and goal as returned), tell the user what changed with before and after, say if it is not yet a light (hearty) meal, and present the recommended one as your recommendation: apply an offer only when the user says yes"
 	case len(ways) > 0:
 		return "apply ways[0] now with apply_changes (its ops, light and goal as returned), then tell the user what changed with before and after"
 	case len(offers) > 0:
-		return "nothing safe to apply on its own: explain why with the numbers and present offer[0] as a question with your recommendation; apply it only when the user says yes"
+		return "nothing safe to apply on its own: explain why with the numbers and present the offer marked recommended as a question; apply it only when the user says yes"
 	}
 	return "nothing to apply: explain why with the numbers and what the user could change"
+}
+
+// slicesDeleteFlag drops the warning note an earlier stage appended to a way's
+// reason (the check just rebuilt the warnings from the write's own report).
+func slicesDeleteFlag(why string) []string {
+	if i := strings.Index(why, "creates a new warning"); i >= 0 {
+		why = strings.TrimRight(strings.TrimSpace(why[:i]), ";")
+	}
+	return []string{strings.TrimSpace(why)}
 }

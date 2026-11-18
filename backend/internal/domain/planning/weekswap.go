@@ -378,7 +378,7 @@ func (x *index) weekOptionsFor(ev *Evaluation, t Target) {
 func (x *index) weekFix(ev Evaluation, t Target, is *Issue, mode swapMode) {
 	opts := x.weekOptions(ev, t, mode)
 	if len(opts) > 0 {
-		is.Options = opts
+		is.Options = recommendFirst(opts)
 		return
 	}
 	is.NoFixFound = true

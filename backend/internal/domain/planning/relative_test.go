@@ -1,6 +1,7 @@
 package planning_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,10 +13,13 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
-const relNuts int64 = 61 // leaf, no-cook, 600 kcal per 100 g, serving 30 g
+const (
+	relNuts  int64 = 61 // leaf, no-cook, 600 kcal per 100 g, serving 30 g
+	relBread int64 = 62 // leaf, no-cook, bakery side_starch, 250 kcal per 100 g, serving 60 g
+)
 
 // relState is one planned Saturday: breakfast oats (350 kcal), lunch curry
-// (500) and dinner lasagne with potatoes (1200), for 2000 kcal a day: the
+// (500) and dinner chili with potatoes (850), for 2000 kcal a day: the
 // even share is 667, the light cap 500, the hearty minimum 833, the floor
 // 1500. Only Saturday is in the plan.
 func relState(confirmedOthers bool) planning.State {
@@ -28,7 +32,11 @@ func relState(confirmedOthers bool) planning.State {
 		ID: relNuts, Name: "Nuts", Kind: food.KindLeaf, LeafRole: food.RoleSideProtein, DietClass: "vegan", NoCook: true, ServingG: 30,
 		Macros: nutrition.Macros{Kcal: 600, Protein: 20}, NutritionComplete: true,
 	}
-	s.NoCook = []int64{relNuts}
+	s.Foods[relBread] = planning.FoodFacts{
+		ID: relBread, Name: "Bread", Kind: food.KindLeaf, LeafRole: food.RoleSideStarch, DietClass: "vegan", NoCook: true, ServingG: 60,
+		Macros: nutrition.Macros{Kcal: 250, Protein: 8}, NutritionComplete: true,
+	}
+	s.NoCook = []int64{relNuts, relBread}
 	one := func(id int64, slot int64, confirmed bool, foods ...int64) planning.Plate {
 		p := planning.Plate{ID: id, Date: day(sat), SlotID: slot, Eaters: 1, Confirmed: confirmed}
 		for i, f := range foods {
@@ -44,7 +52,7 @@ func relState(confirmedOthers bool) planning.State {
 	s.Plates = []planning.Plate{
 		one(1, breakfast, confirmedOthers, oats),
 		one(2, lunch, confirmedOthers, curry),
-		one(3, dinner, false, lasagne, potatoes),
+		one(3, dinner, false, chili, potatoes),
 	}
 	return s
 }
@@ -59,7 +67,7 @@ func ways(t *testing.T, s planning.State, req planning.WayRequest) planning.WayR
 func TestWays_LighterChangesOnlyThisMealAndOffersTheRest(t *testing.T) {
 	res := ways(t, relState(false), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter})
 	assert.InDelta(t, 500, res.MaxKcal, 0.5)
-	assert.InDelta(t, 1200, res.Before.MealKcal, 0.5)
+	assert.InDelta(t, 850, res.Before.MealKcal, 0.5)
 	require.NotEmpty(t, res.Ways)
 	for _, w := range res.Ways {
 		assert.NotEqual(t, "compound", w.Kind, "a compound way is never a default")
@@ -116,7 +124,7 @@ func derefInt(p *int64) int64 {
 func TestWays_HeartierEvenWhenAboveTheMinimum(t *testing.T) {
 	res := ways(t, relState(false), planning.WayRequest{PlateID: 3, Goal: planning.GoalHeartier})
 	assert.InDelta(t, 833, res.MinKcal, 0.5)
-	require.NotEmpty(t, res.Ways, "1200 kcal is above the minimum and still has to get heartier")
+	require.NotEmpty(t, res.Ways, "850 kcal is above the minimum and still has to get heartier")
 	for _, w := range res.Ways {
 		assert.True(t, planning.MeaningfulKcal(res.Before.MealKcal, w.After.MealKcal-res.Before.MealKcal), w.What)
 		assert.NotEmpty(t, w.Ops, "never a mark alone")
@@ -154,10 +162,10 @@ func TestWays_NoOfferWhenTheOtherMealsCannotChange(t *testing.T) {
 }
 
 func TestWays_NothingMeaningfulOnAMealAtTheFloor(t *testing.T) {
-	// Dinner 1200, breakfast and lunch 850: the day is 2050. Raise the floor
-	// to 2050: the dinner cannot lose anything alone.
+	// Dinner 850, breakfast and lunch 850: the day is 1700. Raise the floor
+	// to 1700: the dinner cannot lose anything alone.
 	s := relState(false)
-	s.Profile.KcalTarget = f64(2733) // floor 75 % = 2050
+	s.Profile.KcalTarget = f64(2260) // floor 75 % = 1695
 	res := ways(t, s, planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter})
 	assert.Empty(t, res.Ways)
 	assert.NotEmpty(t, res.EmptyWhy)
@@ -213,7 +221,7 @@ func TestJudgeRelative(t *testing.T) {
 }
 
 func TestWays_DayGoals(t *testing.T) {
-	// Saturday holds 2050 kcal of 2000: lower_day aims at 85 % (band 1530 to
+	// Saturday holds 1700 kcal of 2000: lower_day aims at 85 % (band 1530 to
 	// 1870, floor 1500); raise_day at 115 % (band 2070 to 2530).
 	for goal, in := range map[string]func(planning.WayResult, planning.Way){
 		planning.GoalLowerDay: func(res planning.WayResult, w planning.Way) {
@@ -240,4 +248,68 @@ func TestWays_DayGoals(t *testing.T) {
 	}
 	_, err := planning.Ways(relState(false), windowTarget(relState(false)), planning.WayRequest{Goal: planning.GoalLowerDay})
 	assert.Error(t, err, "a day goal needs a date")
+}
+
+// E018 rule 2: a lighter meal is still a meal: the main keeps at least half a
+// portion and a plate that had a side keeps one (a lighter side before none).
+func TestWays_LighterMealKeepsMainAndSide(t *testing.T) {
+	res := ways(t, relState(false), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter})
+	all := append(append([]planning.Way{}, res.Ways...), res.Offers...)
+	require.NotEmpty(t, all)
+	for _, w := range all {
+		for _, op := range w.Ops {
+			if op.Portions != nil {
+				assert.GreaterOrEqual(t, *op.Portions, 0.5, "%s: no fragment of a dish", w.What)
+			}
+		}
+		if strings.Contains(w.What, "leave out Potatoes") || strings.Contains(w.What, "leave out Potatoes and") {
+			t.Errorf("%s drops the only side", w.What)
+		}
+	}
+	// The offer reaches the cap by swapping the side for a lighter one.
+	require.NotEmpty(t, res.Offers)
+	assert.Contains(t, res.Offers[0].What, "swap Potatoes for")
+}
+
+// E018 rule 5: a number that cannot be met (under the day's minimum) gets no
+// way and one offer: the nearest safe option, never under the minimum.
+func TestWays_ImpossibleDayNumber(t *testing.T) {
+	res := ways(t, relState(false), planning.WayRequest{Date: sat, Goal: planning.GoalLowerDay, TargetKcal: 900})
+	assert.True(t, res.Impossible)
+	assert.Empty(t, res.Ways)
+	assert.Contains(t, res.EmptyWhy, "minimum")
+	require.Len(t, res.Offers, 1)
+	assert.GreaterOrEqual(t, res.Offers[0].After.DayKcal, res.FloorKcal)
+	feasible := ways(t, relState(false), planning.WayRequest{Date: sat, Goal: planning.GoalLowerDay, TargetKcal: 1700})
+	assert.False(t, feasible.Impossible)
+}
+
+// E018 rule 1: no way or offer of the fixture adds a bread over its add-on
+// limit or an add-on that does not fit; nothing a way adds is nuts or cheese.
+func TestWays_NoFillersAndNoOverCapBread(t *testing.T) {
+	for _, goal := range []string{planning.GoalLighter, planning.GoalHeartier, planning.GoalMoreProtein} {
+		res := ways(t, relState(false), planning.WayRequest{PlateID: 3, Goal: goal})
+		for _, w := range append(append([]planning.Way{}, res.Ways...), res.Offers...) {
+			for _, op := range w.Ops {
+				if op.Op == "add" {
+					assert.NotEqual(t, relNuts, op.FoodID, "%s: nuts on a chili", goal)
+				}
+			}
+			for _, is := range w.NewIssues {
+				assert.NotEqual(t, planning.CodeAddOnExcess, is.Code, "%s %s: no add-on over its limit", goal, w.What)
+			}
+		}
+	}
+}
+
+// E018 rule 4: the first alternative is marked recommended, once, with a
+// reason; no other is.
+func TestAlternatives_FirstIsRecommendedOnce(t *testing.T) {
+	out := alts(t, altState(), planning.AltRequest{PlateID: altSatDinner, What: planning.AltMain})
+	require.NotEmpty(t, out)
+	assert.True(t, out[0].Recommended)
+	assert.NotEmpty(t, out[0].Because)
+	for _, a := range out[1:] {
+		assert.False(t, a.Recommended)
+	}
 }

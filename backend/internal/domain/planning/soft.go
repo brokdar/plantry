@@ -42,6 +42,10 @@ type Option struct {
 	Ops []OptionOp `json:"ops,omitempty"`
 	// PlateKcal is the plate's kcal after the option (S6/S6b options).
 	PlateKcal float64 `json:"plate_kcal,omitempty"`
+	// Recommended marks the first, best-ranked verified option (one per
+	// issue); Because says why in one phrase.
+	Recommended bool   `json:"recommended,omitempty"`
+	Because     string `json:"recommended_because,omitempty"`
 	// Why says why Go chose this plate when it is not the day's last one
 	// ("lunch: dinner is light").
 	Why string `json:"why,omitempty"`
@@ -325,6 +329,20 @@ func (x *index) options(ev Evaluation, t Target, d DayEval, day time.Time, prote
 // optionsFor is options with the bound an option must reach to count as
 // "reachable" (the band's low end for S2/S3, the floor for H9).
 func (x *index) optionsFor(ev Evaluation, t Target, d DayEval, day time.Time, protein bool, target, reach float64) []Option {
+	return recommendFirst(x.optionsRaw(ev, t, d, day, protein, target, reach))
+}
+
+// recommendFirst marks the best-ranked option of a verified list as the
+// recommended one: the options are already ranked, each verified to add no
+// hard issue and no new add-on warning.
+func recommendFirst(opts []Option) []Option {
+	if len(opts) > 0 {
+		opts[0].Recommended, opts[0].Because = true, "the best-ranked option that was checked: no new hard issue"
+	}
+	return opts
+}
+
+func (x *index) optionsRaw(ev Evaluation, t Target, d DayEval, day time.Time, protein bool, target, reach float64) []Option {
 	want := target - d.Kcal
 	if want <= 0 {
 		want = target*x.pol.DayHigh - d.Kcal
@@ -464,7 +482,7 @@ func (x *index) candidates(day time.Time, want float64) []optCand {
 		for _, c := range x.s.Plates[last].Components {
 			onPlate = onPlate || c.FoodID == id
 		}
-		if onPlate {
+		if onPlate || !x.s.addOnFits(x.s.Plates[last], f, slotName(x.s, x.s.Plates[last].SlotID)) {
 			continue
 		}
 		c := optCand{plate: last, comp: -1}
