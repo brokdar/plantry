@@ -41,6 +41,13 @@ type llmEnv struct {
 
 func newLLMEnv(t *testing.T) *llmEnv {
 	t.Helper()
+	return newLLMEnvOver(t, func(c llm.Client) llm.Client { return c })
+}
+
+// newLLMEnvOver is newLLMEnv with the provider client wrapped by wrap (under
+// the run recorder's meter), to inject provider failures.
+func newLLMEnvOver(t *testing.T, wrap func(llm.Client) llm.Client) *llmEnv {
+	t.Helper()
 	script := &fake.Script{}
 	client := fake.NewFromScript(script)
 	e := newSvcEnv(t)
@@ -50,7 +57,7 @@ func newLLMEnv(t *testing.T) *llmEnv {
 	e.deps.RunLog, e.deps.Runs = planning.RecorderLog{Recorder: rec}, repo
 	e.deps.Choosers = map[airun.Chooser]planning.Chooser{
 		airun.ChooserHeuristic: planning.Heuristic{},
-		airun.ChooserLLM:       planning.NewLLMChooser(llm.StaticResolver(rec.Meter(client, "fake"), "fake-model")),
+		airun.ChooserLLM:       planning.NewLLMChooser(llm.StaticResolver(rec.Meter(wrap(client), "fake"), "fake-model")),
 	}
 	e.svc = planning.NewService(e.deps)
 	return &llmEnv{svcEnv: e, client: client, script: script}
