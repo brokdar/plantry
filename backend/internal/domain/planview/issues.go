@@ -85,6 +85,7 @@ func (s *Service) checkState(ctx context.Context, in checkInput) (planning.State
 		Profile:  planning.StateProfile(in.profile),
 	}
 	st.SlotNames = make(map[int64]string, len(in.env.active))
+	st.SlotKind = in.env.kinds
 	for _, sl := range in.env.active {
 		st.SlotNames[sl.ID] = sl.NameKey
 	}
