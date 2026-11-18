@@ -846,3 +846,16 @@ func TestCopyMeal_AsLeftoverDoesNotFreezeSilently(t *testing.T) {
 	require.ErrorIs(t, err, domain.ErrSessionPastKeepDays)
 	assert.Equal(t, before, e.week())
 }
+
+// The no-silent-freezer rule only covers links a move would newly push into
+// the freezer: a meal that was frozen before keeps relying on it.
+func TestMoveCook_KeepsAnAlreadyFrozenLink(t *testing.T) {
+	e := newEnv(t)
+	sid, _ := e.frozenBatch()
+
+	_, err := e.svc.MoveCook(e.ctx, sid, cell(mon, e.lunch))
+
+	require.NoError(t, err)
+	assert.Equal(t, e.lunch, e.session(sid).CookSlotID)
+	assert.Equal(t, day(mon), e.session(sid).CookDate)
+}

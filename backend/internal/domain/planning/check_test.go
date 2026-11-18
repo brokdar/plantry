@@ -613,6 +613,29 @@ func TestCheck_H8WindowRepeatIsAWarningOnPersistedData(t *testing.T) {
 	})
 }
 
+// The earliest earlier cook decides: a cook before the window wins over one
+// inside it, wherever the plate list holds it, so the repeat stays a violation.
+func TestCheck_H8EarliestCookWinsOnPersistedData(t *testing.T) {
+	s := baseState()
+	manyMains(&s, 5)
+	pre := day(sat).AddDate(0, 0, -3)
+	mk := func(id int64, d time.Time) planning.Plate {
+		return planning.Plate{ID: id, Date: d, SlotID: dinner, Eaters: 1, Components: []planning.Component{{FoodID: 100, Portions: f64(1)}}}
+	}
+	s.Plates = []planning.Plate{mk(1, day(sat)), mk(2, pre), mk(3, day(tue))}
+	var tueIssues []planning.Issue
+	for _, is := range only(planning.Check(s, windowTarget(s)), "H8") {
+		if is.Date == day(tue).Format(time.DateOnly) {
+			tueIssues = append(tueIssues, is)
+		}
+	}
+	require.NotEmpty(t, tueIssues)
+	for _, is := range tueIssues {
+		assert.Equal(t, planning.CodeVarietyRepeat, is.Code)
+		assert.Equal(t, pre.Format(time.DateOnly), is.Params["last_eaten"])
+	}
+}
+
 func TestIssue_JSONShape(t *testing.T) {
 	s := baseState()
 	got := only(check(s, targetCells(cell(sat, lunch), cell(sat, dinner)), planning.Proposal{

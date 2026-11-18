@@ -1864,6 +1864,7 @@
         "H5": "Fleischtage-Grenze",
         "H8": "kürzlich gegessen",
         "H9": "Tag läge unter dem Minimum",
+        "nutrition_missing": "hätte keine Nährwertdaten",
         "other": "{{rule}}",
         "entry": "{{why}} ({{count}})"
       },

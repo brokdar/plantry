@@ -1864,6 +1864,7 @@
         "H5": "meat-day limit",
         "H8": "eaten recently",
         "H9": "day would fall under its minimum",
+        "nutrition_missing": "would have no nutrition data",
         "other": "{{rule}}",
         "entry": "{{why}} ({{count}})"
       },

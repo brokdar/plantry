@@ -465,13 +465,11 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 			}
 		}
 		if ch.Light != nil {
-			// Pruning from the first touched date keeps the restore itself
-			// from dropping a row of the change that has become past.
-			first, err := time.Parse(time.DateOnly, slices.Min(ch.Light.Dates))
-			if err != nil {
-				return fmt.Errorf("change light date: %w", err)
-			}
-			if err := c.light.Replace(ctx, first, ch.Light.Dates, ch.Light.Before); err != nil {
+			// Prune from the real today: the change's earliest date as
+			// "today" would delete the untouched rows before it.
+			y, m, d := c.now().Date()
+			today := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+			if err := c.light.Replace(ctx, today, ch.Light.Dates, ch.Light.Before); err != nil {
 				return err
 			}
 		}

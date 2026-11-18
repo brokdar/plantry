@@ -559,19 +559,21 @@ func (x *index) plateInTarget(date time.Time) bool {
 	return false
 }
 
-// earlierCook finds another cook of cook i's food at an earlier cell, on or
-// after since.
+// earlierCook finds the earliest other cook of cook i's food at an earlier
+// cell, on or after since (x.cooks is not date-sorted).
 func (x *index) earlierCook(i int, since time.Time) (time.Time, bool) {
 	ev := x.cooks[i]
+	var first time.Time
+	var found bool
 	for j, o := range x.cooks {
 		if j == i || o.foodID != ev.foodID || o.cell.Date.Before(since) || x.routine(o.cell) {
 			continue
 		}
-		if plate.Before(o.cell, ev.cell, x.s.SlotOrder) {
-			return o.cell.Date, true
+		if plate.Before(o.cell, ev.cell, x.s.SlotOrder) && (!found || o.cell.Date.Before(first)) {
+			first, found = o.cell.Date, true
 		}
 	}
-	return time.Time{}, false
+	return first, found
 }
 
 // VarietySince is the first day whose eating makes a recipe ineligible for
