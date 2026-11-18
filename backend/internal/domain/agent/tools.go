@@ -280,8 +280,6 @@ func schemaErrors(r *gojsonschema.Result) string {
 func defaultTools(svc Services) []Tool {
 	tools := []Tool{
 		toolFindFoods(svc),
-		toolListSlots(svc),
-		toolGetProfile(svc),
 		toolApplyChanges(svc),
 		toolFindAlternatives(svc),
 		toolConfirm(svc),
@@ -307,55 +305,6 @@ func defaultTools(svc Services) []Tool {
 }
 
 // --- read tools ---
-
-func toolListSlots(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "properties":{"active_only":{"type":"boolean"}},
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "list_slots",
-		Description: "List the user-defined meal time slots (breakfast, lunch, dinner, etc.). Required before creating plates — the slot_id must come from this list. Returns JSON {items:[{id, name_key, icon, sort_order, active}]}.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				ActiveOnly bool `json:"active_only"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			slots, err := svc.Slots.List(ctx, in.ActiveOnly)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			items := make([]map[string]any, 0, len(slots))
-			for _, s := range slots {
-				items = append(items, map[string]any{
-					"id": s.ID, "name_key": s.NameKey, "icon": s.Icon,
-					"sort_order": s.SortOrder, "active": s.Active,
-				})
-			}
-			return mustJSON(map[string]any{"items": items}), ToolEffectNone, nil
-		},
-	}
-}
-
-func toolGetProfile(svc Services) Tool {
-	schema := json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)
-	return Tool{
-		Name:        "get_profile",
-		Description: "Read the user's profile: kcal/macro targets, dietary restrictions, free-form preferences, and any custom system prompt. Returns JSON {kcal_target, protein_pct, fat_pct, carbs_pct, protein_g_per_kg, weight_kg (numbers or null), dietary_restrictions:[string], preferences:{key:value}, system_prompt, locale, household_portions}.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, _ json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			p, err := svc.Profile.Get(ctx)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			return mustJSON(profileMap(p)), ToolEffectNone, nil
-		},
-	}
-}
 
 // --- write tools ---
 
@@ -551,22 +500,6 @@ func componentByID(p *plate.Plate, id int64) (*plate.PlateComponent, error) {
 		}
 	}
 	return nil, fmt.Errorf("%w: plate_component %d on plate %d", domain.ErrNotFound, id, p.ID)
-}
-
-func profileMap(p *profile.Profile) map[string]any {
-	return map[string]any{
-		"kcal_target":          p.KcalTarget,
-		"protein_pct":          p.ProteinPct,
-		"protein_g_per_kg":     p.ProteinGPerKg,
-		"weight_kg":            p.WeightKg,
-		"fat_pct":              p.FatPct,
-		"carbs_pct":            p.CarbsPct,
-		"dietary_restrictions": p.DietaryRestrictions,
-		"preferences":          p.Preferences,
-		"system_prompt":        p.SystemPrompt,
-		"locale":               p.Locale,
-		"household_portions":   p.HouseholdPortions,
-	}
 }
 
 func mustJSON(v any) json.RawMessage {

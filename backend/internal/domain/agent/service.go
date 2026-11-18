@@ -26,7 +26,7 @@ const chatMaxTokens = 16000
 
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v17"
+const PromptVersion = "v18"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
@@ -154,7 +154,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	history = append(history, llm.Message{Role: llm.RoleUser, Content: userBlocks})
 
 	// Compose system prompt.
-	prompt, st, err := s.buildSystemPrompt(ctx, req, w)
+	prompt, cut, st, err := s.buildSystemPrompt(ctx, req, w)
 	if err != nil {
 		return err
 	}
@@ -184,6 +184,12 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 			status, errKey := chatOutcome(ctx, err)
 			run.Finish(ctx, status, errKey)
 		}()
+	}
+
+	if cut > 0 {
+		// Never cut silently: the model works with a damaged prompt then.
+		slog.WarnContext(ctx, "agent.prompt.truncated", append(airun.FromContext(ctx).LogAttrs(), "conversation_id", conv.ID,
+			"prompt_chars", len(prompt), "cut_chars", cut, "budget_chars", promptCharBudget)...)
 	}
 
 	// Drive the loop. Tools read today (D25), the window and the turn from
@@ -341,19 +347,20 @@ func (s *Service) CheckStart(ctx context.Context, start time.Time) error {
 	return err
 }
 
-// buildSystemPrompt renders the system prompt and returns the window's state
-// it was built from.
-func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w window.Window) (string, planning.State, error) {
+// buildSystemPrompt renders the system prompt and returns the bytes its
+// budget cut off (0: none) and the window's state it was built from.
+func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w window.Window) (string, int, planning.State, error) {
 	p, err := s.profile.Get(ctx)
 	if err != nil {
-		return "", planning.State{}, err
+		return "", 0, planning.State{}, err
 	}
 	today := req.Today
 	st, err := s.plan.Build(ctx, w, today, w.Start, w.End)
 	if err != nil {
-		return "", planning.State{}, err
+		return "", 0, planning.State{}, err
 	}
-	return ComposePrompt(p, s.plan.Summary(st, chatIssues(st))+chatFacts(st), today), st, nil
+	prompt, cut := ComposePrompt(p, chatFacts(st), s.plan.Summary(st, chatIssues(st)), today)
+	return prompt, cut, st, nil
 }
 
 type todayKey struct{}
@@ -395,6 +402,6 @@ func (s *Service) DebugSystemPrompt(ctx context.Context, req ChatRequest) (strin
 	if err != nil {
 		return "", err
 	}
-	prompt, _, err := s.buildSystemPrompt(ctx, req, w)
+	prompt, _, _, err := s.buildSystemPrompt(ctx, req, w)
 	return prompt, err
 }

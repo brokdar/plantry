@@ -122,7 +122,7 @@ func TestChat_SystemPromptCarriesWindowAndPlan(t *testing.T) {
 		"- Friday 2026-11-06\n",
 		fmt.Sprintf("plate_id %d, confirmed, 1 eater: Pasta (component_id ", planned.ID),
 		fmt.Sprintf("Sunday 2026-11-01 | %d dinner | none | no plate, leave empty", dinner.ID),
-		fmt.Sprintf("Monday 2026-11-02 | %d dinner | routine | empty", dinner.ID),
+		fmt.Sprintf("Monday 2026-11-02 | %d dinner | routine, not cooking | empty", dinner.ID),
 		"Issues:",
 	} {
 		assert.Contains(t, system, want)

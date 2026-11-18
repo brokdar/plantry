@@ -35,3 +35,6 @@ func BatchDates(b *batch) []string { return b.aff.Dates }
 func NewBatch() *batch { return &batch{} }
 
 var IssueKey = issueKey
+
+// PromptCharBudget is the prompt budget, for the size tests.
+const PromptCharBudget = promptCharBudget

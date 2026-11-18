@@ -136,6 +136,9 @@ type DayEval struct {
 	Meat           bool     `json:"meat"`
 	MeatFoods      []string `json:"meat_foods"`
 	CookOccasions  int      `json:"cook_occasions"`
+	// CookSlots names the slots that cook that day (the chat prompt's day
+	// table); not part of the stored or model-facing evaluation.
+	CookSlots []string `json:"-"`
 	// Complete: every planned, non-routine meal of the day holds a plate
 	// (not to be confused with NutritionMissing).
 	Complete bool `json:"complete"`
@@ -239,6 +242,11 @@ func Evaluate(s State, t Target) Evaluation {
 			Date: dk.Date.Format(time.DateOnly), Kcal: dk.Kcal, ProteinG: dk.ProteinG,
 			MeatFoods: []string{}, Complete: dk.Complete, NutritionMissing: dk.NutritionMissing, Away: dk.Away,
 			CookOccasions: len(x.occasions[dayOf(dk.Date)]),
+		}
+		for _, c := range s.Cells {
+			if dayOf(c.Date) == dayOf(dk.Date) && x.occasions[dayOf(dk.Date)][idOf(c.Key())] {
+				de.CookSlots = append(de.CookSlots, slotName(s, c.SlotID))
+			}
 		}
 		if hasTarget {
 			sc := dk.Adjusted
