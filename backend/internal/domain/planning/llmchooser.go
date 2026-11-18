@@ -587,6 +587,13 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 	if len(fixes) > 0 {
 		view["autofix"] = fixes
 	}
+	if distinctDays(in.Target) < minDGEDays {
+		// A day or plate regenerate sits in a week: name the repeats it holds
+		// (the same dish at lunch and dinner, a dish family on adjacent days).
+		if repeats := newIndex(merged, in.Target).familyRepeats(); len(repeats) > 0 {
+			view["repeats"] = repeats
+		}
+	}
 	out, err := json.Marshal(view)
 	if err != nil {
 		return fail("error: encode evaluation")

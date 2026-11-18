@@ -58,9 +58,6 @@ func (r *repairer) cookDaysAdvice() []string {
 // only where the last guard would act on the plan: a swap that holds on the
 // whole plan, not just on its own dry run.
 func (r *repairer) weekAdvice() []string {
-	if distinctDays(r.in.Target) < minDGEDays {
-		return nil // a day or a plate regenerate does not own the week
-	}
 	meat := meatAllowed(r.in.State)
 	if !meat && !fishAllowed(r.in.State) {
 		return nil

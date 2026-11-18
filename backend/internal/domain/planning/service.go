@@ -867,7 +867,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	}
 	// The week's meat stays within its budget and holds a fish meal whenever a
 	// verified swap exists, whatever the chooser left (runs that span the week only).
-	if j.side == nil && distinctDays(j.target) >= minDGEDays {
+	if j.side == nil {
 		var weekNotes []string
 		prop, weekNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
 		if len(weekNotes) > 0 {

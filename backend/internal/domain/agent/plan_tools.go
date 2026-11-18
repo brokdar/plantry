@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
 // PlanReader is the read model behind GET /api/plan (planview.Service).
@@ -508,7 +510,7 @@ func toolRegenerate(svc Services) Tool {
 	return Tool{
 		Name: "regenerate",
 		Description: "Let the planner choose again for part of the draft plan and wait for it, only when the user asks to plan a whole day or week again (for one dish or side use find_alternatives). Confirmed rows are kept. " +
-			"Returns JSON {run_id, status (ok|partial|error|...), error_key?, counts:{plates, sessions, cook_days, kept_confirmed}, issues:[issue], notes?, changed:[{date, slot_id, plate}]} where plate has the shape of a get_plan cell plate.",
+			"Returns JSON {run_id, status (ok|partial|error|...), error_key?, counts:{plates, sessions, cook_days, kept_confirmed}, issues:[issue], notes?, changed:[{date, slot_id, plate}], week?:{meat_g:{before, after, limit}, repeats:[string]}} (week: the meat of the whole window per person against its weekly limit, before and after the run, and the repeated dishes or dish families the week now holds) where plate has the shape of a get_plan cell plate.",
 		Schema: schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -541,6 +543,7 @@ func toolRegenerate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
+			weekBefore := weekOf(ctx, svc, w)
 			req := planning.Request{Start: w.Start, Today: todayFrom(ctx), Scope: sc, Instruction: in.Instruction, Light: light}
 			var id int64
 			if sc.Kind == planning.ScopeWindow {
@@ -581,6 +584,7 @@ func toolRegenerate(svc Services) Tool {
 				noteChange(ctx, "regenerate_"+string(sc.Kind), params)
 				return nil, ToolEffectNone, err
 			}
+			out.Week = weekEffect(weekBefore, weekOf(ctx, svc, w))
 			params["count"] = len(out.Changed)
 			if sc.Kind == planning.ScopeSide {
 				if name, ok := newSideName(before, out.Changed); ok {
@@ -687,6 +691,45 @@ type regenerateOut struct {
 	Issues   []planning.Issue  `json:"issues"`
 	Notes    string            `json:"notes,omitempty"`
 	Changed  []changedPlateOut `json:"changed"`
+	Week     *weekOut          `json:"week,omitempty"`
+}
+
+// weekOut is what the run did to the week: the window's meat per person
+// against its limit, and the repeats the plan holds (E019).
+type weekOut struct {
+	MeatG   meatOut  `json:"meat_g"`
+	Repeats []string `json:"repeats"`
+}
+
+type meatOut struct {
+	Before float64 `json:"before"`
+	After  float64 `json:"after"`
+	Limit  float64 `json:"limit"`
+}
+
+// weekOf reads the window's week effects; nil when the state cannot be read.
+func weekOf(ctx context.Context, svc Services, w window.Window) *planning.WeekEffect {
+	if svc.State == nil {
+		return nil
+	}
+	st, err := svc.State(ctx, w, todayFrom(ctx))
+	if err != nil {
+		return nil
+	}
+	e := planning.WeekEffectOf(st)
+	return &e
+}
+
+func weekEffect(before, after *planning.WeekEffect) *weekOut {
+	if before == nil || after == nil {
+		return nil
+	}
+	r := func(v float64) float64 { return math.Round(v) }
+	out := &weekOut{MeatG: meatOut{Before: r(before.MeatG), After: r(after.MeatG), Limit: r(after.LimitG)}, Repeats: after.Repeats}
+	if out.Repeats == nil {
+		out.Repeats = []string{}
+	}
+	return out
 }
 
 type regenerateCounts struct {

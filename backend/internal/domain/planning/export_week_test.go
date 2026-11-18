@@ -5,3 +5,6 @@ var GuardWeek = guardWeek
 
 // BalancePlan exposes the balancing pass to the external tests.
 var BalancePlan = balancePlan
+
+// SameFamily exposes the dish family test.
+var SameFamily = sameFamily
