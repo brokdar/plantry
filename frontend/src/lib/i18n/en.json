@@ -1094,7 +1094,9 @@
       "invalid_portions": "Portions must be more than 0 and at most 100.",
       "invalid_shop_section": "Unknown store section.",
       "shop_section_leaf_only": "Only ingredients have a store section.",
-      "invalid_diet_class": "Unknown diet class."
+      "invalid_diet_class": "Unknown diet class.",
+      "invalid_serving": "Serving size must be more than 0 g.",
+      "serving_leaf_only": "Only ingredients have a serving size."
     },
     "settings": {
       "unknown_key": "Unknown settings key.",
@@ -1808,7 +1810,12 @@
       "kcal_above_band": "{{day}}: {{kcal}} kcal, above the {{low}}–{{high}} kcal range.",
       "protein_below_target": "{{day}}: {{protein}} g protein, target {{target}} g.",
       "protein_below_share": "{{day}}: protein is {{pct}} % of energy, target {{target_pct}} %.",
-      "meal_not_light": "{{day}}: the light meal holds {{kcal}} kcal; aim for at most {{max}}."
+      "meal_not_light": "{{day}}: the light meal holds {{kcal}} kcal; aim for at most {{max}}.",
+      "add_on_excess_light_meal": "{{day}}: {{name}} ({{grams}} g) is added to a light meal.",
+      "add_on_excess_duplicates_main": "{{day}}: {{name}} ({{grams}} g) is already in the main dish.",
+      "add_on_excess_over_cap": "{{day}}: {{grams}} g {{name}} added; keep it to {{max_grams}} g.",
+      "add_on_excess_day_limit": "{{day}}: too many add-ons in one day ({{name}}).",
+      "add_on_excess_repeated": "{{day}}: {{name}} is added to many meals this week."
     },
     "meal": {
       "undo": {
@@ -2319,6 +2326,8 @@
     "yes": "Yes",
     "no": "No",
     "hint": "The planner offers foods that need no cooking to fill a day. Automatic guesses from the name and store section.",
-    "auto_hint": "auto"
+    "auto_hint": "auto",
+    "serving_label": "Serving size (g)",
+    "serving_hint": "What one serving weighs when the planner adds it. Empty uses a typical amount."
   }
 }

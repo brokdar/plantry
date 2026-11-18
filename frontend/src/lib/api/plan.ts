@@ -128,8 +128,8 @@ export interface Issue {
   params: Record<string, string | number>
 }
 
-/** The soft rules the board shows as hints (S2 to S7). */
-export type SoftRule = "S2" | "S3" | "S4" | "S5" | "S6" | "S7"
+/** The soft rules the board shows as hints (S2 to S7, S9). */
+export type SoftRule = "S2" | "S3" | "S4" | "S5" | "S6" | "S7" | "S9"
 
 /** A soft finding: never blocks saving. Message key `plan.soft.<code>` with
  *  `params`. */

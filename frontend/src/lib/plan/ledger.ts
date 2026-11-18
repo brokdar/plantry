@@ -153,6 +153,9 @@ function dayHint(s: SoftIssue, f: Formatter): string {
   if (code === "protein_below_target" && p.target_g === undefined) {
     code = "protein_below_share"
   }
+  // An add-on's hint says why it is too much (light_meal, duplicates_main,
+  // over_cap, day_limit, repeated).
+  if (code === "add_on_excess") code = `add_on_excess_${p.reason}`
   return f.t(`plan.soft.${code}`, {
     day,
     kcal: n(p.kcal),
@@ -163,6 +166,9 @@ function dayHint(s: SoftIssue, f: Formatter): string {
     pct: n(p.protein_pct),
     target_pct: n(p.target_pct),
     max: n(p.max_kcal),
+    name: p.name,
+    grams: n(p.grams),
+    max_grams: n(p.max_grams),
   })
 }
 

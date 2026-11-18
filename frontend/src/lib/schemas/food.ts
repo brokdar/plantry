@@ -47,6 +47,14 @@ const leafBase = z.object({
   // The "needs no cooking" override (null = automatic). Saved through
   // PUT /api/foods/{id}/no-cook, not the food payload.
   no_cook: z.boolean().nullable().default(null),
+  // Grams of one serving the planner adds; empty = a typical amount. Saved
+  // with the no-cook override through the same endpoint.
+  serving_g: z
+    .preprocess(
+      (v) => (v === "" || v === undefined ? null : v),
+      z.coerce.number().positive().nullable()
+    )
+    .default(null),
   source: z.string().optional().default("manual"),
   barcode: z.string().nullable().optional(),
   off_id: z.string().nullable().optional(),

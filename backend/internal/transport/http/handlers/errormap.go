@@ -13,6 +13,8 @@ import (
 var sentinelStatus = map[error]int{
 	domain.ErrInvalidShopSection:        http.StatusBadRequest,
 	domain.ErrInvalidDietClass:          http.StatusBadRequest,
+	domain.ErrInvalidServing:            http.StatusBadRequest,
+	domain.ErrServingLeafOnly:           http.StatusBadRequest,
 	domain.ErrShopSectionLeafOnly:       http.StatusBadRequest,
 	domain.ErrInvalidPortions:           http.StatusBadRequest,
 	domain.ErrNotFound:                  http.StatusNotFound,

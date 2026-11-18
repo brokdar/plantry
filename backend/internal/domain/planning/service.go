@@ -25,7 +25,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h15"
+const HeuristicVersion = "h16"
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.
@@ -491,7 +491,9 @@ func (s *Service) resolve(ctx context.Context, w window.Window, today time.Time,
 		for _, p := range closure {
 			add(p.Cell())
 			for _, c := range p.Components {
-				if c.IsComposed() && !slices.Contains(j.avoid, c.FoodID) {
+				// D3: only a plate or day regenerate asks for something different; a
+				// window run excludes nothing and the variety rules handle repeats.
+				if (sc.Kind == ScopePlate || sc.Kind == ScopeDay) && c.IsComposed() && !slices.Contains(j.avoid, c.FoodID) {
 					j.avoid = append(j.avoid, c.FoodID)
 				}
 			}

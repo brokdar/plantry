@@ -273,7 +273,11 @@ describe("RecipeEditor", () => {
     await user.click(screen.getByRole("button", { name: /save/i }))
 
     await vi.waitFor(() =>
-      expect(setNoCook).toHaveBeenCalledWith(mockChickenCurry.id, true)
+      expect(setNoCook).toHaveBeenCalledWith(
+        mockChickenCurry.id,
+        true,
+        undefined
+      )
     )
     expect(vi.mocked(updateFood).mock.calls[0][1]).not.toHaveProperty("no_cook")
   })

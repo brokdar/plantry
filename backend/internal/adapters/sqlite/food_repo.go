@@ -55,7 +55,7 @@ var foodCols = []string{
 	"notes", "image_path", "favorite",
 	"created_at", "updated_at",
 	"source_url", "description", "keep_days", "freezable", "shop_section",
-	"diet_class", "no_cook",
+	"diet_class", "no_cook", "serving_g",
 }
 
 // FoodRepo implements food.Repository backed by SQLite.
@@ -635,8 +635,9 @@ func (r *FoodRepo) SetShopSection(ctx context.Context, id int64, section *food.S
 	return &f, nil
 }
 
-// SetNoCook writes a food's "needs no cooking" override; nil clears it.
-func (r *FoodRepo) SetNoCook(ctx context.Context, id int64, value *bool) (*food.Food, error) {
+// SetNoCook writes a food's "needs no cooking" override (nil clears it) and
+// its serving size in grams (nil clears it).
+func (r *FoodRepo) SetNoCook(ctx context.Context, id int64, value *bool, servingG *float64) (*food.Food, error) {
 	var ni sql.NullInt64
 	if value != nil {
 		ni.Valid = true
@@ -644,7 +645,11 @@ func (r *FoodRepo) SetNoCook(ctx context.Context, id int64, value *bool) (*food.
 			ni.Int64 = 1
 		}
 	}
-	row, err := r.queriesFor(ctx).SetFoodNoCook(ctx, sqlcgen.SetFoodNoCookParams{ID: id, NoCook: ni})
+	var sg sql.NullFloat64
+	if servingG != nil {
+		sg = sql.NullFloat64{Float64: *servingG, Valid: true}
+	}
+	row, err := r.queriesFor(ctx).SetFoodNoCook(ctx, sqlcgen.SetFoodNoCookParams{ID: id, NoCook: ni, ServingG: sg})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: id %d", domain.ErrNotFound, id)
@@ -978,6 +983,11 @@ func mapFoodToDomain(row *sqlcgen.Food, f *food.Food) {
 		v := row.NoCook.Int64 == 1
 		f.NoCookOverride = &v
 	}
+	f.ServingG = nil
+	if row.ServingG.Valid {
+		v := row.ServingG.Float64
+		f.ServingG = &v
+	}
 	f.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
 	f.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt)
 }
@@ -1030,7 +1040,7 @@ func scanFoodRow(rows *sql.Rows) (*sqlcgen.Food, error) {
 		&row.Notes, &row.ImagePath, &row.Favorite,
 		&row.CreatedAt, &row.UpdatedAt,
 		&row.SourceUrl, &row.Description, &row.KeepDays, &row.Freezable, &row.ShopSection,
-		&row.DietClass, &row.NoCook,
+		&row.DietClass, &row.NoCook, &row.ServingG,
 	); err != nil {
 		return nil, err
 	}

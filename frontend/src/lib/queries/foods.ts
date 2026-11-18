@@ -202,13 +202,21 @@ export function useSetDietClass() {
   })
 }
 
-/** Overrides a food's "needs no cooking" flag; `null` drops the override.
+/** Overrides a food's "needs no cooking" flag (`null` drops the override) and
+ *  sets its serving size.
  *  The planner reads it, so foods and the plan refetch. */
 export function useSetNoCook() {
   const { t } = useTranslation()
   return useMutation({
-    mutationFn: ({ id, value }: { id: number; value: boolean | null }) =>
-      setNoCook(id, value),
+    mutationFn: ({
+      id,
+      value,
+      servingG,
+    }: {
+      id: number
+      value: boolean | null
+      servingG?: number | null
+    }) => setNoCook(id, value, servingG),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: foodKeys.all }),

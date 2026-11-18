@@ -275,6 +275,7 @@ func Evaluate(s State, t Target) Evaluation {
 	}
 	ev.Week = x.week(ev)
 	ev.Issues = append(ev.Issues, x.softIssues(ev, t)...)
+	x.floorOptions(&ev, t)
 	ev.Totals = totalsOf(ev.Issues)
 	return ev
 }
@@ -351,4 +352,25 @@ func RecordEvaluationError(ctx context.Context, phase string, cause error) {
 	args, _ := json.Marshal(map[string]any{"phase": phase})
 	result, _ := json.Marshal(map[string]any{"error": cause.Error()})
 	run.ToolStep(context.WithoutCancel(ctx), EvaluationStep, args, result, true, 0)
+}
+
+// floorOptions gives every H9 `kcal_below_floor` issue the same verified
+// options as a day under its band (S2): no-cook adds at serving size and
+// raises of components already on the day, ranked by whether they reach the
+// floor.
+func (x *index) floorOptions(ev *Evaluation, t Target) {
+	for i, is := range ev.Issues {
+		if is.Code != CodeKcalBelowFloor || is.Date == "" {
+			continue
+		}
+		day, err := time.Parse(time.DateOnly, is.Date)
+		if err != nil {
+			continue
+		}
+		for _, d := range ev.Days {
+			if d.Date == is.Date && d.TargetKcal != nil && *d.TargetKcal > 0 {
+				ev.Issues[i].Options = x.optionsFor(*ev, t, d, day, false, *d.TargetKcal, d.FloorKcal)
+			}
+		}
+	}
 }

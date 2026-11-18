@@ -335,3 +335,25 @@ func TestRunLog_SideSwapRecordsChoiceAndSide(t *testing.T) {
 	assert.Equal(t, "side_veg", rec.Side.Role)
 	assert.NotEmpty(t, rec.Side.Plates)
 }
+
+// D3: a window generate over drafts excludes nothing (the variety rules handle repeats);
+// the day scope above still does.
+func TestRunLog_WindowGenerateExcludesNothing(t *testing.T) {
+	e := newLLMEnv(t)
+	require.Equal(t, "ok", e.run(e.gen(submit(t, "tu_1", e.validPlan()))).Status)
+	req := e.req()
+	req.Chooser = airun.ChooserHeuristic
+	id, err := e.svc.Generate(e.ctx, req)
+	require.NoError(t, err)
+	var rec struct {
+		Avoid    []int64 `json:"avoid"`
+		Excluded []struct {
+			Reason string `json:"reason"`
+		} `json:"excluded"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(e.toolSteps(id)[0].Result), &rec))
+	assert.Empty(t, rec.Avoid)
+	for _, x := range rec.Excluded {
+		assert.NotEqual(t, "replaced_by_target", x.Reason)
+	}
+}

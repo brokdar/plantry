@@ -42,6 +42,9 @@ type Option struct {
 	Ops []OptionOp `json:"ops,omitempty"`
 	// PlateKcal is the plate's kcal after the option (S6/S6b options).
 	PlateKcal float64 `json:"plate_kcal,omitempty"`
+	// Why says why Go chose this plate when it is not the day's last one
+	// ("lunch: dinner is light").
+	Why string `json:"why,omitempty"`
 
 	inBand   bool
 	shareGap float64
@@ -259,6 +262,7 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 	}
 	out = append(out, x.lightIssues(ev)...)
 	out = append(out, x.dishIssues()...)
+	out = append(out, x.addOnIssues()...)
 	// S4: the weekly average outside the policy's week band. No date and no
 	// options: the model decides which days to move.
 	if w := ev.Week; w != nil && w.Days >= MinWeekDays {
@@ -311,6 +315,12 @@ func (x *index) options(ev Evaluation, t Target, d DayEval, day time.Time, prote
 	if d.TargetKcal != nil {
 		target = *d.TargetKcal
 	}
+	return x.optionsFor(ev, t, d, day, protein, target, target*x.pol.DayLow)
+}
+
+// optionsFor is options with the bound an option must reach to count as
+// "reachable" (the band's low end for S2/S3, the floor for H9).
+func (x *index) optionsFor(ev Evaluation, t Target, d DayEval, day time.Time, protein bool, target, reach float64) []Option {
 	want := target - d.Kcal
 	if want <= 0 {
 		want = target*x.pol.DayHigh - d.Kcal
@@ -324,7 +334,11 @@ func (x *index) options(ev Evaluation, t Target, d DayEval, day time.Time, prote
 		capLeafAdd(&cands[i], x.s.Foods[cands[i].add.FoodID], target)
 	}
 	slices.SortStableFunc(cands, func(a, b optCand) int {
-		return cmp.Or(cmp.Compare(b.protein, a.protein), cmp.Compare(math.Abs(want-a.kcal), math.Abs(want-b.kcal)))
+		fit := cmp.Compare(math.Abs(want-a.kcal), math.Abs(want-b.kcal))
+		if protein {
+			return cmp.Or(cmp.Compare(b.protein, a.protein), fit)
+		}
+		return cmp.Or(fit, cmp.Compare(b.protein, a.protein))
 	})
 	var ok []Option
 	for i, c := range cands {
@@ -332,6 +346,7 @@ func (x *index) options(ev Evaluation, t Target, d DayEval, day time.Time, prote
 			break
 		}
 		if o, good := x.verify(c, t, base, d, target, protein); good {
+			o.inBand = reach <= 0 || o.DayKcal >= reach-0.5
 			ok = append(ok, o)
 		}
 	}
@@ -342,7 +357,9 @@ func (x *index) options(ev Evaluation, t Target, d DayEval, day time.Time, prote
 			}
 			return 1
 		}
-		return cmp.Or(cmp.Compare(b.shareGap, a.shareGap), cmp.Compare(math.Abs(target-a.DayKcal), math.Abs(target-b.DayKcal)))
+		// Kcal fit first (buckets of 25 kcal), protein as the tie-break.
+		bucket := func(o Option) float64 { return math.Round(math.Abs(target-o.DayKcal) / 25) }
+		return cmp.Or(cmp.Compare(bucket(a), bucket(b)), cmp.Compare(b.shareGap, a.shareGap), cmp.Compare(math.Abs(target-a.DayKcal), math.Abs(target-b.DayKcal)))
 	})
 	if len(ok) > maxOptions {
 		ok = ok[:maxOptions]
@@ -385,19 +402,15 @@ func (c optCand) op(plateID *int64, date string, slot int64) OptionOp {
 	return op
 }
 
-// capLeafAdd caps a leaf add at the heuristic's per-add cap (dayAdds):
-// maxAddFillerGrams and fillerDayShare of the day's target. An add that
+// capLeafAdd caps a leaf add at the per-add cap (addCapG: two servings,
+// maxAddFillerGrams and fillerDayShare of the day's target). An add that
 // cannot close the gap alone is still offered at the cap; its day figures
 // show the partial effect.
 func capLeafAdd(c *optCand, f FoodFacts, target float64) {
 	if c.comp >= 0 || c.add.Grams == nil || f.Macros.Kcal <= 0 {
 		return
 	}
-	g := min(*c.add.Grams, maxAddFillerGrams)
-	if target > 0 {
-		g = min(g, math.Floor(target*fillerDayShare/f.Macros.Kcal*100/roundGrams)*roundGrams)
-	}
-	g = max(g, roundGrams)
+	g := min(*c.add.Grams, addCapG(f, target))
 	*c.add.Grams = g
 	c.kcal, c.protein = f.Macros.Kcal*g/100, f.Macros.Protein*g/100
 }
@@ -426,11 +439,18 @@ func (x *index) candidates(day time.Time, want float64) []optCand {
 			last = i
 		}
 	}
+	why := ""
+	if dl := x.dayLastPlate(day); dl >= 0 && dl != last {
+		if sl := x.s.Plates[dl]; x.s.lightMeal(sl.Date, sl.SlotID) {
+			why = fmt.Sprintf("%s: %s is light", slotName(x.s, x.s.Plates[last].SlotID), slotName(x.s, sl.SlotID))
+		}
+	}
+	dayTarget := x.addDayTarget(day)
 	var out []optCand
 	dietType := diet.Class(x.s.Profile.DietType)
 	for _, id := range x.s.NoCook {
 		f, ok := x.s.Foods[id]
-		if !ok || !f.NutritionComplete || f.Macros.Kcal <= 0 {
+		if !ok || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet {
 			continue
 		}
 		if dietType != "" && (!diet.Valid(f.DietClass) || !diet.Compatible(f.DietClass, dietType)) {
@@ -450,12 +470,16 @@ func (x *index) candidates(day time.Time, want float64) []optCand {
 			c.opt.Portions = &p
 			c.kcal, c.protein = f.Macros.Kcal*p, f.Macros.Protein*p
 		} else {
-			g := clamp(math.Round(want/f.Macros.Kcal*100/roundGrams)*roundGrams, minAddGrams, maxAddGrams)
+			// A leaf is offered in the smallest half-serving count that closes the
+			// gap (a day one kcal short of its floor stays an H9), at most addCapG.
+			serving := ServingGrams(f)
+			n := clamp(math.Ceil(want/(f.Macros.Kcal*serving/100)*2)/2, 0.5, maxAddServings)
+			g := math.Min(math.Round(n*serving/roundGrams)*roundGrams, addCapG(f, dayTarget))
 			c.add = Component{FoodID: id, Grams: &g, Proposed: true}
 			c.opt.Grams = &g
 			c.kcal, c.protein = f.Macros.Kcal*g/100, f.Macros.Protein*g/100
 		}
-		c.opt.Action, c.opt.FoodID, c.opt.Name = "add", id, f.Name
+		c.opt.Action, c.opt.FoodID, c.opt.Name, c.opt.Why = "add", id, f.Name, why
 		out = append(out, c)
 	}
 	for _, pi := range plates {
@@ -513,6 +537,11 @@ func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, tar
 		}
 	}
 	y := newIndex(s, t)
+	for k := range y.addOnKeys() {
+		if !x.baseAddOnKeys()[k] {
+			return Option{}, false
+		}
+	}
 	var after *DayKcal
 	for _, dk := range y.dayAccounts([]time.Time{p.Date}) {
 		after = &dk
@@ -553,6 +582,24 @@ func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, tar
 	return o, true
 }
 
+// addOnKeys identifies the state's S9 issues by plate, food and reason.
+func (x *index) addOnKeys() map[string]bool {
+	m := map[string]bool{}
+	for _, is := range x.addOnIssues() {
+		m[fmt.Sprintf("%s|%v|%v", issueID(is), is.Params["food_id"], is.Params["reason"])] = true
+	}
+	return m
+}
+
+// baseAddOnKeys is addOnKeys, computed once per index: the S9 issues a
+// candidate may not add to.
+func (x *index) baseAddOnKeys() map[string]bool {
+	if x.s9 == nil {
+		x.s9 = x.addOnKeys()
+	}
+	return x.s9
+}
+
 func hardKeys(issues []Issue) map[string]bool {
 	m := map[string]bool{}
 	for _, is := range issues {
@@ -578,3 +625,26 @@ func issueID(is Issue) string {
 }
 
 func clamp(v, lo, hi float64) float64 { return math.Max(lo, math.Min(hi, v)) }
+
+// dayLastPlate is the index of the day's last non-routine draft plate of the
+// window (light meals included), -1 without one.
+func (x *index) dayLastPlate(day time.Time) int {
+	last := -1
+	for i, p := range x.s.Plates {
+		if dayOf(p.Date) != dayOf(day) || p.Confirmed || !x.s.Window.Contains(p.Date) || x.routine(p.Cell()) {
+			continue
+		}
+		if last < 0 || x.s.SlotOrder[p.SlotID] >= x.s.SlotOrder[x.s.Plates[last].SlotID] {
+			last = i
+		}
+	}
+	return last
+}
+
+// addDayTarget is the day's adjusted kcal target (0 without one).
+func (x *index) addDayTarget(day time.Time) float64 {
+	for _, dk := range x.dayAccounts([]time.Time{day}) {
+		return dk.Adjusted
+	}
+	return 0
+}

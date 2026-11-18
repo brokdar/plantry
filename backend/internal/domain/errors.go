@@ -145,6 +145,12 @@ var (
 	// ErrInvalidDietClass is a diet class override outside the four classes
 	// (Phase 3 D28).
 	ErrInvalidDietClass = errors.New("unknown diet class")
+
+	// ErrInvalidServing is a serving size that is not a positive number.
+	ErrInvalidServing = errors.New("serving size must be positive")
+
+	// ErrServingLeafOnly is a serving size on a recipe.
+	ErrServingLeafOnly = errors.New("serving sizes apply to ingredients only")
 )
 
 // resourcePlaceholder in a message key is replaced by the caller's resource
@@ -164,6 +170,8 @@ var messageKeys = []struct {
 	{ErrInvalidShopSection, "error.food.invalid_shop_section"},
 	{ErrShopSectionLeafOnly, "error.food.shop_section_leaf_only"},
 	{ErrInvalidDietClass, "error.food.invalid_diet_class"},
+	{ErrInvalidServing, "error.food.invalid_serving"},
+	{ErrServingLeafOnly, "error.food.serving_leaf_only"},
 	{ErrInvalidPortions, "error.food.invalid_portions"},
 	{ErrNotFound, "error.not_found"},
 	{ErrDuplicateName, "error.{resource}.duplicate_name"},

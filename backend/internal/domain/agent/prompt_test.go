@@ -93,7 +93,7 @@ func TestPrompt_SoftIssuesAreOffered(t *testing.T) {
 	for _, want := range []string{
 		"A request is not done while a hard issue (violation H1-H9) it caused is open",
 		"Fix a new hard issue with another apply_changes call",
-		"A soft issue (S2-S8) is not fixed on your own: report it and offer the fix",
+		"A soft issue (S2-S9) is not fixed on your own: report it and offer the fix",
 		"Close protein gaps by offering",
 	} {
 		if !strings.Contains(prompt, want) {

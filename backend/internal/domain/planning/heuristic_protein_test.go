@@ -38,6 +38,14 @@ func proteinState(dt profile.DietType) planning.State {
 	leaf(skyr, "Skyr", diet.Vegetarian, 60, 11)
 	leaf(tofu, "Tofu", diet.Vegan, 120, 8)
 	leaf(candy, "Candy", diet.Vegan, 400, 0)
+	// A realistic add-on pool: S9 limits one food to three plates a week.
+	leaf(904, "Cheddar", diet.Vegetarian, 400, 25)
+	leaf(905, "Mixed nuts", diet.Vegan, 600, 20)
+	leaf(906, "Wholegrain bread", diet.Vegan, 250, 9)
+	leaf(907, "Hummus", diet.Vegan, 230, 8)
+	leaf(908, "Quark", diet.Vegetarian, 68, 12)
+	leaf(909, "Cottage cheese", diet.Vegetarian, 98, 11)
+	leaf(910, "Edamame", diet.Vegan, 120, 12)
 	c := s.Foods[candy]
 	c.Sweet = true
 	s.Foods[candy] = c
@@ -110,7 +118,7 @@ func TestHeuristic_ProteinGapClosing(t *testing.T) {
 		}
 		p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
 		assert.Zero(t, foodsAdded(p, skyr), "skyr is vegetarian")
-		assert.Positive(t, foodsAdded(p, tofu))
+		assert.Positive(t, foodsAdded(p, tofu)+foodsAdded(p, 910), "tofu or edamame")
 		tgt := windowTarget(s)
 		assert.Empty(t, violations(planning.Check(planning.Merge(s, tgt, p), tgt)))
 	})

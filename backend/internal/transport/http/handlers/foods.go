@@ -195,6 +195,8 @@ type foodResponse struct {
 	// it comes from: user (override) or derived (planning.NoCook).
 	NoCook       bool   `json:"no_cook"`
 	NoCookSource string `json:"no_cook_source"`
+	// ServingG is a leaf's stored serving size in grams (null: none).
+	ServingG *float64 `json:"serving_g"`
 
 	// Derived (§3.3), one of them per kind: leafDerived is set by
 	// toFoodResponse, composedDerived by FoodHandler.respond. Call
@@ -366,6 +368,7 @@ func toFoodResponse(f *food.Food) foodResponse {
 		DietClassSource: string(f.DietClassSource),
 		NoCook:          planning.NoCook(f),
 		NoCookSource:    planning.NoCookSource(f),
+		ServingG:        f.ServingG,
 	}
 
 	if f.Kind == food.KindLeaf {
@@ -911,11 +914,33 @@ func (h *FoodHandler) SetDietClass(w http.ResponseWriter, r *http.Request) {
 }
 
 type foodNoCookRequest struct {
-	Value *bool `json:"value"`
+	Value    *bool    `json:"value"`
+	ServingG *float64 `json:"serving_g"`
+}
+
+// foodNoCookBody is the request body plus whether serving_g was present, so
+// an absent field and an explicit null can be told apart.
+type foodNoCookBody struct {
+	foodNoCookRequest
+	servingGSet bool
+}
+
+func (b *foodNoCookBody) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &b.foodNoCookRequest); err != nil {
+		return err
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return err
+	}
+	_, b.servingGSet = keys["serving_g"]
+	return nil
 }
 
 // SetNoCook handles PUT /api/foods/{id}/no-cook {value: true|false|null}: a
 // food's "needs no cooking" override; null reverts to the derived answer.
+// serving_g sets the serving size; an explicit null clears it and an absent
+// field keeps the stored one.
 func (h *FoodHandler) SetNoCook(w http.ResponseWriter, r *http.Request) {
 	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
 	if !ok {
@@ -926,12 +951,22 @@ func (h *FoodHandler) SetNoCook(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_id")
 		return
 	}
-	var req foodNoCookRequest
+	var req foodNoCookBody
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	f, err := h.svc.SetNoCook(r.Context(), id, req.Value)
+	serving := req.ServingG
+	if !req.servingGSet {
+		cur, err := h.svc.Get(r.Context(), id)
+		if err != nil {
+			status, key := foodHTTPError(err)
+			writeError(w, status, key)
+			return
+		}
+		serving = cur.ServingG
+	}
+	f, err := h.svc.SetNoCook(r.Context(), id, req.Value, serving)
 	if err != nil {
 		status, key := foodHTTPError(err)
 		writeError(w, status, key)
