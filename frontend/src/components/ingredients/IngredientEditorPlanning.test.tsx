@@ -86,7 +86,7 @@ describe("IngredientEditor planning fields", () => {
     await user.click(screen.getByRole("button", { name: "Save" }))
 
     await waitFor(() =>
-      expect(setNoCook).toHaveBeenCalledWith(mockChickenBreast.id, true)
+      expect(setNoCook).toHaveBeenCalledWith(mockChickenBreast.id, true, null)
     )
   })
 
@@ -101,7 +101,7 @@ describe("IngredientEditor planning fields", () => {
     await user.click(await screen.findByRole("option", { name: "No" }))
     await user.click(screen.getByRole("button", { name: "Save" }))
 
-    await waitFor(() => expect(setNoCook).toHaveBeenCalledWith(55, false))
+    await waitFor(() => expect(setNoCook).toHaveBeenCalledWith(55, false, null))
   })
 
   test("an unchanged override makes no no-cook call", async () => {
@@ -121,6 +121,52 @@ describe("IngredientEditor planning fields", () => {
     ).toHaveTextContent(/^Yes$/)
     await user.click(screen.getByRole("button", { name: "Save" }))
     await waitFor(() => expect(updateFood).toHaveBeenCalled())
+    expect(setNoCook).not.toHaveBeenCalled()
+  })
+
+  test("a serving size saves with the no-cook override", async () => {
+    vi.mocked(updateFood).mockResolvedValue(mockChickenBreast)
+    vi.mocked(setNoCook).mockResolvedValue(mockChickenBreast)
+    const user = userEvent.setup()
+    renderWithRouter(<IngredientEditor ingredient={mockChickenBreast} />)
+
+    await user.type(await screen.findByLabelText("Serving size (g)"), "30")
+    await user.click(screen.getByRole("button", { name: "Save" }))
+
+    await waitFor(() =>
+      expect(setNoCook).toHaveBeenCalledWith(mockChickenBreast.id, null, 30)
+    )
+    expect(vi.mocked(updateFood).mock.calls[0][1]).not.toHaveProperty(
+      "serving_g"
+    )
+  })
+
+  test("clearing the serving size sends none", async () => {
+    vi.mocked(updateFood).mockResolvedValue(mockChickenBreast)
+    vi.mocked(setNoCook).mockResolvedValue(mockChickenBreast)
+    const user = userEvent.setup()
+    renderWithRouter(
+      <IngredientEditor ingredient={{ ...mockChickenBreast, serving_g: 40 }} />
+    )
+
+    const serving = await screen.findByLabelText("Serving size (g)")
+    expect(serving).toHaveValue(40)
+    await user.clear(serving)
+    await user.click(screen.getByRole("button", { name: "Save" }))
+
+    await waitFor(() =>
+      expect(setNoCook).toHaveBeenCalledWith(mockChickenBreast.id, null, null)
+    )
+  })
+
+  test("a serving size of zero is refused", async () => {
+    const user = userEvent.setup()
+    renderWithRouter(<IngredientEditor ingredient={mockChickenBreast} />)
+
+    await user.type(await screen.findByLabelText("Serving size (g)"), "0")
+    await user.click(screen.getByRole("button", { name: "Save" }))
+
+    await waitFor(() => expect(updateFood).not.toHaveBeenCalled())
     expect(setNoCook).not.toHaveBeenCalled()
   })
 })

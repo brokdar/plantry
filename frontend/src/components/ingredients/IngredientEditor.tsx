@@ -105,6 +105,7 @@ function toFormValues(input?: LeafFood | LookupCandidate): LeafFoodFormValues {
       name: "",
       role: null,
       no_cook: null,
+      serving_g: null,
       source: "manual",
       barcode: null,
       off_id: null,
@@ -137,6 +138,7 @@ function toFormValues(input?: LeafFood | LookupCandidate): LeafFoodFormValues {
     name: input.name,
     role: isIngredient ? leafRoleOverride(input) : null,
     no_cook: isIngredient ? noCookOverride(input) : null,
+    serving_g: isIngredient ? (input.serving_g ?? null) : null,
     source: input.source ?? "manual",
     barcode,
     off_id,
@@ -214,21 +216,29 @@ export function IngredientEditor({
   }, [isEdit])
 
   async function onSubmit(values: LeafFoodFormValues) {
-    // no_cook has its own endpoint; the food payload carries the role only.
-    const { no_cook: noCook, ...v } = values
+    // no_cook and the serving size share their own endpoint; the food
+    // payload carries the role only.
+    const { no_cook: noCook, serving_g: servingG, ...v } = values
     try {
       if (isEdit && ingredient) {
         await updateMutation.mutateAsync({ id: ingredient.id, data: v })
-        if (noCook !== noCookOverride(ingredient)) {
-          await noCookMutation.mutateAsync({ id: ingredient.id, value: noCook })
+        if (
+          noCook !== noCookOverride(ingredient) ||
+          servingG !== (ingredient.serving_g ?? null)
+        ) {
+          await noCookMutation.mutateAsync({
+            id: ingredient.id,
+            value: noCook,
+            servingG,
+          })
         }
       } else {
         const created = await createMutation.mutateAsync(v)
-        if (noCook !== null) {
+        if (noCook !== null || servingG !== null) {
           // The ingredient exists now: a failed override is toasted by the
           // mutation and must not stop the save (a retry would duplicate it).
           await noCookMutation
-            .mutateAsync({ id: created.id, value: noCook })
+            .mutateAsync({ id: created.id, value: noCook, servingG })
             .catch(() => undefined)
         }
         if (stagedImage) {
@@ -431,6 +441,31 @@ export function IngredientEditor({
                         testId="ingredient-no-cook"
                       />
                       <FormDescription>{t("no_cook.hint")}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="serving_g"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("no_cook.serving_label")}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          step="any"
+                          disabled={isPending}
+                          data-testid="ingredient-serving-g"
+                          {...field}
+                          value={field.value ?? ""}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t("no_cook.serving_hint")}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

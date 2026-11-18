@@ -1121,7 +1121,9 @@
       "invalid_portions": "Die Portionen müssen größer als 0 und höchstens 100 sein.",
       "invalid_shop_section": "Unbekannter Ladenbereich.",
       "shop_section_leaf_only": "Nur Zutaten haben einen Ladenbereich.",
-      "invalid_diet_class": "Unbekannte Ernährungsform."
+      "invalid_diet_class": "Unbekannte Ernährungsform.",
+      "invalid_serving": "Die Portionsgröße muss größer als 0 g sein.",
+      "serving_leaf_only": "Nur Zutaten haben eine Portionsgröße."
     },
     "settings": {
       "unknown_key": "Unbekannter Einstellungsschlüssel.",
@@ -1808,7 +1810,12 @@
       "kcal_above_band": "{{day}}: {{kcal}} kcal, über dem Bereich von {{low}}–{{high}} kcal.",
       "protein_below_target": "{{day}}: {{protein}} g Eiweiß, Ziel {{target}} g.",
       "protein_below_share": "{{day}}: Eiweiß macht {{pct}} % der Energie aus, Ziel {{target_pct}} %.",
-      "meal_not_light": "{{day}}: Die leichte Mahlzeit hat {{kcal}} kcal; höchstens {{max}} wären richtig."
+      "meal_not_light": "{{day}}: Die leichte Mahlzeit hat {{kcal}} kcal; höchstens {{max}} wären richtig.",
+      "add_on_excess_light_meal": "{{day}}: {{name}} ({{grams}} g) kommt zu einer leichten Mahlzeit.",
+      "add_on_excess_duplicates_main": "{{day}}: {{name}} ({{grams}} g) steckt schon im Hauptgericht.",
+      "add_on_excess_over_cap": "{{day}}: {{grams}} g {{name}} dazu; halte es bei {{max_grams}} g.",
+      "add_on_excess_day_limit": "{{day}}: zu viele Extras an einem Tag ({{name}}).",
+      "add_on_excess_repeated": "{{day}}: {{name}} kommt diese Woche zu vielen Mahlzeiten."
     },
     "meal": {
       "undo": {
@@ -2319,6 +2326,8 @@
     "yes": "Ja",
     "no": "Nein",
     "hint": "Der Planer füllt Tage mit Lebensmitteln, die nicht gekocht werden müssen. Automatisch rät er aus Name und Einkaufsabteilung.",
-    "auto_hint": "auto"
+    "auto_hint": "auto",
+    "serving_label": "Portionsgröße (g)",
+    "serving_hint": "Was eine Portion wiegt, wenn der Planer sie hinzufügt. Leer nimmt eine übliche Menge."
   }
 }

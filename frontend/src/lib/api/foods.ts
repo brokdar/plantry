@@ -91,6 +91,8 @@ interface FoodBase {
 
 export interface LeafFood extends FoodBase {
   kind: "leaf"
+  /** Grams of one serving when the planner adds the food; null = typical. */
+  serving_g?: number | null
   source?: FoodSource | null
   barcode?: string | null
   off_id?: string | null
@@ -445,11 +447,17 @@ export function setDietClass(
   })
 }
 
-/** PUT /api/foods/{id}/no-cook — `null` drops the override. */
-export function setNoCook(id: number, value: boolean | null): Promise<Food> {
+/** PUT /api/foods/{id}/no-cook — `value: null` drops the override. The call
+ *  carries the food's whole state: no `servingG` clears the serving size
+ *  (leaf foods only). */
+export function setNoCook(
+  id: number,
+  value: boolean | null,
+  servingG: number | null = null
+): Promise<Food> {
   return apiFetch(`/foods/${id}/no-cook`, {
     method: "PUT",
-    body: JSON.stringify({ value }),
+    body: JSON.stringify({ value, serving_g: servingG }),
   })
 }
 

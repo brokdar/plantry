@@ -137,6 +137,34 @@ describe("WeekLedger", () => {
     expect(details.textContent).toContain("1,100 kcal, below the 1,980–2,420")
   })
 
+  it("words an S9 add-on hint by its reason, in en and de", async () => {
+    const issues = [
+      soft("S9", "add_on_excess", {
+        date: "2026-11-03",
+        params: {
+          name: "Skyr",
+          grams: 300,
+          reason: "over_cap",
+          max_grams: 200,
+        },
+      }),
+      soft("S9", "add_on_excess", {
+        date: "2026-11-04",
+        params: { name: "Nuts", grams: 30, reason: "light_meal" },
+      }),
+    ]
+    ledger(week, issues)
+    const text = screen.getByTestId("ledger-day-hints").textContent
+    expect(text).toContain("300 g Skyr added; keep it to 200 g.")
+    expect(text).toContain("Nuts (30 g) is added to a light meal.")
+    cleanup()
+    await i18n.changeLanguage("de")
+    ledger(week, issues)
+    expect(screen.getByTestId("ledger-day-hints").textContent).toContain(
+      "300 g Skyr dazu; halte es bei 200 g."
+    )
+  })
+
   it("speaks German", async () => {
     await i18n.changeLanguage("de")
     ledger({ ...week, pct: 88 }, [soft("S4", "week_kcal_below_band")])
