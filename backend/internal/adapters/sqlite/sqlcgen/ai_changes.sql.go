@@ -148,6 +148,52 @@ func (q *Queries) ListAIChangesByConversation(ctx context.Context, conversationI
 	return items, nil
 }
 
+const listUndoneAIChangesAfter = `-- name: ListUndoneAIChangesAfter :many
+SELECT id, run_id, step_seq, tool, text_key, params_json, run_ids_json, dates_json, plate_ids_json, session_ids_json, first_event_id, last_event_id, availability_before_json, created_at, undone_at, light_before_json FROM ai_changes
+WHERE undone_at IS NOT NULL AND first_event_id > ?
+ORDER BY id
+`
+
+func (q *Queries) ListUndoneAIChangesAfter(ctx context.Context, firstEventID sql.NullInt64) ([]AiChange, error) {
+	rows, err := q.db.QueryContext(ctx, listUndoneAIChangesAfter, firstEventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AiChange{}
+	for rows.Next() {
+		var i AiChange
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunID,
+			&i.StepSeq,
+			&i.Tool,
+			&i.TextKey,
+			&i.ParamsJson,
+			&i.RunIdsJson,
+			&i.DatesJson,
+			&i.PlateIdsJson,
+			&i.SessionIdsJson,
+			&i.FirstEventID,
+			&i.LastEventID,
+			&i.AvailabilityBeforeJson,
+			&i.CreatedAt,
+			&i.UndoneAt,
+			&i.LightBeforeJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markAIChangeUndone = `-- name: MarkAIChangeUndone :execresult
 UPDATE ai_changes SET undone_at = ? WHERE id = ? AND undone_at IS NULL
 `

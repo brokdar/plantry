@@ -425,3 +425,23 @@ func TestChange_UndoBlockedWhenConfirmed(t *testing.T) {
 	assert.Equal(t, "error.ai.change_confirmed", key)
 	assert.Equal(t, n, e.eventCount(), "nothing written")
 }
+
+// E010: two changes of one plate component, undone newest first, put the plan
+// back exactly; a not-undone edit between them still makes the older stale.
+func TestChange_UndoChainNewestFirst(t *testing.T) {
+	e := newPlanToolEnv(t)
+	ctx, _ := e.chat()
+	p, _ := e.mainSession()
+	dump := e.planDump()
+	a := e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
+	b := e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":2}`, p.ID))
+	require.NotEqual(t, dump, e.planDump())
+
+	_, err := e.changes.Undo(context.Background(), a.ID)
+	require.ErrorIs(t, err, domain.ErrAIChangeStale, "the newer change is not undone yet")
+	_, err = e.changes.Undo(context.Background(), b.ID)
+	require.NoError(t, err)
+	_, err = e.changes.Undo(context.Background(), a.ID)
+	require.NoError(t, err)
+	assert.Equal(t, dump, e.planDump())
+}
