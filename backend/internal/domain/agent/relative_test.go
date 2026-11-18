@@ -229,3 +229,15 @@ func TestFindWays_ApplyFirstWayStoresMarkAndSatisfies(t *testing.T) {
 	}
 	t.Skip("no lunch or dinner of the fixture has a lighter way that reaches its cap")
 }
+
+// E013: a limit inside constraints is refused with the place it belongs.
+func TestFindAlternatives_MisplacedLimitIsRedirected(t *testing.T) {
+	e := relEnv(t)
+	ctx, _ := e.chat()
+	p := e.draftMeals()[0]
+	_, _, _, err := e.ts.Execute(ctx, "find_alternatives", json.RawMessage(fmt.Sprintf(`{"plate_id":%d,"what":"main","constraints":{"limit":3}}`, p.ID)))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "top level")
+	_, _, _, err = e.ts.Execute(ctx, "find_alternatives", json.RawMessage(fmt.Sprintf(`{"plate_id":%d,"what":"main","limit":3}`, p.ID)))
+	require.NoError(t, err)
+}
