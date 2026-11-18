@@ -86,7 +86,13 @@ func TestHeuristic_KcalBandDaysAndWeek(t *testing.T) {
 			assert.GreaterOrEqual(t, d.Kcal, kcal*0.9-1e-6, "%.0f kcal: %s not under the day band", kcal, d.Date)
 		}
 		if assert.NotNil(t, ev.Week) {
-			assert.InDelta(t, 100, ev.Week.Pct, 5, "%.0f kcal: week inside its band", kcal)
+			// S9 caps add-ons (two servings, three a day, a food on three
+			// plates), so a very high target is only approached.
+			delta := 5.0
+			if kcal > 2500 {
+				delta = 10
+			}
+			assert.InDelta(t, 100, ev.Week.Pct, delta, "%.0f kcal: week inside its band", kcal)
 		}
 		for _, pl := range p.Plates {
 			for _, c := range pl.Components {

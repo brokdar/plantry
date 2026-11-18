@@ -83,7 +83,7 @@ func TestPrompt_StatesTheFillCellsAndSuitability(t *testing.T) {
 	k := 2200.0
 	in.State.Profile.KcalTarget = &k
 	sys = planning.RenderPrompt(in)
-	assert.Contains(t, sys, "Saturday 2026-11-21: 1 of 3 meals planned, target 733 kcal")
+	assert.Contains(t, sys, "Saturday 2026-11-21: target 733 (band 660-807), floor 550, fixed 0, 1 of 3 meals planned")
 }
 
 // Runs 6 and 7: a fixed session whose portions are all eaten was hidden, so

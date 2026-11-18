@@ -45,8 +45,32 @@ func derivedNoCook(f *food.Food) bool {
 	default:
 		return false
 	}
-	return !cookedFirst.MatchString(f.Name)
+	return !cookedFirst.MatchString(f.Name) && !notEatenAsIs.MatchString(f.Name)
 }
+
+// ServingGrams is the grams the planner offers f in: the stored serving
+// size, else TypicalLeafGrams.
+func ServingGrams(f FoodFacts) float64 {
+	if f.ServingG > 0 {
+		return f.ServingG
+	}
+	return TypicalLeafGrams
+}
+
+// notEatenAsIs names the produce, dairy and bakery foods that go into a dish
+// and are never a plate add-on: herbs, spices, aromatics, fats and oils,
+// cream, broths, pastes, vinegar, flour, starch, pastry and dough. A match
+// only changes the derived default; the user's override wins.
+var notEatenAsIs = regexp.MustCompile(`(?i)(^|[^\p{L}])(` +
+	`herb|basil|parsley|thyme|chive|coriander|cilantro|mint|dill|rosemary|oregano|sage|bay leaf|spice|seasoning|salt|peppercorn|black pepper|cayenne|cumin|turmeric|cinnamon|` +
+	`garlic|onion|shallot|leek|ginger|chil+i|chile|scallion|` +
+	`oil|butter|ghee|lard|margarine|tallow|cooking cream|cream($|[^\p{L} ]| [^c])|crème|creme|` +
+	`broth|stock|bouillon|paste|puree|purée|vinegar|juice|sauce|starch|pastry|dough|batter` +
+	`)|` +
+	`(kräuter|kraeuter|petersilie|thymian|schnittlauch|koriander|minze|dill|rosmarin|salbei|lorbeer|gewürz|salz|pfeffer|kümmel|kurkuma|zimt|` +
+	`knoblauch|zwiebel|schalotte|lauch|ingwer|` +
+	`öl|oel|butter|schmalz|margarine|sahne|kochcreme|` +
+	`brühe|bruehe|fond|bouillon|tomatenmark|mark|essig|saft|soße|sosse|stärke|staerke|teig|mehl)($|[^\p{L}])`)
 
 var cookedFirst = regexp.MustCompile(`(?i)\b(potato|kartoffel|egg|ei|eier|bean|bohne|lentil|linse|pea|erbse|rice|reis|pasta|nudel|flour|mehl|dough|teig|yeast|hefe|corn ?starch|pudding)`)
 

@@ -3,6 +3,7 @@ package food
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -107,9 +108,22 @@ func (s *Service) SetDietClass(ctx context.Context, id int64, class *diet.Class)
 }
 
 // SetNoCook sets a food's "needs no cooking" override; nil clears it so
-// planning.NoCook derives it again.
-func (s *Service) SetNoCook(ctx context.Context, id int64, value *bool) (*Food, error) {
-	return s.repo.SetNoCook(ctx, id, value)
+// planning.NoCook derives it again. servingG is the grams of one serving of a
+// leaf (nil clears it).
+func (s *Service) SetNoCook(ctx context.Context, id int64, value *bool, servingG *float64) (*Food, error) {
+	if servingG != nil {
+		if *servingG <= 0 || math.IsNaN(*servingG) || math.IsInf(*servingG, 0) {
+			return nil, fmt.Errorf("%w: %v", domain.ErrInvalidServing, *servingG)
+		}
+		f, err := s.repo.Get(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if f.Kind != KindLeaf {
+			return nil, fmt.Errorf("%w: food %d", domain.ErrServingLeafOnly, id)
+		}
+	}
+	return s.repo.SetNoCook(ctx, id, value, servingG)
 }
 
 // listByDiet is List with the diet filter: the class is derived, not stored,

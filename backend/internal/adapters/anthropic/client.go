@@ -469,7 +469,7 @@ func encodeRequest(req llm.Request, stream bool, w wire) ([]byte, error) {
 		// as a prefix, so it is a cache read instead of fresh input.
 		if last := len(body.Messages) - 1; last >= 0 {
 			content := body.Messages[last].Content
-			if i := tailIndex(content); i >= 0 {
+			if i := tailIndex(content, codeCalledIDs(req.Messages)); i >= 0 {
 				content[i].CacheControl = &cacheCtrl{Type: "ephemeral", TTL: "5m"}
 			}
 		}
@@ -478,15 +478,36 @@ func encodeRequest(req llm.Request, stream bool, w wire) ([]byte, error) {
 }
 
 // tailIndex is the block of a message's encoded content that takes the tail
-// cache breakpoint: the last one that is not a verbatim server block (those
-// go out unchanged and cannot carry the marker); -1 when there is none.
-func tailIndex(content []contentBlock) int {
+// cache breakpoint: the last one that is neither a verbatim server block
+// (those go out unchanged and cannot carry the marker) nor the result of a
+// tool call made by code (the API answers 400: such results are not rendered
+// in the model's context and cannot carry cache_control); -1 when there is
+// none, and the request then goes without a tail breakpoint.
+func tailIndex(content []contentBlock, codeCalled map[string]bool) int {
 	for i := len(content) - 1; i >= 0; i-- {
-		if content[i].raw == nil {
-			return i
+		c := content[i]
+		if c.raw != nil || (c.Type == "tool_result" && codeCalled[c.ToolUseID]) {
+			continue
 		}
+		return i
 	}
 	return -1
+}
+
+// codeCalledIDs are the ids of the tool calls in messages that code made.
+func codeCalledIDs(messages []llm.Message) map[string]bool {
+	var ids map[string]bool
+	for _, m := range messages {
+		for _, b := range m.Content {
+			if b.Type == llm.ContentTypeToolUse && b.Caller.FromCode() {
+				if ids == nil {
+					ids = map[string]bool{}
+				}
+				ids[b.ToolUseID] = true
+			}
+		}
+	}
+	return ids
 }
 
 // tailCacheable reports whether encodeRequest puts a breakpoint on the tail.
@@ -494,7 +515,7 @@ func tailCacheable(req llm.Request) bool {
 	if !req.CacheTail || len(req.Messages) == 0 {
 		return false
 	}
-	return tailIndex(encodeContent(req.Messages[len(req.Messages)-1].Content)) >= 0
+	return tailIndex(encodeContent(req.Messages[len(req.Messages)-1].Content), codeCalledIDs(req.Messages)) >= 0
 }
 
 func encodeContent(blocks []llm.ContentBlock) []contentBlock {

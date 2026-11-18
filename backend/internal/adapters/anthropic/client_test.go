@@ -610,3 +610,38 @@ func TestStream_TailBreakpointOptInAndServerBlocks(t *testing.T) {
 	assert.Equal(t, 0, n)
 	assert.Empty(t, bp, "no messages, no breakpoint")
 }
+
+// A tool result answering a call made by code cannot carry cache_control (the
+// gen-p15 run: 400 "Tool use result for toolu_01S24... called by code
+// execution cannot have cache_control"). The tail marker skips it: it takes
+// an earlier block of the message, or none.
+func TestStream_TailBreakpointSkipsCodeCalledResults(t *testing.T) {
+	const codeID, directID = "toolu_01S24DMmT16GZR8CBve7CFnJ", "toolu_direct"
+	asst := llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{
+		{Type: llm.ContentTypeServer, Raw: json.RawMessage(`{"type":"server_tool_use","id":"srvtoolu_1","name":"code_execution","input":{}}`)},
+		{
+			Type: llm.ContentTypeToolUse, ToolUseID: codeID, ToolUseName: "evaluate_plan", ToolUseInput: json.RawMessage(`{}`),
+			Caller: &llm.Caller{Type: llm.CallerCodeExecution, ToolID: "srvtoolu_1"},
+		},
+		{
+			Type: llm.ContentTypeToolUse, ToolUseID: directID, ToolUseName: "find_foods", ToolUseInput: json.RawMessage(`{}`),
+			Caller: &llm.Caller{Type: llm.CallerDirect},
+		},
+	}}
+	result := func(id string) llm.ContentBlock {
+		return llm.ContentBlock{Type: llm.ContentTypeToolResult, ToolResultID: id, ToolResultContent: json.RawMessage(`"ok"`)}
+	}
+	user := llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: "go"}}}
+	req := func(blocks ...llm.ContentBlock) llm.Request {
+		return llm.Request{
+			Model: "claude-sonnet-4-6", MaxTokens: 1024, CacheTail: true,
+			Messages: []llm.Message{user, asst, {Role: llm.RoleUser, Content: blocks}},
+		}
+	}
+
+	// The code tool is sent (the gen-p15 case): the history keeps its code
+	// blocks, so the decision is tailIndex's.
+	assert.Equal(t, -1, anthropic.TailIndex(req(result(codeID)).Messages), "only a code-called result: no tail marker")
+	assert.Equal(t, 1, anthropic.TailIndex(req(result(codeID), result(directID)).Messages), "the direct result takes it")
+	assert.Equal(t, 0, anthropic.TailIndex(req(result(directID), result(codeID)).Messages), "an earlier block is used")
+}

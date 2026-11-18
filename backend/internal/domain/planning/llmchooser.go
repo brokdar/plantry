@@ -263,7 +263,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			case needRepair && paid < maxRepairs:
 				paid++
 			default:
-				return withNotes(prop, append(slices.Clone(allFixes), runNotes...), advice, joinNotes(lightNote(rep.s.Light, in.Locale), kcalNote(rep.s, in.Target), floorNote(rep.s, in.Target))), nil
+				return withNotes(prop, append(slices.Clone(allFixes), runNotes...), advice, joinNotes(lightNote(rep.s.Light, in.Locale), kcalNote(rep.s, in.Target), floorNote(rep.s, in.Target), mealNote(rep.s, in.Target))), nil
 			}
 			noted := withNotes(prop, allFixes, advice, "")
 			last = &noted

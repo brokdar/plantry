@@ -440,3 +440,34 @@ func (x *index) markIntent(pe *PlateEval, p Plate) {
 	}
 	pe.MaxKcal = math.Round(dk.mealCap())
 }
+
+// mealNote is the run-notes line of the light and hearty meals the plan does
+// not meet ("" when it meets all): "Not light: Mon dinner 684 kcal (max 550)".
+// The notes then say what the plan is, even when the model's own notes call
+// the meal light.
+func mealNote(s State, t Target) string {
+	var light, hearty []string
+	for _, is := range Evaluate(s, t).Issues {
+		if is.SlotID == nil || (is.Code != CodeMealNotLight && is.Code != CodeMealNotHearty) {
+			continue
+		}
+		day, _ := time.Parse(time.DateOnly, is.Date)
+		kcal, _ := is.Params["kcal"].(float64)
+		part := fmt.Sprintf("%s %s %.0f kcal", day.Weekday().String()[:3], slotName(s, *is.SlotID), kcal)
+		if is.Code == CodeMealNotLight {
+			limit, _ := is.Params["max_kcal"].(float64)
+			light = append(light, fmt.Sprintf("%s (max %.0f)", part, limit))
+		} else {
+			least, _ := is.Params["min_kcal"].(float64)
+			hearty = append(hearty, fmt.Sprintf("%s (min %.0f)", part, least))
+		}
+	}
+	var out []string
+	if len(light) > 0 {
+		out = append(out, "Not light: "+strings.Join(light, ", "))
+	}
+	if len(hearty) > 0 {
+		out = append(out, "Not hearty: "+strings.Join(hearty, ", "))
+	}
+	return strings.Join(out, "\n")
+}

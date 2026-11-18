@@ -128,3 +128,28 @@ func TestMigration00049_NoCookDefaultsToDerived(t *testing.T) {
 	_, err = conn.Exec(`UPDATE foods SET no_cook = 2 WHERE id = 1`)
 	assert.Error(t, err, "only 0 and 1")
 }
+
+// Migration 00052 adds the nullable serving_g, positive only.
+func TestMigration00052_ServingG(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "migration52.db")
+	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	require.NoError(t, err)
+	conn.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	goose.SetBaseFS(db.Migrations)
+	require.NoError(t, goose.SetDialect("sqlite3"))
+	require.NoError(t, goose.UpTo(conn, "migrations", 51))
+	mustExec(t, conn, `INSERT INTO foods (id, name, kind, source) VALUES (1, 'Apfel', 'leaf', 'manual')`)
+	require.NoError(t, goose.UpTo(conn, "migrations", 52))
+
+	var v sql.NullFloat64
+	require.NoError(t, conn.QueryRow(`SELECT serving_g FROM foods WHERE id = 1`).Scan(&v))
+	assert.False(t, v.Valid)
+	mustExec(t, conn, `UPDATE foods SET serving_g = 150 WHERE id = 1`)
+	_, err = conn.Exec(`UPDATE foods SET serving_g = 0 WHERE id = 1`)
+	assert.Error(t, err, "only positive")
+	require.NoError(t, goose.DownTo(conn, "migrations", 51))
+	_, err = conn.Exec(`SELECT serving_g FROM foods`)
+	assert.Error(t, err)
+}

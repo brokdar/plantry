@@ -60,6 +60,7 @@ const (
 	CodeMealNotLight      = "meal_not_light"
 	CodeMealNotHearty     = "meal_not_hearty"
 	CodeDishRepeats       = "dish_repeats_exceeded"
+	CodeAddOnExcess       = "add_on_excess"
 	CodeWeekMeatAboveDGE  = "week_meat_above_dge"
 	CodeWeekFishBelowDGE  = "week_fish_below_dge"
 	CodeWeekLegumesBelow  = "week_legumes_below_dge"
@@ -141,6 +142,7 @@ func FilterBoardIssues(s State, issues []Issue) []Issue {
 			if !draftDays[is.Date] {
 				is.Severity = SeverityWarning
 			}
+			is.Options = nil
 		case "H2", "H5", "H8":
 		default:
 			continue
@@ -162,7 +164,7 @@ func BoardSoftIssues(s State, issues []Issue) []Issue {
 			continue
 		}
 		switch is.Rule {
-		case "S2", "S3", "S4", "S5", "S6", "S6b", "S7", "S8":
+		case "S2", "S3", "S4", "S5", "S6", "S6b", "S7", "S8", "S9":
 			is.Options = nil
 			out = append(out, is)
 		}

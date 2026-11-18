@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -244,6 +245,13 @@ const ExploreTag = "explore"
 func WithNutrition(ff FoodFacts, d food.Detailed) FoodFacts {
 	ff.Macros, ff.NutritionComplete, ff.FiberMissing = d.Macros, d.Complete, d.FiberMissing
 	ff.Groups = GroupsOf(d.Leaves)
+	ff.Leaves = nil
+	if len(d.Leaves) > 1 {
+		ff.Leaves = map[string]float64{}
+		for _, l := range d.Leaves {
+			ff.Leaves[strings.ToLower(l.Name)] += l.Grams
+		}
+	}
 	return ff
 }
 
@@ -304,6 +312,9 @@ func BaseFacts(f *food.Food) FoodFacts {
 		ID: f.ID, Name: f.Name, Kind: f.Kind, KeepDays: f.KeepDays, Freezable: f.Freezable != nil && *f.Freezable,
 		Favorite: f.Favorite, LastEaten: f.History.LastEaten, ReferencePortions: 1, DietClass: f.DietClass,
 		NoCook: NoCook(f), Sweet: IsSweet(f), Tags: f.Tags,
+	}
+	if f.ServingG != nil {
+		ff.ServingG = *f.ServingG
 	}
 	if f.Kind == food.KindLeaf {
 		if r, _ := shopping.EffectiveRole(f); r != nil {

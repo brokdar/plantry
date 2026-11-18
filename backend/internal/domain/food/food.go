@@ -129,6 +129,10 @@ type Food struct {
 	// nil means planning.NoCook derives it.
 	NoCookOverride *bool
 
+	// ServingG is the grams of one serving of an eat-as-is leaf; nil means
+	// none stored (planning.TypicalLeafGrams applies).
+	ServingG *float64
+
 	// Shared.
 	SourceURL   *string // where the food was imported from
 	Description *string

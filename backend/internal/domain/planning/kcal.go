@@ -2,6 +2,7 @@ package planning
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -168,24 +169,54 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 	return out
 }
 
-// writeDayBudgets tells the prompt which days have fewer meals to plan than
-// slots (a No-plate meal, a routine meal without a plate): their kcal target
-// is scaled to the meals that count.
+// writeDayBudgets is the Go-computed day budget table of the planner prompt
+// (p17): per day with a meal to plan, the kcal target after light and hearty
+// requests, its band, the safety floor, the kcal already fixed (routine and
+// confirmed plates), the open meals and what each needs to reach the floor
+// and the target, and the light cap or hearty minimum of marked meals. The
+// model reads the budget instead of doing the arithmetic.
 func writeDayBudgets(b *strings.Builder, x *index) {
 	k := x.s.Profile.KcalTarget
 	if k == nil || *k <= 0 {
 		return
 	}
+	open := map[int][]string{}
+	for _, c := range x.s.Cells {
+		if c.Mode == availability.ModePlan && x.inTarget(c.Key()) && len(x.byCell[idOf(c.Key())]) == 0 {
+			open[dayOf(c.Date)] = append(open[dayOf(c.Date)], slotName(x.s, c.SlotID))
+		}
+	}
 	first := true
 	for _, dk := range x.dayAccounts(x.days) {
-		if dk.Active() == dk.Meals {
+		meals := open[dayOf(dk.Date)]
+		if dk.Away || (len(meals) == 0 && dk.Active() == dk.Meals) {
 			continue
 		}
 		if first {
-			b.WriteString("\nShort days (a No-plate meal or a routine meal without a plate): the kcal target of these days is scaled to the meals you plan, per person:\n")
+			b.WriteString("\nDay budgets per person (computed; do not redo the arithmetic). target is after light and hearty requests, band is the S2 range, floor is H9 (hard), fixed is routine and confirmed kcal, open lists the meals to plan with the kcal each needs for the floor and for the target:\n")
 			first = false
 		}
-		fmt.Fprintf(b, "- %s: %d of %d meals planned, target %.0f kcal\n", weekdayDate(dk.Date), dk.Active(), dk.Meals, dk.Scaled)
+		fixed := math.Round(dk.Kcal)
+		fmt.Fprintf(b, "- %s: target %.0f (band %.0f-%.0f), floor %.0f, fixed %.0f", weekdayDate(dk.Date), dk.Adjusted,
+			dk.Adjusted*x.pol.DayLow, dk.Adjusted*x.pol.DayHigh, dk.Floor(x.pol), fixed)
+		if dk.Active() != dk.Meals {
+			fmt.Fprintf(b, ", %d of %d meals planned", dk.Active(), dk.Meals)
+		}
+		if n := float64(len(meals)); n > 0 {
+			fmt.Fprintf(b, ", open %s: each needs >=%.0f for the floor, ~%.0f for the target", strings.Join(meals, "+"),
+				math.Max(0, (dk.Floor(x.pol)-fixed)/n), math.Max(0, (dk.Adjusted-fixed)/n))
+		}
+		for _, l := range x.s.Light {
+			if l.Date != dk.Date.Format(time.DateOnly) || l.Scope != LightScopeMeal {
+				continue
+			}
+			if l.Hearty() {
+				fmt.Fprintf(b, ", %s hearty >=%.0f", l.Slot, HeartyMealShare*dk.normalShare())
+			} else {
+				fmt.Fprintf(b, ", %s light <=%.0f", l.Slot, dk.mealCap())
+			}
+		}
+		b.WriteByte('\n')
 	}
 }
 

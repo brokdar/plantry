@@ -204,6 +204,7 @@ type Food struct {
 	ShopSection       sql.NullString
 	DietClass         sql.NullString
 	NoCook            sql.NullInt64
+	ServingG          sql.NullFloat64
 	KeepDays          sql.NullInt64
 	Freezable         sql.NullInt64
 }

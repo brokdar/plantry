@@ -165,8 +165,9 @@ func (h *planner) capAdd(c optCand, maxKcal float64) (optCand, bool) {
 	}
 	switch {
 	case c.opt.Grams != nil:
-		g := min(*c.opt.Grams, maxAddFillerGrams, math.Floor(maxKcal/f.Macros.Kcal*100/roundGrams)*roundGrams)
-		if g < minAddGrams {
+		limit := addCapKcal(f, maxKcal)
+		g := min(*c.opt.Grams, limit)
+		if g < min(minAddGrams, limit) {
 			return c, false
 		}
 		c.opt.Grams, c.add.Grams = &g, &g

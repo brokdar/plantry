@@ -220,6 +220,9 @@ func (h *planner) plan() (Proposal, error) {
 	if note := floorNote(Merge(h.s, h.in.Target, h.prop), h.in.Target); note != "" {
 		h.notes = append(h.notes, note)
 	}
+	if note := mealNote(Merge(h.s, h.in.Target, h.prop), h.in.Target); note != "" {
+		h.notes = append(h.notes, note)
+	}
 	if note := proteinNote(Merge(h.s, h.in.Target, h.prop), h.in.Target); note != "" {
 		h.notes = append(h.notes, note)
 	}

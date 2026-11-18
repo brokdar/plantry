@@ -229,6 +229,7 @@ RETURNING *;
 -- name: SetFoodNoCook :one
 UPDATE foods SET
     no_cook    = ?,
+    serving_g  = ?,
     updated_at = datetime('now')
 WHERE id = ?
 RETURNING *;
