@@ -39,6 +39,13 @@ func (Heuristic) Choose(ctx context.Context, in ChooseInput) (Proposal, error) {
 		prop, err = h.side(*in.Side)
 	} else {
 		h, prop, err = planWithForcedCooks(in, h)
+		if err == nil && distinctDays(in.Target) >= minDGEDays {
+			// The week's meat budget and one fish meal, by verified swaps
+			// (the picks above only weigh them as tie-breaks).
+			var notes []string
+			prop, notes = guardWeek(in.State, in.Target, prop, idSet(in.Exclude), in.Instruction)
+			prop.Notes = joinNotes(append([]string{prop.Notes}, notes...)...)
+		}
 	}
 	h.recordChoices(ctx)
 	return prop, err
@@ -76,6 +83,8 @@ type planner struct {
 	// occasions holds each day's cook cells (H2), routine cells excluded.
 	occasions map[int]map[cellID]bool
 	meatDays  map[int]bool
+	// meatLimitG is the DGE meat limit prorated to the planned days (S7).
+	meatLimitG float64
 	// allowMeat lets a leftover add a meat day past the limit: the last
 	// resort for a cell nothing else can fill (H1 weighs more than H5); it
 	// also lets a batch pass its S8 dish cap then.
@@ -120,6 +129,10 @@ func newPlanner(in ChooseInput) *planner {
 		avoid: idSet(in.Avoid), avoidBatch: idSet(in.AvoidBatches), exclude: idSet(in.Exclude), routineFoods: nil,
 	}
 	h.routineFoods = h.x.routineFoods()
+	h.meatLimitG = DGEMeatMaxG
+	if b, ok := MeatBudgetOf(s, in.Target); ok {
+		h.meatLimitG = b.LimitG
+	}
 	for day, cells := range h.x.occasions {
 		h.occasions[day] = map[cellID]bool{}
 		for c := range cells {
@@ -707,6 +720,7 @@ const dgeFitBucket = 1
 type dgeState struct {
 	needFish, needLegume bool
 	meatG                float64
+	limitG               float64
 }
 
 // dgeState counts what the fixed plates and the recipes cooked so far hold:
@@ -715,7 +729,7 @@ type dgeState struct {
 // portions (a batch feeds that many cells).
 func (h *planner) dgeState() dgeState {
 	t := diet.Class(h.s.Profile.DietType)
-	d := dgeState{needFish: t == "" || diet.Compatible(diet.Pescetarian, t), needLegume: true}
+	d := dgeState{needFish: t == "" || diet.Compatible(diet.Pescetarian, t), needLegume: true, limitG: h.meatLimitG}
 	// note takes the groups of one portion eaten (g) and the portions of
 	// meat that count against the week.
 	note := func(g FoodGroups, meatPortions float64) {
@@ -748,9 +762,10 @@ func (d dgeState) legume(f FoodFacts) float64 {
 	return b2f(!(d.needLegume && f.Groups.LegumeG >= minMealG))
 }
 
-// meat is 1 for a recipe that takes the estimated week past the DGE limit.
+// meat is 1 for a recipe that takes the estimated week past the DGE limit
+// prorated to the planned days (the guard, guardWeek, trims what is left).
 func (d dgeState) meat(f FoodFacts) float64 {
-	return b2f(f.Groups.MeatG > 0 && d.meatG+f.Groups.MeatG*f.ReferencePortions > DGEMeatMaxG)
+	return b2f(f.Groups.MeatG > 0 && d.meatG+f.Groups.MeatG*f.ReferencePortions > d.limitG)
 }
 
 // mainCandidate reports whether f may be cooked as the main of c.
@@ -996,4 +1011,13 @@ func (h *planner) recipeReason(f FoodFacts) string {
 
 func (h *planner) leftoverReason(cookDate time.Time) string {
 	return fmt.Sprintf(h.text(textLeftovers), weekdays[h.lang()][cookDate.Weekday()])
+}
+
+// distinctDays is the number of days the target's cells span.
+func distinctDays(t Target) int {
+	days := map[int]bool{}
+	for _, c := range t.Cells {
+		days[dayOf(c.Date)] = true
+	}
+	return len(days)
 }

@@ -25,7 +25,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h17"
+const HeuristicVersion = "h18"
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.
@@ -864,6 +864,15 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	prop, capNotes := capPortions(base, last)
 	if len(capNotes) > 0 {
 		prop.Notes = joinNotes(append([]string{prop.Notes}, capNotes...)...)
+	}
+	// The week's meat stays within its budget and holds a fish meal whenever a
+	// verified swap exists, whatever the chooser left (runs that span the week only).
+	if j.side == nil && distinctDays(j.target) >= minDGEDays {
+		var weekNotes []string
+		prop, weekNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
+		if len(weekNotes) > 0 {
+			prop.Notes = joinNotes(append([]string{prop.Notes}, weekNotes...)...)
+		}
 	}
 	merged := Merge(base, j.target, prop)
 	issues := Check(merged, j.target)

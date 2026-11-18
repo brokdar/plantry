@@ -243,7 +243,7 @@ func TestLLMChooser_RequestAndPrompt(t *testing.T) {
 		row := candidateLine(t, sys, fid)
 		kcal := macros[fid].Macros.Kcal
 		require.Positive(t, kcal)
-		assert.Equal(t, fmt.Sprintf("%.0f", kcal), strings.Split(row, "|")[6], "candidate %d", fid)
+		assert.Equal(t, fmt.Sprintf("%.0f", kcal), strings.Split(row, "|")[8], "candidate %d", fid)
 	}
 	assert.Contains(t, sys, "- diet type: omnivore\n")
 	assert.Contains(t, sys, "No coriander, ever.")
@@ -490,7 +490,7 @@ func TestLLMChooser_StageAndReady(t *testing.T) {
 	// The empty first plan is H1-only: its repair is extra, then two repairs.
 	assert.Equal(t, 3, p.RepairAttempts)
 	assert.Equal(t, []planning.Stage{planning.StageRepairing, planning.StageRepairing, planning.StageRepairing}, stages)
-	assert.Equal(t, "p18", c.PromptVersion())
+	assert.Equal(t, "p19", c.PromptVersion())
 
 	require.NoError(t, c.Ready(context.Background()))
 	assert.ErrorIs(t, planning.NewLLMChooser(llm.StaticResolver(nil, "")).Ready(context.Background()), domain.ErrAIProviderMissing)
