@@ -1,0 +1,25 @@
+{
+  "name": "addon_caps",
+  "description": "Add-on caps: a low-kcal library (soups, salads, vegetables, light mains) on 2200 kcal; the caps bind, so the week may stay a little under its band (at least 90 %). Gaps are closed with add-ons at the food's serving size, at most two servings, and no S9 add_on_excess is raised.",
+  "today": "2026-11-06",
+  "start": "2026-11-07",
+  "settings": {
+    "plan.shopping_day": "5", "plan.batch_cooking": "false", "plan.default_keep_days": "2",
+    "plan.max_cook_occasions_per_day": "2", "plan.variety_weeks": "2", "plan.freezing_enabled": "false"
+  },
+  "profile": {"diet_type": "omnivore", "household_portions": 1, "kcal_target": 2200, "goal": "maintain", "weight_kg": 70},
+  "slots": ["breakfast", "lunch", "dinner"],
+  "presets": [{"name": "Yoghurt", "slot": "breakfast", "recipe": "Joghurt mit Beeren"}],
+  "availability": {"defaults": [
+    {"weekdays": [0, 1, 2, 3, 4, 5, 6], "slot": "breakfast", "mode": "routine", "preset": "Yoghurt"}
+  ]},
+  "recipes": [
+    "Joghurt mit Beeren", "Gurkensalat", "Gedünsteter Brokkoli", "Ofengemüse", "Basmatireis", "Salzkartoffeln",
+    "Linsen-Dal", "Tofu-Gemüse-Pfanne", "Shakshuka", "Lachs mit Brokkoli", "Hähnchen-Curry", "Chili con Carne", "Overnight Oats"
+  ],
+  "steps": [{"action": "generate"}],
+  "expect": {
+    "min_plates": 14,
+    "evaluation": {"week_pct": [90, 105], "min_day_share": 0.7, "issues_absent": ["add_on_excess", "kcal_below_floor"]}
+  }
+}
