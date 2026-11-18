@@ -83,3 +83,20 @@ func TestChatModelReadsNoRuleCodesOrDryRun(t *testing.T) {
 	}
 	assert.Contains(t, prompt, "I checked the change first")
 }
+
+// An issue with no verified fix (E002b) and a cook in a no-plate slot (E001)
+// read by label too; no_fix_found and no_fix_reason stay.
+func TestPlainRules_NoFixAndCookInNoneCell(t *testing.T) {
+	raw := json.RawMessage(`{"issues":[{"rule":"H2","code":"too_many_cook_occasions","severity":"violation","no_fix_found":true,"no_fix_reason":"ask the user"},
+		{"rule":"H1","code":"cook_in_none_cell","severity":"violation","session_id":4}]}`)
+	var res struct {
+		Issues []map[string]any `json:"issues"`
+	}
+	out := agent.PlainRules(raw)
+	require.NoError(t, json.Unmarshal(out, &res))
+	assert.NotRegexp(t, ruleToken, string(out))
+	assert.Equal(t, "cooking occasions per day", res.Issues[0]["label"])
+	assert.Equal(t, true, res.Issues[0]["no_fix_found"])
+	assert.Equal(t, "ask the user", res.Issues[0]["no_fix_reason"])
+	assert.Equal(t, "cooking in a no-plate slot", res.Issues[1]["label"])
+}

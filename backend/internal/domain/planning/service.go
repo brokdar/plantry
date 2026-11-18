@@ -25,7 +25,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h16"
+const HeuristicVersion = "h18"
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.
@@ -859,7 +859,30 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		}
 	}
 
-	prop := last
+	// No saved plate holds a dish above the portion cap, whatever the chooser
+	// left (the checker flagged it and the repairs had their turns).
+	prop, capNotes := capPortions(base, last)
+	if len(capNotes) > 0 {
+		prop.Notes = joinNotes(append([]string{prop.Notes}, capNotes...)...)
+	}
+	// The week's meat stays within its budget and holds a fish meal whenever a
+	// verified swap exists, whatever the chooser left (runs that span the week only).
+	if j.side == nil && distinctDays(j.target) >= minDGEDays {
+		var weekNotes []string
+		prop, weekNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
+		if len(weekNotes) > 0 {
+			prop.Notes = joinNotes(append([]string{prop.Notes}, weekNotes...)...)
+		}
+	}
+	// A model's plan gets its quantities finished in Go (portions, a side,
+	// add-ons), the way the heuristic sets its own.
+	if _, heuristic := j.chooser.(Heuristic); !heuristic && j.side == nil {
+		var balanceNotes []string
+		prop, balanceNotes = balancePlan(ChooseInput{State: base, Target: j.target, Exclude: j.exclude, Avoid: j.avoid, Locale: base.Profile.Locale}, prop)
+		if len(balanceNotes) > 0 {
+			prop.Notes = joinNotes(append([]string{prop.Notes}, balanceNotes...)...)
+		}
+	}
 	merged := Merge(base, j.target, prop)
 	issues := Check(merged, j.target)
 	stage(StageChecking, issueAttrs(issues)...)

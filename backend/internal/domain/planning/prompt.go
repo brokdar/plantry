@@ -18,7 +18,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p17"
+const PromptVersion = "p20"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -69,7 +69,7 @@ var submitPlanSchema = `{
               "type": "object",
               "properties": {
                 "food_id": {"type": "integer"},
-                "portions": {"type": "number", "description": "Portions PER EATER of a recipe, usually 1; up to 1.5 to reach the day's kcal target, raising the main of a non-light meal before adding no-cook items (never the number of eaters: 3 eaters eating 1 portion each consume 3 portions of the session). Omit for a no-cook leaf."},
+                "portions": {"type": "number", "description": "Portions PER EATER of a recipe, usually 1; at most 1.5 (more is a hard violation: close the day's kcal gap with a side or a no-cook add-on, never a bigger dish) (never the number of eaters: 3 eaters eating 1 portion each consume 3 portions of the session). Omit for a no-cook leaf."},
                 "grams": {"type": "number", "description": "Grams PER EATER of a leaf from the no-cook table, at most 2 servings (no session, no cooking occasion). Instead of portions."},
                 "session_key": {"type": "string", "description": "Key of a session you propose."},
                 "session_id": {"type": "integer", "description": "Id of a fixed session with free portions."}
@@ -133,6 +133,7 @@ func renderPrompt(in ChooseInput) (string, []FoodFacts) {
 	writeSettings(&head, in)
 	writeProfile(&head, s.Profile)
 	writeDayBudgets(&head, x)
+	writeMeatBudget(&head, in)
 	writeCells(&head, x)
 	writeSessions(&head, x)
 	writeFixedCooks(&head, x)
@@ -146,7 +147,7 @@ func renderPrompt(in ChooseInput) (string, []FoodFacts) {
 	for i, f := range cands {
 		rows[i] = candidateRow(f, s.Settings.DefaultKeepDays)
 	}
-	const header = "\nCandidate recipes (id|name|role|suits|diet|meat|kcal|protein_g|fat_g|carbs_g|nutrition_complete|minutes|reference_portions|keep_days|freezable|last_eaten|eaten_8_weeks|favorite|like_score|explore), per portion:\n"
+	const header = "\nCandidate recipes (id|name|role|suits|diet|meat|meat_g|fish_g|kcal|protein_g|fat_g|carbs_g|nutrition_complete|minutes|reference_portions|keep_days|freezable|last_eaten|eaten_8_weeks|favorite|like_score|explore), per portion:\n"
 	var noCook strings.Builder
 	writeNoCook(&noCook, in)
 	room := PromptTokenBudget*4 - utf8.RuneCountInString(head.String()) - utf8.RuneCountInString(tail.String()) - utf8.RuneCountInString(noCook.String()) - len(header) - 80
@@ -375,10 +376,11 @@ How a plan works:
 - Cooking occasions: every cook cell of a session counts, and so does every component without a session_key/session_id (it is cooked fresh on its own cell). Several sessions cooked on the same cell are one occasion, so cook a side on the same cell as its main, and let other plates eat from a session.
 - Every lunch and dinner plate needs a main (role main, suits lunch_dinner in the candidate table); a side alone is not a meal. Recipes that suit breakfast (standalone: oats, yoghurt) are for breakfast cells only, never a lunch or dinner. Pair mains with a side where it suits.
 - Submit the COMPLETE plan in your first call: a plate for every fill cell (the task lists them with their count) and every session they need. The checker allows only two repairs; do not use them to find missing cells. notes describe only what is in the plan.
-- Soft rules (reported by evaluate_plan, never block saving, aim to satisfy them): S1 at most the meat-day limit of days with an omnivore recipe on a plate (the meat column; a cook day without an eating plate is not a meat day); S2 every day's plates per eater within the day band of the energy policy below, as a share of the day's kcal target (a day with a No-plate meal has a lower target, see Short days); S3 every day at least 90% of its protein target (g per kg body weight when the profile has a weight, else the profile's protein share of kcal minus 5 points) and the weekly average at least 100% of it; S4 the average of the complete days within the week band of the energy policy (it has no options: move kcal between days or raise portions); S5 the weekly carb and fat shares inside their ranges (no options; lowest priority, never at the cost of kcal or protein); S7 the DGE food rules, judged on 5 or more complete days (meat at most 300 g per person per week, prorated by week.days; a fish meal and a legume meal, at least 50 g each per person, at least once a week; week.meat_g, fish_meals, legume_meals; no options, priority 5, never at the cost of kcal, protein or the user's wishes). S9 add_on_excess (soft, ranked with preferences): an add-on is a no-cook leaf on a plate; it must not be over its cap (2 servings, 200 g, 20% of the day target), the day may hold at most 3, the same food at most 3 plates a week, no add-on goes on a light meal and none duplicates what the main already holds (tofu on a tofu dish). Each S2/S3/H9 issue lists computed options (add a no-cook item at serving size, or raise an amount) with the kcal and protein they add and, when Go chose another meal, a why; take one instead of computing by hand.
+- Soft rules (reported by evaluate_plan, never block saving, aim to satisfy them): S1 at most the meat-day limit of days with an omnivore recipe on a plate (the meat column; a cook day without an eating plate is not a meat day); S2 every day's plates per eater within the day band of the energy policy below, as a share of the day's kcal target (a day with a No-plate meal has a lower target, see Short days); S3 every day at least 90% of its protein target (g per kg body weight when the profile has a weight, else the profile's protein share of kcal minus 5 points) and the weekly average at least 100% of it; S4 the average of the complete days within the week band of the energy policy (it has no options: move kcal between days or raise portions); S5 the weekly carb and fat shares inside their ranges (no options; lowest priority, never at the cost of kcal or protein); S7 the DGE food rules, judged on 5 or more complete days (meat at most 300 g per person per week, prorated by week.days, see the week meat budget below; a fish meal and a legume meal, at least 50 g each per person, at least once a week; week.meat_g, fish_meals, legume_meals; priority 5, never at the cost of kcal, protein or the user's wishes). When evaluate_plan lists options on week_meat_above_dge or week_fish_below_dge (verified swaps of one main, each keeping its day in band) take them: the weekly meat limit and one fish meal must be met whenever the evaluation offers a way; with no_fix_found leave them. S9 add_on_excess (soft, ranked with preferences): an add-on is a no-cook leaf on a plate; it must not be over its cap (2 servings, 200 g, 20% of the day target), the day may hold at most 3, the same food at most 3 plates a week, no add-on goes on a light meal and none duplicates what the main already holds (tofu on a tofu dish). Each S2/S3/H9 issue lists computed options (add a no-cook item at serving size, or raise an amount) with the kcal and protein they add and, when Go chose another meal, a why; take one instead of computing by hand.
 - When a code execution tool is offered: for fan-out or comparing variants, write code that calls evaluate_plan on several drafts and prints only what you need (the cheapest plan that clears the hard rules); call submit_plan yourself, directly, with the plan you chose.
 - Evaluate before you submit: write the draft, call evaluate_plan with it, read days (kcal, protein, cook occasions, meat) and issues, change the plan, evaluate again. Do not simulate the checker in your head. Do not add up kcal, protein, meat days or keep windows in your reasoning: write a draft and call evaluate_plan, which computes them, then fix what it reports.
 - No-cook table: eat-as-is foods (serving = the amount to offer) that close a kcal or protein gap without a cooking occasion; add one as a component of an existing plate (leaf: grams, no session), never a sweet, never on a light meal, at most 2 servings. First raise the main of a non-light meal (up to 1.5 portions); add-ons come after that.
+- After you submit, Go balances the quantities of your plan (portions up to 1.5, a side recipe, add-ons within their caps, trimming add-on excess) so every day lands in its band and the week at its target. Choose dishes, days, batches and the instruction; call evaluate_plan until no hard rule is broken and the weekly meat limit and fish meal are met, then submit. Do not spend dry runs on S2, S3, S4 or S9 quantity items.
 - The day budget table gives each day's target, band, floor, fixed kcal and what each open meal needs; plan the meals to those sizes in your first draft.
 - notes must match the plan evaluate_plan reports: never call a meal light while it has S6, nor a day within its band while it has S2.
 - Mix several different mains over the week rather than one recipe for most meals.
@@ -400,7 +402,7 @@ Hard rules (a checker rejects violations):
 		fmt.Fprintf(b, "H5 at most %d days of the week have an omnivore recipe.\n", *s.Profile.MeatDaysPerWeekMax)
 	}
 	b.WriteString("H6 fixed plates and sessions stay as they are; propose sessions only on fill cells.\n")
-	b.WriteString("H7 sessions and components are candidate recipes, portions are positive, every plate has a component.\n")
+	b.WriteString("H7 sessions and components are candidate recipes, portions are positive and at most 1.5 per eater, every plate has a component.\n")
 	if w := s.Settings.VarietyWeeks; w > 0 {
 		fmt.Fprintf(b, "H8 variety: don't cook a main or standalone recipe eaten or cooked within the %d weeks before (last_eaten) or earlier in this plan, unless the candidates run out.\n", w)
 	}
@@ -412,6 +414,24 @@ Hard rules (a checker rejects violations):
 		}
 		b.WriteString(" (kcal_below_floor).\n\n" + pol.Describe() + "\n")
 	}
+}
+
+// writeMeatBudget states the week's meat budget as a number (MeatBudgetOf):
+// the DGE limit prorated to the planned days, less the meat already on fixed
+// plates. The candidate table's meat_g and fish_g are grams per portion.
+func writeMeatBudget(b *strings.Builder, in ChooseInput) {
+	if in.Side != nil {
+		return
+	}
+	mb, ok := MeatBudgetOf(in.State, in.Target)
+	if !ok {
+		return
+	}
+	fixed := ""
+	if mb.FixedG > 0 {
+		fixed = fmt.Sprintf(", less %.0f g already on fixed plates", mb.FixedG)
+	}
+	fmt.Fprintf(b, "\nWeek meat budget: at most %.0f g of meat per person over the %d planned days (%.0f g limit%s). The meat_g column is grams of meat per portion (0 none): a main of 150 g uses half of a 300 g week per portion eaten, and a batch eaten on three plates counts three times. fish_g marks fish mains (50 g or more is a fish meal; fish keeps 1 day, so each fish main needs its own cook cell). Plan the week within the budget and with one fish meal.\n", mb.BudgetG, mb.Days, mb.LimitG, fixed)
 }
 
 func meatLimit(p Profile) string {
@@ -758,8 +778,8 @@ func candidateRow(f FoodFacts, defaultKeep int) string {
 	if role == "" {
 		role = "-"
 	}
-	return fmt.Sprintf("%d|%s|%s|%s|%s|%s|%.0f|%.0f|%.0f|%.0f|%s|%d|%s|%s|%s|%s|%d|%s|%s|%s",
-		f.ID, cell(f.Name), role, suits(f.Role), f.DietClass, yesNo(f.DietClass == diet.Omnivore), f.Macros.Kcal, f.Macros.Protein, f.Macros.Fat, f.Macros.Carbs,
+	return fmt.Sprintf("%d|%s|%s|%s|%s|%s|%.0f|%.0f|%.0f|%.0f|%.0f|%.0f|%s|%d|%s|%s|%s|%s|%d|%s|%s|%s",
+		f.ID, cell(f.Name), role, suits(f.Role), f.DietClass, yesNo(f.DietClass == diet.Omnivore), f.Groups.MeatG, f.Groups.FishG, f.Macros.Kcal, f.Macros.Protein, f.Macros.Fat, f.Macros.Carbs,
 		yesNo(f.NutritionComplete), f.Minutes, num(f.ReferencePortions), keep, yesNo(f.Freezable), last,
 		f.TimesEaten8Weeks, yesNo(f.Favorite), num(f.LikeScore), yesNo(f.Explore()))
 }

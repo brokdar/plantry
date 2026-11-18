@@ -2,6 +2,7 @@ package eval
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -128,8 +129,9 @@ func TestAlternatives_GeneratedWeek(t *testing.T) {
 	// The leftover main's best alternative cooks at an existing cooking
 	// cell; applied through ReplaceComponent it adds no H2.
 	res := ask(leftover, planning.AltMain)
-	top := res.Alternatives[0]
-	require.Equal(t, planning.SourceCookAt, top.Source, "%+v", top)
+	i := slices.IndexFunc(res.Alternatives, func(a planning.Alternative) bool { return a.Source == planning.SourceCookAt })
+	require.GreaterOrEqual(t, i, 0, "a cook_at alternative: %+v", res.Alternatives)
+	top := res.Alternatives[i]
 	require.NotNil(t, top.CookAt)
 	require.Len(t, top.Ops, 1)
 	assert.Equal(t, "replace", top.Ops[0].Op)

@@ -1,28 +1,28 @@
 Report 0123456789ab llm/p1-b/fake
 scenario                    runs  ok  violations  coverage  macro_daily_pct  distinct  repeats  waste  tokens_in  cost_usd  latency_ms
-addon_caps                  1     1   0           1         8.675            6         8        0      4119       -         0
+addon_caps                  1     1   0           1         2.316            6         8        0      4430       -         0
 away_thu_fri                1     1   0           1         -                0         0        0      0          -         0
-confirmed_cook_empty_cell   1     1   0           1         39.545           1         0        0      4187       -         0
-confirmed_cook_no_surplus   1     1   1           0.5       70.795           1         0        0      16576      -         0
-explore_quota               1     1   0           1         -                3         2        0      2853       -         0
-family_daily                1     1   0           1         28.544           9         0        0      4466       -         0
-hearty_meal                 1     1   0           1         3.245            14        0        0      4563       -         0
-light_day                   1     1   0           1         5.914            14        0        0      4550       -         0
-light_dinners_no_addons     1     1   0           1         8.731            14        0        0      4619       -         0
-light_meal_weekday_dinners  1     1   0           1         8.731            14        0        0      4619       -         0
-light_two_meals_floor       1     1   2           1         12.058           14        0        0      13809      -         0
-many_none_cells             1     1   0           1         -                2         0        0      3191       -         0
-nutrition_lose              1     1   0           1         9.921            14        0        0      4504       -         0
-nutrition_maintain          1     1   0           1         1.899            14        0        0      4505       -         0
-nutrition_maintain_1800     1     1   0           1         4.255            14        0        0      4505       -         0
-nutrition_maintain_2500     1     1   0           1         4.756            14        0        0      4507       -         0
-protein_gap_week            1     1   0           1         0.205            8         6        0      4120       -         0
-replan_one_day              1     1   0           1         9.727            1         0        0      4400       -         0
-single_batch_cooker         1     1   0           1         26.247           5         0        0      4474       -         0
-small_library_h8            1     1   0           1         -                7         14       0      2915       -         0
-unreachable_floor           1     1   7           1         85.509           14        0        0      13548      -         0
-vegetarian_variety          1     1   0           1         10.497           7         0        0      4092       -         0
-walkthrough_batch_cooker    1     1   0           1         25.733           5         0        0      4483       -         0
+confirmed_cook_empty_cell   1     1   0           1         33.182           1         0        0      4410       -         0
+confirmed_cook_no_surplus   1     1   1           0.5       70.795           1         0        0      17468      -         0
+explore_quota               1     1   0           1         -                3         2        0      3166       -         0
+family_daily                1     1   0           1         27.944           9         0        0      4798       -         0
+hearty_meal                 1     1   0           1         3.635            14        0        0      4896       -         0
+light_day                   1     1   0           1         4.966            14        0        0      4882       -         0
+light_dinners_no_addons     1     1   0           1         6.46             14        0        0      4951       -         0
+light_meal_weekday_dinners  1     1   0           1         6.46             14        0        0      4951       -         0
+light_two_meals_floor       1     1   2           1         11.865           14        0        0      14805      -         0
+many_none_cells             1     1   0           1         -                2         0        0      3415       -         0
+nutrition_lose              1     1   0           1         3.461            14        0        0      4837       -         0
+nutrition_maintain          1     1   0           1         0.449            14        0        0      4837       -         0
+nutrition_maintain_1800     1     1   0           1         3.213            14        0        0      4837       -         0
+nutrition_maintain_2500     1     1   0           1         1.299            14        0        0      4839       -         0
+protein_gap_week            1     1   0           1         1.878            8         6        0      4322       -         0
+replan_one_day              1     1   0           1         0.193            1         0        0      4740       -         0
+single_batch_cooker         1     1   0           1         24.379           9         0        0      4806       -         0
+small_library_h8            1     1   0           1         -                7         14       0      3225       -         0
+unreachable_floor           1     1   7           1         82.916           14        0        0      14544      -         0
+vegetarian_variety          1     1   0           1         2.442            7         0        0      4299       -         0
+walkthrough_batch_cooker    1     1   0           1         25.295           6         0        0      4815       -         0
 Wrote 23 records to b.jsonl
 
 Compare 0123456789ab llm/p1-a/fake -> 0123456789ab llm/p1-b/fake
@@ -34,8 +34,8 @@ addon_caps
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     8.675     8.675    0
-  macro_weekly_pct    8.675     8.675    0
+  macro_daily_pct     2.316     2.316    0
+  macro_weekly_pct    0.022     0.022    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    6         6        0
@@ -44,7 +44,7 @@ addon_caps
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4119      4119     0
+  input_tokens        4430      4430     0
   output_tokens       1722      1722     0
   latency_ms          0         0        0
 
@@ -74,8 +74,8 @@ confirmed_cook_empty_cell
   repair_attempts     0         0        0
   plates              1         1        0
   coverage            1         1        0
-  macro_daily_pct     39.545    39.545   0
-  macro_weekly_pct    39.545    39.545   0
+  macro_daily_pct     33.182    33.182   0
+  macro_weekly_pct    33.182    33.182   0
   cook_occasions      1         1        0
   days_with_prepared  1         1        0
   variety_distinct    1         1        0
@@ -84,7 +84,7 @@ confirmed_cook_empty_cell
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4187      4187     0
+  input_tokens        4410      4410     0
   output_tokens       58        58       0
   latency_ms          0         0        0
 
@@ -105,7 +105,7 @@ confirmed_cook_no_surplus
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        16576     16576    0
+  input_tokens        17468     17468    0
   output_tokens       40        40       0
   latency_ms          0         0        0
 
@@ -124,7 +124,7 @@ explore_quota
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        2853      2853     0
+  input_tokens        3166      3166     0
   output_tokens       547       547      0
   latency_ms          0         0        0
 
@@ -135,8 +135,8 @@ family_daily
   repair_attempts     0         0        0
   plates              16        16       0
   coverage            1         1        0
-  macro_daily_pct     28.544    28.544   0
-  macro_weekly_pct    26.132    26.132   0
+  macro_daily_pct     27.944    27.944   0
+  macro_weekly_pct    25.533    25.533   0
   cook_occasions      9         9        0
   days_with_prepared  0         0        0
   variety_distinct    9         9        0
@@ -145,7 +145,7 @@ family_daily
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4466      4466     0
+  input_tokens        4798      4798     0
   output_tokens       1121      1121     0
   latency_ms          0         0        0
 
@@ -156,8 +156,8 @@ hearty_meal
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     3.245     3.245    0
-  macro_weekly_pct    0.198     0.198    0
+  macro_daily_pct     3.635     3.635    0
+  macro_weekly_pct    2.394     2.394    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -166,8 +166,8 @@ hearty_meal
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4563      4563     0
-  output_tokens       1739      1739     0
+  input_tokens        4896      4896     0
+  output_tokens       1737      1737     0
   latency_ms          0         0        0
 
 light_day
@@ -177,8 +177,8 @@ light_day
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     5.914     5.914    0
-  macro_weekly_pct    5.164     5.164    0
+  macro_daily_pct     4.966     4.966    0
+  macro_weekly_pct    4.008     4.008    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -187,8 +187,8 @@ light_day
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4550      4550     0
-  output_tokens       1702      1702     0
+  input_tokens        4882      4882     0
+  output_tokens       1700      1700     0
   latency_ms          0         0        0
 
 light_dinners_no_addons
@@ -198,8 +198,8 @@ light_dinners_no_addons
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     8.731     8.731    0
-  macro_weekly_pct    8.179     8.179    0
+  macro_daily_pct     6.46      6.46     0
+  macro_weekly_pct    5.908     5.908    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -208,8 +208,8 @@ light_dinners_no_addons
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4619      4619     0
-  output_tokens       1585      1585     0
+  input_tokens        4951      4951     0
+  output_tokens       1584      1584     0
   latency_ms          0         0        0
 
 light_meal_weekday_dinners
@@ -219,8 +219,8 @@ light_meal_weekday_dinners
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     8.731     8.731    0
-  macro_weekly_pct    8.179     8.179    0
+  macro_daily_pct     6.46      6.46     0
+  macro_weekly_pct    5.908     5.908    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -229,8 +229,8 @@ light_meal_weekday_dinners
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4619      4619     0
-  output_tokens       1585      1585     0
+  input_tokens        4951      4951     0
+  output_tokens       1584      1584     0
   latency_ms          0         0        0
 
 light_two_meals_floor
@@ -240,8 +240,8 @@ light_two_meals_floor
   repair_attempts     2         2        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     12.058    12.058   0
-  macro_weekly_pct    11.345    11.345   0
+  macro_daily_pct     11.865    11.865   0
+  macro_weekly_pct    11.557    11.557   0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -250,8 +250,8 @@ light_two_meals_floor
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        13809     13809    0
-  output_tokens       4791      4791     0
+  input_tokens        14805     14805    0
+  output_tokens       4800      4800     0
   latency_ms          0         0        0
 
 many_none_cells
@@ -269,7 +269,7 @@ many_none_cells
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        3191      3191     0
+  input_tokens        3415      3415     0
   output_tokens       330       330      0
   latency_ms          0         0        0
 
@@ -280,8 +280,8 @@ nutrition_lose
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     9.921     9.921    0
-  macro_weekly_pct    2.952     2.952    0
+  macro_daily_pct     3.461     3.461    0
+  macro_weekly_pct    0.852     0.852    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -290,8 +290,8 @@ nutrition_lose
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4504      4504     0
-  output_tokens       1678      1678     0
+  input_tokens        4837      4837     0
+  output_tokens       1684      1684     0
   latency_ms          0         0        0
 
 nutrition_maintain
@@ -301,8 +301,8 @@ nutrition_maintain
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     1.899     1.899    0
-  macro_weekly_pct    0.885     0.885    0
+  macro_daily_pct     0.449     0.449    0
+  macro_weekly_pct    0.065     0.065    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -311,7 +311,7 @@ nutrition_maintain
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4505      4505     0
+  input_tokens        4837      4837     0
   output_tokens       1689      1689     0
   latency_ms          0         0        0
 
@@ -322,8 +322,8 @@ nutrition_maintain_1800
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     4.255     4.255    0
-  macro_weekly_pct    0.291     0.291    0
+  macro_daily_pct     3.213     3.213    0
+  macro_weekly_pct    0.011     0.011    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -332,7 +332,7 @@ nutrition_maintain_1800
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4505      4505     0
+  input_tokens        4837      4837     0
   output_tokens       1642      1642     0
   latency_ms          0         0        0
 
@@ -343,8 +343,8 @@ nutrition_maintain_2500
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     4.756     4.756    0
-  macro_weekly_pct    3.872     3.872    0
+  macro_daily_pct     1.299     1.299    0
+  macro_weekly_pct    0.141     0.141    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -353,8 +353,8 @@ nutrition_maintain_2500
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4507      4507     0
-  output_tokens       1708      1708     0
+  input_tokens        4839      4839     0
+  output_tokens       1702      1702     0
   latency_ms          0         0        0
 
 protein_gap_week
@@ -364,8 +364,8 @@ protein_gap_week
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     0.205     0.205    0
-  macro_weekly_pct    0.01      0.01     0
+  macro_daily_pct     1.878     1.878    0
+  macro_weekly_pct    1.837     1.837    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    8         8        0
@@ -374,7 +374,7 @@ protein_gap_week
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4120      4120     0
+  input_tokens        4322      4322     0
   output_tokens       1701      1701     0
   latency_ms          0         0        0
 
@@ -385,8 +385,8 @@ replan_one_day
   repair_attempts     0         0        0
   plates              3         3        0
   coverage            1         1        0
-  macro_daily_pct     9.727     9.727    0
-  macro_weekly_pct    9.727     9.727    0
+  macro_daily_pct     0.193     0.193    0
+  macro_weekly_pct    0.193     0.193    0
   cook_occasions      1         1        0
   days_with_prepared  1         1        0
   variety_distinct    1         1        0
@@ -395,7 +395,7 @@ replan_one_day
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4400      4400     0
+  input_tokens        4740      4740     0
   output_tokens       183       183      0
   latency_ms          0         0        0
 
@@ -406,18 +406,18 @@ single_batch_cooker
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     26.247    26.247   0
-  macro_weekly_pct    18.313    18.313   0
+  macro_daily_pct     24.379    24.379   0
+  macro_weekly_pct    21.91     21.91    0
   cook_occasions      5         5        0
   days_with_prepared  7         7        0
-  variety_distinct    5         5        0
+  variety_distinct    9         9        0
   variety_repeats     0         0        0
   explore_placed      0         0        0
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4474      4474     0
-  output_tokens       1131      1131     0
+  input_tokens        4806      4806     0
+  output_tokens       1524      1524     0
   latency_ms          0         0        0
 
 small_library_h8
@@ -435,7 +435,7 @@ small_library_h8
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        2915      2915     0
+  input_tokens        3225      3225     0
   output_tokens       1671      1671     0
   latency_ms          0         0        0
 
@@ -446,8 +446,8 @@ unreachable_floor
   repair_attempts     2         2        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     85.509    85.509   0
-  macro_weekly_pct    85.509    85.509   0
+  macro_daily_pct     82.916    82.916   0
+  macro_weekly_pct    82.916    82.916   0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -456,7 +456,7 @@ unreachable_floor
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        13548     13548    0
+  input_tokens        14544     14544    0
   output_tokens       5436      5436     0
   latency_ms          0         0        0
 
@@ -467,8 +467,8 @@ vegetarian_variety
   repair_attempts     0         0        0
   plates              14        14       0
   coverage            1         1        0
-  macro_daily_pct     10.497    10.497   0
-  macro_weekly_pct    10.379    10.379   0
+  macro_daily_pct     2.442     2.442    0
+  macro_weekly_pct    1.708     1.708    0
   cook_occasions      7         7        0
   days_with_prepared  7         7        0
   variety_distinct    7         7        0
@@ -477,7 +477,7 @@ vegetarian_variety
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4092      4092     0
+  input_tokens        4299      4299     0
   output_tokens       1245      1245     0
   latency_ms          0         0        0
 
@@ -488,16 +488,16 @@ walkthrough_batch_cooker
   repair_attempts     0         0        0
   plates              19        19       0
   coverage            1         1        0
-  macro_daily_pct     25.733    25.733   0
-  macro_weekly_pct    19.063    19.063   0
+  macro_daily_pct     25.295    25.295   0
+  macro_weekly_pct    16.908    16.908   0
   cook_occasions      5         5        0
   days_with_prepared  6         6        0
-  variety_distinct    5         5        0
+  variety_distinct    6         6        0
   variety_repeats     0         0        0
   explore_placed      0         0        0
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4483      4483     0
-  output_tokens       960       960      0
+  input_tokens        4815      4815     0
+  output_tokens       994       994      0
   latency_ms          0         0        0

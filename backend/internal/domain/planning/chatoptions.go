@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"math"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
@@ -59,6 +60,10 @@ func IssueOptions(s State, t Target, ev Evaluation, issues []Issue, keep func(Is
 			out[i].Options = x.lightOptions(ev, t, is)
 		} else {
 			out[i].Options = x.cookOptions(ev, t, is)
+			if len(out[i].Options) == 0 {
+				out[i].NoFixFound = true
+				out[i].NoFixReason = "no verified way to move a cook or swap a dish brings this day within the limit; it needs a change of plan (fewer cooked dishes that day), ask the user"
+			}
 		}
 	}
 	return out
@@ -325,8 +330,10 @@ func (x *index) altOption(a Alternative, p Plate, plateKcal float64) Option {
 
 // cookOptions are the verified ways to bring a day with too many cooking
 // occasions within the limit: move a batch cooked that day to another cell
-// (at most maxCookMoves, nearest first), or swap the main of a plate that
-// cooks fresh for a leftover or a no-cook food (at most maxSwapOpts).
+// (at most maxCookMoves, nearest first; a cell of the day that already holds a
+// cook is nearest), when no single move does it move all of the day's batches
+// to one cell (one option with an op per batch), or swap the main of a plate
+// that cooks fresh for a leftover or a no-cook food (at most maxSwapOpts).
 func (x *index) cookOptions(ev Evaluation, t Target, is Issue) []Option {
 	opts := []Option{}
 	day, err := time.Parse(time.DateOnly, is.Date)
@@ -334,8 +341,17 @@ func (x *index) cookOptions(ev Evaluation, t Target, is Issue) []Option {
 		return opts
 	}
 	limit := x.s.Settings.MaxCookOccasionsPerDay
+	hard, id := hardKeys(ev.Issues), issueID(is)
+	resolves := func(next State) bool {
+		for _, e := range Check(next, t) {
+			if issueID(e) == id || (e.Severity == SeverityViolation && !hard[issueID(e)]) {
+				return false
+			}
+		}
+		return true
+	}
 	for _, ss := range x.s.Sessions {
-		if ss.ID <= 0 || ss.Confirmed || ss.Proposed() || dayOf(ss.CookDate) != dayOf(day) || len(opts) >= maxCookMoves {
+		if ss.ID <= 0 || ss.Confirmed || ss.Proposed() || dayOf(ss.CookDate) != dayOf(day) || x.routine(ss.CookCell()) || len(opts) >= maxCookMoves {
 			continue
 		}
 		cells := slices.Clone(x.s.Cells)
@@ -348,7 +364,9 @@ func (x *index) cookOptions(ev Evaluation, t Target, is Issue) []Option {
 			if tries >= maxCellTries || len(opts) >= maxCookMoves {
 				break
 			}
-			if dayOf(c.Date) == dayOf(day) || c.Date.Before(x.s.Today) || !x.s.Window.Contains(c.Date) || c.Mode == availability.ModeNone || x.routine(k) || !x.inTarget(k) {
+			// Another cell of the day is a target only when it already holds
+			// a cook: the day then has one occasion fewer.
+			if dayOf(c.Date) == dayOf(day) && (!x.occasions[dayOf(day)][idOf(k)] || (dayOf(c.Date) == dayOf(ss.CookDate) && c.SlotID == ss.CookSlotID)) || c.Date.Before(x.s.Today) || !x.s.Window.Contains(c.Date) || c.Mode == availability.ModeNone || x.routine(k) || !x.inTarget(k) {
 				continue
 			}
 			tries++
@@ -359,15 +377,7 @@ func (x *index) cookOptions(ev Evaluation, t Target, is Issue) []Option {
 					next.Sessions[i].CookDate, next.Sessions[i].CookSlotID = c.Date, c.SlotID
 				}
 			}
-			hard, id := hardKeys(ev.Issues), issueID(is)
-			good := true
-			for _, e := range Check(next, t) {
-				if issueID(e) == id || (e.Severity == SeverityViolation && !hard[issueID(e)]) {
-					good = false
-					break
-				}
-			}
-			if !good {
+			if !resolves(next) {
 				continue
 			}
 			sid := ss.ID
@@ -378,6 +388,9 @@ func (x *index) cookOptions(ev Evaluation, t Target, is Issue) []Option {
 				Op:            OptionOp{Op: "move_cook", SessionID: &sid, CookAt: &OptionCell{Date: date, SlotID: c.SlotID}},
 			})
 		}
+	}
+	if len(opts) == 0 {
+		opts = append(opts, x.groupedCookMove(t, day, resolves)...)
 	}
 	swaps := 0
 	for _, p := range x.s.Plates {
@@ -400,4 +413,50 @@ func (x *index) cookOptions(ev Evaluation, t Target, is Issue) []Option {
 		}
 	}
 	return opts
+}
+
+// groupedCookMove is the option that moves every batch cooked on day to one
+// of the day's cook cells, for a day where moving one batch alone leaves too
+// many occasions (the day's sessions often cook one dish and its side on the
+// same cell): one option whose ops are a move_cook per batch. A batch cooked
+// in a routine cell (the breakfast routine) is no occasion and stays.
+func (x *index) groupedCookMove(t Target, day time.Time, resolves func(State) bool) []Option {
+	var group []Session
+	for _, ss := range x.s.Sessions {
+		if ss.ID > 0 && !ss.Confirmed && !ss.Proposed() && dayOf(ss.CookDate) == dayOf(day) && !x.routine(ss.CookCell()) {
+			group = append(group, ss)
+		}
+	}
+	if len(group) < 2 {
+		return nil
+	}
+	for _, c := range x.s.Cells {
+		k := c.Key()
+		if dayOf(c.Date) != dayOf(day) || !x.occasions[dayOf(day)][idOf(k)] || c.Date.Before(x.s.Today) || !x.s.Window.Contains(c.Date) || c.Mode == availability.ModeNone || x.routine(k) || !x.inTarget(k) {
+			continue
+		}
+		next := x.s
+		next.Sessions = slices.Clone(x.s.Sessions)
+		var ops []OptionOp
+		var names []string
+		date := c.Date.Format(time.DateOnly)
+		for i := range next.Sessions {
+			ss := &next.Sessions[i]
+			if !slices.ContainsFunc(group, func(g Session) bool { return g.ID == ss.ID }) || (dayOf(ss.CookDate) == dayOf(c.Date) && ss.CookSlotID == c.SlotID) {
+				continue
+			}
+			sid := ss.ID
+			ss.CookDate, ss.CookSlotID = c.Date, c.SlotID
+			names = append(names, x.s.Foods[ss.FoodID].Name)
+			ops = append(ops, OptionOp{Op: "move_cook", SessionID: &sid, CookAt: &OptionCell{Date: date, SlotID: c.SlotID}})
+		}
+		if len(ops) < 2 || !resolves(next) {
+			continue
+		}
+		return []Option{{
+			Action: "move_cook", FoodID: group[0].FoodID, Name: strings.Join(names, ", "), Date: date, SlotID: c.SlotID,
+			CookOccasions: len(newIndex(next, t).occasions[dayOf(day)]), Op: ops[0], Ops: ops,
+		}}
+	}
+	return nil
 }

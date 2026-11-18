@@ -104,6 +104,8 @@ type Services struct {
 	// apply to that call only.
 	Light planning.LightStore
 	Tx    domain.Transactor
+	// Undo may be nil: undo_last_change is then not registered.
+	Undo *Changes
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -283,6 +285,7 @@ func defaultTools(svc Services) []Tool {
 		toolFindFoods(svc),
 		toolApplyChanges(svc),
 		toolFindAlternatives(svc),
+		toolFindWays(svc),
 		toolConfirm(svc),
 		toolUnlock(svc),
 		toolRecordPreference(svc),
@@ -295,6 +298,9 @@ func defaultTools(svc Services) []Tool {
 	}
 	if svc.Planner != nil {
 		tools = append(tools, toolRegenerate(svc))
+	}
+	if svc.Undo != nil {
+		tools = append(tools, toolUndoLastChange(svc))
 	}
 	for i := range tools {
 		tools[i].CodeCallable = codeCallableTools[tools[i].Name]
