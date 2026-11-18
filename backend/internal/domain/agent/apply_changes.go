@@ -512,7 +512,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		}
 		b.plate(p)
 		b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(old)...)
-		b.note(op, map[string]any{"food": old.FoodName, "to": pc.FoodName, "date": p.DateString()})
+		b.note(op, map[string]any{"food": food.Data(old.FoodName), "to": food.Data(pc.FoodName), "date": p.DateString()})
 		return opResult(op, p, pc), nil
 	case "set_quantity":
 		q := op.quantity()
@@ -531,7 +531,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 			return nil, err
 		}
 		b.plate(p)
-		b.note(op, map[string]any{"food": pc.FoodName, "date": p.DateString()})
+		b.note(op, map[string]any{"food": food.Data(pc.FoodName), "date": p.DateString()})
 		return opResult(op, p, pc), nil
 	case "remove":
 		p, pc, err := componentOnPlate(ctx, svc, op.PlateComponentID)
@@ -543,7 +543,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		}
 		b.plate(p)
 		b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(pc)...)
-		b.note(op, map[string]any{"food": pc.FoodName, "date": p.DateString()})
+		b.note(op, map[string]any{"food": food.Data(pc.FoodName), "date": p.DateString()})
 		return map[string]any{"op": op.Op, "plate_component_id": op.PlateComponentID, "removed": true}, nil
 	case "create_plate":
 		d, err := parseOpDate(op.Date)
@@ -695,7 +695,7 @@ func opAdd(ctx context.Context, svc Services, op changeOp, b *batch) (map[string
 		b.aff.Dates = append(b.aff.Dates, op.CookAt.Date)
 	}
 	b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(added)...)
-	b.note(op, map[string]any{"food": added.FoodName, "date": got.DateString()})
+	b.note(op, map[string]any{"food": food.Data(added.FoodName), "date": got.DateString()})
 	return opResult(op, got, added), nil
 }
 
@@ -764,7 +764,7 @@ func opSetPortions(ctx context.Context, svc Services, op changeOp, b *batch) (ma
 	if plate.Exceeds(cur.Consumed, *op.Portions) || plate.Exceeds(cur.FrozenConsumed, frozen) {
 		return nil, fmt.Errorf("%w: %s would cook %s portions (%s frozen) but its plates eat %s (%s from the freezer); "+
 			"set at least %s portions (%s frozen), or reduce the plates' eaters or portions first",
-			domain.ErrInvalidInput, cur.FoodName, fnum(*op.Portions), fnum(frozen), fnum(cur.Consumed), fnum(cur.FrozenConsumed), fnum(cur.Consumed), fnum(cur.FrozenConsumed))
+			domain.ErrInvalidInput, food.Data(cur.FoodName), fnum(*op.Portions), fnum(frozen), fnum(cur.Consumed), fnum(cur.FrozenConsumed), fnum(cur.Consumed), fnum(cur.FrozenConsumed))
 	}
 	v, err := svc.Plates.SetSessionPortions(ctx, op.SessionID, plate.SessionPortions{Portions: *op.Portions, FrozenPortions: frozen, Note: sess.Note})
 	if err != nil {
@@ -772,7 +772,7 @@ func opSetPortions(ctx context.Context, svc Services, op changeOp, b *batch) (ma
 	}
 	b.aff.Sessions = append(b.aff.Sessions, v.ID)
 	b.aff.Dates = append(b.aff.Dates, v.CookDate.Format(time.DateOnly))
-	b.note(op, map[string]any{"food": v.FoodName, "date": v.CookDate.Format(time.DateOnly), "portions": v.Portions})
+	b.note(op, map[string]any{"food": food.Data(v.FoodName), "date": v.CookDate.Format(time.DateOnly), "portions": v.Portions})
 	return map[string]any{"op": op.Op, "session_id": v.ID, "portions": v.Portions, "frozen_portions": v.FrozenPortions}, nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
 
@@ -80,7 +81,7 @@ func chatFacts(st planning.State) string {
 		if f.DietClass != "" {
 			class = " | " + string(f.DietClass)
 		}
-		fmt.Fprintf(&b, "food_id %d %s | %s%s%s | %.0f kcal, %.0f g protein %s\n", f.ID, f.Name, role, class, minutes, f.Macros.Kcal, f.Macros.Protein, per)
+		fmt.Fprintf(&b, "food_id %d %s | %s%s%s | %.0f kcal, %.0f g protein %s\n", f.ID, food.Data(f.Name), role, class, minutes, f.Macros.Kcal, f.Macros.Protein, per)
 	}
 	// Day figures come from the evaluation; the day's target is scaled to its
 	// planned meals (a "No plate" meal asks less) and moved by light meals.

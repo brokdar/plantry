@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"log/slog"
 	"slices"
 	"time"
@@ -101,7 +102,7 @@ func changeEffect(ctx context.Context, svc Services, a affected) map[string]any 
 		dates[p.DateString()] = true
 		names := make([]string, len(p.Components))
 		for i, c := range p.Components {
-			names[i] = c.FoodName
+			names[i] = food.Data(c.FoodName)
 			if c.FoodRole != nil && *c.FoodRole != "" {
 				names[i] += " (" + *c.FoodRole + ")"
 			}
@@ -128,7 +129,7 @@ func changeEffect(ctx context.Context, svc Services, a affected) map[string]any 
 			warn[i] = w.Code
 		}
 		sessions = append(sessions, effectSession{
-			ID: v.ID, Food: v.FoodName, CookDate: v.CookDate.Format(time.DateOnly),
+			ID: v.ID, Food: food.Data(v.FoodName), CookDate: v.CookDate.Format(time.DateOnly),
 			Portions: v.Portions, FrozenPortions: v.FrozenPortions, Consumed: v.Consumed,
 			FrozenConsumed: v.FrozenConsumed, Surplus: v.Surplus, State: string(v.State),
 			Cooked: v.CookedAt != nil, Warnings: warn,

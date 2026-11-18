@@ -13,6 +13,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
@@ -224,13 +225,13 @@ func opReplace(ctx context.Context, svc Services, op changeOp, b *batch) (map[st
 	b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(pc)...)
 	oldName := ""
 	if old != nil {
-		oldName = old.FoodName
+		oldName = food.Data(old.FoodName)
 		b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(old)...)
 	}
 	if src.CookAt != nil {
 		b.aff.Dates = append(b.aff.Dates, op.CookAt.Date)
 	}
-	b.note(op, map[string]any{"food": oldName, "to": pc.FoodName, "date": after.DateString()})
+	b.note(op, map[string]any{"food": oldName, "to": food.Data(pc.FoodName), "date": after.DateString()})
 	out := opResult(op, after, pc)
 	out["position"] = string(pc.Position)
 	return mealResult(out, res, b), nil
@@ -424,7 +425,7 @@ func opMoveCook(ctx context.Context, svc Services, op changeOp, b *batch) (map[s
 	b.aff.Dates = append(b.aff.Dates, from, op.CookAt.Date)
 	name := ""
 	if v, err := svc.Plates.Session(ctx, op.SessionID); err == nil {
-		name = v.FoodName
+		name = food.Data(v.FoodName)
 	}
 	b.note(op, map[string]any{
 		"food": name, "date": op.CookAt.Date, "from_date": from,
