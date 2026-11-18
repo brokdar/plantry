@@ -167,7 +167,7 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 					// Other errors may not have — surface them here.
 					_ = writer.Send(string(llm.EventError), llm.StreamErrorPayload{
 						MessageKey: "error.ai.stream_interrupted",
-						Message:    err.Error(),
+						Message:    agent.PlainMessage("error.ai.stream_interrupted"),
 					})
 				}
 				return

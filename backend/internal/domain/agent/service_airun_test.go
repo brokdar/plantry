@@ -49,7 +49,7 @@ func newChatServiceWithClient(t *testing.T, fc *fake.Client) (*agent.Service, *s
 	return buildChatService(t, fc, nil)
 }
 
-func buildChatService(t *testing.T, fc *fake.Client, wrap func(call int, st planning.State, err error) (planning.State, error)) (*agent.Service, *sql.DB) {
+func buildChatService(t *testing.T, fc llm.Client, wrap func(call int, st planning.State, err error) (planning.State, error)) (*agent.Service, *sql.DB) {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)

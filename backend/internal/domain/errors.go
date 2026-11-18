@@ -26,6 +26,12 @@ var (
 	// submit_plan call (D11).
 	ErrAIProviderFailed = errors.New("ai provider error")
 	ErrAIInvalidPlan    = errors.New("ai plan unreadable")
+	// ErrAIRefused: the model declined the request (stop reason refusal).
+	ErrAIRefused = errors.New("ai refused")
+	// ErrAIRateLimited: the provider answered 429 or 529. ErrAIKeyRejected: it
+	// answered 401 or 403.
+	ErrAIRateLimited = errors.New("ai provider rate limited")
+	ErrAIKeyRejected = errors.New("ai provider rejected the key")
 	// ErrAIPastDate: the agent never writes a plate, session or cell dated
 	// before the chat's today (Phase 4 D7). ErrAIPreferenceReserved: the
 	// agent never records likes/dislikes, which plate feedback owns (D9).
@@ -185,6 +191,9 @@ var messageKeys = []struct {
 	{ErrAIStreamInterrupted, "error.ai.stream_interrupted"},
 	{ErrAIProviderFailed, "error.ai.provider_error"},
 	{ErrAIInvalidPlan, "error.ai.invalid_plan"},
+	{ErrAIRefused, "error.ai.refused"},
+	{ErrAIRateLimited, "error.ai.rate_limited"},
+	{ErrAIKeyRejected, "error.ai.key_rejected"},
 	{ErrAIPastDate, "error.ai.past_date"},
 	{ErrAIPreferenceReserved, "error.ai.preference_reserved"},
 	{ErrAIUnlockNeedsUser, "error.ai.unlock_needs_user"},

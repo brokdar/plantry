@@ -14,6 +14,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
@@ -247,7 +248,7 @@ func planOutput(p *planview.Plan) planOut {
 
 func planSession(v plate.SessionView) planSessionOut {
 	s := planSessionOut{
-		ID: v.ID, FoodID: v.FoodID, Name: v.FoodName,
+		ID: v.ID, FoodID: v.FoodID, Name: food.Data(v.FoodName),
 		CookDate: v.CookDate.Format(time.DateOnly), CookSlotID: v.CookSlotID,
 		Portions: v.Portions, FrozenPortions: v.FrozenPortions, State: string(v.State),
 		Cooked: v.CookedAt != nil, Consumed: v.Consumed, FrozenConsumed: v.FrozenConsumed,
@@ -279,7 +280,7 @@ func planPlate(p *plate.Plate, batch map[int64]string) *planPlateOut {
 	}
 	for i, c := range p.Components {
 		out.Components[i] = planComponentOut{
-			ID: c.ID, FoodID: c.FoodID, Name: c.FoodName,
+			ID: c.ID, FoodID: c.FoodID, Name: food.Data(c.FoodName),
 			Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, SessionID: c.CookSessionID,
 			Position: string(c.Position), Batch: batch[c.ID],
 		}
@@ -642,7 +643,7 @@ func newSideName(before *plate.Plate, changed []changedPlateOut) (string, bool) 
 		}
 		for _, c := range ch.Plate.Components {
 			if !had[c.FoodID] {
-				return c.Name, true
+				return food.Data(c.Name), true
 			}
 		}
 	}
