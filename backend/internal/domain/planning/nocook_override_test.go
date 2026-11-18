@@ -46,6 +46,8 @@ func TestNoCook_DerivedExcludesCookingIngredients(t *testing.T) {
 		{"Knoblauch", produce},
 		{"Onion", produce},
 		{"Rote Zwiebel", produce},
+		{"Zwiebeln", produce},
+		{"Kräuter", produce},
 		{"Shallot", produce},
 		{"Ginger", produce},
 		{"Ingwer", produce},

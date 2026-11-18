@@ -70,7 +70,7 @@ var notEatenAsIs = regexp.MustCompile(`(?i)(^|[^\p{L}])(` +
 	`(kräuter|kraeuter|petersilie|thymian|schnittlauch|koriander|minze|dill|rosmarin|salbei|lorbeer|gewürz|salz|pfeffer|kümmel|kurkuma|zimt|` +
 	`knoblauch|zwiebel|schalotte|lauch|ingwer|` +
 	`öl|oel|butter|schmalz|margarine|sahne|kochcreme|` +
-	`brühe|bruehe|fond|bouillon|tomatenmark|mark|essig|saft|soße|sosse|stärke|staerke|teig|mehl)($|[^\p{L}])`)
+	`brühe|bruehe|fond|bouillon|tomatenmark|mark|essig|saft|soße|sosse|stärke|staerke|teig|mehl)(n|en|e|s)?($|[^\p{L}])`)
 
 var cookedFirst = regexp.MustCompile(`(?i)\b(potato|kartoffel|egg|ei|eier|bean|bohne|lentil|linse|pea|erbse|rice|reis|pasta|nudel|flour|mehl|dough|teig|yeast|hefe|corn ?starch|pudding)`)
 

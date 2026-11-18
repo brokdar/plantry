@@ -34,6 +34,10 @@ type Ingredient struct {
 	Protein float64 `json:"protein"`
 	Fat     float64 `json:"fat"`
 	Carbs   float64 `json:"carbs"`
+	// NoCook overrides the derived eat-as-is flag; ServingG is the serving
+	// size the planner adds it in.
+	NoCook   *bool    `json:"no_cook"`
+	ServingG *float64 `json:"serving_g"`
 }
 
 // Recipe is a composed food. Ingredients are [name, grams] pairs.

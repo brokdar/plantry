@@ -470,9 +470,10 @@ func (x *index) candidates(day time.Time, want float64) []optCand {
 			c.opt.Portions = &p
 			c.kcal, c.protein = f.Macros.Kcal*p, f.Macros.Protein*p
 		} else {
-			// A leaf is offered in half servings, at most addCapG.
+			// A leaf is offered in the smallest half-serving count that closes the
+			// gap (a day one kcal short of its floor stays an H9), at most addCapG.
 			serving := ServingGrams(f)
-			n := clamp(math.Round(want/(f.Macros.Kcal*serving/100)*2)/2, 0.5, maxAddServings)
+			n := clamp(math.Ceil(want/(f.Macros.Kcal*serving/100)*2)/2, 0.5, maxAddServings)
 			g := math.Min(math.Round(n*serving/roundGrams)*roundGrams, addCapG(f, dayTarget))
 			c.add = Component{FoodID: id, Grams: &g, Proposed: true}
 			c.opt.Grams = &g

@@ -278,6 +278,11 @@ func (e *env) seedLibrary(ctx context.Context, lib Library, only []string, extra
 			return fmt.Errorf("ingredient %s: %w", in.Name, err)
 		}
 		leaves[in.Name] = f.ID
+		if in.NoCook != nil || in.ServingG != nil {
+			if _, err := e.foods.SetNoCook(ctx, f.ID, in.NoCook, in.ServingG); err != nil {
+				return fmt.Errorf("ingredient %s no-cook: %w", in.Name, err)
+			}
+		}
 	}
 	want := map[string]bool{}
 	for _, n := range only {
