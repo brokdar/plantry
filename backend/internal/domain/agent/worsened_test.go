@@ -89,3 +89,10 @@ func TestMealResult_SkipsEmptyDates(t *testing.T) {
 	}}, b)
 	assert.ElementsMatch(t, []string{"2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12"}, agent.BatchDates(b))
 }
+
+// An after-value that cannot be measured is neither worsened nor improved.
+func TestDeltaOf_UnmeasurableAfterIsNotWorsened(t *testing.T) {
+	before := issueWith("S7", planning.CodeWeekMeatAboveDGE, "", map[string]any{"meat_g": 321.0, "max_g": 300.0})
+	after := issueWith("S7", "unknown_code", "", nil)
+	assert.NotContains(t, agent.DeltaOf(byKey(before), byKey(after)), "worsened")
+}

@@ -316,8 +316,8 @@ func worsened(before, after planning.Issue) bool {
 	if !ok {
 		return false
 	}
-	a, _ := badness(after)
-	return a > b+1e-9
+	a, ok := badness(after)
+	return ok && a > b+1e-9
 }
 
 func toEffectIssue(is planning.Issue) effectIssue {

@@ -18,7 +18,11 @@ const (
 	optGramsMin   = 0.5
 	maxCookMoves  = 2
 	maxSwapOpts   = 2
-	maxCellTries  = 12
+	// MaxOptionIssues caps the issues IssueOptions computes options for, the
+	// earliest by date: each option re-evaluates the plan, and the chat tools
+	// read the plan on every call.
+	MaxOptionIssues = 5
+	maxCellTries    = 12
 )
 
 // IssueOptions returns issues with computed options on the chat's S6/S6b
@@ -27,17 +31,32 @@ const (
 // leftover or a no-cook food). Each option is verified like an S2/S3 one: the
 // plan re-evaluated with it applied has no new hard issue and the issue is
 // gone, so an S6 option may leave the day under its band (a light or hearty
-// request ranks above the day and week bands) but never under H9. ev is the
-// evaluation of s the issues come from. The planner's Evaluate has none of
+// request ranks above the day and week bands) but never under H9. Only the
+// first MaxOptionIssues such issues by date, and only those keep accepts (nil
+// accepts all), get options. ev is the evaluation of s the issues come from. The planner's Evaluate has none of
 // these options; only the chat tools call this.
-func IssueOptions(s State, t Target, ev Evaluation, issues []Issue) []Issue {
+func IssueOptions(s State, t Target, ev Evaluation, issues []Issue, keep func(Issue) bool) []Issue {
 	out := slices.Clone(issues)
 	x := newIndex(s, t)
-	for i, is := range out {
-		switch {
-		case is.Rule == "S6" || is.Rule == "S6b":
+	order := make([]int, len(out))
+	for i := range order {
+		order[i] = i
+	}
+	slices.SortStableFunc(order, func(a, b int) int { return cmp.Compare(out[a].Date, out[b].Date) })
+	n := 0
+	for _, i := range order {
+		is := out[i]
+		light := is.Rule == "S6" || is.Rule == "S6b"
+		cook := is.Rule == "H2" && is.Code == CodeTooManyCookOccasions
+		if (!light && !cook) || (keep != nil && !keep(is)) {
+			continue
+		}
+		if n++; n > MaxOptionIssues {
+			break
+		}
+		if light {
 			out[i].Options = x.lightOptions(ev, t, is)
-		case is.Rule == "H2" && is.Code == CodeTooManyCookOccasions:
+		} else {
 			out[i].Options = x.cookOptions(ev, t, is)
 		}
 	}
@@ -216,12 +235,17 @@ portions:
 		if err != nil {
 			continue
 		}
+		// The whole-meal swap has its own slot: it is the only option for a
+		// plate far over its cap.
+		whole := req.What == AltMeal
 		for _, a := range res.Alternatives {
-			if len(a.NewIssues) > 0 || len(a.Ops) == 0 || swaps >= maxSwapOpts {
+			if len(a.NewIssues) > 0 || len(a.Ops) == 0 || (!whole && swaps >= maxSwapOpts) {
 				continue
 			}
 			opts = append(opts, x.altOption(a, p, plateKcal))
-			swaps++
+			if !whole {
+				swaps++
+			}
 			break
 		}
 	}
@@ -235,10 +259,14 @@ func btoi(b bool) int {
 	return 0
 }
 
-// swapRequests are the swaps worth asking for on p: its main (when composed)
-// and its largest side (a leaf too).
+// swapRequests are the swaps worth asking for on p: the whole meal when it
+// has sides or add-ons (replace the main, drop the rest), its main (when
+// composed) and its largest side (a leaf too).
 func (x *index) swapRequests(p Plate) []AltRequest {
 	var out []AltRequest
+	if len(p.Components) > 1 {
+		out = append(out, AltRequest{PlateID: p.ID, What: AltMeal, Limit: 3})
+	}
 	side, sideKcal := 0, -1.0
 	for i, c := range p.Components {
 		f, ok := x.s.Foods[c.FoodID]
