@@ -120,6 +120,23 @@ func (r *AIChangeRepo) ConversationChanges(ctx context.Context, conversationID i
 	return out, nil
 }
 
+// UndoneAfter lists the undone changes whose events begin after eventID.
+func (r *AIChangeRepo) UndoneAfter(ctx context.Context, eventID int64) ([]agent.Change, error) {
+	rows, err := r.queriesFor(ctx).ListUndoneAIChangesAfter(ctx, sql.NullInt64{Int64: eventID, Valid: true})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]agent.Change, len(rows))
+	for i, row := range rows {
+		c, err := mapAIChange(row)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = *c
+	}
+	return out, nil
+}
+
 // MarkUndone sets undone_at; false when it was set already.
 func (r *AIChangeRepo) MarkUndone(ctx context.Context, id int64, at time.Time) (bool, error) {
 	res, err := r.queriesFor(ctx).MarkAIChangeUndone(ctx, sqlcgen.MarkAIChangeUndoneParams{

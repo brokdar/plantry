@@ -40,8 +40,8 @@ func toolUndoLastChange(svc Services) Tool {
     }`)
 	return Tool{
 		Name: undoLastChangeName,
-		Description: "Undo the newest change you made in this conversation that is not undone yet, exactly as it was: the same meals, the same cooking batches and leftovers. Use it when the user asks to undo or revert what you just did; never rebuild the old state by hand with apply_changes. " +
-			"Takes no ids. Returns JSON {undone:int, restored:[string] (the meals and what they are again), message, refused?:{reason, what_to_do}}; refused is set when the plan was changed since or a meal is confirmed now, and nothing of that change was touched. Tell the user what is back.",
+		Description: "Undo the newest change you made in this conversation that is not undone yet, exactly as it was: the same meals, the same cooking batches and leftovers. Use it whenever the user asks to undo, revert or take back what you just did (count 2 for \"both\"); never rebuild the old state by hand with apply_changes, that loses batch links. After it, tell the user in plain words what is back (use restored), or why it could not be undone. " +
+			"Takes no ids. Returns JSON {undone:int, restored:[string] (the meals and what they are again), message, refused?:{reason, what_to_do}}; refused is set when the plan was changed since or a meal is confirmed now, and nothing of that change was touched.",
 		Schema: schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -90,9 +90,6 @@ func toolUndoLastChange(svc Services) Tool {
 					return nil, ToolEffectNone, err
 				}
 				if out.Refused != nil {
-					if out.Undone > 0 && errors.Is(err, domain.ErrAIChangeStale) {
-						out.Refused.Reason = "The older change shares meals with the one just undone, so it cannot be put back exactly any more."
-					}
 					break
 				}
 				lines, err := restoredLines(ctx, svc, ch, rows)

@@ -15,5 +15,10 @@ JOIN ai_runs r ON r.id = c.run_id
 WHERE r.conversation_id = ?
 ORDER BY c.id;
 
+-- name: ListUndoneAIChangesAfter :many
+SELECT * FROM ai_changes
+WHERE undone_at IS NOT NULL AND first_event_id > ?
+ORDER BY id;
+
 -- name: MarkAIChangeUndone :execresult
 UPDATE ai_changes SET undone_at = ? WHERE id = ? AND undone_at IS NULL;

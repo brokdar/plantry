@@ -184,6 +184,7 @@ type Querier interface {
 	// normalized duplicate check.
 	ListSourceURLs(ctx context.Context) ([]string, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
+	ListUndoneAIChangesAfter(ctx context.Context, firstEventID sql.NullInt64) ([]AiChange, error)
 	// Recipes no confirmed plate dated in [since, today] holds, plates marked
 	// not_eaten aside: FoodHistory's last_eaten is before since, or there is
 	// none. The variety rule H8 counts them (D21). The eaten set is one

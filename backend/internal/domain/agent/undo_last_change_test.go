@@ -61,8 +61,7 @@ func TestUndoLastChange_MoveSwapRestoresExactly(t *testing.T) {
 }
 
 // count 2 undoes the two newest changes, newest first; an undone change is
-// skipped. Two changes of the same meal cannot both come back exactly: the
-// older one is refused with its reason.
+// skipped.
 func TestUndoLastChange_CountAndSkipsUndone(t *testing.T) {
 	e := newPlanToolEnv(t)
 	a, b := e.twoDinners()
@@ -86,11 +85,33 @@ func TestUndoLastChange_CountAndSkipsUndone(t *testing.T) {
 	assert.Nil(t, res["refused"])
 	assert.Equal(t, dump, e.planDump())
 
+	// Two changes of the same plate: undone newest first, the older one still
+	// comes back exactly (the revert of the newer put its rows back).
 	e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, a.ID))
 	e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":2}`, a.ID))
 	res = e.undoLast(ctx, conv, `{"count":2}`)
-	assert.EqualValues(t, 1, res["undone"])
-	assert.Contains(t, res["refused"].(map[string]any)["reason"], "shares meals")
+	assert.EqualValues(t, 2, res["undone"])
+	assert.Nil(t, res["refused"])
+	assert.Equal(t, dump, e.planDump())
+}
+
+// An older change stays stale when something that is not undone touched its
+// rows after it, even if a newer change was undone in between.
+func TestUndoLastChange_ChainStillGuardsForeignEdits(t *testing.T) {
+	e := newPlanToolEnv(t)
+	p, _ := e.mainSession()
+	ctx, conv := e.chat()
+	e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
+	four := 4.0
+	_, err := e.plates.Update(context.Background(), p.ID, plate.PlatePatch{Eaters: &four})
+	require.NoError(t, err)
+	e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":2}`, p.ID))
+	res := e.undoLast(ctx, conv, `{"count":2}`)
+	assert.EqualValues(t, 1, res["undone"], "the newest comes back")
+	assert.NotNil(t, res["refused"], "the older one lies behind the user's edit")
+	got, err := e.plates.Get(context.Background(), p.ID)
+	require.NoError(t, err)
+	assert.InDelta(t, 4.0, got.Eaters, 1e-9)
 }
 
 // A newer edit of the plan refuses the undo with a reason and writes nothing.
