@@ -249,7 +249,7 @@ func TestPlanHTTP_WeekLedger(t *testing.T) {
 		week := body["week"].(map[string]any)
 		assert.EqualValues(t, 3, week["days"])
 		assert.InDelta(t, 300, week["avg_kcal"], 1e-6)
-		assert.InDelta(t, (2000+1700+2000)/3.0, week["target_kcal"], 1e-6, "the light day lowers the week target")
+		assert.InDelta(t, (2000+1700+(2000-2000.0/3/4))/3.0, week["target_kcal"], 1e-6, "the light day lowers the week target")
 		assert.InDelta(t, 300/week["target_kcal"].(float64)*100, week["pct"], 1e-6)
 
 		days := body["days"].([]any)
@@ -260,7 +260,7 @@ func TestPlanHTTP_WeekLedger(t *testing.T) {
 		assert.NotContains(t, day(2), "light_slot")
 		assert.Equal(t, "meal", day(3)["light"])
 		assert.Equal(t, "dinner", day(3)["light_slot"])
-		assert.InDelta(t, 2000, day(3)["target_kcal"], 1e-6)
+		assert.InDelta(t, 2000-2000.0/3/4, day(3)["target_kcal"], 1e-6, "a light meal moves the day target by 25 % of its share")
 		assert.NotContains(t, day(1), "light")
 
 		rules := map[string]bool{}

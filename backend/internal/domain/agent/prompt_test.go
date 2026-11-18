@@ -63,6 +63,21 @@ func TestPrompt_MealEditRules(t *testing.T) {
 	}
 }
 
+// v17: consequences only from tool results, runnable options, the ops that
+// were dry-ran, warnings named but not blocking, the meal intent's shift.
+func TestPrompt_V17Rules(t *testing.T) {
+	prompt := ComposePrompt(nil, "", time.Time{})
+	for _, want := range []string{
+		"never infer what happens to other meals", "Offer only options you dry-ran",
+		"write exactly the ops you dry-ran", "variety_repeat_week", "carry out the request and name the warning",
+		"moves the day's target by that meal's share", "say so with the numbers",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt must mention %q", want)
+		}
+	}
+}
+
 // The "not done while an issue is open" rule covers hard issues only; a soft
 // issue is reported with the fix offered, never applied unasked (no
 // contradiction with "offer the fix" and the protein instruction).
