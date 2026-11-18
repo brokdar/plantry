@@ -117,6 +117,17 @@ func TestOptions_PassTheirOwnDryRun(t *testing.T) {
 			return p.DateString(), e.awayCells(p.Date.AddDate(0, 0, -1).Format(time.DateOnly))
 		},
 	}
+	// The cook day goes away with its neighbours: the only cook cells left are
+	// on the day itself (one batch moved to a cook cell of it, or all of them).
+	states["neighbours away"] = func(e *planToolEnv) (string, []string) {
+		_, p := e.laterMealSession()
+		require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "1"))
+		var away []string
+		for _, off := range []int{-2, -1, 2, 3} {
+			away = append(away, e.awayCells(p.Date.AddDate(0, 0, off).Format(time.DateOnly))...)
+		}
+		return p.DateString(), away
+	}
 	for name, setup := range states {
 		t.Run(name, func(t *testing.T) {
 			e := newPlanToolEnv(t)
@@ -127,7 +138,8 @@ func TestOptions_PassTheirOwnDryRun(t *testing.T) {
 			}
 			var results []map[string]any
 			results = append(results, e.mustExec("get_plan", `{}`))
-			results = append(results, e.mustExec("apply_changes", `{"dry_run":true,"ops":[{"op":"away","cells":[`+strings.Join(cells, ",")+`]}]}`))
+			awayOp := `{"op":"away","cells":[` + strings.Join(cells, ",") + `]}`
+			results = append(results, e.mustExec("apply_changes", `{"dry_run":true,"ops":[`+awayOp+`]}`))
 			awayDay := map[string]bool{}
 			for _, c := range append(away, cells...) {
 				var r struct {
@@ -151,7 +163,12 @@ func TestOptions_PassTheirOwnDryRun(t *testing.T) {
 					}
 					raw, err := json.Marshal(ops)
 					require.NoError(t, err)
-					dry, err := e.exec("apply_changes", `{"dry_run":true,"ops":`+string(raw)+`}`)
+					// The away probe's options fix the plan after the away.
+					call := string(raw)
+					if i == 1 {
+						call = "[" + awayOp + "," + string(raw)[1:]
+					}
+					dry, err := e.exec("apply_changes", `{"dry_run":true,"ops":`+call+`}`)
 					if err != nil {
 						t.Errorf("option %s fails its dry run: %v", raw, err)
 						continue
@@ -165,6 +182,9 @@ func TestOptions_PassTheirOwnDryRun(t *testing.T) {
 				}
 			}
 			t.Logf("%d options checked", checked)
+			if name == "neighbours away" {
+				assert.Positive(t, checked, "the day's own cook cells are offered")
+			}
 		})
 	}
 }
