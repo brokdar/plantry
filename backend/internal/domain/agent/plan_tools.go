@@ -74,7 +74,7 @@ func toolGetPlan(svc Services) Tool {
 			out := planOutput(p)
 			var ev *planning.Evaluation
 			if svc.State != nil {
-				if e, err := evalWindow(ctx, svc, w); err == nil {
+				if e, err := evalWindow(ctx, svc, w, true); err == nil {
 					ev = &e
 				} else {
 					out.EvaluationError = err.Error()

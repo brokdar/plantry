@@ -195,7 +195,7 @@ func toolApplyChanges(svc Services) Tool {
 			ws := windowsFor(w, opDates(in.Ops))
 			// The baseline stands under the stored light only: an intent this
 			// call adds must show its own S6/S6b as new (audit B2).
-			before, err := evalWindows(withLight(ctx, nil), svc, ws)
+			before, err := evalWindows(withLight(ctx, nil), svc, ws, false)
 			if err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("read the plan before the change: %w", err)
 			}
@@ -692,20 +692,24 @@ func opSetAvailability(ctx context.Context, svc Services, op changeOp, b *batch)
 }
 
 // evalWindow evaluates the chat window as the model and user see it.
-func evalWindow(ctx context.Context, svc Services, w window.Window) (planning.Evaluation, error) {
+func evalWindow(ctx context.Context, svc Services, w window.Window, withOptions bool) (planning.Evaluation, error) {
 	st, err := svc.State(ctx, w, todayFrom(ctx))
 	if err != nil {
 		return planning.Evaluation{}, err
 	}
 	st.Light = planning.MergeLight(st.Light, lightFrom(ctx))
-	return chatView(st), nil
+	ev := chatView(st)
+	if withOptions {
+		ev.Issues = planning.IssueOptions(st, planning.WindowTarget(st), ev, ev.Issues)
+	}
+	return ev, nil
 }
 
 // batchAfter is the combined `after` of a call: the touched plates and
 // sessions, the evaluation's days for the touched dates and the issues the
 // ops made new or resolved against before.
 func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, before planning.Evaluation) (map[string]any, planning.Evaluation, error) {
-	now, err := evalWindows(ctx, svc, ws)
+	now, err := evalWindows(ctx, svc, ws, true)
 	if err != nil {
 		return nil, planning.Evaluation{}, fmt.Errorf("read the plan after the change: %w", err)
 	}
@@ -819,14 +823,14 @@ func inWindows(ws []window.Window, date string) bool {
 
 // evalWindows evaluates the chat window and every extra window: days and
 // issues are the union, the meat figures are the chat window's.
-func evalWindows(ctx context.Context, svc Services, ws []window.Window) (planning.Evaluation, error) {
-	ev, err := evalWindow(ctx, svc, ws[0])
+func evalWindows(ctx context.Context, svc Services, ws []window.Window, withOptions bool) (planning.Evaluation, error) {
+	ev, err := evalWindow(ctx, svc, ws[0], withOptions)
 	if err != nil {
 		return ev, err
 	}
 	seen := issueMap(ev.Issues)
 	for _, w := range ws[1:] {
-		more, err := evalWindow(ctx, svc, w)
+		more, err := evalWindow(ctx, svc, w, withOptions)
 		if err != nil {
 			return ev, err
 		}

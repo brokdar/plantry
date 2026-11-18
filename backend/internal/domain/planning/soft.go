@@ -14,7 +14,7 @@ import (
 // no-cook food to a plate, or raise the amount of a component already on
 // it. Figures are per eater; the day figures are the day after the option.
 type Option struct {
-	// Action is "add" or "raise".
+	// Action is "add" or "raise"; for S6/S6b "portions", "remove" or "swap"; for H2 "move_cook" or "swap".
 	Action string `json:"action"`
 	FoodID int64  `json:"food_id"`
 	Name   string `json:"name"`
@@ -36,8 +36,12 @@ type Option struct {
 	// a meat day.
 	CookOccasions int  `json:"cook_occasions"`
 	NewMeatDay    bool `json:"new_meat_day"`
-	// Op is the apply_changes op that applies the option as it is.
-	Op OptionOp `json:"op"`
+	// Op is the apply_changes op that applies the option as it is; Ops lists
+	// every op, in order, when the option needs more than one.
+	Op  OptionOp   `json:"op"`
+	Ops []OptionOp `json:"ops,omitempty"`
+	// PlateKcal is the plate's kcal after the option (S6/S6b options).
+	PlateKcal float64 `json:"plate_kcal,omitempty"`
 
 	inBand   bool
 	shareGap float64
