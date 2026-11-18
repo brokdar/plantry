@@ -11,6 +11,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
 // A relative request ("lighter", "heartier", "more protein") is met only when
@@ -35,12 +36,15 @@ const (
 	// maxWays is the most ways Ways returns (a caller that checks them again
 	// asks for more than it shows); defaultWays is what it returns by default.
 	maxWays        = 8
+	maxOffers      = 4
 	defaultWays    = 4
 	wayPortionMin  = 0.5
 	wayCompSteps   = 3
 	maxCompPerKind = 3
 	wayAddTries    = 12
 	wayMaxServings = 2
+	// wayBreadServings: a bread beside the other meal may be a large helping.
+	wayBreadServings = 3
 )
 
 // MeaningfulKcal reports whether a change of delta kcal (in the asked
@@ -78,8 +82,11 @@ type Way struct {
 	Moved []string `json:"moved,omitempty"`
 	// Reaches is false for the closest way when none reaches the goal; Why
 	// then says how far it gets and what stops it.
-	Reaches bool   `json:"reaches"`
+	Reaches bool   `json:"reaches_cap"`
 	Why     string `json:"why,omitempty"`
+	// ChangesOther marks a compound way: it changes another meal of the day
+	// and is only ever offered, never a default.
+	ChangesOther bool `json:"changes_other_meal,omitempty"`
 	// Light is the mark to pass to apply_changes with Ops: set only when the
 	// meal meets its cap (minimum) after the way.
 	Light  []LightIntent `json:"light,omitempty"`
@@ -91,14 +98,20 @@ type Way struct {
 
 	// PlateID is the plate the figures belong to.
 	PlateID int64 `json:"plate_id"`
-	rank    wayRank
-	next    State
+	// Meaningful: the food changed in the asked direction by enough.
+	Meaningful bool `json:"-"`
+	rank       wayRank
+	next       State
 }
 
 type wayRank struct {
 	notReaching bool
-	newSoft     int
-	cost        int
+	// newSoft counts the new soft issues but the day band's; belowBand is
+	// whether the day band is missed.
+	newSoft   int
+	belowBand int
+	progress  float64
+	cost      int
 	// protein is the protein the way adds (more_protein only): more first.
 	protein float64
 	// step is how far the way moves the meal's energy (light and hearty):
@@ -119,12 +132,15 @@ type WayResult struct {
 	Before WayFigures `json:"before"`
 	// Day limits: the energy floor and the band, per eater (after the mark
 	// the way would store).
-	FloorKcal  float64 `json:"floor_kcal,omitempty"`
-	BandLow    float64 `json:"band_low,omitempty"`
-	BandHigh   float64 `json:"band_high,omitempty"`
-	Ways       []Way   `json:"ways"`
-	EmptyWhy   string  `json:"empty_why,omitempty"`
-	Candidates int     `json:"candidates"`
+	FloorKcal float64 `json:"floor_kcal,omitempty"`
+	BandLow   float64 `json:"band_low,omitempty"`
+	BandHigh  float64 `json:"band_high,omitempty"`
+	Ways      []Way   `json:"ways"`
+	// Offers are compound ways: the named meal reaches its cap (minimum)
+	// because another meal of the day changes. Never applied unasked.
+	Offers     []Way  `json:"offer,omitempty"`
+	EmptyWhy   string `json:"empty_why,omitempty"`
+	Candidates int    `json:"candidates"`
 }
 
 // wayEdit is a change of the plan under test: the state after it and the ops.
@@ -226,8 +242,7 @@ func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 		res.FloorKcal, res.BandLow, res.BandHigh = math.Round(d.FloorKcal), math.Round(d.BandLow), math.Round(d.BandHigh)
 	}
 
-	var found, near []Way
-	var blocked *Way // the best way that reaches the goal but breaks the floor
+	var found, offers []Way
 	comps := map[string]int{}
 	// compensating re-evaluates the plan many times: a few primary edits of
 	// each kind get it.
@@ -235,79 +250,84 @@ func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 		comps[e.kind]++
 		return comps[e.kind] <= maxCompPerKind
 	}
+	offer := func(e wayEdit, ev Evaluation) {
+		if !canCompensate(e) {
+			return
+		}
+		for _, c := range w.compensate(e, ev) {
+			if rc := w.check(c.s); !rc.other && !rc.floor && (w.goal == GoalLighter || !w.outOfBand(rc.ev)) {
+				a := w.way(c, rc, intent)
+				a.ChangesOther = true
+				offers = append(offers, a)
+			}
+		}
+	}
 	consider := func(e wayEdit) {
 		r := w.check(e.s)
 		if r.other {
 			return
 		}
 		way := w.way(e, r, intent)
-		if r.floor {
-			if way.Reaches && blocked == nil {
-				blocked = &way
+		switch {
+		case r.floor:
+			// The meal alone would break the floor: only a way that makes
+			// the other meal grow gets it to its cap.
+			if way.Reaches && w.goal == GoalLighter {
+				offer(e, r.ev)
 			}
-			if way.Reaches && canCompensate(e) {
-				for _, c := range w.compensate(e, r.ev) {
-					rc := w.check(c.s)
-					if !rc.other && !rc.floor {
-						found = append(found, w.way(c, rc, intent))
-					}
-				}
+		case w.goal == GoalHeartier && w.outOfBand(r.ev):
+			if way.Reaches {
+				offer(e, r.ev)
 			}
-			return
-		}
-		if way.Reaches {
+		case way.Meaningful:
 			found = append(found, way)
-			if w.goal != GoalMoreProtein && w.outOfBand(r.ev) && canCompensate(e) {
-				for _, c := range w.compensate(e, r.ev) {
-					if rc := w.check(c.s); !rc.other && !rc.floor {
-						found = append(found, w.way(c, rc, intent))
-					}
-				}
-			}
-			return
 		}
-		near = append(near, way)
 	}
 	for _, e := range w.primary(s) {
 		consider(e)
 	}
 	res.Candidates = w.tried
-	found = dedupeWays(found)
-	slices.SortStableFunc(found, func(a, b Way) int { return a.cmp(b) })
 	limit := req.Limit
 	if limit <= 0 {
 		limit = defaultWays
 	}
 	limit = min(limit, maxWays)
+	found = dedupeWays(found)
+	slices.SortStableFunc(found, func(a, b Way) int { return a.cmp(b) })
 	if len(found) > limit {
 		found = found[:limit]
 	}
-	res.Ways = found
+	offers = dedupeWays(offers)
+	slices.SortStableFunc(offers, func(a, b Way) int { return a.cmp(b) })
+	if len(offers) > maxOffers {
+		offers = offers[:maxOffers]
+	}
+	res.Ways, res.Offers = found, offers
 	if len(found) == 0 {
-		slices.SortStableFunc(near, func(a, b Way) int {
-			return cmp.Or(cmp.Compare(-w.progress(a), -w.progress(b)), a.cmp(b))
-		})
-		if len(near) > 0 {
-			c := near[0]
-			c.Why = w.whyNot(c, blocked, res)
-			res.Ways = []Way{c}
-		} else {
-			res.EmptyWhy = "no verified change of this meal moves it in the asked direction without breaking a hard rule"
-			if blocked != nil {
-				res.EmptyWhy = w.whyNot(*blocked, blocked, res)
-			}
-		}
+		res.EmptyWhy = w.noWayWhy(res)
 	}
 	for i := range res.Ways {
 		res.Ways[i].next = State{}
 	}
+	for i := range res.Offers {
+		res.Offers[i].next = State{}
+	}
 	return res, nil
 }
 
+// cmp ranks ways: those meeting the cap (minimum) first, the fewest new soft
+// issues; then, among those that meet it, the day in its band, the least
+// change and the smallest sufficient one; among those that do not, the
+// furthest toward the goal (as far as the floor lets it).
 func (a Way) cmp(b Way) int {
+	if c := cmp.Or(boolCmp(a.rank.notReaching, b.rank.notReaching), cmp.Compare(a.rank.newSoft, b.rank.newSoft)); c != 0 {
+		return c
+	}
+	if a.rank.notReaching {
+		return cmp.Or(cmp.Compare(-math.Floor(a.rank.progress/150), -math.Floor(b.rank.progress/150)), cmp.Compare(a.rank.cost, b.rank.cost), cmp.Compare(-a.rank.progress, -b.rank.progress), cmp.Compare(a.rank.belowBand, b.rank.belowBand), cmp.Compare(a.rank.cost, b.rank.cost))
+	}
 	return cmp.Or(
-		boolCmp(a.rank.notReaching, b.rank.notReaching),
-		cmp.Compare(a.rank.newSoft, b.rank.newSoft),
+		cmp.Compare(a.rank.belowBand, b.rank.belowBand),
 		cmp.Compare(a.rank.cost, b.rank.cost),
 		cmp.Compare(-a.rank.protein, -b.rank.protein),
 		cmp.Compare(a.rank.step, b.rank.step),
@@ -319,7 +339,7 @@ func dedupeWays(in []Way) []Way {
 	seen := map[string]bool{}
 	var out []Way
 	for _, a := range in {
-		k, _ := json.Marshal(a.Ops)
+		k, _ := json.Marshal([]any{a.Ops, a.Light})
 		if seen[string(k)] {
 			continue
 		}
@@ -408,40 +428,43 @@ func (w *waySearch) outOfBand(ev Evaluation) bool {
 	return d.Kcal > d.BandHigh+1e-9
 }
 
-// reaches judges the target meal's figures against the goal.
+// reaches judges the target meal's figures against the goal: it changed
+// meaningfully and meets its cap (minimum).
 func (w *waySearch) reaches(before, after WayFigures) bool {
-	_, ok, _ := JudgeRelative(w.goal, w.pi >= 0, w.capKcal, w.minKcal, before, after)
-	return ok
+	changed, reached, _ := JudgeRelative(w.goal, w.pi >= 0, w.capKcal, w.minKcal, before, after)
+	return changed && reached
 }
 
 // JudgeRelative decides a relative request: changed is true when the food
 // moved in the asked direction by a meaningful amount (energy: at least
 // RelMinShare of the meal or RelMinKcal, the smaller; protein: RelMinProteinG
-// of the meal, or of the day when meal is false), satisfied when it also
-// reaches the meal's light cap (maxKcal > 0) or hearty minimum (minKcal > 0).
-// why says in plain words, with the numbers, what is missing.
-func JudgeRelative(goal string, meal bool, maxKcal, minKcal float64, before, after WayFigures) (changed, satisfied bool, why string) {
+// of the meal, or of the day when meal is false). reached is true when the
+// meal is at or under its light cap (maxKcal > 0) or at or over its hearty
+// minimum (minKcal > 0); for more_protein it equals changed. A request is
+// satisfied when changed. why says in plain words, with the numbers, what is
+// missing.
+func JudgeRelative(goal string, meal bool, maxKcal, minKcal float64, before, after WayFigures) (changed, reached bool, why string) {
 	switch goal {
 	case GoalLighter:
 		changed = MeaningfulKcal(before.MealKcal, before.MealKcal-after.MealKcal)
-		over := maxKcal > 0 && after.MealKcal > maxKcal+0.5
+		reached = maxKcal <= 0 || after.MealKcal <= maxKcal+0.5
 		switch {
 		case !changed:
 			why = fmt.Sprintf("the meal holds %.0f kcal after, %.0f before: not lighter by a meaningful amount (at least %.0f kcal)", after.MealKcal, before.MealKcal, math.Min(RelMinKcal, RelMinShare*before.MealKcal))
-		case over:
-			why = fmt.Sprintf("the meal now holds %.0f kcal (was %.0f), its light cap is %.0f kcal", after.MealKcal, before.MealKcal, maxKcal)
+		case !reached:
+			why = fmt.Sprintf("lighter, but not a light meal yet: it now holds %.0f kcal (was %.0f), its light cap is %.0f kcal", after.MealKcal, before.MealKcal, maxKcal)
 		}
-		return changed, changed && !over, why
+		return changed, reached, why
 	case GoalHeartier:
 		changed = MeaningfulKcal(before.MealKcal, after.MealKcal-before.MealKcal)
-		under := minKcal > 0 && after.MealKcal < minKcal-0.5
+		reached = minKcal <= 0 || after.MealKcal >= minKcal-0.5
 		switch {
 		case !changed:
 			why = fmt.Sprintf("the meal holds %.0f kcal after, %.0f before: not heartier by a meaningful amount (at least %.0f kcal)", after.MealKcal, before.MealKcal, math.Min(RelMinKcal, RelMinShare*before.MealKcal))
-		case under:
-			why = fmt.Sprintf("the meal now holds %.0f kcal (was %.0f), its hearty minimum is %.0f kcal", after.MealKcal, before.MealKcal, minKcal)
+		case !reached:
+			why = fmt.Sprintf("heartier, but not a hearty meal yet: it now holds %.0f kcal (was %.0f), its hearty minimum is %.0f kcal", after.MealKcal, before.MealKcal, minKcal)
 		}
-		return changed, changed && !under, why
+		return changed, reached, why
 	}
 	gain, what := after.DayProteinG-before.DayProteinG, "day"
 	if meal {
@@ -482,7 +505,8 @@ func (w *waySearch) way(e wayEdit, r wayCheck, intent *LightIntent) Way {
 		// The day's figures are the day's, whichever plate changed.
 		a.Before.DayKcal, a.Before.DayProteinG = w.figures(w.base, 0).DayKcal, w.figures(w.base, 0).DayProteinG
 	}
-	a.Reaches = w.reaches(before, after)
+	changed, reached, _ := JudgeRelative(w.goal, w.pi >= 0, w.capKcal, w.minKcal, before, after)
+	a.Meaningful, a.Reaches = changed, changed && reached
 	if a.Reaches && intent != nil {
 		a.Light = append(a.Light, *intent)
 	}
@@ -491,7 +515,14 @@ func (w *waySearch) way(e wayEdit, r wayCheck, intent *LightIntent) Way {
 	if d, ok := w.dayEval(r.ev); ok && d.TargetKcal != nil {
 		fit = math.Abs(d.Kcal - *d.TargetKcal)
 	}
-	a.rank = wayRank{notReaching: !a.Reaches, newSoft: len(r.newSoft), cost: e.cost, dayFit: fit}
+	other := 0
+	for _, is := range r.newSoft {
+		if is.Rule != "S2" {
+			other++
+		}
+	}
+	a.rank = wayRank{notReaching: !a.Reaches, newSoft: other, belowBand: len(r.newSoft) - other, cost: e.cost, dayFit: fit}
+	a.rank.progress = w.progress(a)
 	if w.goal != GoalMoreProtein {
 		a.rank.step = math.Round(w.progress(a) / 20)
 	} else {
@@ -501,27 +532,17 @@ func (w *waySearch) way(e wayEdit, r wayCheck, intent *LightIntent) Way {
 	return a
 }
 
-// whyNot says in plain words, with the numbers, how far the closest way gets
-// and what stops the goal.
-func (w *waySearch) whyNot(c Way, blocked *Way, res WayResult) string {
-	var b strings.Builder
+// noWayWhy says in plain words, with the numbers, why the named meal alone
+// has no meaningful way.
+func (w *waySearch) noWayWhy(res WayResult) string {
 	switch w.goal {
 	case GoalLighter:
-		fmt.Fprintf(&b, "The closest way brings the meal to %.0f kcal, its light cap is %.0f kcal.", c.After.MealKcal, w.capKcal)
-		if blocked != nil {
-			fmt.Fprintf(&b, " A meal at the cap would put the day at %.0f kcal, under its energy floor of %.0f kcal, and the other meals cannot make that up within their limits.", blocked.After.DayKcal, res.FloorKcal)
-		} else {
-			fmt.Fprintf(&b, " Going lower would break a hard rule.")
-		}
+		return fmt.Sprintf("This meal cannot get meaningfully lighter on its own: it holds %.0f kcal (a change needs at least %.0f kcal) and the day holds %.0f kcal, its minimum is %.0f kcal, so the day has only %.0f kcal of room. Its light cap is %.0f kcal.",
+			res.Before.MealKcal, math.Min(RelMinKcal, RelMinShare*res.Before.MealKcal), res.Before.DayKcal, res.FloorKcal, math.Max(0, res.Before.DayKcal-res.FloorKcal), res.MaxKcal)
 	case GoalHeartier:
-		fmt.Fprintf(&b, "The closest way brings the meal to %.0f kcal, its hearty minimum is %.0f kcal.", c.After.MealKcal, w.minKcal)
-		if blocked != nil {
-			fmt.Fprintf(&b, " Reaching it would break a hard rule (the day would be %.0f kcal).", blocked.After.DayKcal)
-		}
-	default:
-		fmt.Fprintf(&b, "The closest way adds %.1f g protein, a meaningful change is at least %.0f g.", c.After.MealProteinG-c.Before.MealProteinG, RelMinProteinG)
+		return fmt.Sprintf("This meal cannot get meaningfully heartier on its own without taking the day (%.0f kcal) over its band top of %.0f kcal.", res.Before.DayKcal, res.BandHigh)
 	}
-	return b.String()
+	return "no verified change adds enough protein without breaking a hard rule"
 }
 
 // ---------------------------------------------------------------------------
@@ -767,7 +788,7 @@ func (w *waySearch) swapEdits(s State, p Plate, what string, minProtein float64)
 		if what == AltMeal {
 			words = "swap the whole meal for " + a.Name
 		}
-		out = append(out, wayEdit{s: a.next, ops: a.Ops, what: []string{words}, cost: 3 + btoi(what == AltMeal), kind: "swap", plate: p.ID})
+		out = append(out, wayEdit{s: a.next, ops: a.Ops, what: []string{words}, cost: 5 + btoi(what == AltMeal), kind: "swap", plate: p.ID})
 	}
 	return out
 }
@@ -921,29 +942,24 @@ func (w *waySearch) compensate(e wayEdit, ev Evaluation) []wayEdit {
 			clears = append(clears, true)
 		}
 		for _, clear := range clears {
-			for v := 0; v < 2; v++ {
-				cur, curEv := e, ev
-				cur.kind = "compound"
+			cur, curEv := e, ev
+			cur.kind = "compound"
+			if clear {
+				cur.s, cur.clear = w.clearMark(cur.s, q), append(slices.Clone(cur.clear), w.markOf(cur.s, q, false))
+				cur.cost += 3
+				curEv = Evaluate(cur.s, w.t)
+			}
+			if up {
+				cur, curEv = w.compUp(cur, curEv, qi)
+			} else {
+				cur, curEv = w.compDown(cur, curEv, qi)
+			}
+			_ = curEv
+			if len(cur.moved) > 0 {
 				if clear {
-					cur.s, cur.clear = w.clearMark(cur.s, q), append(slices.Clone(cur.clear), w.markOf(cur.s, q, false))
-					cur.cost += 3
-					curEv = Evaluate(cur.s, w.t)
+					cur.moved = append([]string{slotName(e.s, q.SlotID) + " is no longer a light meal"}, cur.moved...)
 				}
-				if up {
-					cur, curEv = w.compUp(cur, curEv, qi, v == 1)
-				} else {
-					if v == 1 {
-						continue
-					}
-					cur, curEv = w.compDown(cur, curEv, qi)
-				}
-				_ = curEv
-				if len(cur.moved) > 0 {
-					if clear {
-						cur.moved = append([]string{slotName(e.s, q.SlotID) + " is no longer a light meal"}, cur.moved...)
-					}
-					out = append(out, cur)
-				}
+				out = append(out, cur)
 			}
 		}
 	}
@@ -981,13 +997,16 @@ func (w *waySearch) score(r wayCheck) (float64, bool) {
 	return fit + 400*float64(soft) + 100000*float64(btoi(r.floor)), true
 }
 
-func (w *waySearch) compUp(e wayEdit, ev Evaluation, qi int, raise bool) (wayEdit, Evaluation) {
+// compUp grows the other meal the way a person would: a larger portion of
+// its own main (up to MaxDishPortions), then a matching side or bread, never
+// a gap filler that does not belong to the dish.
+func (w *waySearch) compUp(e wayEdit, ev Evaluation, qi int) (wayEdit, Evaluation) {
 	q := e.s.Plates[qi]
 	who := slotName(e.s, q.SlotID)
-	apply := func(c wayEdit, moved string) {
+	apply := func(c wayEdit) {
 		e.s = c.s
 		e.ops = append(slices.Clone(e.ops), c.ops...)
-		e.moved = append(slices.Clone(e.moved), moved)
+		e.moved = append(slices.Clone(e.moved), who+": "+c.what[0])
 		e.cost += c.cost
 		ev = Evaluate(e.s, w.t)
 	}
@@ -1000,42 +1019,84 @@ func (w *waySearch) compUp(e wayEdit, ev Evaluation, qi int, raise bool) (wayEdi
 		}
 		return best, ok
 	}
-	if raise {
-		var cands []wayEdit
-		for qi2, c := range q.Components {
-			if !isMainComp(e.s, q, qi2) {
-				continue
-			}
-			f, ok := e.s.Foods[c.FoodID]
-			if !ok || !f.NutritionComplete {
-				continue
-			}
-			for _, n := range levels(c, +1) {
-				cands = append(cands, wayEdit{s: setQuantity(e.s, qi, qi2, n), ops: []OptionOp{quantityOp(q, c, n)}, what: []string{quantityWords(f, c, n)}, cost: 1})
-			}
+	bread := false // one bread at most
+	var raise []wayEdit
+	for qi2, c := range q.Components {
+		f, ok := e.s.Foods[c.FoodID]
+		if !isMainComp(e.s, q, qi2) || !ok || !f.NutritionComplete {
+			continue
 		}
-		c, ok := pick(cands)
-		if !ok {
-			return e, ev
+		for _, n := range levels(c, +1) {
+			raise = append(raise, wayEdit{s: setQuantity(e.s, qi, qi2, n), ops: []OptionOp{quantityOp(q, c, n)}, what: []string{quantityWords(f, c, n)}, cost: 1})
 		}
-		apply(c, who+": "+c.what[0])
 	}
-	for range wayCompSteps {
+	if c, ok := pick(raise); ok {
+		apply(c)
+	}
+	for range wayCompSteps - 1 {
 		need := w.lift(ev)
 		if need <= 0 {
 			break
 		}
 		var cands []wayEdit
-		for _, ac := range w.addCands(e.s, e.s.Plates[qi], need+1, false) {
+		for _, ac := range w.sideCands(e.s, e.s.Plates[qi], need+1, bread) {
 			cands = append(cands, w.addEdit(e.s, qi, ac, ""))
 		}
 		c, ok := pick(cands)
 		if !ok {
 			break
 		}
-		apply(c, who+": "+c.what[0])
+		apply(c)
+		bread = bread || c.ops[0].Amount != nil
 	}
 	return e, ev
+}
+
+// sideCands are the sides that fit a plate: a side recipe (starch or
+// vegetable) or a bread leaf, sized closest to want kcal. No cheese, nuts or
+// other fillers.
+func (w *waySearch) sideCands(s State, p Plate, want float64, noBread bool) []addCand {
+	onPlate := map[int64]bool{}
+	for _, c := range p.Components {
+		onPlate[c.FoodID] = true
+	}
+	var out []addCand
+	for id, f := range s.Foods {
+		if onPlate[id] || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet || !fitsDiet(f.DietClass, w.household) {
+			continue
+		}
+		var best *addCand
+		try := func(c Component, kcal, grams float64) {
+			if best == nil || math.Abs(kcal-want) < math.Abs(best.kcal-want) {
+				best = &addCand{f: f, comp: c, kcal: kcal, grams: grams}
+			}
+		}
+		switch {
+		case f.Composed() && (f.Role == food.RoleSideStarch || f.Role == food.RoleSideVeg):
+			for n := 0.5; n <= MaxDishPortions+1e-9; n += 0.5 {
+				n := n
+				try(Component{FoodID: id, Portions: &n, Proposed: true}, f.Macros.Kcal*n, 0)
+			}
+		case !noBread && !f.Composed() && f.NoCook && f.LeafRole == food.RoleSideStarch:
+			limit := math.Min(wayBreadServings*ServingGrams(f), maxAddFillerGrams)
+			for n := 0.5; n <= wayBreadServings+1e-9; n += 0.5 {
+				g := math.Round(n*ServingGrams(f)/roundGrams) * roundGrams
+				if g > 0 && g <= limit+1e-9 {
+					try(Component{FoodID: id, Grams: &g, Proposed: true}, f.Macros.Kcal*g/100, g)
+				}
+			}
+		}
+		if best != nil {
+			out = append(out, *best)
+		}
+	}
+	slices.SortStableFunc(out, func(a, b addCand) int {
+		return cmp.Or(cmp.Compare(math.Abs(a.kcal-want), math.Abs(b.kcal-want)), cmp.Compare(a.f.ID, b.f.ID))
+	})
+	if len(out) > wayAddTries {
+		out = out[:wayAddTries]
+	}
+	return out
 }
 
 func (w *waySearch) compDown(e wayEdit, ev Evaluation, qi int) (wayEdit, Evaluation) {

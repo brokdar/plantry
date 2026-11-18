@@ -26,8 +26,8 @@ const findWaysSchema = `{
   "additionalProperties":false
 }`
 
-const findWaysDescription = `Find verified ways to meet a relative request ("make dinner lighter", "heartier", "more protein") in one call. goal: lighter (the meal must come under its light cap), heartier (the meal must reach its hearty minimum) or more_protein (a plate, or the day with date; at least 10 g more). For lighter and heartier the food must change in the asked direction by a meaningful amount (at least 10% of the meal or 80 kcal, the smaller of the two): a meal that already meets its cap or minimum still has to change. A way is a smaller or larger portion, leaving out or adding a side or add-on, a lighter or heartier main, or a compound way that also changes the day's other meal (adds food there when lightening, takes some away when making heartier) so the day stays above its floor and within its band; a compound way may drop the light mark of that other meal (its light entry says so). Every way was applied to a copy of the plan and checked like apply_changes before it is listed: no new hard issue, the day above its floor, in the band where possible. Ranked: reaches the goal, no new soft issue, least change, the day closest to its target. Saves nothing.
-Returns compact JSON (a field that is 0, false or empty is left out) {goal:{kind, plate_id?, date?} (pass it as it is to apply_changes), max_kcal? (light cap), min_kcal? (hearty minimum), before:{meal_kcal, meal_protein_g, day_kcal, day_protein_g} (per eater), floor_kcal, band_low, band_high (the day), ways:[{kind portion|remove|add|swap|compound, what (the change in words), moved? (a compound way: what changes on the other meal), reaches (false: the closest way, why says how far it gets and what stops it), why?, ops (apply_changes ops), light? (the marks to pass to apply_changes with the ops), before and after:{meal_kcal, meal_protein_g, day_kcal, day_protein_g}, new_issues?}], empty_reason?}. To take a way, call apply_changes with its ops, its light and the goal exactly as returned; the result's request says whether the request is satisfied.`
+const findWaysDescription = `Find verified ways to meet a relative request ("make dinner lighter", "heartier", "more protein") in one call. goal: lighter, heartier (one lunch or dinner plate) or more_protein (a plate, or the day with date; at least 10 g more). The food must change in the asked direction by a meaningful amount (at least 10% of the meal or 80 kcal, the smaller): a meal that already meets its cap or minimum still has to change. ways change ONLY the named meal (a smaller or larger portion, leaving out or adding a side or add-on, a lighter or heartier main), the day stays above its floor (heartier: in its band); the first one goes as far as that allows, so reaches_cap false means lighter (heartier) but not yet a light (hearty) meal, why says by how much. offer holds at most two compound ways that also change another meal of the day (a bigger portion of its main and a matching side or bread, or a smaller one) so the named meal reaches its cap or minimum, and may end that meal's light mark: never apply an offer unasked, present it as a choice. Every way was applied to a copy and checked like apply_changes before it is listed. Saves nothing.
+Returns JSON {goal:{kind, plate_id?, date?} (pass it as it is to apply_changes), max_kcal? (light cap), min_kcal? (hearty minimum), before:{meal_kcal, meal_protein_g, day_kcal, day_protein_g} (per eater), floor_kcal, band_low, band_high (the day), ways:[{kind portion|remove|add|swap, what (the change in words), reaches_cap (more_protein: always true), why?, ops (apply_changes ops), light? (marks to pass with the ops), before and after:{meal_kcal, meal_protein_g, day_kcal, day_protein_g}, new_issues?}], offer?:[the same with changes_other_meal true, kind compound and moved (what changes on the other meal)], empty_reason? (no way changes only this meal, with the numbers)}. To take a way or an offer, call apply_changes with its ops, its light and the goal exactly as returned; the result's request says whether it is satisfied.`
 
 func toolFindWays(svc Services) Tool {
 	return Tool{
@@ -68,20 +68,27 @@ func toolFindWays(svc Services) Tool {
 			if limit <= 0 {
 				limit = 4
 			}
-			var ways []planning.Way
+			var ways, offers []planning.Way
 			var dropped []string
-			for _, way := range res.Ways {
-				checked, why := checkWay(ctx, svc, w, goal, res.Date, way)
-				if why != "" {
-					dropped = append(dropped, why)
-					continue
+			verify := func(in []planning.Way, max int) []planning.Way {
+				var out []planning.Way
+				for _, way := range in {
+					checked, why := checkWay(ctx, svc, w, goal, res.Date, way)
+					if why != "" {
+						dropped = append(dropped, why)
+						continue
+					}
+					if out = append(out, checked); len(out) == max {
+						break
+					}
 				}
-				ways = append(ways, checked)
-				if len(ways) == limit {
-					break
-				}
+				return out
 			}
+			ways, offers = verify(res.Ways, limit), verify(res.Offers, 2)
 			out := map[string]any{"goal": goal, "before": res.Before, "ways": nonNil(ways)}
+			if len(offers) > 0 {
+				out["offer"] = offers
+			}
 			for k, v := range map[string]float64{"max_kcal": res.MaxKcal, "min_kcal": res.MinKcal, "floor_kcal": res.FloorKcal, "band_low": res.BandLow, "band_high": res.BandHigh} {
 				if v > 0 {
 					out[k] = v
@@ -91,6 +98,9 @@ func toolFindWays(svc Services) Tool {
 			case len(ways) > 0:
 			case res.EmptyWhy != "":
 				out["empty_reason"] = res.EmptyWhy
+				if len(dropped) > 0 && len(offers) == 0 {
+					out["empty_reason"] = res.EmptyWhy + " Checked against the real plan and dropped: " + strings.Join(dropped, "; ")
+				}
 			case len(dropped) > 0:
 				out["empty_reason"] = "every way failed the check against the real plan: " + strings.Join(dropped, "; ")
 			default:
@@ -144,8 +154,20 @@ func checkWay(ctx context.Context, svc Services, w window.Window, goal applyGoal
 	way.After = planning.FiguresOf(run.after, way.PlateID, date)
 	if req, ok := run.result["request"].(map[string]any); ok {
 		sat, _ := req["satisfied"].(bool)
-		if way.Reaches && !sat {
+		reached := sat
+		for _, k := range []string{"reached_light", "reached_hearty"} {
+			if v, ok := req[k].(bool); ok {
+				reached = sat && v
+			}
+		}
+		if !sat {
+			return way, way.What + ": " + fmt.Sprint(req["why"])
+		}
+		if way.Reaches && !reached {
 			way.Reaches, way.Why = false, fmt.Sprint(req["why"])
+		}
+		if !way.Reaches && way.Why == "" && reached == false {
+			way.Why = fmt.Sprint(req["why"])
 		}
 	}
 	return way, ""
@@ -210,7 +232,8 @@ func judgeGoal(ctx context.Context, svc Services, w window.Window, g applyGoal, 
 		}
 	}
 	b, a := planning.FiguresOf(before, g.PlateID, date), planning.FiguresOf(after, g.PlateID, date)
-	changed, satisfied, why := planning.JudgeRelative(g.Kind, g.PlateID != 0, maxKcal, minKcal, b, a)
+	changed, reached, why := planning.JudgeRelative(g.Kind, g.PlateID != 0, maxKcal, minKcal, b, a)
+	satisfied := changed
 	if !changed && g.Kind != planning.GoalMoreProtein {
 		for _, l := range light {
 			if l.Scope == planning.LightScopeMeal && l.Date == date && l.Hearty() == (g.Kind == planning.GoalHeartier) {
@@ -219,6 +242,12 @@ func judgeGoal(ctx context.Context, svc Services, w window.Window, g applyGoal, 
 		}
 	}
 	req := map[string]any{"goal": g.Kind, "before": b, "after": a, "satisfied": satisfied}
+	switch g.Kind {
+	case planning.GoalLighter:
+		req["reached_light"] = reached
+	case planning.GoalHeartier:
+		req["reached_hearty"] = reached
+	}
 	if g.PlateID == 0 {
 		// A day request: the figures are the day's.
 		req["before"], req["after"] = map[string]any{"day_kcal": b.DayKcal, "day_protein_g": b.DayProteinG}, map[string]any{"day_kcal": a.DayKcal, "day_protein_g": a.DayProteinG}

@@ -53,27 +53,57 @@ func (e *planToolEnv) applyWay(res, way map[string]any, dryRun bool) (map[string
 	return e.exec("apply_changes", string(raw))
 }
 
-// Every way find_ways lists passes the dry run of apply_changes with its own
-// ops, light and goal: no new hard issue, and a way that reaches the goal is
-// reported satisfied.
-func TestFindWays_EveryWayPassesItsOwnDryRun(t *testing.T) {
+// Every way and offer find_ways lists passes the dry run of apply_changes
+// with its own ops, light and goal: no new hard issue, satisfied, and the
+// cap flag agrees. Ways change only the named meal; an offer is the only
+// compound kind, and it never adds a filler (only a side recipe or bread).
+func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 	e := relEnv(t)
 	ctx, _ := e.chat()
-	checked, goals := 0, map[string]int{}
+	checked, offers, goals := 0, 0, map[string]int{}
 	for _, p := range e.draftMeals() {
 		for _, goal := range []string{"lighter", "heartier", "more_protein"} {
 			out, _, _, err := e.ts.Execute(ctx, "find_ways", json.RawMessage(fmt.Sprintf(`{"goal":%q,"plate_id":%d}`, goal, p.ID)))
 			require.NoError(t, err, "plate %d %s", p.ID, goal)
 			var res map[string]any
 			require.NoError(t, json.Unmarshal(out, &res))
-			for _, way := range relMaps(res["ways"]) {
+			var all []map[string]any
+			for _, w := range relMaps(res["ways"]) {
+				assert.NotEqual(t, "compound", w["kind"], "a compound way is never a default")
+				assert.Nil(t, w["changes_other_meal"])
+				all = append(all, w)
+			}
+			if res["offer"] != nil {
+				for _, o := range relMaps(res["offer"]) {
+					assert.Equal(t, "compound", o["kind"])
+					assert.Equal(t, true, o["changes_other_meal"])
+					assert.NotEmpty(t, o["moved"])
+					for _, op := range relMaps(o["ops"]) {
+						if op["op"] != "add" {
+							continue
+						}
+						var kind, role string
+						require.NoError(t, e.db.QueryRow(`SELECT kind, COALESCE(role,'') FROM foods WHERE id = ?`, int64(op["food_id"].(float64))).Scan(&kind, &role))
+						assert.Equal(t, "composed", kind, "an offer adds a side recipe, not a filler")
+						assert.Contains(t, []string{"side_starch", "side_veg"}, role)
+					}
+					all = append(all, o)
+					offers++
+				}
+			}
+			for _, way := range all {
 				got, err := e.applyWayCtx(ctx, res, way)
 				require.NoError(t, err, "plate %d %s: %v", p.ID, goal, way["what"])
 				for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
 					assert.NotEqual(t, "violation", is["severity"], "%s %v adds %v", goal, way["what"], is["label"])
 				}
 				req := got["request"].(map[string]any)
-				assert.Equal(t, way["reaches"] == true, req["satisfied"] == true, "%s %v: %v", goal, way["what"], req["why"])
+				assert.Equal(t, true, req["satisfied"], "%s %v: %v", goal, way["what"], req["why"])
+				for _, k := range []string{"reached_light", "reached_hearty"} {
+					if v, ok := req[k]; ok {
+						assert.Equal(t, way["reaches_cap"], v, "%s %v", goal, way["what"])
+					}
+				}
 				checked++
 				goals[goal]++
 			}
@@ -83,6 +113,7 @@ func TestFindWays_EveryWayPassesItsOwnDryRun(t *testing.T) {
 	for _, g := range []string{"lighter", "heartier", "more_protein"} {
 		assert.Positive(t, goals[g], "ways for %s", g)
 	}
+	t.Logf("checked %d ways and offers, %d offers", checked, offers)
 }
 
 func (e *planToolEnv) applyWayCtx(ctx context.Context, res, way map[string]any) (map[string]any, error) {
@@ -182,7 +213,7 @@ func TestFindWays_ApplyFirstWayStoresMarkAndSatisfies(t *testing.T) {
 		var res map[string]any
 		require.NoError(t, json.Unmarshal(out, &res))
 		ways := relMaps(res["ways"])
-		if len(ways) == 0 || ways[0]["reaches"] != true || ways[0]["light"] == nil {
+		if len(ways) == 0 || ways[0]["reaches_cap"] != true || ways[0]["light"] == nil {
 			continue
 		}
 		got, err := e.applyWay(res, ways[0], false)

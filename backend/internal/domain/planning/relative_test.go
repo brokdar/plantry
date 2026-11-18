@@ -56,24 +56,51 @@ func ways(t *testing.T, s planning.State, req planning.WayRequest) planning.WayR
 	return res
 }
 
-func TestWays_Lighter(t *testing.T) {
+func TestWays_LighterChangesOnlyThisMealAndOffersTheRest(t *testing.T) {
 	res := ways(t, relState(false), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter})
 	assert.InDelta(t, 500, res.MaxKcal, 0.5)
 	assert.InDelta(t, 1200, res.Before.MealKcal, 0.5)
 	require.NotEmpty(t, res.Ways)
 	for _, w := range res.Ways {
-		assert.True(t, w.Reaches, w.What)
-		assert.LessOrEqual(t, w.After.MealKcal, res.MaxKcal+0.5, w.What)
+		assert.NotEqual(t, "compound", w.Kind, "a compound way is never a default")
+		assert.False(t, w.ChangesOther)
+		assert.Empty(t, w.Moved)
+		assert.True(t, planning.MeaningfulKcal(res.Before.MealKcal, res.Before.MealKcal-w.After.MealKcal), w.What)
 		assert.GreaterOrEqual(t, w.After.DayKcal, res.FloorKcal, "%s keeps the day above its floor", w.What)
-		assert.NotEmpty(t, w.Ops)
-		assert.Contains(t, w.Light, planning.LightIntent{Date: sat, Scope: "meal", Slot: "dinner"}, "a way that meets the cap carries its mark")
-		if w.Kind == "compound" {
-			assert.NotEmpty(t, w.Moved, "a compound way says what moves to the other meal")
+		for _, op := range w.Ops {
+			assert.Contains(t, []int64{30, 31, 0}, derefInt(op.PlateComponentID)-0, "ops touch dinner only: %v", op)
+		}
+		if !w.Reaches {
+			assert.Empty(t, w.Light, "no mark on a meal over its cap")
 		}
 	}
-	// A dinner at its cap leaves the day under its floor: the first way
-	// has to move energy to another meal.
-	assert.Equal(t, "compound", res.Ways[0].Kind, res.Ways[0].What)
+	// The first way goes as far as the floor allows: no other way is lighter.
+	assert.False(t, res.Ways[0].Reaches, "the floor stops a 500 kcal dinner here")
+	for _, w := range res.Ways[1:] {
+		assert.GreaterOrEqual(t, w.After.MealKcal, res.Ways[0].After.MealKcal, w.What)
+	}
+
+	// The offer: dinner at its cap, the lunch grows by its own dish and a
+	// side or bread, never a filler such as nuts.
+	require.NotEmpty(t, res.Offers)
+	for _, o := range res.Offers {
+		assert.True(t, o.ChangesOther)
+		assert.NotEmpty(t, o.Moved)
+		assert.True(t, o.Reaches)
+		assert.LessOrEqual(t, o.After.MealKcal, res.MaxKcal+0.5)
+		assert.GreaterOrEqual(t, o.After.DayKcal, res.FloorKcal, o.What)
+		assert.Contains(t, o.Light, planning.LightIntent{Date: sat, Scope: "meal", Slot: "dinner"})
+		for _, op := range o.Ops {
+			assert.NotEqual(t, relNuts, op.FoodID, "no filler on a dish it does not belong to: %v", o.Moved)
+		}
+	}
+}
+
+func derefInt(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
 }
 
 func TestWays_HeartierEvenWhenAboveTheMinimum(t *testing.T) {
@@ -81,7 +108,6 @@ func TestWays_HeartierEvenWhenAboveTheMinimum(t *testing.T) {
 	assert.InDelta(t, 833, res.MinKcal, 0.5)
 	require.NotEmpty(t, res.Ways, "1200 kcal is above the minimum and still has to get heartier")
 	for _, w := range res.Ways {
-		assert.True(t, w.Reaches)
 		assert.True(t, planning.MeaningfulKcal(res.Before.MealKcal, w.After.MealKcal-res.Before.MealKcal), w.What)
 		assert.NotEmpty(t, w.Ops, "never a mark alone")
 	}
@@ -106,19 +132,26 @@ func TestWays_MoreProtein(t *testing.T) {
 	}
 }
 
-func TestWays_NoCompensationAvailable(t *testing.T) {
+func TestWays_NoOfferWhenTheOtherMealsCannotChange(t *testing.T) {
 	// The other meals are confirmed: nothing can lift the day, so a dinner
-	// at its cap would break the floor. No way may reach the cap; the answer
-	// says how far it gets.
+	// at its cap would break the floor and there is no offer.
 	res := ways(t, relState(true), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter})
+	assert.Empty(t, res.Offers)
 	for _, w := range res.Ways {
 		assert.False(t, w.Reaches, w.What)
-		assert.NotEmpty(t, w.Why)
 		assert.GreaterOrEqual(t, w.After.DayKcal, res.FloorKcal)
 	}
-	if len(res.Ways) == 0 {
-		assert.NotEmpty(t, res.EmptyWhy)
-	}
+}
+
+func TestWays_NothingMeaningfulOnAMealAtTheFloor(t *testing.T) {
+	// Dinner 1200, breakfast and lunch 850: the day is 2050. Raise the floor
+	// to 2050: the dinner cannot lose anything alone.
+	s := relState(false)
+	s.Profile.KcalTarget = f64(2733) // floor 75 % = 2050
+	res := ways(t, s, planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter})
+	assert.Empty(t, res.Ways)
+	assert.NotEmpty(t, res.EmptyWhy)
+	assert.Contains(t, res.EmptyWhy, "kcal")
 }
 
 func TestWays_Errors(t *testing.T) {
@@ -161,10 +194,10 @@ func TestJudgeRelative(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			changed, sat, why := planning.JudgeRelative(tt.goal, tt.meal, tt.maxK, tt.minK, tt.before, tt.after)
+			changed, reached, why := planning.JudgeRelative(tt.goal, tt.meal, tt.maxK, tt.minK, tt.before, tt.after)
 			assert.Equal(t, tt.changed, changed)
-			assert.Equal(t, tt.sat, sat)
-			assert.Equal(t, !tt.sat, why != "", "a request that is not satisfied says why")
+			assert.Equal(t, tt.sat, changed && reached)
+			assert.Equal(t, !(changed && reached), why != "", "a request that is not fully met says why")
 		})
 	}
 }

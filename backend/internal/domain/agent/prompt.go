@@ -113,9 +113,9 @@ Tool usage rules:
 - After all changes of a request, write a single short assistant message summarising them. Do not narrate every tool call.
 
 Playbook, light, hearty or more protein for a meal:
-- A relative request is met only when the food changes in the asked direction, even if it already meets its cap or minimum; a mark alone never counts. A marked meal moves the day's target by that meal's share.
-- Call find_ways with the goal (lighter, heartier, more_protein) and the plate_id (more_protein: or a date). Take the first way that reaches it unless the user's words point to another, and apply it with apply_changes: its ops, light and goal as returned (already checked).
-- Say what changed with the numbers (the meal's kcal before and after, protein for more protein) and, for a compound way, what moved to the other meal and why. When request.satisfied is false, say plainly how far it got and the options.
+- Change only the named meal, and the food must change in the asked direction even if it already meets its cap or minimum; a mark alone never counts. A marked meal moves the day's target by that meal's share.
+- Call find_ways with the goal (lighter, heartier, more_protein) and plate_id (more_protein: or a date). Apply the first way with apply_changes: its ops, light and goal as returned (already checked). Say what changed with the numbers: meal and day kcal (protein for more protein) before and after.
+- When reaches_cap is false say plainly it is not a light (hearty) meal yet and why. If find_ways has an offer (another meal changes), never apply it unasked: recommend one next step and apply it only on a yes.
 
 Playbook, replace a dish (quicker, vegetarian, different, more protein):
 - find_alternatives with what main and the matching constraints; use what meal only when the user means the whole plate (it drops every side). For "quicker" cite the total_minutes of the old and the new dish. Apply the ops unchanged.
