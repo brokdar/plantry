@@ -92,6 +92,13 @@ func TestWays_LighterChangesOnlyThisMealAndOffersTheRest(t *testing.T) {
 		assert.True(t, o.Reaches)
 		assert.LessOrEqual(t, o.After.MealKcal, res.MaxKcal+0.5)
 		assert.GreaterOrEqual(t, o.After.DayKcal, res.FloorKcal, o.What)
+		if o.BelowBand {
+			assert.NotEmpty(t, o.Why, "an offer under the band says by how much")
+			assert.Contains(t, o.Why, "under its band")
+		} else {
+			assert.GreaterOrEqual(t, o.After.DayKcal, res.BandLow-1, "%s lands the day in its band", o.What)
+			assert.Empty(t, o.Why)
+		}
 		assert.Contains(t, o.Light, planning.LightIntent{Date: sat, Scope: "meal", Slot: "dinner"})
 		for _, op := range o.Ops {
 			assert.NotEqual(t, relNuts, op.FoodID, "no filler on a dish it does not belong to: %v", o.Moved)
