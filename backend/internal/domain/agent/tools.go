@@ -283,6 +283,7 @@ func defaultTools(svc Services) []Tool {
 		toolFindFoods(svc),
 		toolApplyChanges(svc),
 		toolFindAlternatives(svc),
+		toolFindWays(svc),
 		toolConfirm(svc),
 		toolUnlock(svc),
 		toolRecordPreference(svc),

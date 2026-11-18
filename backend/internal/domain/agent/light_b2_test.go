@@ -12,9 +12,10 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
-// The light request of the call itself is not part of the baseline: a dinner
-// marked light that is still far over its cap shows S6 as a new issue (audit B2).
-func TestApplyChanges_LightCallShowsItsOwnS6AsNew(t *testing.T) {
+// A mark on a meal that is still far over its cap is refused: the mark is
+// derived from the result, and the message names the numbers and find_ways
+// (audit B2 showed the S6 as new; E006 stops the mark instead).
+func TestApplyChanges_LightCallOnAMealOverItsCapIsRefused(t *testing.T) {
 	e := newPlanToolEnv(t)
 	e.withMacros()
 	e.sql(`UPDATE foods SET kcal_100g = 1000 WHERE name = 'Kichererbsen'`)
@@ -30,24 +31,8 @@ func TestApplyChanges_LightCallShowsItsOwnS6AsNew(t *testing.T) {
 	require.NotNil(t, p)
 
 	input := fmt.Sprintf(`{"dry_run":true,"light":[{"date":%q,"scope":"meal","slot":"dinner"}],"ops":[{"op":"set_eaters","plate_id":%d,"eaters":1}]}`, p.DateString(), p.ID)
-	out, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(input))
-	require.NoError(t, err)
-	var res struct {
-		After struct {
-			Issues struct {
-				New []struct {
-					Label string `json:"label"`
-					Date  string `json:"date"`
-				} `json:"new"`
-			} `json:"issues"`
-		} `json:"after"`
-	}
-	require.NoError(t, json.Unmarshal(out, &res))
-	var codes []string
-	for _, is := range res.After.Issues.New {
-		if is.Date == p.DateString() {
-			codes = append(codes, is.Label)
-		}
-	}
-	assert.Contains(t, codes, "light meal")
+	_, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(input))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "light cap")
+	assert.Contains(t, err.Error(), "find_ways")
 }

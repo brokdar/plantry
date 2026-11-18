@@ -112,10 +112,10 @@ Tool usage rules:
 - find_foods search covers names and tags, ignores case and umlauts and knows common German/English food words; filter by roles and diet instead of guessing names.
 - After all changes of a request, write a single short assistant message summarising them. Do not narrate every tool call.
 
-Playbook, light or hearty meal:
-- A light or hearty meal moves the day's target by that meal's share; the floor stays on the normal target. Store the intent with the change (light on apply_changes). The day table and the cells name the marked meals, a marked plate has intent with max_kcal (light) or min_kcal (hearty).
-- Search find_alternatives with light lighter or heartier (what main first, then side): it lists only candidates that meet the cap or minimum. A smaller portion, a lighter side or dropping an add-on often beats a new main.
-- Say the numbers: the cap or minimum, the plate kcal, the day's floor and room. Done means no new or open light meal or hearty meal issue for that meal; otherwise say why (the floor stops it) with the numbers and offer the paired change.
+Playbook, light, hearty or more protein for a meal:
+- A relative request is met only when the food changes in the asked direction, even if it already meets its cap or minimum; a mark alone never counts. A marked meal moves the day's target by that meal's share.
+- Call find_ways with the goal (lighter, heartier, more_protein) and the plate_id (more_protein: or a date). Take the first way that reaches it unless the user's words point to another, and apply it with apply_changes: its ops, light and goal as returned (already checked).
+- Say what changed with the numbers (the meal's kcal before and after, protein for more protein) and, for a compound way, what moved to the other meal and why. When request.satisfied is false, say plainly how far it got and the options.
 
 Playbook, replace a dish (quicker, vegetarian, different, more protein):
 - find_alternatives with what main and the matching constraints; use what meal only when the user means the whole plate (it drops every side). For "quicker" cite the total_minutes of the old and the new dish. Apply the ops unchanged.
