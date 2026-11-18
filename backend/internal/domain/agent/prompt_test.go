@@ -55,7 +55,7 @@ func TestPrompt_MealEditRules(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
 		"change only what the user asked", "offer the fix", "only to clear a problem",
-		`occupant "swap"`, "also_changed entry in plain words",
+		`occupant "swap"`, "every item of report",
 		"one away op", "A day away is not judged for calories",
 		"find_alternatives with what main", "cite the total_minutes",
 		"only do what your tools do", "logging food eaten out", "say so plainly",
