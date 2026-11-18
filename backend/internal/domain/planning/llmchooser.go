@@ -580,7 +580,7 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 	}
 	prop, fixes := autofix(in, prop)
 	merged := Merge(in.State, in.Target, prop)
-	ev := Evaluate(merged, in.Target)
+	ev := EvaluateWeek(merged, in.Target)
 	RecordDryRun(ctx, n, func() Evaluation { return ev })
 	view := ev.Compact(ev.ProposedView())
 	if len(fixes) > 0 {
@@ -598,7 +598,7 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 // goes after the repair text so the model sees every rule, soft ones
 // included.
 func evaluationFeedback(merged State, t Target) string {
-	ev := Evaluate(merged, t)
+	ev := EvaluateWeek(merged, t)
 	out, err := json.Marshal(ev.Compact(ev.ProposedView()))
 	if err != nil {
 		return ""

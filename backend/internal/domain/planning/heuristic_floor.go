@@ -125,6 +125,9 @@ func (h *planner) dayAccounts() (*index, []DayKcal) {
 // verified no-cook foods.
 func (h *planner) liftDay(dk DayKcal, limit float64, roundUp bool) {
 	h.topUpDay(dk.Date, limit-dk.Kcal, roundUp)
+	if h.balance {
+		h.addSide(dk.Date, limit)
+	}
 	for h.addNoCook(dk.Date, false, limit) {
 	}
 }
@@ -363,6 +366,11 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp bool) {
 	// its keep days (not a frozen link), and the session's index.
 	growable := func(p ProposedPlate, c ProposedComponent) (int, bool) {
 		i, ok := sessions[c.SessionKey]
+		if h.balance && c.SessionKey == "" && c.SessionID == 0 && c.Portions > 0 && !h.s.lightMeal(p.Date, p.SlotID) {
+			// A component cooked fresh for its own plate has no session to grow.
+			f, known := h.s.Foods[c.FoodID]
+			return -1, known && f.Macros.Kcal > 0 && (f.Role == food.RoleMain || f.Role == food.RoleSideStarch)
+		}
 		if c.SessionKey == "" || !ok || c.Portions <= 0 || h.s.lightMeal(p.Date, p.SlotID) {
 			return 0, false
 		}
@@ -412,7 +420,9 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp bool) {
 				h.topUpBase[key] = c.Portions
 			}
 			raised = max(min(raised, math.Floor(h.topUpBase[key]*maxTopUp*4+epsilon)/4, MaxDishPortions), c.Portions)
-			h.prop.Sessions[si].Portions += eaters * (raised - c.Portions)
+			if si >= 0 {
+				h.prop.Sessions[si].Portions += eaters * (raised - c.Portions)
+			}
 			c.Portions = raised
 		}
 	}

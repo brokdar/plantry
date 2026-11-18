@@ -45,6 +45,8 @@ type Option struct {
 	// Why says why Go chose this plate when it is not the day's last one
 	// ("lunch: dinner is light").
 	Why string `json:"why,omitempty"`
+	// MeatSavedG is the meat per eater a week swap takes off its plate.
+	MeatSavedG float64 `json:"meat_saved_g,omitempty"`
 
 	inBand   bool
 	shareGap float64
@@ -194,11 +196,13 @@ func (x *index) dgeIssues(w *WeekEval) []Issue {
 	meatOK := dt == "" || diet.Compatible(diet.Omnivore, dt)
 	fishOK := dt == "" || diet.Compatible(diet.Pescetarian, dt)
 	if meatOK && w.MeatG > DGEMeatMaxG*float64(w.Days)/weekDays {
-		out = append(out, issue("S7", CodeWeekMeatAboveDGE, SeveritySoft).
-			with("days", w.Days).with("meat_g", math.Round(w.MeatG)).with("max_g", math.Round(DGEMeatMaxG*float64(w.Days)/weekDays)))
+		is := issue("S7", CodeWeekMeatAboveDGE, SeveritySoft).
+			with("days", w.Days).with("meat_g", math.Round(w.MeatG)).with("max_g", math.Round(DGEMeatMaxG*float64(w.Days)/weekDays))
+		out = append(out, is)
 	}
 	if fishOK && w.FishMeals == 0 {
-		out = append(out, issue("S7", CodeWeekFishBelowDGE, SeveritySoft).with("days", w.Days).with("fish_meals", 0).with("min_meals", 1))
+		is := issue("S7", CodeWeekFishBelowDGE, SeveritySoft).with("days", w.Days).with("fish_meals", 0).with("min_meals", 1)
+		out = append(out, is)
 	}
 	if w.LegumeMeals == 0 {
 		out = append(out, issue("S7", CodeWeekLegumesBelow, SeveritySoft).with("days", w.Days).with("legume_meals", 0).with("min_meals", 1))
