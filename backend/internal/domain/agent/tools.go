@@ -460,7 +460,7 @@ func round1(v float64) float64 {
 func plateComponentMap(pc *plate.PlateComponent) map[string]any {
 	out := map[string]any{
 		"id": pc.ID, "plate_id": pc.PlateID, "food_id": pc.FoodID,
-		"sort_order": pc.SortOrder, "name": pc.FoodName,
+		"sort_order": pc.SortOrder, "name": food.Data(pc.FoodName),
 	}
 	if pc.FoodRole != nil && *pc.FoodRole != "" {
 		out["role"] = *pc.FoodRole
