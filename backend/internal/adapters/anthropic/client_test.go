@@ -595,8 +595,8 @@ func TestStream_TailBreakpointOptInAndServerBlocks(t *testing.T) {
 	assert.Equal(t, []string{"messages"}, bp)
 
 	n, bp = tailMarkers(t, req(true, asst(server)))
-	assert.Equal(t, 0, n, "a server-only tail cannot carry the marker")
-	assert.Empty(t, bp)
+	assert.Equal(t, 1, n, "a server-only tail falls back to the earlier message")
+	assert.Equal(t, []string{"messages"}, bp)
 
 	n, bp = tailMarkers(t, req(true, asst(thinking, text)))
 	assert.Equal(t, 1, n, "the text after the thinking block takes it")
@@ -641,7 +641,19 @@ func TestStream_TailBreakpointSkipsCodeCalledResults(t *testing.T) {
 
 	// The code tool is sent (the gen-p15 case): the history keeps its code
 	// blocks, so the decision is tailIndex's.
-	assert.Equal(t, -1, anthropic.TailIndex(req(result(codeID)).Messages), "only a code-called result: no tail marker")
-	assert.Equal(t, 1, anthropic.TailIndex(req(result(codeID), result(directID)).Messages), "the direct result takes it")
-	assert.Equal(t, 0, anthropic.TailIndex(req(result(directID), result(codeID)).Messages), "an earlier block is used")
+	at := func(blocks ...llm.ContentBlock) [2]int {
+		m, i := anthropic.TailIndex(req(blocks...).Messages)
+		return [2]int{m, i}
+	}
+	// Only a code-called result in the last message: the marker walks back to
+	// the assistant message's last eligible block (the tool_use after the
+	// server block), never the server block or the code-called result.
+	assert.Equal(t, [2]int{1, 2}, at(result(codeID)), "only a code-called result: falls back to the earlier message")
+	assert.Equal(t, [2]int{2, 1}, at(result(codeID), result(directID)), "the direct result takes it")
+	assert.Equal(t, [2]int{2, 0}, at(result(directID), result(codeID)), "an earlier block is used")
+
+	// Nothing eligible anywhere: no tail marker.
+	onlyServer := llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{asst.Content[0]}}
+	m, i := anthropic.TailIndex([]llm.Message{onlyServer})
+	assert.Equal(t, [2]int{-1, -1}, [2]int{m, i})
 }

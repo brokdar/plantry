@@ -45,7 +45,8 @@ func derivedNoCook(f *food.Food) bool {
 	default:
 		return false
 	}
-	return !cookedFirst.MatchString(f.Name) && !notEatenAsIs.MatchString(f.Name)
+	name := eatenAsIsFat.ReplaceAllString(f.Name, " ")
+	return !cookedFirst.MatchString(name) && !notEatenAsIs.MatchString(name)
 }
 
 // ServingGrams is the grams the planner offers f in: the stored serving
@@ -61,16 +62,26 @@ func ServingGrams(f FoodFacts) float64 {
 // and are never a plate add-on: herbs, spices, aromatics, fats and oils,
 // cream, broths, pastes, vinegar, flour, starch, pastry and dough. A match
 // only changes the derived default; the user's override wins.
+//
+// English words match as whole words with an optional plural s (salted
+// almonds, pasteurized, buttermilk and creamy do not match). German words
+// match as the end of a compound on purpose (Rapsöl, Tomatenmark, Olivenöl),
+// with an optional inflection ending.
 var notEatenAsIs = regexp.MustCompile(`(?i)(^|[^\p{L}])(` +
-	`herb|basil|parsley|thyme|chive|coriander|cilantro|mint|dill|rosemary|oregano|sage|bay leaf|spice|seasoning|salt|peppercorn|black pepper|cayenne|cumin|turmeric|cinnamon|` +
+	`(herb|basil|parsley|thyme|chive|coriander|cilantro|mint|dill|rosemary|oregano|sage|bay leaf|spice|seasoning|salt|peppercorn|black pepper|cayenne|cumin|turmeric|cinnamon|` +
 	`garlic|onion|shallot|leek|ginger|chil+i|chile|scallion|` +
-	`oil|butter|ghee|lard|margarine|tallow|cooking cream|cream($|[^\p{L} ]| [^c])|crème|creme|` +
-	`broth|stock|bouillon|paste|puree|purée|vinegar|juice|sauce|starch|pastry|dough|batter` +
-	`)|` +
+	`oil|butter|ghee|lard|margarine|tallow|cooking cream|crème|creme|` +
+	`broth|stock|bouillon|paste|puree|purée|vinegar|juice|sauce|starch|pastry|dough|batter)(s)?($|[^\p{L}])` +
+	`|cream(s)?($|[^\p{L} ]| [^c]))|` +
 	`(kräuter|kraeuter|petersilie|thymian|schnittlauch|koriander|minze|dill|rosmarin|salbei|lorbeer|gewürz|salz|pfeffer|kümmel|kurkuma|zimt|` +
 	`knoblauch|zwiebel|schalotte|lauch|ingwer|` +
 	`öl|oel|butter|schmalz|margarine|sahne|kochcreme|` +
 	`brühe|bruehe|fond|bouillon|tomatenmark|mark|essig|saft|soße|sosse|stärke|staerke|teig|mehl)(n|en|e|s)?($|[^\p{L}])`)
+
+// eatenAsIsFat names the fat-named foods that are eaten as they are: nut
+// butters and a food packed in oil, stripped from the name before
+// notEatenAsIs applies.
+var eatenAsIsFat = regexp.MustCompile(`(?i)((peanut|nut|almond|cashew|hazelnut|cocoa|cacao|shea) butter|(erdnuss|mandel|cashew|haselnuss|nuss|kakao)butter| in (öl|oel|oil))`)
 
 var cookedFirst = regexp.MustCompile(`(?i)\b(potato|kartoffel|egg|ei|eier|bean|bohne|lentil|linse|pea|erbse|rice|reis|pasta|nudel|flour|mehl|dough|teig|yeast|hefe|corn ?starch|pudding)`)
 

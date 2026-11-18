@@ -65,6 +65,12 @@ func TestFoodHandler_ServingG(t *testing.T) {
 	_, got = doJSON(t, r, http.MethodGet, fmt.Sprintf("/api/foods/%d", id), "")
 	assert.Equal(t, 150.0, got["serving_g"])
 
+	// An absent serving_g keeps the stored serving; an explicit null clears it.
+	code, got = doJSON(t, r, http.MethodPut, url, `{"value":false}`)
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, 150.0, got["serving_g"], "absent keeps it")
+	assert.Equal(t, false, got["no_cook"])
+
 	code, got = doJSON(t, r, http.MethodPut, url, `{"value":null,"serving_g":null}`)
 	require.Equal(t, http.StatusOK, code)
 	assert.Nil(t, got["serving_g"])

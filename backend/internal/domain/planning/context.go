@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -246,10 +245,10 @@ func WithNutrition(ff FoodFacts, d food.Detailed) FoodFacts {
 	ff.Macros, ff.NutritionComplete, ff.FiberMissing = d.Macros, d.Complete, d.FiberMissing
 	ff.Groups = GroupsOf(d.Leaves)
 	ff.Leaves = nil
-	if len(d.Leaves) > 1 {
-		ff.Leaves = map[string]float64{}
+	if len(d.Leaves) > 0 {
+		ff.Leaves = map[int64]float64{}
 		for _, l := range d.Leaves {
-			ff.Leaves[strings.ToLower(l.Name)] += l.Grams
+			ff.Leaves[l.ID] += l.Grams
 		}
 	}
 	return ff

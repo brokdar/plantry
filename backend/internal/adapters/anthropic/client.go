@@ -467,31 +467,32 @@ func encodeRequest(req llm.Request, stream bool, w wire) ([]byte, error) {
 	if req.CacheTail {
 		// Cache the conversation tail: the next request resends this history
 		// as a prefix, so it is a cache read instead of fresh input.
-		if last := len(body.Messages) - 1; last >= 0 {
-			content := body.Messages[last].Content
-			if i := tailIndex(content, codeCalledIDs(req.Messages)); i >= 0 {
-				content[i].CacheControl = &cacheCtrl{Type: "ephemeral", TTL: "5m"}
-			}
+		if m, i := tailIndex(body.Messages, codeCalledIDs(req.Messages)); m >= 0 {
+			body.Messages[m].Content[i].CacheControl = &cacheCtrl{Type: "ephemeral", TTL: "5m"}
 		}
 	}
 	return json.Marshal(body)
 }
 
-// tailIndex is the block of a message's encoded content that takes the tail
-// cache breakpoint: the last one that is neither a verbatim server block
-// (those go out unchanged and cannot carry the marker) nor the result of a
-// tool call made by code (the API answers 400: such results are not rendered
-// in the model's context and cannot carry cache_control); -1 when there is
-// none, and the request then goes without a tail breakpoint.
-func tailIndex(content []contentBlock, codeCalled map[string]bool) int {
-	for i := len(content) - 1; i >= 0; i-- {
-		c := content[i]
-		if c.raw != nil || (c.Type == "tool_result" && codeCalled[c.ToolUseID]) {
-			continue
+// tailIndex is the message and block that take the tail cache breakpoint: the
+// last block that is neither a verbatim server block (those go out unchanged
+// and cannot carry the marker) nor the result of a tool call made by code
+// (the API answers 400: such results are not rendered in the model's context
+// and cannot carry cache_control). The search starts in the last message and
+// walks back through earlier ones when it has no eligible block; -1, -1 when
+// no message has one, and the request then goes without a tail breakpoint.
+func tailIndex(messages []messageBody, codeCalled map[string]bool) (msg, block int) {
+	for m := len(messages) - 1; m >= 0; m-- {
+		content := messages[m].Content
+		for i := len(content) - 1; i >= 0; i-- {
+			c := content[i]
+			if c.raw != nil || (c.Type == "tool_result" && codeCalled[c.ToolUseID]) {
+				continue
+			}
+			return m, i
 		}
-		return i
 	}
-	return -1
+	return -1, -1
 }
 
 // codeCalledIDs are the ids of the tool calls in messages that code made.
@@ -515,7 +516,12 @@ func tailCacheable(req llm.Request) bool {
 	if !req.CacheTail || len(req.Messages) == 0 {
 		return false
 	}
-	return tailIndex(encodeContent(req.Messages[len(req.Messages)-1].Content), codeCalledIDs(req.Messages)) >= 0
+	msgs := make([]messageBody, len(req.Messages))
+	for i, m := range req.Messages {
+		msgs[i].Content = encodeContent(m.Content)
+	}
+	m, _ := tailIndex(msgs, codeCalledIDs(req.Messages))
+	return m >= 0
 }
 
 func encodeContent(blocks []llm.ContentBlock) []contentBlock {

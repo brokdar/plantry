@@ -77,6 +77,10 @@ func TestNoCook_DerivedExcludesCookingIngredients(t *testing.T) {
 		{"Pizzateig", bakery},
 		{"Cornstarch", bakery},
 		{"Lemon juice", produce},
+		{"Rapsöl", produce},
+		{"Cooking creams", dairy},
+		{"Chilis", produce},
+		{"Herbs", produce},
 	}
 	for _, tt := range never {
 		f := food.Food{Kind: food.KindLeaf, Name: tt.name, ShopSection: tt.sec}
@@ -99,6 +103,14 @@ func TestNoCook_DerivedExcludesCookingIngredients(t *testing.T) {
 		{"Wholegrain bread", bakery},
 		{"Ciabatta", bakery},
 		{"Strawberries", produce},
+		{"Salted almonds", produce},
+		{"Pasteurized milk", dairy},
+		{"Buttermilk", dairy},
+		{"Creamy yogurt", dairy},
+		{"Erdnussbutter", dairy},
+		{"Mandelbutter", dairy},
+		{"Peanut butter", dairy},
+		{"Thunfisch in Öl", produce},
 	}
 	for _, tt := range keep {
 		f := food.Food{Kind: food.KindLeaf, Name: tt.name, ShopSection: tt.sec}

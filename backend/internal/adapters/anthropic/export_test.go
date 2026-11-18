@@ -19,8 +19,12 @@ func CapabilityTTLLeft(c *Client, model string) time.Duration {
 // SetLookupTimeout replaces the bound on one capability lookup.
 func SetLookupTimeout(c *Client, d time.Duration) { c.lookupTimeout = d }
 
-// TailIndex is the block of the last message that takes the tail breakpoint
-// (-1: none), as encodeRequest decides it when the code tool is sent.
-func TailIndex(messages []llm.Message) int {
-	return tailIndex(encodeContent(messages[len(messages)-1].Content), codeCalledIDs(messages))
+// TailIndex is the message and block that take the tail breakpoint (-1, -1:
+// none), as encodeRequest decides it when the code tool is sent.
+func TailIndex(messages []llm.Message) (msg, block int) {
+	msgs := make([]messageBody, len(messages))
+	for i, m := range messages {
+		msgs[i].Content = encodeContent(m.Content)
+	}
+	return tailIndex(msgs, codeCalledIDs(messages))
 }

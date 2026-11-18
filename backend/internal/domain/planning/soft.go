@@ -537,8 +537,10 @@ func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, tar
 		}
 	}
 	y := newIndex(s, t)
-	if len(y.addOnIssues()) > len(x.addOnIssues()) {
-		return Option{}, false
+	for k := range y.addOnKeys() {
+		if !x.baseAddOnKeys()[k] {
+			return Option{}, false
+		}
 	}
 	var after *DayKcal
 	for _, dk := range y.dayAccounts([]time.Time{p.Date}) {
@@ -578,6 +580,24 @@ func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, tar
 		return Option{}, false
 	}
 	return o, true
+}
+
+// addOnKeys identifies the state's S9 issues by plate, food and reason.
+func (x *index) addOnKeys() map[string]bool {
+	m := map[string]bool{}
+	for _, is := range x.addOnIssues() {
+		m[fmt.Sprintf("%s|%v|%v", issueID(is), is.Params["food_id"], is.Params["reason"])] = true
+	}
+	return m
+}
+
+// baseAddOnKeys is addOnKeys, computed once per index: the S9 issues a
+// candidate may not add to.
+func (x *index) baseAddOnKeys() map[string]bool {
+	if x.s9 == nil {
+		x.s9 = x.addOnKeys()
+	}
+	return x.s9
 }
 
 func hardKeys(issues []Issue) map[string]bool {

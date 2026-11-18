@@ -70,7 +70,9 @@ type index struct {
 	// dupKeys are the proposed session keys used more than once, in
 	// first-seen order.
 	dupKeys []string
-	links   map[sessionRef][]plate.Link
+	// s9 caches the keys of the state's S9 issues (see addOnKeys).
+	s9    map[string]bool
+	links map[sessionRef][]plate.Link
 	// cooks are the state's cook events (see cookEvent), sessions first.
 	cooks []cookEvent
 	// merged reports whether the state holds proposed rows: a run's result

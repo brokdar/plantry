@@ -3,12 +3,12 @@ package planning
 import (
 	"math"
 	"slices"
-	"strings"
 	"time"
 )
 
 // Add-on rules (soft issue S9 add_on_excess). An add-on is a no-cook leaf on
-// a plate (a plate component, not a child of a recipe): a snack or side the
+// a plate that also holds a composed component (a plate component, not a
+// child of a recipe): a snack or side the
 // planner adds to a meal. The cap and the day limits are the heuristic's
 // (dayAdds), so a heuristic plan never raises S9 and the options never
 // create one.
@@ -25,6 +25,9 @@ const (
 	// maxProteinAdds protein add. After the fact the two kinds cannot be told
 	// apart, so S9 counts them together.
 	maxDayAddOns = maxFillerAdds + maxProteinAdds
+	// minLightAddKcal: an add-on under this many kcal per eater (raw
+	// cucumber, tomato) does not weigh on a light meal.
+	minLightAddKcal = 50
 )
 
 // S9 reasons (Params["reason"]).
@@ -59,6 +62,9 @@ type addOn struct {
 	f     FoodFacts
 }
 
+// kcal is the add-on's energy per eater.
+func (a addOn) kcal() float64 { return a.grams * a.f.Macros.Kcal / 100 }
+
 // addOns lists the add-ons of the window's draft plates in plan order: a
 // confirmed plate or one on a routine cell is the user's own and is never
 // judged.
@@ -78,6 +84,15 @@ func (x *index) addOns() []addOn {
 	})
 	var out []addOn
 	for _, p := range plates {
+		composed := false
+		for _, c := range p.Components {
+			if f, ok := x.food(c.FoodID); ok && f.Composed() {
+				composed = true
+			}
+		}
+		if !composed {
+			continue // a plate of leaves only (yogurt, skyr) has no add-ons
+		}
 		for _, c := range p.Components {
 			f, ok := x.food(c.FoodID)
 			if !ok || f.Composed() || !f.NoCook || c.Grams == nil {
@@ -114,7 +129,7 @@ func (x *index) addOnIssues() []Issue {
 		perDay[d]++
 		reason, limit := "", 0.0
 		switch {
-		case x.s.lightMeal(a.plate.Date, a.plate.SlotID):
+		case x.s.lightMeal(a.plate.Date, a.plate.SlotID) && a.kcal() >= minLightAddKcal:
 			reason = AddOnLightMeal
 		case x.duplicatesMain(a):
 			reason = AddOnDuplicatesMain
@@ -154,5 +169,5 @@ func (x *index) platesWith(adds []addOn, id int64) int {
 // main with at least dupMainGrams per portion.
 func (x *index) duplicatesMain(a *addOn) bool {
 	main, ok := x.food(x.s.mainOf(a.plate))
-	return ok && main.Leaves[strings.ToLower(a.f.Name)] >= dupMainGrams
+	return ok && main.Leaves[a.f.ID] >= dupMainGrams
 }

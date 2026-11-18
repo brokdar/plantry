@@ -158,9 +158,9 @@ type FoodFacts struct {
 	// ServingG is a leaf's stored serving size in grams (0: none, see
 	// ServingGrams).
 	ServingG float64
-	// Leaves is a recipe's leaf grams per portion by lower-cased leaf name
-	// (S9's duplicate-of-the-main check).
-	Leaves map[string]float64
+	// Leaves is a recipe's leaf grams per portion by leaf food id (S9's
+	// duplicate-of-the-main check).
+	Leaves map[int64]float64
 	// Groups are the DGE food groups in a portion (leaf: 100 g), see FoodGroups.
 	Groups FoodGroups
 	// Sweet: a leaf that is mostly sugar (see IsSweet); never a kcal filler.

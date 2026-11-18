@@ -50,6 +50,7 @@ type Detailed struct {
 // LeafGrams is one leaf's weight in a food's portion; Section is the
 // leaf's shop section override (nil: classified from the name).
 type LeafGrams struct {
+	ID      int64
 	Name    string
 	Section *ShopSection
 	Grams   float64
@@ -111,7 +112,7 @@ func (r *NutritionResolver) PerPortionDetailedMany(ctx context.Context, ids []in
 			d.Macros = scale(total, 1/portions)
 			d.Leaves = w.leaves(f, 1/portions, 0)
 		} else {
-			d.Leaves = []LeafGrams{{Name: f.Name, Section: f.ShopSection, Grams: 100}}
+			d.Leaves = []LeafGrams{{ID: f.ID, Name: f.Name, Section: f.ShopSection, Grams: 100}}
 		}
 		out[id] = d
 	}
@@ -305,7 +306,7 @@ func (w *walk) leaves(f *Food, k float64, depth int) []LeafGrams {
 			continue
 		}
 		if c.Kind == KindLeaf {
-			out = append(out, LeafGrams{Name: c.Name, Section: c.ShopSection, Grams: ch.Grams * k})
+			out = append(out, LeafGrams{ID: c.ID, Name: c.Name, Section: c.ShopSection, Grams: ch.Grams * k})
 			continue
 		}
 		cTotal := 0.0

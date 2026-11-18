@@ -75,8 +75,8 @@ func TestS9_LightMeal(t *testing.T) {
 	s := softState(2200)
 	s.SlotNames = map[int64]string{breakfast: "slot.breakfast", lunch: "slot.lunch", dinner: "slot.dinner"}
 	s.Light = []planning.LightIntent{{Date: sat, Scope: planning.LightScopeMeal, Slot: "lunch"}}
-	addTo(&s, 2, apple, 50)
-	addTo(&s, 3, apple, 50)
+	addTo(&s, 2, apple, 100)
+	addTo(&s, 3, apple, 100)
 	got := s9Of(s)
 	require.Len(t, got, 1, "only the light lunch")
 	assert.Equal(t, planning.AddOnLightMeal, got[0].Params["reason"])
@@ -120,7 +120,7 @@ func TestS9_SameAddOnOnManyPlates(t *testing.T) {
 func TestS9_DuplicatesTheMain(t *testing.T) {
 	s := softState(2200)
 	m := s.Foods[chili]
-	m.Leaves = map[string]float64{"apple": 40, "rice dry": 10}
+	m.Leaves = map[int64]float64{apple: 40, 40: 10}
 	s.Foods[chili] = m
 	addTo(&s, 2, apple, 50)
 	addOnFood(&s, 40, "Rice dry", 130)
@@ -196,5 +196,62 @@ func TestH9GetsOptions(t *testing.T) {
 	for _, o := range h9[0].Options {
 		assert.Positive(t, o.KcalDelta)
 		assert.Greater(t, o.DayKcal, 1800.0)
+	}
+}
+
+// a plate of leaves only (a yogurt or skyr breakfast) has no add-ons.
+func TestS9_LeafOnlyPlateHasNoAddOns(t *testing.T) {
+	s := softState(2200)
+	addOnFood(&s, 50, "Skyr", 63)
+	for i := range s.Plates {
+		if s.Plates[i].ID == 1 {
+			s.Plates[i].Components = []planning.Component{{FoodID: 50, Grams: f64(400)}}
+		}
+	}
+	assert.Empty(t, s9Of(s), "a skyr-only breakfast is the meal, not an add-on")
+}
+
+func TestS9_LightMealIgnoresLowKcalAddOns(t *testing.T) {
+	s := softState(2200)
+	s.SlotNames = map[int64]string{breakfast: "slot.breakfast", lunch: "slot.lunch", dinner: "slot.dinner"}
+	s.Light = []planning.LightIntent{{Date: sat, Scope: planning.LightScopeMeal, Slot: "dinner"}}
+	addOnFood(&s, 51, "Cucumber", 15)
+	addOnFood(&s, 52, "Skyr", 63)
+	addTo(&s, 3, 51, 100) // 15 kcal: not flagged
+	assert.Empty(t, s9Of(s))
+	addTo(&s, 3, 52, 150) // 95 kcal on a plate with a composed main
+	got := s9Of(s)
+	require.Len(t, got, 1)
+	assert.Equal(t, planning.AddOnLightMeal, got[0].Params["reason"])
+	assert.EqualValues(t, 52, got[0].Params["food_id"])
+}
+
+// A food that is a leaf of the main by id duplicates it, even for a recipe
+// with a single leaf.
+func TestS9_DuplicatesMainSingleLeafRecipe(t *testing.T) {
+	s := softState(2200)
+	m := s.Foods[chili]
+	m.Leaves = map[int64]float64{apple: 60}
+	s.Foods[chili] = m
+	addTo(&s, 2, apple, 50)
+	got := s9Of(s)
+	require.Len(t, got, 1)
+	assert.Equal(t, planning.AddOnDuplicatesMain, got[0].Params["reason"])
+}
+
+// Options never add an S9 issue, whether or not the state already has one.
+func TestS9_OptionsAddNoNewS9(t *testing.T) {
+	s := softState(2600)
+	addTo(&s, 3, apple, 250) // over_cap, in the base state
+	ev := planning.Evaluate(s, windowTarget(s))
+	base := s9Of(s)
+	require.Len(t, base, 1)
+	for _, is := range softOf(ev, "S2") {
+		for _, o := range is.Options {
+			if o.Action != "add" {
+				continue
+			}
+			assert.NotEqual(t, apple, o.FoodID, "a second apple would be repeated or over the day limit: %+v", o)
+		}
 	}
 }
