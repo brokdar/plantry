@@ -366,7 +366,7 @@ func TestAlternatives_EmptyReason(t *testing.T) {
 	assert.Equal(t, map[string]int{"H2.too_many_cook_occasions": 1}, res.EmptyReason.Dropped)
 	assert.Equal(t, 1, res.EmptyReason.Candidates)
 	require.Len(t, res.EmptyReason.Why, 1)
-	assert.Contains(t, res.EmptyReason.Why[0], "H2: 1 would add a cooking occasion", "the blocking rule in words, with the numbers")
+	assert.Contains(t, res.EmptyReason.Why[0], "cooking occasions per day: 1 would add a cooking occasion", "the blocking rule in words, with the numbers")
 	assert.Contains(t, res.EmptyReason.Why[0], "(2 of 1)")
 
 	res, err = planning.Alternatives(s, windowTarget(s), planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain, Constraints: planning.AltConstraints{Search: "nothing like this"}})

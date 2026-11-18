@@ -58,7 +58,7 @@ func TestRenderPlanSummary_SkipsSessionsOfTheirOwnCell(t *testing.T) {
 // the 300-recipe state.
 func TestRenderPlanSummary(t *testing.T) {
 	s := summaryState()
-	issues := []planning.Issue{{Rule: "H2", Code: "too_many_cooks", Severity: planning.SeverityViolation, Date: sat, Params: map[string]any{"count": 2}}}
+	issues := []planning.Issue{{Rule: "H2", Code: planning.CodeTooManyCookOccasions, Severity: planning.SeverityViolation, Date: sat, Params: map[string]any{"count": 2}}}
 
 	got := planning.RenderPlanSummary(s, issues)
 
@@ -74,7 +74,7 @@ func TestRenderPlanSummary(t *testing.T) {
 		"| none | no plate, leave empty",
 		"session_id 4 | food_id ",
 		"portions 4, frozen 1 | eaten 3, of which frozen 0 | keeps until 2026-11-10",
-		"Issues:\n- H2 too_many_cooks (violation) " + sat + " count=2\n",
+		"Issues:\n- cooking occasions per day (violation) " + sat + " count=2\n",
 	} {
 		assert.Contains(t, got, want)
 	}

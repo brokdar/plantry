@@ -150,27 +150,40 @@ func (p Policy) shiftedTarget(scaled float64, active, light, hearty int) float64
 
 // Describe is the policy as the prompts tell it to the model: the target is
 // a target, the week matters most, the floors are hard.
-func (p Policy) Describe() string {
+func (p Policy) Describe() string { return p.describe(false) }
+
+// DescribePlain is Describe for the chat: rules go by their plain labels
+// (PlainText), never by code, because the user reads what the model writes.
+func (p Policy) DescribePlain() string { return p.describe(true) }
+
+func (p Policy) describe(plain bool) string {
+	// rule is the planner's wording, or the chat's when plain.
+	rule := func(coded, label string) string {
+		if plain {
+			return label
+		}
+		return coded
+	}
 	pct := func(v float64) int { return int(math.Round(v * 100)) }
 	floor := fmt.Sprintf("%d%% of the day's target", pct(p.FloorShare))
 	if p.FloorKcal > 0 {
 		floor += fmt.Sprintf(" and never below %.0f kcal per person for a full day (scaled to the planned meals on a short day)", p.FloorKcal)
 	}
-	out := fmt.Sprintf("Energy policy (goal: %s). The kcal target is a target, not a limit. The week matters most: the average of the complete days should land at %d-%d%% of the target (soft issue S4); a single day may deviate within %d-%d%% of its target (soft issue S2). The floor is hard: never plan a day below %s (H9).",
-		p.Goal, pct(p.WeekLow), pct(p.WeekHigh), pct(p.DayLow), pct(p.DayHigh), floor)
-	out += fmt.Sprintf(" Priority when rules conflict: 1 hard rules, 2 weekly kcal, 3 day kcal band, 4 protein, 5 food-group rules (the DGE weekly food rules below, soft issues S7), 6 preferences and effort, 7 carb and fat ranges (soft issues S5: last, never at the cost of kcal or protein). Carbs and fat are judged on the weekly average only: carbs %.0f-%.0f%% and fat %.0f-%.0f%% of energy.",
-		p.CarbsLow, p.CarbsHigh, p.FatLow, p.FatHigh)
-	out += fmt.Sprintf(" Light requests are structured, never prose: a list of {date, scope meal|day, slot lunch|dinner for a meal}. \"Something light\" means scope meal: that lunch or dinner holds at most %d%% of its normal share of the day's target (soft issue S6 when it is not lighter). A light or hearty meal moves the day's target by that meal's share, within the normal day band; the safety floor stays on the normal target and so does protein. Only an explicit request to eat less for a day is scope day: that day's target becomes %d%% and its band is centred there. Never go below the floors (H9); when a floor stopped a lighter day, say so in the reply.",
-		pct(LightMealShare), pct(LightDayShare))
-	out += fmt.Sprintf(" The opposite is level hearty on the same entry: a hearty meal holds at least %d%% of its normal share (soft issue S6b when it does not) and raises the day's target the same way, a hearty day's target becomes %d%%.",
-		pct(HeartyMealShare), pct(HeartyDayShare))
-	out += " An explicit light or hearty meal request ranks above the day and week kcal bands (S2, S4), below the hard rules: top-ups never go on a light meal."
-	out += " Add-ons (S9, ranked with preferences): within 2 servings, 200 g and 20% of the day's target, at most 3 a day, one food on at most 3 plates, none on a light meal or duplicating the main."
-	out += " Dish repeats (soft issue S8 dish_repeats_exceeded, ranked with preferences): one dish should be the main of at most the user's limit of lunches and dinners a week."
-	out += " DGE weekly food rules (soft issues week_meat_above_dge, week_fish_below_dge, week_legumes_below_dge; rule S7, priority 5: prefer them, never at the cost of kcal, protein or the user's wishes; they are judged only on 5 or more complete days): meat and sausage at most 300 g per person per week (prorated to the days), fish once a week or more, legumes (beans, lentils, chickpeas, peas, tofu) at least once a week (at least 50 g per person per meal), plenty of fruit and vegetables every day."
+	out := fmt.Sprintf("Energy policy (goal: %s). The kcal target is a target, not a limit. The week matters most: the average of the complete days should land at %d-%d%% of the target (%s); a single day may deviate within %d-%d%% of its target (%s). The floor is hard: never plan a day below %s (%s).",
+		p.Goal, pct(p.WeekLow), pct(p.WeekHigh), rule("soft issue S4", "weekly energy"), pct(p.DayLow), pct(p.DayHigh), rule("soft issue S2", "day energy"), floor, rule("H9", "day energy floor"))
+	out += fmt.Sprintf(" Priority when rules conflict: 1 hard rules, 2 weekly kcal, 3 day kcal band, 4 protein, 5 food-group rules (the DGE weekly food rules below, %s), 6 preferences and effort, 7 carb and fat ranges (%s: last, never at the cost of kcal or protein). Carbs and fat are judged on the weekly average only: carbs %.0f-%.0f%% and fat %.0f-%.0f%% of energy.",
+		rule("soft issues S7", "weekly meat, fish and legumes"), rule("soft issues S5", "weekly carbs and fat"), p.CarbsLow, p.CarbsHigh, p.FatLow, p.FatHigh)
+	out += fmt.Sprintf(" Light requests are structured, never prose: a list of {date, scope meal|day, slot lunch|dinner for a meal}. \"Something light\" means scope meal: that lunch or dinner holds at most %d%% of its normal share of the day's target (%s when it is not lighter). A light or hearty meal moves the day's target by that meal's share, within the normal day band; the safety floor stays on the normal target and so does protein. Only an explicit request to eat less for a day is scope day: that day's target becomes %d%% and its band is centred there. Never go below the floors (%s); when a floor stopped a lighter day, say so in the reply.",
+		pct(LightMealShare), rule("soft issue S6", "light meal"), pct(LightDayShare), rule("H9", "day energy floor"))
+	out += fmt.Sprintf(" The opposite is level hearty on the same entry: a hearty meal holds at least %d%% of its normal share (%s when it does not) and raises the day's target the same way, a hearty day's target becomes %d%%.",
+		pct(HeartyMealShare), rule("soft issue S6b", "hearty meal"), pct(HeartyDayShare))
+	out += " An explicit light or hearty meal request ranks above the day and week kcal bands " + rule("(S2, S4)", "(day energy, weekly energy)") + ", below the hard rules: top-ups never go on a light meal."
+	out += " Add-ons (" + rule("S9", "add-ons") + ", ranked with preferences): within 2 servings, 200 g and 20% of the day's target, at most 3 a day, one food on at most 3 plates, none on a light meal or duplicating the main."
+	out += " Dish repeats (" + rule("soft issue S8 dish_repeats_exceeded", "dish as main too often") + ", ranked with preferences): one dish should be the main of at most the user's limit of lunches and dinners a week."
+	out += " DGE weekly food rules (" + rule("soft issues week_meat_above_dge, week_fish_below_dge, week_legumes_below_dge; rule S7", "weekly meat, weekly fish, weekly legumes") + ", priority 5: prefer them, never at the cost of kcal, protein or the user's wishes; they are judged only on 5 or more complete days): meat and sausage at most 300 g per person per week (prorated to the days), fish once a week or more, legumes (beans, lentils, chickpeas, peas, tofu) at least once a week (at least 50 g per person per meal), plenty of fruit and vegetables every day."
 	if p.ProteinGPerKg > 0 {
-		out += fmt.Sprintf(" Protein target: %.1f g per kg x %.0f kg = %.0f g per person per full day (scaled to the planned meals on a short day). A day under %d%% of it is soft issue S3, a weekly average under %d%% too: close protein gaps actively (find_foods with min_protein, or take an issue's options: skyr/quark, yoghurt, tofu, eggs, cheese, legumes, honouring the diet type and the kcal band) and write a note only when no option exists.",
-			p.ProteinGPerKg, p.WeightKg, p.ProteinTargetG(1), pct(ProteinDayMin), pct(ProteinWeekMin))
+		out += fmt.Sprintf(" Protein target: %.1f g per kg x %.0f kg = %.0f g per person per full day (scaled to the planned meals on a short day). A day under %d%% of it is %s, a weekly average under %d%% too: close protein gaps actively (find_foods with min_protein, or take an issue's options: skyr/quark, yoghurt, tofu, eggs, cheese, legumes, honouring the diet type and the kcal band) and write a note only when no option exists.",
+			p.ProteinGPerKg, p.WeightKg, p.ProteinTargetG(1), pct(ProteinDayMin), rule("soft issue S3", "day protein"), pct(ProteinWeekMin))
 	}
 	return out
 }

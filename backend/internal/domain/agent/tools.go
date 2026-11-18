@@ -247,7 +247,8 @@ func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessag
 		}
 		return nil, ToolEffectNone, fmt.Errorf("%w: %s", domain.ErrInvalidInput, msg)
 	}
-	return t.Handler(ctx, input)
+	out, effect, err := t.Handler(ctx, input)
+	return plainRules(out), effect, err
 }
 
 // unwrapParams returns the object inside a sole {"params": {...}} input: a

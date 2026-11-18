@@ -54,7 +54,7 @@ func TestPrompt_ToolRules(t *testing.T) {
 func TestPrompt_MealEditRules(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
-		"change only what the user asked", "offer the fix", "only to clear a hard violation (H1-H9)",
+		"change only what the user asked", "offer the fix", "only to clear a hard violation",
 		`occupant "swap"`, "also_changed entry in plain words",
 		"one away op", "A day away is not judged for calories",
 		"find_alternatives with what main", "cite the total_minutes",
@@ -75,8 +75,8 @@ func TestPrompt_MealEditRules(t *testing.T) {
 func TestPrompt_V17Rules(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
-		"never infer what happens to other meals", "dry-run every write", "already verified: apply them without a dry run",
-		"write exactly the ops you dry-ran", "variety_repeat_week", "carry out the request and name the warning",
+		"never infer what happens to other meals", "check every write (apply_changes", "already verified: apply them without a check",
+		"write exactly the ops you checked", "dish repeated this week", "carry out the request and name the warning",
 		"moves the day's target by that meal's share", "with the numbers",
 	} {
 		if !strings.Contains(prompt, want) {
@@ -91,9 +91,9 @@ func TestPrompt_V17Rules(t *testing.T) {
 func TestPrompt_SoftIssuesAreOffered(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
-		"A request is not done while a hard issue (violation H1-H9) it caused is open",
+		"A request is not done while a hard issue (violation) it caused is open",
 		"Fix a new hard issue with another apply_changes call",
-		"A soft issue (S2-S9) is not fixed on your own: report it and offer the fix",
+		"A soft issue is not fixed on your own: report it and offer the fix",
 		"Close protein gaps by offering",
 	} {
 		if !strings.Contains(prompt, want) {
@@ -112,7 +112,7 @@ func TestPrompt_SoftIssuesAreOffered(t *testing.T) {
 func TestPrompt_S5RanksLowest(t *testing.T) {
 	kcal := 2000.0
 	prompt := compose(&profile.Profile{KcalTarget: &kcal}, "", time.Time{})
-	for _, want := range []string{"preferences and effort, 7 carb and fat ranges (soft issues S5: last", "food-group rules (the DGE weekly food rules", "never at the cost of kcal or protein"} {
+	for _, want := range []string{"preferences and effort, 7 carb and fat ranges (weekly carbs and fat: last", "food-group rules (the DGE weekly food rules", "never at the cost of kcal or protein"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt must contain %q", want)
 		}
@@ -195,8 +195,8 @@ func TestPrompt_V18(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
 		"Playbook, light or hearty meal", "Playbook, replace a dish", "Playbook, away",
-		"find_alternatives with light lighter or heartier", "what main", "dry-run a fix from the issue's options",
-		"Cooking occasions (H2)", "a routine cell add none",
+		"find_alternatives with light lighter or heartier", "what main", "check a fix from the issue's options",
+		"Cooking occasions per day", "a routine cell add none",
 		"worsened", "Report a worsened issue like a new one",
 	} {
 		if !strings.Contains(prompt, want) {

@@ -313,7 +313,7 @@ func TestApplyChanges_Away(t *testing.T) {
 			dry, real, ch := e.mealOp("[" + op + "]")
 			assert.Len(t, applied0(t, dry)["cells"], 3)
 			for _, res := range []map[string]any{dry, real} {
-				assert.NotContains(t, issueRules(t, res, "new"), "H9", "a day away is not judged for calories")
+				assert.NotContains(t, issueRules(t, res, "new"), "day energy floor", "a day away is not judged for calories")
 			}
 			for _, s := range slots {
 				assert.Nil(t, e.plateAtCell(day, s), "no plate on an away cell")
@@ -609,13 +609,13 @@ func TestApplyChanges_WindowRepeatIsAWarning(t *testing.T) {
 	var codes []string
 	for _, is := range issues["new"].([]any) {
 		m := is.(map[string]any)
-		codes = append(codes, m["code"].(string))
-		if m["code"] == "variety_repeat_week" {
+		codes = append(codes, m["label"].(string))
+		if m["label"] == "dish repeated this week" {
 			assert.Equal(t, "warning", m["severity"])
 		}
 	}
-	assert.Contains(t, codes, "variety_repeat_week")
-	assert.NotContains(t, codes, "variety_repeat")
+	assert.Contains(t, codes, "dish repeated this week")
+	assert.NotContains(t, codes, "dish variety")
 }
 
 func sqliteChange(e *planToolEnv, id int64) (*agent.Change, error) {
