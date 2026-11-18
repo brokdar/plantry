@@ -48,6 +48,7 @@ func TestApplyChanges_CookCellUnavailable(t *testing.T) {
 			_, err := e.exec("apply_changes", `{"dry_run":true,"ops":[`+tc.op+`]}`)
 			require.ErrorIs(t, err, domain.ErrCellUnavailable)
 			assert.Contains(t, err.Error(), "nobody is home")
+			assert.NotRegexp(t, ruleToken, err.Error(), "the refusal names no rule code")
 			_, hint, ok := strings.Cut(err.Error(), "instead: ")
 			require.True(t, ok, err.Error())
 			n := strings.Count(hint, "slot_id")
@@ -221,11 +222,16 @@ func TestApplyChanges_AwayRehomesCooks(t *testing.T) {
 	for _, m := range autos {
 		assert.Equal(t, "move_cook", m["op"])
 		assert.NotNil(t, m["cook_date"], "the result says where the cook went")
+		assert.NotRegexp(t, ruleToken, m["auto_fix"], "auto_fix names no rule code")
 	}
 	for _, is := range issues["new"].([]any) {
 		assert.NotEqual(t, "violation", is.(map[string]any)["severity"], "no new hard issue: %v", is)
 	}
 	assert.Equal(t, before, e.planDump(), "a dry run saves nothing")
+	whole, err := json.Marshal(res)
+	require.NoError(t, err)
+	assert.NotRegexp(t, ruleToken, string(whole), "nothing the model reads names a rule code")
+	assert.NotContains(t, string(whole), "too_many_cook_occasions")
 
 	// For real: the cooks are where the result says.
 	e.mustExec("apply_changes", `{"ops":[`+away+`]}`)
@@ -237,6 +243,6 @@ func TestApplyChanges_AwayRehomesCooks(t *testing.T) {
 	fresh := e.mustExec("get_plan", `{}`)
 	for _, is := range fresh["issues"].([]any) {
 		m := is.(map[string]any)
-		assert.NotEqual(t, "too_many_cook_occasions", m["code"], "no second cooking occasion is left: %v", m)
+		assert.NotEqual(t, "cooking occasions per day", m["label"], "no second cooking occasion is left: %v", m)
 	}
 }

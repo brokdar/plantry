@@ -38,3 +38,6 @@ var IssueKey = issueKey
 
 // PromptCharBudget is the prompt budget, for the size tests.
 const PromptCharBudget = promptCharBudget
+
+// PlainRules is the rewrite of a tool result for the model (no rule codes).
+var PlainRules = plainRules

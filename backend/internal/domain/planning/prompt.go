@@ -338,7 +338,7 @@ func writeIssues(b *strings.Builder, issues []Issue) {
 	}
 	b.WriteString("\nIssues:\n")
 	for _, is := range issues {
-		fmt.Fprintf(b, "- %s %s (%s)", is.Rule, is.Code, is.Severity)
+		fmt.Fprintf(b, "- %s (%s)", PlainText(is.Code).Label, is.Severity)
 		if is.Date != "" {
 			fmt.Fprintf(b, " %s", is.Date)
 		}

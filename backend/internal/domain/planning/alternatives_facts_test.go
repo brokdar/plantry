@@ -113,7 +113,7 @@ func TestAlternatives_EmptyReasonNamesTheFloor(t *testing.T) {
 	require.NotNil(t, res.EmptyReason)
 	assert.Positive(t, res.EmptyReason.Dropped["H9."+planning.CodeKcalBelowFloor])
 	require.NotEmpty(t, res.EmptyReason.Why)
-	assert.Contains(t, res.EmptyReason.Why[0], "H9")
+	assert.Contains(t, res.EmptyReason.Why[0], "day energy floor:")
 	assert.Contains(t, res.EmptyReason.Why[0], "floor is 500 kcal")
 	assert.Contains(t, res.EmptyReason.Why[0], "reaches 400 kcal")
 }

@@ -36,9 +36,8 @@ func TestApplyChanges_LightCallShowsItsOwnS6AsNew(t *testing.T) {
 		After struct {
 			Issues struct {
 				New []struct {
-					Rule string `json:"rule"`
-					Code string `json:"code"`
-					Date string `json:"date"`
+					Label string `json:"label"`
+					Date  string `json:"date"`
 				} `json:"new"`
 			} `json:"issues"`
 		} `json:"after"`
@@ -47,8 +46,8 @@ func TestApplyChanges_LightCallShowsItsOwnS6AsNew(t *testing.T) {
 	var codes []string
 	for _, is := range res.After.Issues.New {
 		if is.Date == p.DateString() {
-			codes = append(codes, is.Rule+"."+is.Code)
+			codes = append(codes, is.Label)
 		}
 	}
-	assert.Contains(t, codes, "S6.meal_not_light")
+	assert.Contains(t, codes, "light meal")
 }

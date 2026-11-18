@@ -62,12 +62,13 @@ func (e *planToolEnv) emptyOtherSlot(p plate.Plate) int64 {
 	return id
 }
 
+// issueRules are the labels of an issue list: the model reads no rule codes.
 func issueRules(t *testing.T, res map[string]any, key string) []string {
 	t.Helper()
 	issues := res["after"].(map[string]any)["issues"].(map[string]any)
 	var rules []string
 	for _, is := range issues[key].([]any) {
-		rules = append(rules, is.(map[string]any)["rule"].(string))
+		rules = append(rules, is.(map[string]any)["label"].(string))
 	}
 	return rules
 }
@@ -140,13 +141,13 @@ func TestApplyChanges_CookAtSharesTheCookCell(t *testing.T) {
 	alone, err := e.exec("apply_changes", fmt.Sprintf(
 		`{"dry_run":true,"ops":[{"op":"add","date":%q,"slot_id":%d,"food_id":%d,"portions":1}]}`, p.DateString(), slotID, side))
 	require.NoError(t, err)
-	assert.Contains(t, issueRules(t, alone, "new"), "H2", "cooking the side in its own cell is a second occasion")
+	assert.Contains(t, issueRules(t, alone, "new"), "cooking occasions per day", "cooking the side in its own cell is a second occasion")
 
 	shared, err := e.exec("apply_changes", fmt.Sprintf(
 		`{"ops":[{"op":"add","date":%q,"slot_id":%d,"food_id":%d,"portions":1,"cook_at":{"date":%q,"slot_id":%d}}]}`,
 		p.DateString(), slotID, side, p.DateString(), p.SlotID))
 	require.NoError(t, err)
-	assert.NotContains(t, issueRules(t, shared, "new"), "H2")
+	assert.NotContains(t, issueRules(t, shared, "new"), "cooking occasions per day")
 	days := shared["after"].(map[string]any)["days"].([]any)
 	require.NotEmpty(t, days)
 	day := days[0].(map[string]any)
