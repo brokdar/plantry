@@ -646,3 +646,74 @@ func TestRevert_AnAwayCellEditedSinceIsStale(t *testing.T) {
 	require.ErrorIs(t, err, domain.ErrPlanChangeStale)
 	assert.Empty(t, e.week())
 }
+
+// A meal operation never uses the freezer silently (design rule 1a): a named
+// meal that moves past the keeping time leaves its batch and cooks fresh.
+func (e *env) freezableChili() {
+	e.t.Helper()
+	e.set("plan.freezing_enabled", "true")
+	e.set("plan.freezer_keep_days", "30")
+	e.set("plan.default_keep_days", "1")
+	e.exec(`UPDATE foods SET freezable = 1 WHERE id = ?`, e.chili)
+}
+
+func TestMoveMeal_SwapPastKeepDoesNotFreezeSilently(t *testing.T) {
+	e := newEnv(t)
+	e.freezableChili()
+	monPlate := e.create(mon, e.dinner, nil, composed(e.chili, 1))
+	sid := sessionOf(monPlate, 0)
+	_, err := e.svc.AddLeftovers(e.ctx, sid, []plate.CellKey{cell(tue, e.dinner)})
+	require.NoError(t, err)
+	e.create(thu, e.dinner, f64(3), composed(e.curry, 1))
+	before := e.week()
+
+	res, err := e.move(monPlate, thu, e.dinner, plate.Occupant{Kind: plate.OccupantSwap})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"2026-11-02/dinner curry x2 cook=2026-11-02/dinner portions=2",
+		"2026-11-03/dinner chili x2 cook=2026-11-03/dinner portions=2",
+		"2026-11-05/dinner chili x3 cook=2026-11-05/dinner portions=3",
+	}, e.week())
+	v := e.session(sid)
+	assert.Equal(t, day(tue), v.CookDate)
+	assert.InDelta(t, 0.0, v.FrozenPortions, 1e-9)
+	for _, w := range v.Warnings {
+		assert.NotEqual(t, plate.WarnFrozenDeficit, w.Code)
+	}
+	var fresh *plate.AlsoChanged
+	for i := range res.AlsoChanged {
+		if res.AlsoChanged[i].What == plate.AlsoCooksFresh {
+			fresh = &res.AlsoChanged[i]
+		}
+	}
+	require.NotNil(t, fresh, "the moved meal cooks fresh: %v", whats(res.AlsoChanged))
+	assert.Equal(t, monPlate.ID, fresh.PlateID)
+	assert.Equal(t, "past_keep_days", fresh.Why)
+	assert.Contains(t, whats(res.AlsoChanged), plate.AlsoBecameCooking)
+
+	_, err = e.avail.Revert(e.ctx, res.Undo)
+	require.NoError(t, err)
+	assert.Equal(t, before, e.week())
+}
+
+func TestMoveMeal_AlreadyFrozenMealStaysFrozenInItsBatch(t *testing.T) {
+	e := newEnv(t)
+	e.freezableChili()
+	monPlate := e.create(mon, e.dinner, nil, composed(e.chili, 1))
+	sid := sessionOf(monPlate, 0)
+	_, err := e.svc.AddLeftovers(e.ctx, sid, []plate.CellKey{cell(wed, e.dinner)})
+	require.NoError(t, err)
+	_, err = e.svc.SetSessionPortions(e.ctx, sid, plate.SessionPortions{Portions: 4, FrozenPortions: 2})
+	require.NoError(t, err)
+
+	res, err := e.move(e.plateAt(wed, e.dinner), thu, e.dinner, plate.Occupant{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"2026-11-02/dinner chili x2 cook=2026-11-02/dinner portions=4",
+		"2026-11-05/dinner chili x2 cook=2026-11-02/dinner portions=4",
+	}, e.week())
+	assert.Empty(t, res.AlsoChanged)
+	assert.InDelta(t, 2.0, e.session(sid).FrozenPortions, 1e-9)
+}

@@ -264,6 +264,23 @@ func (s *Service) localRule(ctx context.Context, t *tracker, sid int64, named ma
 		return err
 	}
 	keep := e.set.KeepDays(f.KeepDays)
+	// A meal operation never uses the freezer silently: a named meal may rely
+	// on it only when it already was a frozen meal of this batch.
+	prior := *sess
+	prior.CookDate, prior.CookSlotID = t.prior[sid].cook.Date, t.prior[sid].cook.SlotID
+	wasFrozen := map[int64]bool{}
+	for _, l := range mine {
+		if Classify(named[l.PlateID].before.Cell(), prior, keep) == KindFrozen {
+			wasFrozen[l.PlateID] = true
+		}
+	}
+	setFor := func(l Link) BatchSettings {
+		set := e.set
+		if _, ok := named[l.PlateID]; ok && !wasFrozen[l.PlateID] {
+			set.FreezingEnabled = false
+		}
+		return set
+	}
 	if sess.CookedAt == nil {
 		cook := sess.CookCell()
 		cookMoved := false
@@ -278,11 +295,11 @@ func (s *Service) localRule(ctx context.Context, t *tracker, sid int64, named ma
 		if first, ok := earliestMeal(links, today, e.order); ok {
 			switch {
 			case cookMoved:
-				target = cookTarget(*sess, links, named, keep, e, today)
+				target = cookTarget(*sess, links, named, keep, e, today, setFor)
 			case Before(first, cook, e.order):
 				cand := *sess
 				cand.CookDate, cand.CookSlotID = first.Date, first.SlotID
-				if feedsAll(cand, links, keep, e) {
+				if feedsAll(cand, links, keep, e, setFor) {
 					target = first
 				}
 			}
@@ -312,7 +329,7 @@ func (s *Service) localRule(ctx context.Context, t *tracker, sid int64, named ma
 		}
 	}
 	for _, l := range mine {
-		err := CheckLink(l.Cell, sess.FoodID, *sess, keep, e.set, e.order)
+		err := CheckLink(l.Cell, sess.FoodID, *sess, keep, setFor(l), e.order)
 		if err == nil {
 			continue
 		}
@@ -380,7 +397,7 @@ func earliestMeal(links []Link, today time.Time, order SlotOrder) (CellKey, bool
 // that meal leaves the batch (it cooks fresh) and the next earliest is tried;
 // an earliest meal the caller did not name always gets the cook. With no meal
 // left the cook stays.
-func cookTarget(sess CookSession, links []Link, named map[int64]relocation, keep int, e env, today time.Time) CellKey {
+func cookTarget(sess CookSession, links []Link, named map[int64]relocation, keep int, e env, today time.Time, setFor func(Link) BatchSettings) CellKey {
 	rest := make([]Link, 0, len(links))
 	for _, l := range links {
 		if !dateOnly(l.Cell.Date).Before(today) {
@@ -402,7 +419,7 @@ func cookTarget(sess CookSession, links []Link, named map[int64]relocation, keep
 				}
 			}
 		}
-		if !namedOnly || feedsAll(cand, rest, keep, e) {
+		if !namedOnly || feedsAll(cand, rest, keep, e, setFor) {
 			return first
 		}
 		rest = slices.DeleteFunc(rest, func(l Link) bool { return l.Cell.Equal(first) })
@@ -411,9 +428,10 @@ func cookTarget(sess CookSession, links []Link, named map[int64]relocation, keep
 
 // feedsAll reports whether s can feed every link (CheckLink: on or after the
 // cook, within the keeping or freezer time).
-func feedsAll(s CookSession, links []Link, keep int, e env) bool {
+// setFor gives the settings each link is checked with.
+func feedsAll(s CookSession, links []Link, keep int, e env, setFor func(Link) BatchSettings) bool {
 	for _, l := range links {
-		if CheckLink(l.Cell, s.FoodID, s, keep, e.set, e.order) != nil {
+		if CheckLink(l.Cell, s.FoodID, s, keep, setFor(l), e.order) != nil {
 			return false
 		}
 	}
