@@ -95,13 +95,13 @@ func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 				got, err := e.applyWayCtx(ctx, res, way)
 				require.NoError(t, err, "plate %d %s: %v", p.ID, goal, way["what"])
 				for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
-					assert.NotEqual(t, "violation", is["severity"], "%s %v adds %v", goal, way["what"], is["label"])
+					assert.NotEqual(t, "problem", is["severity"], "%s %v adds %v", goal, way["what"], is["label"])
 				}
 				req := got["request"].(map[string]any)
 				assert.Equal(t, true, req["satisfied"], "%s %v: %v", goal, way["what"], req["why"])
 				for _, k := range []string{"reached_light", "reached_hearty"} {
 					if v, ok := req[k]; ok {
-						assert.Equal(t, way["reaches_cap"], v, "%s %v", goal, way["what"])
+						assert.Equal(t, way["reaches_limit"], v, "%s %v", goal, way["what"])
 					}
 				}
 				checked++
@@ -145,7 +145,7 @@ func TestApplyChanges_MarkOnAMealThatMissesItsLimitIsRefused(t *testing.T) {
 		}
 	}
 	require.NotZero(t, p.ID)
-	for level, want := range map[string]string{"light": "light cap", "hearty": "hearty minimum"} {
+	for level, want := range map[string]string{"light": "limit", "hearty": "hearty minimum"} {
 		in := fmt.Sprintf(`{"dry_run":true,"light":[{"date":%q,"scope":"meal","slot":"dinner","level":%q}],"ops":[{"op":"set_eaters","plate_id":%d,"eaters":1}]}`, p.DateString(), level, p.ID)
 		_, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(in))
 		if level == "hearty" {
@@ -213,7 +213,7 @@ func TestFindWays_ApplyFirstWayStoresMarkAndSatisfies(t *testing.T) {
 		var res map[string]any
 		require.NoError(t, json.Unmarshal(out, &res))
 		ways := relMaps(res["ways"])
-		if len(ways) == 0 || ways[0]["reaches_cap"] != true || ways[0]["light"] == nil {
+		if len(ways) == 0 || ways[0]["reaches_limit"] != true || ways[0]["light"] == nil {
 			continue
 		}
 		got, err := e.applyWay(res, ways[0], false)
@@ -272,9 +272,9 @@ func TestFindWays_DayGoalsAndNextStep(t *testing.T) {
 				require.NoError(t, err, "%s %s: %v", goal, date, way["what"])
 				req := got["request"].(map[string]any)
 				assert.Equal(t, true, req["satisfied"], "%v", req["why"])
-				assert.Equal(t, true, req["reached_band"], "%v", req["why"])
+				assert.Equal(t, true, req["reached_range"], "%v", req["why"])
 				for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
-					assert.NotEqual(t, "violation", is["severity"])
+					assert.NotEqual(t, "problem", is["severity"])
 				}
 				checked++
 			}

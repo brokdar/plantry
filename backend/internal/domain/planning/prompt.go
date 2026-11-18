@@ -232,7 +232,7 @@ func writeSummaryCells(b *strings.Builder, x *index) {
 // leftover, frozen).
 func summaryPlate(x *index, p Plate) string {
 	s := x.s
-	state := "draft"
+	state := "pending"
 	if p.Confirmed {
 		state = "confirmed"
 	}
@@ -293,7 +293,7 @@ func writeSummarySessions(b *strings.Builder, x *index) {
 			continue
 		}
 		use := x.usage(ss)
-		state := "draft"
+		state := "pending"
 		if ss.Confirmed {
 			state = "confirmed"
 		}
@@ -310,7 +310,7 @@ func writeSummarySessions(b *strings.Builder, x *index) {
 	if len(lines) == 0 {
 		return
 	}
-	b.WriteString("\nCook sessions:\n")
+	b.WriteString("\nCook batches:\n")
 	for _, l := range lines {
 		b.WriteString(l)
 		b.WriteByte('\n')
@@ -332,6 +332,14 @@ func onlyOwnCell(x *index, ss Session) bool {
 	return true
 }
 
+// plainSeverity is a severity as the chat reads it.
+func plainSeverity(s Severity) string {
+	if s == SeverityViolation {
+		return "problem"
+	}
+	return "warning"
+}
+
 func writeIssues(b *strings.Builder, issues []Issue) {
 	if len(issues) == 0 {
 		b.WriteString("\nIssues: none.\n")
@@ -339,7 +347,7 @@ func writeIssues(b *strings.Builder, issues []Issue) {
 	}
 	b.WriteString("\nIssues:\n")
 	for _, is := range issues {
-		fmt.Fprintf(b, "- %s (%s)", PlainText(is.Code).Label, is.Severity)
+		fmt.Fprintf(b, "- %s (%s)", PlainText(is.Code).Label, plainSeverity(is.Severity))
 		if is.Date != "" {
 			fmt.Fprintf(b, " %s", is.Date)
 		}

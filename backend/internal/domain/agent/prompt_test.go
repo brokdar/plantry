@@ -39,7 +39,7 @@ func TestPrompt_CarriesSummaryBetweenProfileAndRules(t *testing.T) {
 // week-copy paragraph.
 func TestPrompt_ToolRules(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
-	for _, want := range []string{"drafts", "unlock", "later message", "call unlock in that same turn", "before today", "regenerate", "single short assistant message", "get_plan"} {
+	for _, want := range []string{"wait until the user accepts", "unlock", "later message", "call unlock in that same turn", "before today", "regenerate", "Reply after a change", "get_plan"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt must mention %q", want)
 		}
@@ -54,7 +54,7 @@ func TestPrompt_ToolRules(t *testing.T) {
 func TestPrompt_MealEditRules(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
-		"change only what the user asked", "offer the fix", "only to clear a hard violation",
+		"change only what the user asked", "offer the fix", "only to clear a problem",
 		`occupant "swap"`, "also_changed entry in plain words",
 		"one away op", "A day away is not judged for calories",
 		"find_alternatives with what main", "cite the total_minutes",
@@ -75,7 +75,7 @@ func TestPrompt_MealEditRules(t *testing.T) {
 func TestPrompt_V17Rules(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
-		"never infer what happens to other meals", "check every write (apply_changes", "already verified: apply them without a check",
+		"never infer what happens to other meals", "Check every write (apply_changes", "already verified: apply them without a check",
 		"write exactly the ops you checked", "dish repeated this week", "carry out the request and name the warning",
 		"moves the day's target by that meal's share", "with the numbers",
 	} {
@@ -91,9 +91,9 @@ func TestPrompt_V17Rules(t *testing.T) {
 func TestPrompt_SoftIssuesAreOffered(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
-		"A request is not done while a hard issue (violation) it caused is open",
-		"Fix a new hard issue with another apply_changes call",
-		"A soft issue is not fixed on your own: report it and offer the fix",
+		"A request is not done while a problem it caused is open",
+		"Fix a new problem with another apply_changes call",
+		"A warning is not fixed on your own: report it and offer the fix",
 		"Close protein gaps by offering",
 	} {
 		if !strings.Contains(prompt, want) {
@@ -141,7 +141,7 @@ func TestPrompt_OverBudgetDropsPastCellsFirst(t *testing.T) {
 	if len(prompt) > promptCharBudget {
 		t.Errorf("prompt is %d bytes, budget is %d", len(prompt), promptCharBudget)
 	}
-	if !strings.HasSuffix(prompt, toolRules) {
+	if !strings.HasSuffix(prompt, plainWords(toolRules)) {
 		t.Error("an over-budget prompt must keep the tool rules verbatim")
 	}
 	if strings.Contains(prompt, "Thursday 2026-10-01 |") {
@@ -163,7 +163,7 @@ func TestPrompt_StillOverBudgetIsCutOnRuneBoundary(t *testing.T) {
 	if len(prompt) > promptCharBudget {
 		t.Errorf("prompt is %d bytes, budget is %d", len(prompt), promptCharBudget)
 	}
-	if !strings.HasSuffix(prompt, truncationNote+toolRules) {
+	if !strings.HasSuffix(prompt, truncationNote+plainWords(toolRules)) {
 		t.Error("a cut prompt must end with the truncation note followed by the tool rules")
 	}
 	if !utf8.ValidString(prompt) {
@@ -180,7 +180,7 @@ func TestPrompt_OversizedProfileCutsOnRuneBoundary(t *testing.T) {
 	if len(prompt) > promptCharBudget {
 		t.Errorf("prompt is %d bytes, budget is %d", len(prompt), promptCharBudget)
 	}
-	if !strings.HasSuffix(prompt, truncationNote+toolRules) {
+	if !strings.HasSuffix(prompt, truncationNote+plainWords(toolRules)) {
 		t.Error("a cut prompt must end with the truncation note followed by the tool rules")
 	}
 	if !utf8.ValidString(prompt) {

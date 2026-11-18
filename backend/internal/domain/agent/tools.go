@@ -127,6 +127,8 @@ func (s *ToolSet) register(t Tool) error {
 	if _, exists := s.byName[t.Name]; exists {
 		return fmt.Errorf("duplicate tool %q", t.Name)
 	}
+	t.Description = plainWords(t.Description)
+	t.Schema = json.RawMessage(plainWords(string(t.Schema)))
 	schema, err := gojsonschema.NewSchema(gojsonschema.NewBytesLoader(t.Schema))
 	if err != nil {
 		return fmt.Errorf("compile schema: %w", err)
@@ -250,6 +252,9 @@ func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessag
 		return nil, ToolEffectNone, fmt.Errorf("%w: %s", domain.ErrInvalidInput, msg)
 	}
 	out, effect, err := t.Handler(ctx, input)
+	if err != nil {
+		err = plainError{err}
+	}
 	return plainRules(out), effect, err
 }
 
@@ -304,12 +309,21 @@ func defaultTools(svc Services) []Tool {
 	}
 	for i := range tools {
 		tools[i].CodeCallable = codeCallableTools[tools[i].Name]
+		if tools[i].Name == "undo_last_change" || tools[i].Name == "regenerate" {
+			tools[i].Handler = withReport(svc, tools[i].Handler)
+		}
+		if tools[i].Name == applyChangesName || tools[i].Name == "undo_last_change" || tools[i].Name == "regenerate" {
+			tools[i].Description += reportNote
+		}
 		if effectTools[tools[i].Name] {
 			tools[i].Handler = withIssueBaseline(svc, tools[i].Handler)
 		}
 	}
 	return tools
 }
+
+// reportNote documents the report a plan-changing tool returns.
+const reportNote = " Also returns report, the computed facts of the change in plain words: changed (per meal: foods and kcal before and after), days (kcal before and after, healthy_range, status), cooking (per day: what is cooked at which meal for which meals, cooking_times), leftovers (portions left over or missing, batch resized or not), also_changed (every change outside the asked meals), week (only what this change moved), new_warnings, earlier_warnings_unaffected (a count: do not list them), not_covered. Your reply states these facts and nothing else about the plan."
 
 // --- read tools ---
 

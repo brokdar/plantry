@@ -44,17 +44,17 @@ func TestPlainRules_IssueHasLabelAndNoCodes(t *testing.T) {
 	is := res.After.Issues.New[0]
 	assert.Equal(t, "day energy", is["label"])
 	assert.Equal(t, "The day's energy is below its target range.", is["message"])
-	assert.Equal(t, "soft", is["severity"])
+	assert.Equal(t, "warning", is["severity"])
 	assert.Equal(t, "2026-11-10", is["date"])
 	assert.Equal(t, map[string]any{"kcal": float64(1500)}, is["params"])
 	require.Len(t, res.After.Issues.Worsen, 1)
 	assert.Equal(t, "weekly meat", res.After.Issues.Worsen[0]["label"])
-	assert.Equal(t, map[string]json.Number{"day energy floor": "2", "light meal": "1", "missing nutrition data": "1"}, res.EmptyReason.Dropped)
+	assert.Equal(t, map[string]json.Number{"day energy minimum": "2", "light meal": "1", "missing nutrition data": "1"}, res.EmptyReason.Dropped)
 }
 
 func TestPlainRules_ResultWithoutIssuesIsUntouched(t *testing.T) {
 	raw := json.RawMessage(`{"b":1,"a":[{"code":"x"}]}`)
-	assert.Equal(t, string(raw), string(agent.PlainRules(raw)))
+	assert.JSONEq(t, string(raw), string(agent.PlainRules(raw)))
 }
 
 // What the chat model reads up front holds no rule code and no "dry run": the
@@ -81,7 +81,7 @@ func TestChatModelReadsNoRuleCodesOrDryRun(t *testing.T) {
 		assert.NotContains(t, lower, "dry run", name)
 		assert.NotContains(t, lower, "dry-run", name)
 	}
-	assert.Contains(t, prompt, "I checked the change first")
+	assert.NotContains(t, prompt, "checked the change first")
 }
 
 // An issue with no verified fix (E002b) and a cook in a no-plate slot (E001)

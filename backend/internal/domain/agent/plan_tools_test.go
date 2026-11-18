@@ -113,7 +113,7 @@ func TestToolGetPlan_MatchesPlanReadModel(t *testing.T) {
 			FrozenConsumed float64 `json:"frozen_consumed"`
 			Links          []any   `json:"links"`
 			Warnings       []any   `json:"warnings"`
-		} `json:"sessions"`
+		} `json:"batches"`
 		Issues json.RawMessage `json:"issues"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &got))

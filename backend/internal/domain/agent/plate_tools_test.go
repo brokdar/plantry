@@ -232,7 +232,7 @@ func TestToolSet_NoListSlotsNoGetProfile(t *testing.T) {
 func TestPrompt_SaysPortionsPerEater(t *testing.T) {
 	prompt, _ := agent.ComposePrompt(nil, "", "", time.Time{})
 	assert.Contains(t, prompt, "portions per eater")
-	assert.Equal(t, "v23", agent.PromptVersion)
+	assert.Equal(t, "v24", agent.PromptVersion)
 }
 
 // B2-AC6: the chat modes and week ids are gone from the agent package.
@@ -352,11 +352,11 @@ func TestTool_GetPlan_StateAndSessions(t *testing.T) {
 	plates := platesOf(got)
 	require.Len(t, plates, 2)
 	first, second := plates[0], plates[1]
-	assert.Equal(t, "draft", first["state"])
+	assert.Equal(t, "pending", first["state"])
 	assert.Equal(t, "confirmed", second["state"])
 
 	sid := first["components"].([]any)[0].(map[string]any)["session_id"]
-	sessions := got["sessions"].([]any)
+	sessions := got["batches"].([]any)
 	require.Len(t, sessions, 1)
 	s := sessions[0].(map[string]any)
 	assert.Equal(t, sid, s["id"])
@@ -365,7 +365,7 @@ func TestTool_GetPlan_StateAndSessions(t *testing.T) {
 	assert.Equal(t, float64(e.slotID), s["cook_slot_id"])
 	assert.Equal(t, 2.0, s["portions"])
 	assert.Equal(t, 0.0, s["frozen_portions"])
-	assert.Equal(t, "draft", s["state"])
+	assert.Equal(t, "pending", s["state"])
 	assert.Contains(t, got, "evaluation", "get_plan carries the evaluation")
 }
 
