@@ -192,7 +192,7 @@ export function AlternativesPanel({
                     alt.total_minutes
                       ? t("plan.alt.minutes", { count: alt.total_minutes })
                       : null,
-                    `${formatNumber(alt.kcal, i18n)} ${t("units.kcal")}`,
+                    `${formatNumber(alt.plate_kcal, i18n)} ${t("units.kcal")}`,
                     alt.day_pct
                       ? t("plan.alt.day_pct", { pct: Math.round(alt.day_pct) })
                       : t("plan.alt.day_kcal", {

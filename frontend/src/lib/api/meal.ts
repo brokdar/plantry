@@ -219,8 +219,8 @@ export interface Alternative {
   /** The cell a cook_at alternative cooks on (it shares that cook). */
   cook_at?: MealCell
   total_minutes?: number
-  kcal: number
-  protein_g: number
+  plate_kcal: number
+  plate_protein_g: number
   day_kcal: number
   day_pct?: number
   week_pct?: number

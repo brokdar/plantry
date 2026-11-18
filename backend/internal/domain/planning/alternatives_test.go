@@ -363,12 +363,18 @@ func TestAlternatives_EmptyReason(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, res.Alternatives)
 	require.NotNil(t, res.EmptyReason)
-	assert.Equal(t, planning.EmptyReason{Candidates: 1, Dropped: map[string]int{"H2.too_many_cook_occasions": 1}}, *res.EmptyReason)
+	assert.Equal(t, map[string]int{"H2.too_many_cook_occasions": 1}, res.EmptyReason.Dropped)
+	assert.Equal(t, 1, res.EmptyReason.Candidates)
+	require.Len(t, res.EmptyReason.Why, 1)
+	assert.Contains(t, res.EmptyReason.Why[0], "H2: 1 would add a cooking occasion", "the blocking rule in words, with the numbers")
+	assert.Contains(t, res.EmptyReason.Why[0], "(2 of 1)")
 
 	res, err = planning.Alternatives(s, windowTarget(s), planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain, Constraints: planning.AltConstraints{Search: "nothing like this"}})
 	require.NoError(t, err)
 	assert.Empty(t, res.Alternatives)
-	assert.Equal(t, &planning.EmptyReason{}, res.EmptyReason, "no candidate fits the constraints")
+	require.NotNil(t, res.EmptyReason)
+	assert.Zero(t, res.EmptyReason.Candidates, "no candidate fits the constraints")
+	assert.Contains(t, res.EmptyReason.Why[0], "loosen one")
 }
 
 // cookAtCells are the cells of the cook_at alternatives in out.

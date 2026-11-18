@@ -55,7 +55,7 @@ func TestPlanAlternativesHTTP(t *testing.T) {
 	code, body = a.do(http.MethodPost, url, fmt.Sprintf(`{"plate_id":%d,"what":"main","constraints":{"search":"zzz-nothing"}}`, pid))
 	require.Equal(t, http.StatusOK, code, body)
 	assert.Equal(t, []any{}, body["alternatives"])
-	assert.Equal(t, map[string]any{"candidates": float64(0)}, body["empty_reason"], "nothing fits the constraints")
+	assert.Equal(t, map[string]any{"candidates": float64(0), "why": []any{"no food fits the position and the constraints: loosen one"}}, body["empty_reason"], "nothing fits the constraints")
 
 	// A dinner eating the lunch batch does not cook: its alternatives cook at
 	// the lunch cell (cook_at), and POST /api/plates/{id}/replace takes the op.

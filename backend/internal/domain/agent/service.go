@@ -24,6 +24,13 @@ import (
 // is per generated token, the cap only prevents cut-offs.
 const chatMaxTokens = 16000
 
+// chatProgrammatic is false (D4): the chat agent never gets the code
+// execution tool or allowed callers, whatever ai.programmatic_tools says. The
+// definitions cost about 21 % of every request and 0 of 30 audited chats used
+// them; the planner keeps programmatic tool calling. The loop's plumbing stays
+// for a chat use case that needs it.
+const chatProgrammatic = false
+
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
 const PromptVersion = "v18"
@@ -205,7 +212,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		Effort:         s.effort(ctx),
 		MaxTokens:      chatMaxTokens,
 	}
-	if s.programmatic(ctx) {
+	if chatProgrammatic {
 		runReq.CodeExecution = true
 		switch {
 		case conv.ContainerID == "":
@@ -224,16 +231,6 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		runReq.Tools = withoutCallers(runReq.Tools)
 	}
 	return Run(ctx, runReq, client, s.tools, s.repo, out)
-}
-
-// programmatic reads ai.programmatic_tools; an unreadable setting means off.
-func (s *Service) programmatic(ctx context.Context) bool {
-	v, err := s.settings.Get(ctx, settings.KeyAIProgrammaticTools)
-	if err != nil {
-		slog.WarnContext(ctx, "agent.programmatic.setting", "error", err)
-		return false
-	}
-	return v.Raw == "true"
 }
 
 // effort reads ai.reasoning_effort.chat; an unreadable setting means the
