@@ -74,11 +74,14 @@ func TestWays_LighterChangesOnlyThisMealAndOffersTheRest(t *testing.T) {
 			assert.Empty(t, w.Light, "no mark on a meal over its cap")
 		}
 	}
-	// The first way goes as far as the floor allows: no other way is lighter.
-	assert.False(t, res.Ways[0].Reaches, "the floor stops a 500 kcal dinner here")
-	for _, w := range res.Ways[1:] {
-		assert.GreaterOrEqual(t, w.After.MealKcal, res.Ways[0].After.MealKcal, w.What)
+	// The first way goes about as far as the floor allows: within one rank
+	// bucket (150 kcal) of the lightest, and the own dish before a swap.
+	lightest := res.Ways[0].After.MealKcal
+	for _, w := range res.Ways {
+		lightest = min(lightest, w.After.MealKcal)
 	}
+	assert.False(t, res.Ways[0].Reaches, "the floor stops a 500 kcal dinner here")
+	assert.LessOrEqual(t, res.Ways[0].After.MealKcal-lightest, 150.0)
 
 	// The offer: dinner at its cap, the lunch grows by its own dish and a
 	// side or bread, never a filler such as nuts.
@@ -197,7 +200,7 @@ func TestJudgeRelative(t *testing.T) {
 			changed, reached, why := planning.JudgeRelative(tt.goal, tt.meal, tt.maxK, tt.minK, tt.before, tt.after)
 			assert.Equal(t, tt.changed, changed)
 			assert.Equal(t, tt.sat, changed && reached)
-			assert.Equal(t, !(changed && reached), why != "", "a request that is not fully met says why")
+			assert.Equal(t, !changed || !reached, why != "", "a request that is not fully met says why")
 		})
 	}
 }

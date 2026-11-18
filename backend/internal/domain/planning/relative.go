@@ -428,13 +428,6 @@ func (w *waySearch) outOfBand(ev Evaluation) bool {
 	return d.Kcal > d.BandHigh+1e-9
 }
 
-// reaches judges the target meal's figures against the goal: it changed
-// meaningfully and meets its cap (minimum).
-func (w *waySearch) reaches(before, after WayFigures) bool {
-	changed, reached, _ := JudgeRelative(w.goal, w.pi >= 0, w.capKcal, w.minKcal, before, after)
-	return changed && reached
-}
-
 // JudgeRelative decides a relative request: changed is true when the food
 // moved in the asked direction by a meaningful amount (energy: at least
 // RelMinShare of the meal or RelMinKcal, the smaller; protein: RelMinProteinG

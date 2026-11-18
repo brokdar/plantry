@@ -166,7 +166,7 @@ func checkWay(ctx context.Context, svc Services, w window.Window, goal applyGoal
 		if way.Reaches && !reached {
 			way.Reaches, way.Why = false, fmt.Sprint(req["why"])
 		}
-		if !way.Reaches && way.Why == "" && reached == false {
+		if !way.Reaches && way.Why == "" && !reached {
 			way.Why = fmt.Sprint(req["why"])
 		}
 	}
