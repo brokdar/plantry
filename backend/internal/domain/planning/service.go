@@ -874,6 +874,15 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 			prop.Notes = joinNotes(append([]string{prop.Notes}, weekNotes...)...)
 		}
 	}
+	// A model's plan gets its quantities finished in Go (portions, a side,
+	// add-ons), the way the heuristic sets its own.
+	if _, heuristic := j.chooser.(Heuristic); !heuristic && j.side == nil {
+		var balanceNotes []string
+		prop, balanceNotes = balancePlan(ChooseInput{State: base, Target: j.target, Exclude: j.exclude, Avoid: j.avoid, Locale: base.Profile.Locale}, prop)
+		if len(balanceNotes) > 0 {
+			prop.Notes = joinNotes(append([]string{prop.Notes}, balanceNotes...)...)
+		}
+	}
 	merged := Merge(base, j.target, prop)
 	issues := Check(merged, j.target)
 	stage(StageChecking, issueAttrs(issues)...)

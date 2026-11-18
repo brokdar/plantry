@@ -83,6 +83,11 @@ type planner struct {
 	// occasions holds each day's cook cells (H2), routine cells excluded.
 	occasions map[int]map[cellID]bool
 	meatDays  map[int]bool
+	// balance marks the final balancing pass over a plan a model made
+	// (balancePlan): fresh components grow too and a day may take a side recipe.
+	balance bool
+	// sided are the days that took a side recipe in that pass.
+	sided map[int]bool
 	// meatLimitG is the DGE meat limit prorated to the planned days (S7).
 	meatLimitG float64
 	// allowMeat lets a leftover add a meat day past the limit: the last
