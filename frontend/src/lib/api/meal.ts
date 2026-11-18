@@ -42,7 +42,7 @@ export interface AlsoChanged {
   what: AlsoChangedWhat
   from_date?: string
   from_slot_id?: number
-  why?: "before_cook" | "past_keep_days" | "cooked"
+  why?: "before_cook" | "past_keep_days" | "past_freezer_days" | "cooked"
 }
 
 export interface MealResult {

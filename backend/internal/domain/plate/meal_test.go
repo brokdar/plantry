@@ -83,6 +83,28 @@ func (e *env) lateBatch() int64 {
 	return sid
 }
 
+// freezableChili turns freezing on, keep days to 1 and makes chili freezable.
+func (e *env) freezableChili() {
+	e.t.Helper()
+	e.set("plan.freezing_enabled", "true")
+	e.set("plan.freezer_keep_days", "30")
+	e.set("plan.default_keep_days", "1")
+	e.exec(`UPDATE foods SET freezable = 1 WHERE id = ?`, e.chili)
+}
+
+// frozenBatch is a chili batch cooked Mon dinner with a leftover on Wed dinner
+// (past the 1 keep day, so classified frozen before any move). It returns the
+// session and the Mon plate.
+func (e *env) frozenBatch() (sid int64, monPlate *plate.Plate) {
+	e.t.Helper()
+	e.freezableChili()
+	monPlate = e.create(mon, e.dinner, nil, composed(e.chili, 1))
+	sid = sessionOf(monPlate, 0)
+	_, err := e.svc.AddLeftovers(e.ctx, sid, []plate.CellKey{cell(wed, e.dinner)})
+	require.NoError(e.t, err)
+	return sid, monPlate
+}
+
 func TestMoveMeal_LeftoverBeforeItsCookReanchorsTheBatch(t *testing.T) {
 	e := newEnv(t)
 	sid := e.lateBatch()
@@ -645,4 +667,139 @@ func TestRevert_AnAwayCellEditedSinceIsStale(t *testing.T) {
 
 	require.ErrorIs(t, err, domain.ErrPlanChangeStale)
 	assert.Empty(t, e.week())
+}
+
+// A meal operation never uses the freezer silently (design rule 1a): a named
+// meal that moves past the keeping time leaves its batch and cooks fresh.
+func TestMoveMeal_SwapPastKeepDoesNotFreezeSilently(t *testing.T) {
+	e := newEnv(t)
+	e.freezableChili()
+	monPlate := e.create(mon, e.dinner, nil, composed(e.chili, 1))
+	sid := sessionOf(monPlate, 0)
+	_, err := e.svc.AddLeftovers(e.ctx, sid, []plate.CellKey{cell(tue, e.dinner)})
+	require.NoError(t, err)
+	e.create(thu, e.dinner, f64(3), composed(e.curry, 1))
+	before := e.week()
+
+	res, err := e.move(monPlate, thu, e.dinner, plate.Occupant{Kind: plate.OccupantSwap})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"2026-11-02/dinner curry x2 cook=2026-11-02/dinner portions=2",
+		"2026-11-03/dinner chili x2 cook=2026-11-03/dinner portions=2",
+		"2026-11-05/dinner chili x3 cook=2026-11-05/dinner portions=3",
+	}, e.week())
+	v := e.session(sid)
+	assert.Equal(t, day(tue), v.CookDate)
+	assert.InDelta(t, 0.0, v.FrozenPortions, 1e-9)
+	for _, w := range v.Warnings {
+		assert.NotEqual(t, plate.WarnFrozenDeficit, w.Code)
+	}
+	var fresh *plate.AlsoChanged
+	for i := range res.AlsoChanged {
+		if res.AlsoChanged[i].What == plate.AlsoCooksFresh {
+			fresh = &res.AlsoChanged[i]
+		}
+	}
+	require.NotNil(t, fresh, "the moved meal cooks fresh: %v", whats(res.AlsoChanged))
+	assert.Equal(t, monPlate.ID, fresh.PlateID)
+	assert.Equal(t, "past_keep_days", fresh.Why)
+	assert.Contains(t, whats(res.AlsoChanged), plate.AlsoBecameCooking)
+
+	_, err = e.avail.Revert(e.ctx, res.Undo)
+	require.NoError(t, err)
+	assert.Equal(t, before, e.week())
+}
+
+func TestMoveMeal_MealClassifiedPastUseByStaysFrozenInItsBatch(t *testing.T) {
+	e := newEnv(t)
+	sid, _ := e.frozenBatch()
+
+	res, err := e.move(e.plateAt(wed, e.dinner), thu, e.dinner, plate.Occupant{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"2026-11-02/dinner chili x2 cook=2026-11-02/dinner portions=4",
+		"2026-11-05/dinner chili x2 cook=2026-11-02/dinner portions=4",
+	}, e.week())
+	assert.Empty(t, res.AlsoChanged)
+	assert.InDelta(t, 4.0, e.session(sid).Portions, 1e-9)
+}
+
+func TestMoveMeal_SwapCookWithAFrozenMealOfTheSameBatchKeepsTheCookWhereTheFrozenMealIs(t *testing.T) {
+	e := newEnv(t)
+	sid, monPlate := e.frozenBatch()
+	wedPlate := e.plateAt(wed, e.dinner)
+
+	res, err := e.move(monPlate, wed, e.dinner, plate.Occupant{Kind: plate.OccupantSwap})
+
+	require.NoError(t, err)
+	got := e.week()
+	require.Len(t, got, 2, "%v", got)
+	assert.Contains(t, got[0], "2026-11-02/dinner chili x2 cook=2026-11-02/dinner", "the frozen meal stays in the batch, now its cook")
+	assert.Contains(t, got[1], "2026-11-04/dinner chili x2 cook=2026-11-04/dinner", "the old cook is past the keeping time and cooks fresh")
+	assert.Equal(t, 2.0, e.session(sid).Portions)
+	var fresh *plate.AlsoChanged
+	for i := range res.AlsoChanged {
+		if res.AlsoChanged[i].What == plate.AlsoCooksFresh {
+			fresh = &res.AlsoChanged[i]
+		}
+	}
+	require.NotNil(t, fresh, "%v", whats(res.AlsoChanged))
+	assert.Equal(t, monPlate.ID, fresh.PlateID)
+	assert.Equal(t, "past_keep_days", fresh.Why)
+	assert.NotEqual(t, wedPlate.ID, fresh.PlateID)
+	assert.NotContains(t, whats(res.AlsoChanged), "before_cook")
+}
+
+func TestMoveMeal_DroppingTheCookingMealKeepsTheLaterMealInTheBatch(t *testing.T) {
+	e := newEnv(t)
+	sid, _ := e.frozenBatch()
+	curry := e.create(tue, e.dinner, nil, composed(e.curry, 1))
+
+	res, err := e.move(curry, mon, e.dinner, plate.Occupant{Kind: plate.OccupantDrop})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"2026-11-02/dinner curry x2 cook=2026-11-02/dinner portions=2",
+		"2026-11-04/dinner chili x2 cook=2026-11-02/dinner portions=2",
+	}, e.week(), "the later meal stays in its batch; it does not leave or cook fresh")
+	assert.NotContains(t, whats(res.AlsoChanged), plate.AlsoCooksFresh)
+	assert.Equal(t, day(mon), e.session(sid).CookDate)
+}
+
+func TestMoveMeal_FrozenMealMovedPastFreezerDaysCooksFresh(t *testing.T) {
+	e := newEnv(t)
+	e.frozenBatch()
+	e.set("plan.freezer_keep_days", "3")
+
+	res, err := e.move(e.plateAt(wed, e.dinner), sat, e.dinner, plate.Occupant{})
+
+	require.NoError(t, err)
+	require.Contains(t, whats(res.AlsoChanged), plate.AlsoCooksFresh)
+	for _, a := range res.AlsoChanged {
+		if a.What == plate.AlsoCooksFresh {
+			assert.Equal(t, "past_freezer_days", a.Why)
+		}
+	}
+}
+
+func TestMoveMeal_AnUnnamedPastKeepLinkIsUntouchedWhenTheCookMoves(t *testing.T) {
+	e := newEnv(t)
+	sunPlate, sid := e.batch()
+	_, err := e.svc.AddLeftovers(e.ctx, sid, []plate.CellKey{cell(wed, e.dinner)})
+	require.NoError(t, err)
+	e.set("plan.default_keep_days", "1") // Wed dinner is now past the keeping time of any cook before Tue
+	wedLeftover := e.plateAt(wed, e.dinner)
+
+	res, err := e.move(sunPlate, sat, e.lunch, plate.Occupant{})
+
+	require.NoError(t, err)
+	for _, a := range res.AlsoChanged {
+		assert.NotEqual(t, wedLeftover.ID, a.PlateID, "the unnamed meal is not touched: %v", res.AlsoChanged)
+	}
+	wedPlate := e.plateAt(wed, e.dinner)
+	require.NotNil(t, wedPlate.Components[0].CookSessionID)
+	assert.Equal(t, sid, *wedPlate.Components[0].CookSessionID, "still in the batch")
+	assert.Equal(t, day(mon), e.session(sid).CookDate, "the cook went to the earliest meal")
 }
