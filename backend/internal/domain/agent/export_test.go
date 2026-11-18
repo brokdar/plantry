@@ -1,5 +1,7 @@
 package agent
 
+import "context"
+
 // WithToday lets the external tests pin the chat's today, which the past-date
 // guard (D7) reads.
 var WithToday = withToday
@@ -41,3 +43,8 @@ const PromptCharBudget = promptCharBudget
 
 // PlainRules is the rewrite of a tool result for the model (no rule codes).
 var PlainRules = plainRules
+
+// WithTurn puts a chat turn of the conversation in ctx, as Service.Chat does.
+func WithTurn(ctx context.Context, conversationID int64) context.Context {
+	return withTurn(ctx, chatTurn{conversationID: conversationID})
+}

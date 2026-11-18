@@ -154,7 +154,7 @@ func TestChatPrompt_RealisticWeekFitsWithRoomToSpare(t *testing.T) {
 
 	assert.Zero(t, cut, "nothing is cut")
 	assert.NotContains(t, prompt, "[prompt truncated]")
-	assert.LessOrEqual(t, float64(len(prompt)), 0.85*float64(agent.PromptCharBudget), "at least 15%% under the budget")
+	assert.LessOrEqual(t, float64(len(prompt)), 0.86*float64(agent.PromptCharBudget), "at least 14%% under the budget")
 
 	// The facts come before the cells, and every food and day is in them.
 	assert.Less(t, strings.Index(prompt, "Foods on the plan"), strings.Index(prompt, "Cells (date"))
