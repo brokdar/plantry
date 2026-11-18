@@ -16,6 +16,8 @@ type Proposal struct {
 	Plates   []ProposedPlate
 	// Notes is the chooser's short summary for the user.
 	Notes string
+	// MaxCookDays is the days of cooking the instruction allows (0: no limit stated).
+	MaxCookDays int
 	// RepairAttempts is how many repair turns the chooser took (LLM, D12).
 	RepairAttempts int
 	// Light are the light requests the chooser was given, as it states them

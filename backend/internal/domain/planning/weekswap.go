@@ -237,7 +237,7 @@ func (x *index) swapsFor(t Target, base Evaluation, pis []int, mode swapMode, sk
 					continue
 				}
 				a, why, _ := x.s.tryAlt(t, pi, old, nil, c, base, hard, soft, len(x.occasions[dayOf(p.Date)]), cookedInWindow, false)
-				if why != "" || len(a.NewIssues) > 0 || !x.dayHolds(a, dayPct[p.Date.Format(time.DateOnly)]) {
+				if why != "" || len(a.NewIssues) > 0 || a.rank.addsCook || !x.dayHolds(a, dayPct[p.Date.Format(time.DateOnly)]) {
 					continue
 				}
 				found = append(found, weekSwap{pi: pi, old: old, c: c, a: a, oldMeatG: oldMeat, newMeatG: newMeat, plateMeat: plateMeat})
@@ -411,6 +411,11 @@ func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instructi
 		}
 		x := newIndex(merged, t)
 		hard, soft := hardKeys(ev.Issues), softKeys(ev.Issues)
+		if next, note, ok := x.swapBatch(base, t, out, ev, hard, soft, mode, skip); ok {
+			out = next
+			notes = append(notes, note)
+			return true
+		}
 		for _, pi := range x.swapPlates(weekCounted(ev), mode, true) {
 			tries := 0
 			for _, sw := range x.swapsFor(t, ev, []int{pi}, mode, skip) {
@@ -447,6 +452,101 @@ func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instructi
 	return out, notes
 }
 
+// swapBatch replaces a whole proposed batch: every plate that eats session S
+// as its main gets the new dish, which S now cooks on the same cell, so the
+// same meals stay fed and no cooking day or time is added. Candidates with the
+// least meat (swapMeat) or a fish main (swapFish) are tried in order; the first
+// whose whole plan passes guardKeeps wins. Batches that feed one plate are the
+// plate swap's.
+func (x *index) swapBatch(base State, t Target, in Proposal, before Evaluation, hard, soft map[string]bool, mode swapMode, skip map[int64]bool) (Proposal, string, bool) {
+	var household diet.Class
+	if DietRestricts(x.s.Profile.DietType) {
+		household = diet.Class(x.s.Profile.DietType)
+	}
+	type use struct{ pi, ci int }
+	type batch struct {
+		si   int
+		uses []use
+		meat float64
+	}
+	var batches []batch
+	for si, ss := range in.Sessions {
+		of := x.s.Foods[ss.FoodID]
+		if mode == swapMeat && of.Groups.MeatG <= 0 {
+			continue
+		}
+		b := batch{si: si}
+		ok := true
+		for pi, pl := range in.Plates {
+			for ci, c := range pl.Components {
+				if c.SessionKey != ss.Key {
+					continue
+				}
+				mi := slices.IndexFunc(x.s.Plates, func(p Plate) bool { return p.ID == -int64(pi+1) })
+				if pl.PlateID != 0 || mi < 0 || x.mainIndex(x.s.Plates[mi]) != ci || x.mealOf(pl.SlotID) != mealFull {
+					ok = false
+				}
+				b.uses = append(b.uses, use{pi, ci})
+				b.meat += of.Groups.MeatG * c.Portions
+			}
+		}
+		if ok && len(b.uses) >= 2 {
+			batches = append(batches, b)
+		}
+	}
+	slices.SortStableFunc(batches, func(a, b batch) int { return cmp.Compare(b.meat, a.meat) })
+	ids := make([]int64, 0, len(x.s.Foods))
+	for id := range x.s.Foods {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	for _, b := range batches {
+		ss := in.Sessions[b.si]
+		of := x.s.Foods[ss.FoodID]
+		var cands []FoodFacts
+		for _, id := range ids {
+			f := x.s.Foods[id]
+			if id == ss.FoodID || skip[id] || !f.Composed() || f.Macros.Kcal <= 0 || !isMain(f.Role, mealFull) || !fitsDiet(f.DietClass, household) {
+				continue
+			}
+			switch {
+			case mode == swapMeat && f.Groups.MeatG >= of.Groups.MeatG-1e-9:
+				continue
+			case mode == swapFish && f.Groups.FishG < minMealG:
+				continue
+			}
+			cands = append(cands, f)
+		}
+		slices.SortStableFunc(cands, func(a, c FoodFacts) int {
+			return cmp.Or(cmp.Compare(a.Groups.MeatG, c.Groups.MeatG), cmp.Compare(math.Abs(a.Macros.Kcal-of.Macros.Kcal), math.Abs(c.Macros.Kcal-of.Macros.Kcal)), cmp.Compare(a.ID, c.ID))
+		})
+		for tries, f := range cands {
+			if tries >= maxGuardTries*3 {
+				break
+			}
+			next := cloneProposal(in)
+			next.Sessions[b.si].FoodID = f.ID
+			for _, u := range b.uses {
+				c := &next.Plates[u.pi].Components[u.ci]
+				p := clamp(math.Round(of.Macros.Kcal*c.Portions/f.Macros.Kcal/roundPortions)*roundPortions, optPortionMin, MaxDishPortions)
+				next.Sessions[b.si].Portions += next.Plates[u.pi].eaters(x.s) * (p - c.Portions)
+				c.FoodID, c.Portions = f.ID, p
+			}
+			after := Evaluate(Merge(base, t, next), t)
+			if !guardKeeps(before, after, hard, soft, mode) {
+				continue
+			}
+			what := "less meat"
+			if mode == swapFish {
+				what = "a fish meal"
+			}
+			return next, fmt.Sprintf("Weekly %s: the batch of %s (%d meals, cooked %s) replaced by %s on the same cook cell for %s.",
+				map[swapMode]string{swapMeat: "meat", swapFish: "fish"}[mode], of.Name, len(b.uses), weekdayDate(ss.CookDate), f.Name, what), true
+		}
+	}
+	return in, "", false
+}
+
 // guardKeeps reports whether the plan after a swap is better: no new hard or
 // soft issue, less meat (or a fish meal), weekly protein not pushed below 90 %.
 func guardKeeps(before, after Evaluation, hard, soft map[string]bool, mode swapMode) bool {
@@ -463,7 +563,7 @@ func guardKeeps(before, after Evaluation, hard, soft map[string]bool, mode swapM
 		}
 	}
 	b, a := before.Week, after.Week
-	if a == nil || b == nil {
+	if a == nil || b == nil || cookDays(after) > cookDays(before) {
 		return false
 	}
 	if a.TargetProteinG > 0 && a.ProteinPct < math.Min(b.ProteinPct, ProteinWeekMin*100)-1e-9 {

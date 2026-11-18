@@ -2,6 +2,7 @@ package planning_test
 
 import (
 	"math"
+	"slices"
 	"strings"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
@@ -22,6 +24,9 @@ func meatyWeek() planning.State {
 		withGroups(s, id, planning.FoodGroups{MeatG: 150})
 	}
 	withGroups(s, 109, planning.FoodGroups{FishG: 150})
+	for id := int64(111); id <= 116; id++ { // more mains without meat, so variety has room
+		s.Foods[id] = recipe(id, "Main "+string(rune('A'+id-111)), food.RoleMain, "omnivore", 600)
+	}
 	return s
 }
 
@@ -86,7 +91,7 @@ func TestMeatBudgetOf(t *testing.T) {
 // run note.
 func TestGuardWeek_SwapsMeatAndPlacesFish(t *testing.T) {
 	over := meatyWeek()
-	for id := int64(108); id <= 110; id++ { // the picks see only meat mains
+	for id := int64(108); id <= 116; id++ { // the picks see only meat mains
 		withGroups(over, id, planning.FoodGroups{MeatG: 150})
 	}
 	prop := choose(t, planning.ChooseInput{State: over, Target: windowTarget(over)})
@@ -119,7 +124,7 @@ func TestGuardWeek_SwapsMeatAndPlacesFish(t *testing.T) {
 
 func TestGuardWeek_Limits(t *testing.T) {
 	over := meatyWeek()
-	for id := int64(108); id <= 110; id++ {
+	for id := int64(108); id <= 116; id++ {
 		withGroups(over, id, planning.FoodGroups{MeatG: 150})
 	}
 	prop := choose(t, planning.ChooseInput{State: over, Target: windowTarget(over)})
@@ -157,7 +162,7 @@ func TestGuardWeek_Limits(t *testing.T) {
 	})
 	t.Run("excluded foods are not placed", func(t *testing.T) {
 		s := meatyWeek()
-		skip := map[int64]bool{108: true, 109: true, 110: true}
+		skip := map[int64]bool{108: true, 109: true, 110: true, 111: true, 112: true, 113: true, 114: true, 115: true, 116: true}
 		got, _ := planning.GuardWeek(s, windowTarget(s), prop, skip, "")
 		assert.InDelta(t, meatOf(s, prop), meatOf(s, got), 1e-9)
 	})
@@ -167,7 +172,7 @@ func TestGuardWeek_Limits(t *testing.T) {
 // names the cell, lowers the meat and passes its own dry run.
 func TestEvaluateWeek_OffersVerifiedSwaps(t *testing.T) {
 	over := meatyWeek()
-	for id := int64(108); id <= 110; id++ {
+	for id := int64(108); id <= 116; id++ {
 		withGroups(over, id, planning.FoodGroups{MeatG: 150})
 	}
 	prop := choose(t, planning.ChooseInput{State: over, Target: windowTarget(over)})
@@ -200,7 +205,7 @@ func TestEvaluateWeek_OffersVerifiedSwaps(t *testing.T) {
 // only stays as it is.
 func TestHeuristic_WeekMeatBudgetAndFish(t *testing.T) {
 	all := meatyWeek()
-	for id := int64(108); id <= 110; id++ {
+	for id := int64(108); id <= 116; id++ {
 		withGroups(all, id, planning.FoodGroups{MeatG: 150})
 	}
 	stuck := choose(t, planning.ChooseInput{State: all, Target: windowTarget(all)})
@@ -220,4 +225,60 @@ func fishPlanned(s planning.State, p planning.Proposal) bool {
 		}
 	}
 	return false
+}
+
+func cookDaysOf(s planning.State, p planning.Proposal) int {
+	t := windowTarget(s)
+	n := 0
+	for _, d := range planning.Evaluate(planning.Merge(s, t, p), t).Days {
+		if d.CookOccasions > 0 {
+			n++
+		}
+	}
+	return n
+}
+
+// The guard replaces a whole batch by another dish cooked on the same cell
+// for the same meals: no session is added, no cooking day appears.
+func TestGuardWeek_SwapsWholeBatchesAndKeepsCookingDays(t *testing.T) {
+	s := meatyWeek() // 101-107 hold 150 g of meat a portion, 108 and 110 none
+	cells := []struct {
+		date string
+		slot int64
+	}{}
+	for _, c := range s.Cells {
+		if c.SlotID != breakfast {
+			cells = append(cells, struct {
+				date string
+				slot int64
+			}{c.Date.Format("2006-01-02"), c.SlotID})
+		}
+	}
+	var prop planning.Proposal
+	// Two meaty batches of three meals each (101: Sat dinner-Sun dinner, 102: Mon dinner-Tue dinner); the rest eats 108 in batches too.
+	groups := [][]int{{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, {9, 10, 11}, {12, 13}}
+	foods := []int64{101, 102, 108, 110, 111}
+	for gi, g := range groups {
+		key := string(rune('a' + gi))
+		first := cells[g[0]]
+		portions := float64(len(g))
+		prop.Sessions = append(prop.Sessions, session(key, foods[gi], first.date, first.slot, portions))
+		for _, ci := range g {
+			prop.Plates = append(prop.Plates, planning.ProposedPlate{Date: day(cells[ci].date), SlotID: cells[ci].slot, Eaters: 1,
+				Components: []planning.ProposedComponent{{FoodID: foods[gi], Portions: 1, SessionKey: key}}})
+		}
+	}
+	for _, c := range s.Cells { // every breakfast cell holds a plate, so the week's days count
+		if c.SlotID == breakfast && !slices.ContainsFunc(s.Plates, func(p planning.Plate) bool { return p.Date.Equal(c.Date) && p.SlotID == breakfast }) {
+			prop.Plates = append(prop.Plates, planning.ProposedPlate{Date: c.Date, SlotID: breakfast, Eaters: 1, Components: []planning.ProposedComponent{{FoodID: oats, Portions: 1}}})
+		}
+	}
+	target := windowTarget(s)
+	require.Greater(t, meatOf(s, prop), 300.0)
+	daysBefore := cookDaysOf(s, prop)
+	got, notes := planning.GuardWeek(s, target, prop, nil, "")
+	assert.LessOrEqual(t, meatOf(s, got), 300.0+1e-9)
+	assert.LessOrEqual(t, len(got.Sessions), len(prop.Sessions), "no session is added")
+	assert.LessOrEqual(t, cookDaysOf(s, got), daysBefore, "no cooking day is added")
+	assert.True(t, slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, "batch") }), "%v", notes)
 }

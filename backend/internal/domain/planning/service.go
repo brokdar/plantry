@@ -879,6 +879,10 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	if _, heuristic := j.chooser.(Heuristic); !heuristic && j.side == nil {
 		var balanceNotes []string
 		prop, balanceNotes = balancePlan(ChooseInput{State: base, Target: j.target, Exclude: j.exclude, Avoid: j.avoid, Locale: base.Profile.Locale}, prop)
+		// Raised portions may have passed the week's meat limit again.
+		var again []string
+		prop, again = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
+		balanceNotes = append(balanceNotes, again...)
 		if len(balanceNotes) > 0 {
 			prop.Notes = joinNotes(append([]string{prop.Notes}, balanceNotes...)...)
 		}

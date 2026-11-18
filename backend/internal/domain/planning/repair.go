@@ -38,7 +38,20 @@ func (r *repairer) advisories() []string {
 	if r.in.Side != nil {
 		return r.sideRoleChanged()
 	}
-	return append(r.missingMains(), r.weekAdvice()...)
+	return append(append(r.missingMains(), r.cookDaysAdvice()...), r.weekAdvice()...)
+}
+
+// cookDaysAdvice is the advisory for a plan that cooks on more days than the
+// limit the model itself stated (submit_plan max_cook_days).
+func (r *repairer) cookDaysAdvice() []string {
+	limit := r.prop.MaxCookDays
+	if limit <= 0 {
+		return nil
+	}
+	if n := cookDays(Evaluate(r.s, r.in.Target)); n > limit {
+		return []string{fmt.Sprintf("The plan cooks on %d days, but the instruction allows %d. Fix: cook bigger batches on fewer days and let other plates eat them as leftovers (keep days and freezing permitting).", n, limit)}
+	}
+	return nil
 }
 
 // weekAdvice are the week's meat and fish advisories (weekAdvisories), kept

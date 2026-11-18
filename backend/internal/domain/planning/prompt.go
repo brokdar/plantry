@@ -18,7 +18,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p20"
+const PromptVersion = "p21"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -83,6 +83,7 @@ var submitPlanSchema = `{
       }
     },
     ` + LightSchema(false) + `,
+    "max_cook_days": {"type": "integer", "description": "Only when the user's instruction limits the days on which anything is cooked (e.g. I can only cook on two days): that number. Omit otherwise. The plan and Go's later changes keep within it."},
     "notes": {"type": "string", "description": "One or two sentences describing exactly the plan you submit (its recipes and days), nothing it does not contain."}
   },
   "required": ["sessions", "plates", "notes"]
