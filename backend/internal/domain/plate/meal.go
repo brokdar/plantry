@@ -22,7 +22,9 @@ import (
 // re-anchors its cook to the batch's earliest meal; when that would break the
 // keeping time (R2) or the batch is cooked, the named meal leaves the batch
 // and its dish cooks fresh at its own cell. A meal the caller did not name
-// never loses its dish; at most it becomes its batch's cooking meal.
+// never loses its dish; at most it becomes its batch's cooking meal. A named
+// meal stays in its batch past the keeping time (on the freezer) only when it
+// already was a frozen meal of that batch; a move never freezes a meal.
 
 // OccupantKind says what MoveMeal does with a plate on the target cell.
 type OccupantKind string
@@ -235,8 +237,10 @@ func (s *Service) trackPortions(ctx context.Context, t *tracker, sids []int64) (
 // written): the cook re-anchors to the earliest meal when a cooking meal
 // moved or a named meal now comes before the cook (the latter only when R2
 // holds for every meal); then every named meal the batch cannot feed (before
-// the cook, past the keeping time, or the batch is cooked) cooks fresh. The
-// session is kept out of settle's re-anchor.
+// the cook, past the keeping time, or the batch is cooked) cooks fresh. A
+// named meal that was already frozen (past the use-by of the batch as it was
+// before the move) may still rely on the freezer; any other named meal is
+// checked with freezing off. The session is kept out of settle's re-anchor.
 func (s *Service) localRule(ctx context.Context, t *tracker, sid int64, named map[int64]relocation, e env, today time.Time) error {
 	sess, err := s.sessions.GetSession(ctx, sid)
 	if err != nil {
@@ -266,6 +270,7 @@ func (s *Service) localRule(ctx context.Context, t *tracker, sid int64, named ma
 	keep := e.set.KeepDays(f.KeepDays)
 	// A meal operation never uses the freezer silently: a named meal may rely
 	// on it only when it already was a frozen meal of this batch.
+	// Only the cook and keep inputs of Classify are read from prior.
 	prior := *sess
 	prior.CookDate, prior.CookSlotID = t.prior[sid].cook.Date, t.prior[sid].cook.SlotID
 	wasFrozen := map[int64]bool{}
@@ -295,7 +300,7 @@ func (s *Service) localRule(ctx context.Context, t *tracker, sid int64, named ma
 		if first, ok := earliestMeal(links, today, e.order); ok {
 			switch {
 			case cookMoved:
-				target = cookTarget(*sess, links, named, keep, e, today, setFor)
+				target = cookTarget(*sess, links, named, keep, e, today)
 			case Before(first, cook, e.order):
 				cand := *sess
 				cand.CookDate, cand.CookSlotID = first.Date, first.SlotID
@@ -367,6 +372,8 @@ func splitReason(err error, sess CookSession) string {
 		return "cooked"
 	case errors.Is(err, domain.ErrSessionBeforeCook):
 		return "before_cook"
+	case errors.Is(err, domain.ErrSessionPastFreezerDays):
+		return "past_freezer_days"
 	default:
 		return "past_keep_days"
 	}
@@ -392,18 +399,20 @@ func earliestMeal(links []Link, today time.Time, order SlotOrder) (CellKey, bool
 }
 
 // cookTarget is where the cook of sess goes when its cooking meal moved: the
-// earliest meal not before today, provided the batch can feed every meal from
-// there. When the earliest meal is named only and the batch cannot feed all,
-// that meal leaves the batch (it cooks fresh) and the next earliest is tried;
-// an earliest meal the caller did not name always gets the cook. With no meal
-// left the cook stays.
-func cookTarget(sess CookSession, links []Link, named map[int64]relocation, keep int, e env, today time.Time, setFor func(Link) BatchSettings) CellKey {
+// earliest meal not before today, provided the batch can feed every unnamed
+// meal from there (normal settings). Named meals the batch cannot feed from
+// there cook fresh afterwards. An earliest meal that is named only is skipped
+// (and the next earliest tried) when an unnamed meal would break; an earliest
+// meal the caller did not name always gets the cook. With no meal left the
+// cook stays.
+func cookTarget(sess CookSession, links []Link, named map[int64]relocation, keep int, e env, today time.Time) CellKey {
 	rest := make([]Link, 0, len(links))
 	for _, l := range links {
 		if !dateOnly(l.Cell.Date).Before(today) {
 			rest = append(rest, l)
 		}
 	}
+	normal := func(Link) BatchSettings { return e.set }
 	for {
 		first, ok := earliestMeal(rest, today, e.order)
 		if !ok {
@@ -412,14 +421,17 @@ func cookTarget(sess CookSession, links []Link, named map[int64]relocation, keep
 		cand := sess
 		cand.CookDate, cand.CookSlotID = first.Date, first.SlotID
 		namedOnly := true
+		unnamed := make([]Link, 0, len(rest))
 		for _, l := range rest {
+			if _, ok := named[l.PlateID]; ok {
+				continue
+			}
+			unnamed = append(unnamed, l)
 			if l.Cell.Equal(first) {
-				if _, ok := named[l.PlateID]; !ok {
-					namedOnly = false
-				}
+				namedOnly = false
 			}
 		}
-		if !namedOnly || feedsAll(cand, rest, keep, e, setFor) {
+		if !namedOnly || feedsAll(cand, unnamed, keep, e, normal) {
 			return first
 		}
 		rest = slices.DeleteFunc(rest, func(l Link) bool { return l.Cell.Equal(first) })
