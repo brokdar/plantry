@@ -202,7 +202,7 @@ func LightSchema(withClear bool) string {
 	}
 	return fmt.Sprintf(`"light":{
       "type":"array","maxItems":14,
-      "description":"The user's light (or hearty) requests, structured; omit when there is none. Requests are stored: a meal entry replaces the stored request of that date and slot, a day entry that date's day request; everything else stored stays and every evaluation already stands under it, so list only what the user asked for now. scope meal: that lunch or dinner is lighter (at most 75%% of its even share of the day's target; level hearty: at least 125%%) and the day's target moves by that meal's share, within the normal day band; the safety floor stays on the normal target. scope day: ONLY when the user explicitly asks to eat less (hearty: more) that day; the day's target becomes 85%% (hearty: 115%%); at most %d light or hearty days per plan window (a lasting change is the profile's goal). Dates must lie in the plan window.%s",
+      "description":"The user's light (hearty) requests; omit when none. Stored per date and slot: a meal entry replaces that slot's request, a day entry that date's; the rest stays, so list only what the user asked now. meal: that lunch or dinner holds at most 75%% (hearty: at least 125%%) of its even share of the day's target, and the day's target moves by that share within the day band; the safety floor stays on the normal target. day: ONLY when the user explicitly asks to eat less (hearty: more) that day: target 85%% (hearty: 115%%); at most %d such days per window. Dates must lie in the plan window.%s",
       "items":{
         "type":"object","required":["date","scope"],
         "properties":{
