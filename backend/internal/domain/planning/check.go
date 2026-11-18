@@ -46,6 +46,7 @@ const (
 	CodePlateOnConfirmedCell  = "plate_on_confirmed_cell"
 	CodeVarietyRepeat         = "variety_repeat"
 	CodeVarietyRelaxed        = "variety_relaxed"
+	CodeVarietyRepeatWeek     = "variety_repeat_week"
 	CodeKcalBelowFloor        = "kcal_below_floor"
 	// Soft rules (Evaluate).
 	CodeKcalBelowBand     = "kcal_below_band"
@@ -467,6 +468,11 @@ func (x *index) component(p Plate, c Component) []Issue {
 // fewer eligible recipes exist than the window's unconfirmed cooks, repeats
 // are warnings (variety_relaxed): the window decides, not the target, so a
 // single-plate run relaxes the way the board does for the same plan.
+//
+// On persisted data a cook whose only repeat is another cook (or a confirmed
+// plate) inside the plan window is the user's own choice of the week, not a
+// repeat of the history: a variety_repeat_week warning. A repeat from before
+// the window stays the violation. A run's merged state keeps the violation.
 func (x *index) h8() []Issue {
 	weeks := x.s.Settings.VarietyWeeks
 	if weeks <= 0 {
@@ -507,6 +513,10 @@ func (x *index) h8() []Issue {
 		}
 		if !repeat {
 			continue
+		}
+		code, sev := code, sev
+		if !x.merged && code == CodeVarietyRepeat && x.s.Window.Contains(prev) {
+			code, sev = CodeVarietyRepeatWeek, SeverityWarning
 		}
 		is := issue("H8", code, sev)
 		if ev.session >= 0 {
@@ -549,19 +559,21 @@ func (x *index) plateInTarget(date time.Time) bool {
 	return false
 }
 
-// earlierCook finds another cook of cook i's food at an earlier cell, on or
-// after since.
+// earlierCook finds the earliest other cook of cook i's food at an earlier
+// cell, on or after since (x.cooks is not date-sorted).
 func (x *index) earlierCook(i int, since time.Time) (time.Time, bool) {
 	ev := x.cooks[i]
+	var first time.Time
+	var found bool
 	for j, o := range x.cooks {
 		if j == i || o.foodID != ev.foodID || o.cell.Date.Before(since) || x.routine(o.cell) {
 			continue
 		}
-		if plate.Before(o.cell, ev.cell, x.s.SlotOrder) {
-			return o.cell.Date, true
+		if plate.Before(o.cell, ev.cell, x.s.SlotOrder) && (!found || o.cell.Date.Before(first)) {
+			first, found = o.cell.Date, true
 		}
 	}
-	return time.Time{}, false
+	return first, found
 }
 
 // VarietySince is the first day whose eating makes a recipe ineligible for

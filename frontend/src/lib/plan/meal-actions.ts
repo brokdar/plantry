@@ -104,13 +104,13 @@ export function lighterKcal(plan: Plan, date: string): number | undefined {
   return Math.round(target / Math.max(1, meals))
 }
 
-const DROP_RULES = ["H2", "H3", "H4", "H5", "H8", "H9"]
+const DROP_RULES = ["H2", "H3", "H4", "H5", "H8", "H9", "nutrition_missing"]
 
 /**
  * Why an alternatives list is empty, in plain words: the dishes that fit the
  * position and filters, and what each rule dropped, the most common first
  * ("would add a cooking over your limit (5), eaten recently (2)"). `dropped`
- * keys are `rule.code`; a rule without copy shows its name. With no
+ * keys are `rule.code`, or the bare `nutrition_missing` (a dish with incomplete nutrition data); a rule without copy shows its name. With no
  * candidate the filters are the reason.
  */
 export function emptyReasonText(

@@ -72,6 +72,13 @@ func (r *AIChangeRepo) CreateChange(ctx context.Context, c *agent.Change) error 
 		}
 		p.AvailabilityBeforeJson = sql.NullString{String: s, Valid: true}
 	}
+	if c.Light != nil {
+		s, err := marshalString(c.Light)
+		if err != nil {
+			return err
+		}
+		p.LightBeforeJson = sql.NullString{String: s, Valid: true}
+	}
 	row, err := r.queriesFor(ctx).CreateAIChange(ctx, p)
 	if err != nil {
 		return fmt.Errorf("create ai change: %w", err)
@@ -150,6 +157,12 @@ func mapAIChange(row sqlcgen.AiChange) (*agent.Change, error) {
 			return nil, fmt.Errorf("ai change %d availability: %w", row.ID, err)
 		}
 		c.Cells = cells
+	}
+	if row.LightBeforeJson.Valid {
+		c.Light = &agent.LightBefore{}
+		if err := json.Unmarshal([]byte(row.LightBeforeJson.String), c.Light); err != nil {
+			return nil, fmt.Errorf("ai change %d light: %w", row.ID, err)
+		}
 	}
 	var err error
 	if c.CreatedAt, err = time.Parse(timeLayout, row.CreatedAt); err != nil {

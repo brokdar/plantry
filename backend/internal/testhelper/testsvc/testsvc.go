@@ -66,7 +66,7 @@ func PlanAt(db *sql.DB, events plate.EventLog, now func() time.Time) (*plate.Ser
 // Changes returns the agent's change undo service over plates and avail
 // (Plan's), wired like main.go.
 func Changes(db *sql.DB, plates *plate.Service, avail *availability.Service) *agent.Changes {
-	return agent.NewChanges(sqlite.NewAIChangeRepo(db), plates, avail, sqlite.NewTxRunner(db), time.Now)
+	return agent.NewChanges(sqlite.NewAIChangeRepo(db), plates, avail, sqlite.NewPlanLightRepo(db), sqlite.NewTxRunner(db), time.Now)
 }
 
 // Plates returns the plate service of Plan.

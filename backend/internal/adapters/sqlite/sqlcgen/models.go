@@ -24,6 +24,7 @@ type AiChange struct {
 	AvailabilityBeforeJson sql.NullString
 	CreatedAt              string
 	UndoneAt               sql.NullString
+	LightBeforeJson        sql.NullString
 }
 
 type AiConversation struct {

@@ -13,6 +13,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
@@ -43,7 +44,10 @@ type Change struct {
 	LastEventID  *int64
 	// Cells are the cells the call's availability ops changed, each as it
 	// was before the call and as the call left it.
-	Cells     []CellBefore
+	Cells []CellBefore
+	// Light is the light requests of the dates the call saved, before and
+	// after; nil when it saved none.
+	Light     *LightBefore
 	CreatedAt time.Time
 	UndoneAt  *time.Time
 	// Unrecorded marks a change that was made but could not be saved: it has
@@ -56,7 +60,7 @@ type Change struct {
 
 // Undoable reports whether the change wrote anything undo can put back.
 func (c Change) Undoable() bool {
-	return !c.Unrecorded && (c.FirstEventID != nil || len(c.Cells) > 0)
+	return !c.Unrecorded && (c.FirstEventID != nil || len(c.Cells) > 0 || c.Light != nil)
 }
 
 // Payload is the change as the chat stream and the conversation carry it.
@@ -77,6 +81,15 @@ type CellBefore struct {
 	SlotID   int64         `json:"slot_id"`
 	Override *CellOverride `json:"override"`
 	After    *CellOverride `json:"after"`
+}
+
+// LightBefore is the light requests of Dates as a call found them (Before)
+// and left them (After; undo compares it with the current ones to see a
+// newer edit).
+type LightBefore struct {
+	Dates  []string               `json:"dates"`
+	Before []planning.LightIntent `json:"before"`
+	After  []planning.LightIntent `json:"after"`
 }
 
 // CellOverride is a stored availability override.
@@ -113,6 +126,7 @@ type changeNote struct {
 	params  map[string]any
 	runIDs  []int64
 	cells   []CellBefore
+	light   *LightBefore
 	// dates are the cells' dates the call touched besides its events' (a
 	// move's source and target).
 	dates []string
@@ -165,6 +179,31 @@ func noteCell(ctx context.Context, date time.Time, slotID int64, before, after *
 		}
 	}
 	n.cells = append(n.cells, CellBefore{Date: d, SlotID: slotID, Override: cellOverride(before), After: cellOverride(after)})
+}
+
+// noteLight records the light requests of dates before and after a call
+// saved them; nothing when they are the same.
+func noteLight(ctx context.Context, dates []string, before, after []planning.LightIntent) {
+	if sameLight(before, after) {
+		return
+	}
+	noteFrom(ctx).light = &LightBefore{Dates: dates, Before: before, After: after}
+}
+
+// sameLight reports whether two sets of intents are equal, order aside.
+func sameLight(a, b []planning.LightIntent) bool {
+	return len(a) == len(b) && !slices.ContainsFunc(a, func(l planning.LightIntent) bool { return !slices.Contains(b, l) })
+}
+
+// lightOn keeps the intents dated in dates.
+func lightOn(in []planning.LightIntent, dates []string) []planning.LightIntent {
+	var out []planning.LightIntent
+	for _, l := range in {
+		if slices.Contains(dates, l.Date) {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 func cellOverride(o *availability.Override) *CellOverride {
@@ -228,7 +267,7 @@ func (s *ToolSet) recordChange(ctx context.Context, runID int64, seq int, tool s
 	}
 	c := &Change{
 		RunID: runID, StepSeq: seq, Tool: tool, TextKey: n.textKey, Params: n.params,
-		RunIDs: runIDs, Cells: n.cells,
+		RunIDs: runIDs, Cells: n.cells, Light: n.light,
 		Dates: []string{}, PlateIDs: []int64{}, SessionIDs: []int64{},
 	}
 	if c.Params == nil {
@@ -236,6 +275,9 @@ func (s *ToolSet) recordChange(ctx context.Context, runID int64, seq int, tool s
 	}
 	for _, cb := range n.cells {
 		c.Dates = append(c.Dates, cb.Date)
+	}
+	if n.light != nil {
+		c.Dates = append(c.Dates, n.light.Dates...)
 	}
 	for _, d := range n.dates {
 		if d != "" {
@@ -273,13 +315,14 @@ type Changes struct {
 	store  ChangeStore
 	plates *plate.Service
 	cells  CellRestorer
+	light  planning.LightStore
 	tx     domain.Transactor
 	now    func() time.Time
 }
 
 // NewChanges wires the undo service.
-func NewChanges(store ChangeStore, plates *plate.Service, cells CellRestorer, tx domain.Transactor, now func() time.Time) *Changes {
-	return &Changes{store: store, plates: plates, cells: cells, tx: tx, now: now}
+func NewChanges(store ChangeStore, plates *plate.Service, cells CellRestorer, light planning.LightStore, tx domain.Transactor, now func() time.Time) *Changes {
+	return &Changes{store: store, plates: plates, cells: cells, light: light, tx: tx, now: now}
 }
 
 // List returns the changes of a conversation, ascending by id.
@@ -395,6 +438,11 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 				return err
 			}
 		}
+		if ch.Light != nil {
+			if err := c.checkLight(ctx, id, ch.Light); err != nil {
+				return err
+			}
+		}
 		if ch.FirstEventID != nil {
 			events, err := c.store.RunEvents(ctx, *ch.FirstEventID-1, *ch.LastEventID, ch.RunIDs)
 			if err != nil {
@@ -413,6 +461,15 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 		}
 		for _, cb := range ch.Cells {
 			if err := c.restoreCell(ctx, cb); err != nil {
+				return err
+			}
+		}
+		if ch.Light != nil {
+			// Prune from the real today: the change's earliest date as
+			// "today" would delete the untouched rows before it.
+			y, m, d := c.now().Date()
+			today := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+			if err := c.light.Replace(ctx, today, ch.Light.Dates, ch.Light.Before); err != nil {
 				return err
 			}
 		}
@@ -450,6 +507,33 @@ func (c *Changes) checkCell(ctx context.Context, id int64, cb CellBefore) error 
 	}
 	if !sameOverride(cellOverride(cur), cb.After) {
 		return fmt.Errorf("%w: change %d: the cell %s slot %d was edited since", domain.ErrAIChangeStale, id, cb.Date, cb.SlotID)
+	}
+	return nil
+}
+
+// currentLight is the stored light requests of lb's dates.
+func (c *Changes) currentLight(ctx context.Context, lb *LightBefore) ([]planning.LightIntent, error) {
+	first, err := time.Parse(time.DateOnly, slices.Min(lb.Dates))
+	if err != nil {
+		return nil, fmt.Errorf("change light date: %w", err)
+	}
+	last, err := time.Parse(time.DateOnly, slices.Max(lb.Dates))
+	if err != nil {
+		return nil, fmt.Errorf("change light date: %w", err)
+	}
+	stored, err := c.light.List(ctx, first, last)
+	return lightOn(stored, lb.Dates), err
+}
+
+// checkLight fails with domain.ErrAIChangeStale when the dates' light
+// requests are not the ones the change left (a newer edit).
+func (c *Changes) checkLight(ctx context.Context, id int64, lb *LightBefore) error {
+	cur, err := c.currentLight(ctx, lb)
+	if err != nil {
+		return err
+	}
+	if !sameLight(cur, lb.After) {
+		return fmt.Errorf("%w: change %d: the light requests of %s were edited since", domain.ErrAIChangeStale, id, strings.Join(lb.Dates, ", "))
 	}
 	return nil
 }

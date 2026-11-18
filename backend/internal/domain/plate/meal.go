@@ -616,7 +616,12 @@ func (s *Service) replace(ctx context.Context, t *tracker, p *Plate, pc *PlateCo
 			return err
 		}
 	}
-	linked, err := s.attach(ctx, t, pc, f, p.Cell(), p.Eaters, e, true, fresh)
+	// Eating from a batch past its keeping time is the keep-time error, not
+	// a silent use of the freezer (a replace creates a link that was not
+	// frozen before).
+	ea := e
+	ea.set.FreezingEnabled = false
+	linked, err := s.attach(ctx, t, pc, f, p.Cell(), p.Eaters, ea, true, fresh)
 	if err != nil {
 		return err
 	}
@@ -705,10 +710,16 @@ func (s *Service) MoveCook(ctx context.Context, sessionID int64, to CellKey) (Me
 		keep := e.set.KeepDays(f.KeepDays)
 		var blocking []string
 		for _, l := range OrderLinks(cand, links, keep, e.order) {
+			// A move never freezes a meal: only one frozen before may still
+			// rely on the freezer.
+			set := e.set
+			if Classify(l.Cell, *sess, keep) != KindFrozen {
+				set.FreezingEnabled = false
+			}
 			where := fmt.Sprintf("plate %d (%s slot %d)", l.PlateID, l.Cell.Date.Format(dateLayout), l.Cell.SlotID)
 			if Before(l.Cell, to, e.order) {
 				blocking = append(blocking, where+" comes before the cook")
-			} else if CheckLink(l.Cell, cand.FoodID, cand, keep, e.set, e.order) != nil {
+			} else if CheckLink(l.Cell, cand.FoodID, cand, keep, set, e.order) != nil {
 				blocking = append(blocking, where+" is past the keeping time")
 			}
 		}
@@ -768,6 +779,8 @@ func (s *Service) CopyMeal(ctx context.Context, plateID int64, to []CellKey, as 
 			return err
 		}
 		today := dateOnly(s.now())
+		// A leftover copy is a new link: it never relies on the freezer.
+		e.set.FreezingEnabled = false
 		j := newJournal()
 		t := newTracker(j)
 		ids := make([]int64, 0, len(to))

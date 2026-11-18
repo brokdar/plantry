@@ -14,6 +14,7 @@ import {
   alsoChangedLines,
   cellLabel,
   cookCells,
+  emptyReasonText,
   lighterKcal,
   targetCells,
 } from "./meal-actions"
@@ -174,5 +175,23 @@ describe("words", () => {
       "Thu slot3 will cook Chili fresh",
       "The Chili batch changes size",
     ])
+  })
+})
+
+describe("emptyReasonText", () => {
+  it("has copy for nutrition_missing in en and de", async () => {
+    const reason = {
+      candidates: 3,
+      dropped: { "H8.variety_repeat": 1, nutrition_missing: 2 },
+    }
+    await i18n.changeLanguage("en")
+    expect(emptyReasonText(reason, i18n.t.bind(i18n))).toBe(
+      "Nothing fits. Of 3 matching dishes: would have no nutrition data (2), eaten recently (1)."
+    )
+    await i18n.changeLanguage("de")
+    expect(emptyReasonText(reason, i18n.t.bind(i18n))).toContain(
+      "hätte keine Nährwertdaten (2)"
+    )
+    await i18n.changeLanguage("en")
   })
 })

@@ -70,5 +70,20 @@ func saveLight(ctx context.Context, svc Services, light []planning.LightIntent) 
 	if err != nil {
 		return err
 	}
-	return svc.Light.Replace(ctx, todayFrom(ctx), dates, planning.MergeLight(stored, light))
+	merged := planning.MergeLight(stored, light)
+	today := todayFrom(ctx)
+	if err := svc.Light.Replace(ctx, today, dates, merged); err != nil {
+		return err
+	}
+	// Replace keeps no row before today: note only the dates it stored.
+	var kept []string
+	for _, d := range dates {
+		if d >= today.Format(time.DateOnly) {
+			kept = append(kept, d)
+		}
+	}
+	if len(kept) > 0 {
+		noteLight(ctx, kept, lightOn(stored, kept), lightOn(merged, kept))
+	}
+	return nil
 }

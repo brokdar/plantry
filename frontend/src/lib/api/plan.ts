@@ -103,6 +103,7 @@ export const KNOWN_ISSUE_CODES = [
   "diet_unknown",
   "variety_repeat",
   "variety_relaxed",
+  "variety_repeat_week",
   "kcal_below_floor",
   "leftover_before_cook",
   "past_keep_days",
