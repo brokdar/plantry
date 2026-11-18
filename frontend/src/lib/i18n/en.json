@@ -1077,6 +1077,7 @@
       "rate_limited": "The AI provider is busy or its limit is reached, so nothing was changed. Wait a minute and try again.",
       "key_rejected": "The AI provider rejected the API key, so nothing was changed. Check the key in Settings.",
       "timeout": "The assistant took too long to answer, so nothing more was changed. Please try again.",
+      "cut_off": "The answer was cut off at the length limit. Ask for the rest or shorten the request.",
       "refused": "The assistant declined this request, so nothing was changed. Rephrase it or plan without the assistant.",
       "invalid_date": "A chat date is not a valid YYYY-MM-DD date."
     },

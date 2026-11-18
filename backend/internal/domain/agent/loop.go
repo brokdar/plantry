@@ -18,6 +18,10 @@ import (
 // iteration budget without the model returning an end_turn.
 var ErrIterationsExceeded = errors.New("agent iteration budget exceeded")
 
+// ErrCutOff is raised when the final reply, with no tool call, was cut off at
+// the output limit: its text is stored, but the user must know it is unfinished.
+var ErrCutOff = errors.New("agent reply cut off at the output limit")
+
 // MaxIterations caps the model turns of the tool-calling loop. The cap
 // protects against runaway tool-tool cycles and unbounded token cost.
 const MaxIterations = 20
@@ -200,6 +204,12 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		if res.resp.StopReason == llm.StopReasonPauseTurn && len(toolUses) == 0 {
 			continuation = true
 			continue
+		}
+
+		// A final reply cut off at the output limit is unfinished: keep its text,
+		// and tell the user instead of showing it as a complete answer.
+		if res.resp.StopReason == llm.StopReasonMaxTokens && len(toolUses) == 0 {
+			return fail("error.ai.cut_off", ErrCutOff)
 		}
 
 		// No tool calls → the turn is the final response.
@@ -433,6 +443,8 @@ func PlainMessage(key string) string {
 		return "The assistant took too long to answer. Please try again."
 	case "error.ai.refused":
 		return "The assistant declined this request, so nothing was changed. Rephrase it or plan without the assistant."
+	case "error.ai.cut_off":
+		return "The answer was cut off at the length limit. Ask for the rest or shorten the request."
 	case "error.ai.provider_error":
 		return "The assistant could not be reached. Try again."
 	case "error.ai.iterations_exceeded":
