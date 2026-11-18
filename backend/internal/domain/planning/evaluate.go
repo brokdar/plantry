@@ -190,8 +190,16 @@ type ComponentEval struct {
 // source of the day accounts (index.dayAccounts, which DayKcals shares), the
 // H5 meat days (index.meatDays, which h5 shares), the cook occasions and the
 // foods' macros; pass the state after Merge to evaluate a proposal.
-func Evaluate(s State, t Target) Evaluation {
+func Evaluate(s State, t Target) Evaluation { return evaluate(s, t, false) }
+
+// EvaluateWeek is Evaluate with verified swap options on the week's meat and
+// fish issues (S7); the planner's evaluate_plan, its repair feedback and its
+// guard read it. It costs a re-evaluation per candidate swap.
+func EvaluateWeek(s State, t Target) Evaluation { return evaluate(s, t, true) }
+
+func evaluate(s State, t Target, weekOpts bool) Evaluation {
 	x := newIndex(s, t)
+	x.weekOpts = weekOpts
 	ev := Evaluation{
 		Days: []DayEval{}, Plates: []PlateEval{}, MeatDaysMax: s.Profile.MeatDaysPerWeekMax,
 		Issues: Check(s, t), Light: s.Light,
@@ -276,6 +284,9 @@ func Evaluate(s State, t Target) Evaluation {
 	ev.Week = x.week(ev)
 	ev.Issues = append(ev.Issues, x.softIssues(ev, t)...)
 	x.floorOptions(&ev, t)
+	if weekOpts {
+		x.weekOptionsFor(&ev, t)
+	}
 	ev.Totals = totalsOf(ev.Issues)
 	return ev
 }

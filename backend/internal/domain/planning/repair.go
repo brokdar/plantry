@@ -19,14 +19,15 @@ const maxFeedbackLines = 10
 // found as rules in plain words with the numbers, the cells and keys
 // involved, and a concrete fix. It reads the merged state the checker saw.
 type repairer struct {
-	in ChooseInput
-	s  State
-	x  *index
+	in   ChooseInput
+	prop Proposal
+	s    State
+	x    *index
 }
 
 func newRepairer(in ChooseInput, prop Proposal) *repairer {
 	s := Merge(in.State, in.Target, prop)
-	return &repairer{in: in, s: s, x: newIndex(s, in.Target)}
+	return &repairer{in: in, prop: prop, s: s, x: newIndex(s, in.Target)}
 }
 
 // advisories are the findings that are no hard rule: a lunch or dinner
@@ -37,7 +38,32 @@ func (r *repairer) advisories() []string {
 	if r.in.Side != nil {
 		return r.sideRoleChanged()
 	}
-	return r.missingMains()
+	return append(r.missingMains(), r.weekAdvice()...)
+}
+
+// weekAdvice are the week's meat and fish advisories (weekAdvisories), kept
+// only where the last guard would act on the plan: a swap that holds on the
+// whole plan, not just on its own dry run.
+func (r *repairer) weekAdvice() []string {
+	if distinctDays(r.in.Target) < minDGEDays {
+		return nil // a day or a plate regenerate does not own the week
+	}
+	meat := meatAllowed(r.in.State)
+	if !meat && !fishAllowed(r.in.State) {
+		return nil
+	}
+	adv := weekAdvisories(EvaluateWeek(r.s, r.in.Target), r.in.Instruction)
+	if len(adv) == 0 {
+		return nil
+	}
+	_, notes := guardWeek(r.in.State, r.in.Target, r.prop, idSet(r.in.Exclude), r.in.Instruction)
+	return slices.DeleteFunc(adv, func(a string) bool {
+		prefix := "Weekly fish"
+		if strings.HasPrefix(a, "The week holds ") && !strings.HasPrefix(a, "The week holds no fish") {
+			prefix = "Weekly meat"
+		}
+		return !slices.ContainsFunc(notes, func(n string) bool { return strings.HasPrefix(n, prefix) })
+	})
 }
 
 // sideRoleChanged reports a side swap whose new side has another role than

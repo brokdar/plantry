@@ -78,6 +78,8 @@ type index struct {
 	// merged reports whether the state holds proposed rows: a run's result
 	// rather than persisted data.
 	merged bool
+	// weekOpts asks the S7 week issues for their swap options (EvaluateWeek).
+	weekOpts bool
 	// occasions holds each day's cooking occasions (H2): the distinct cook
 	// cells of sessions and of fresh components without a session, routine
 	// cells excluded.
