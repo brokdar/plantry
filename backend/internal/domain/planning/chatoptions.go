@@ -60,6 +60,10 @@ func IssueOptions(s State, t Target, ev Evaluation, issues []Issue, keep func(Is
 			out[i].Options = x.lightOptions(ev, t, is)
 		} else {
 			out[i].Options = x.cookOptions(ev, t, is)
+			if len(out[i].Options) == 0 {
+				out[i].NoFixFound = true
+				out[i].NoFixReason = "no verified way to move a cook or swap a dish brings this day within the limit; it needs a change of plan (fewer cooked dishes that day), ask the user"
+			}
 		}
 	}
 	return out
@@ -347,7 +351,7 @@ func (x *index) cookOptions(ev Evaluation, t Target, is Issue) []Option {
 		return true
 	}
 	for _, ss := range x.s.Sessions {
-		if ss.ID <= 0 || ss.Confirmed || ss.Proposed() || dayOf(ss.CookDate) != dayOf(day) || len(opts) >= maxCookMoves {
+		if ss.ID <= 0 || ss.Confirmed || ss.Proposed() || dayOf(ss.CookDate) != dayOf(day) || x.routine(ss.CookCell()) || len(opts) >= maxCookMoves {
 			continue
 		}
 		cells := slices.Clone(x.s.Cells)
@@ -413,11 +417,13 @@ func (x *index) cookOptions(ev Evaluation, t Target, is Issue) []Option {
 
 // groupedCookMove is the option that moves every batch cooked on day to one
 // of the day's cook cells, for a day where moving one batch alone leaves too
-// many occasions: one option whose ops are a move_cook per batch.
+// many occasions (the day's sessions often cook one dish and its side on the
+// same cell): one option whose ops are a move_cook per batch. A batch cooked
+// in a routine cell (the breakfast routine) is no occasion and stays.
 func (x *index) groupedCookMove(t Target, day time.Time, resolves func(State) bool) []Option {
 	var group []Session
 	for _, ss := range x.s.Sessions {
-		if ss.ID > 0 && !ss.Confirmed && !ss.Proposed() && dayOf(ss.CookDate) == dayOf(day) {
+		if ss.ID > 0 && !ss.Confirmed && !ss.Proposed() && dayOf(ss.CookDate) == dayOf(day) && !x.routine(ss.CookCell()) {
 			group = append(group, ss)
 		}
 	}

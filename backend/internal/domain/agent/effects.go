@@ -58,7 +58,9 @@ type effectIssue struct {
 	Session  *int64         `json:"session_id,omitempty"`
 	Params   map[string]any `json:"params,omitempty"`
 	// Options are the computed fixes of a soft issue (planning.Option).
-	Options []planning.Option `json:"options,omitempty"`
+	Options     []planning.Option `json:"options,omitempty"`
+	NoFixFound  bool              `json:"no_fix_found,omitempty"`
+	NoFixReason string            `json:"no_fix_reason,omitempty"`
 }
 
 // effectWorsened is an issue open before and after a write whose numbers got
@@ -324,6 +326,7 @@ func toEffectIssue(is planning.Issue) effectIssue {
 	return effectIssue{
 		Rule: is.Rule, Code: is.Code, Severity: string(is.Severity), Date: is.Date,
 		SlotID: is.SlotID, PlateID: is.PlateID, Session: is.SessionID, Params: is.Params, Options: is.Options,
+		NoFixFound: is.NoFixFound, NoFixReason: is.NoFixReason,
 	}
 }
 

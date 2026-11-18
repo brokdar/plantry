@@ -81,7 +81,7 @@ Ops (fields):
 - move_cook: session_id, cook_at {date, slot_id}: the batch cooks there instead (on or before every meal eating it, within keep days).
 - copy: plate_id, to [{date, slot_id}], as leftover (eat from the same batches) | fresh (cook again on each cell).
 Only draft plates in the future are changeable; a confirmed one needs the user to unlock it.
-Returns compact JSON (numbers rounded: kcal whole, other figures one decimal; a field that is 0, false or empty is left out, so absent means 0 / false / none; complete shows only when false) {dry_run, dry_run_note? (dry runs only), applied:[{op, plate_id?, plate_component_id?, session_id?, ..., also_changed?:[{what cook_moved|became_cooking_meal|cooks_fresh|batch_resized, session_id, plate_id, date, slot_id, from_date, from_slot_id, why?}]}] (move: date, slot_id, from_date, from_slot_id, occupant?, occupant_plate_id?; away: cells, removed_plates; move_cook: cook_date, cook_slot_id; copy: copies [{plate_id, date, slot_id}]; also_changed lists what else the op changed, tell the user in plain words), after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),intent? (light|hearty) with max_kcal? (light cap) or min_kcal? (hearty minimum),component_details (only these touched plates):[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,band_low,band_high (the day band, kcal),floor_kcal (H9 floor),room_kcal (kcal left to the band top),protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,light_meals? (e.g. "light dinner"),complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only),meat_g? (per week, extrapolated to 7 days),fish_meals?,legume_meals?,produce_g_per_day? (DGE food groups per eater, display only)} (the weekly kcal ledger of the whole window: complete days only, per eater), issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],worsened:[{rule,code,severity,date?,slot_id?,plate_id?,before:{params},after:{params}}] (open before and after, the numbers got worse, e.g. meat 321 to 471 g),total_open,new_more?,resolved_more?,worsened_more?}, change_id? (not on dry runs)}}. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). An S3 option raises the day's protein; an S2 option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (H1-H9; H9 is a day below its kcal safety floor) are hard rules: fix them. Soft issues (S2 day kcal outside the day band, S3 protein under 90% of the day target (g/kg) or the share under target or the weekly average under target, S4 weekly average outside the week band, S5 weekly carb or fat share outside its range, S6 a light meal over its cap (max_kcal), S6b a hearty meal under its minimum (min_kcal), S7 a DGE food rule missed (week_meat_above_dge over 300 g, week_fish_below_dge, week_legumes_below_dge), S8 a dish as main of too many meals) never block saving. Options (computed, verified, each with a ready op; ops when it needs several): S2 below band and S3 add or raise food (action add|raise); S6/S6b portions (a smaller or larger portion, 0.75-1.5), remove (an add-on, S6 only) or swap (a lighter or heartier main or side); H2 move_cook (cook the batch on another cell) or swap (a leftover or no-cook food). An S6/S6b option may leave the day under its band (a light or hearty request ranks above the day and week bands) but never under the H9 floor. Pass light (the user's light requests, meal unless they explicitly ask to eat less for the day) to judge the result under them; stored light requests apply without passing them again. A call that is not a dry run and succeeds saves the light you pass (a date replaces that date's request, scope none clears it); a dry run saves nothing: days then show light and normal_target_kcal, week.target_kcal is the target after them and week.normal_target_kcal the normal one. Your request is not done while a hard issue (violation) it caused is open, unless you tell the user why; a soft issue you report and offer the fix for, without applying it.`
+Returns compact JSON (numbers rounded: kcal whole, other figures one decimal; a field that is 0, false or empty is left out, so absent means 0 / false / none; complete shows only when false) {dry_run, dry_run_note? (dry runs only), applied:[{op, plate_id?, plate_component_id?, session_id?, ..., also_changed?:[{what cook_moved|became_cooking_meal|cooks_fresh|batch_resized, session_id, plate_id, date, slot_id, from_date, from_slot_id, why?}]}] (move: date, slot_id, from_date, from_slot_id, occupant?, occupant_plate_id?; away: cells, removed_plates; move_cook: cook_date, cook_slot_id; copy: copies [{plate_id, date, slot_id}]; also_changed lists what else the op changed, tell the user in plain words), after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),intent? (light|hearty) with max_kcal? (light cap) or min_kcal? (hearty minimum),component_details (only these touched plates):[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,band_low,band_high (the day band, kcal),floor_kcal (H9 floor),room_kcal (kcal left to the band top),protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,light_meals? (e.g. "light dinner"),complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only),meat_g? (per week, extrapolated to 7 days),fish_meals?,legume_meals?,produce_g_per_day? (DGE food groups per eater, display only)} (the weekly kcal ledger of the whole window: complete days only, per eater), issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],worsened:[{rule,code,severity,date?,slot_id?,plate_id?,before:{params},after:{params}}] (open before and after, the numbers got worse, e.g. meat 321 to 471 g),total_open,new_more?,resolved_more?,worsened_more?}, change_id? (not on dry runs)}}. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). An S3 option raises the day's protein; an S2 option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (H1-H9; H9 is a day below its kcal safety floor) are hard rules: fix them. Soft issues (S2 day kcal outside the day band, S3 protein under 90% of the day target (g/kg) or the share under target or the weekly average under target, S4 weekly average outside the week band, S5 weekly carb or fat share outside its range, S6 a light meal over its cap (max_kcal), S6b a hearty meal under its minimum (min_kcal), S7 a DGE food rule missed (week_meat_above_dge over 300 g, week_fish_below_dge, week_legumes_below_dge), S8 a dish as main of too many meals) never block saving. Options (computed, verified, each with a ready op; ops when it needs several): S2 below band and S3 add or raise food (action add|raise); S6/S6b portions (a smaller or larger portion, 0.75-1.5), remove (an add-on, S6 only) or swap (a lighter or heartier main or side); H2 move_cook (cook the batch on another cell) or swap (a leftover or no-cook food). An S6/S6b option may leave the day under its band (a light or hearty request ranks above the day and week bands) but never under the H9 floor. Pass light (the user's light requests, meal unless they explicitly ask to eat less for the day) to judge the result under them; stored light requests apply without passing them again. A call that is not a dry run and succeeds saves the light you pass (a date replaces that date's request, scope none clears it); a dry run saves nothing: days then show light and normal_target_kcal, week.target_kcal is the target after them and week.normal_target_kcal the normal one. Your request is not done while a hard issue (violation) it caused is open, unless you tell the user why; a soft issue you report and offer the fix for, without applying it. An away call that would leave a day with a second cooking occasion (H2) moves cooks itself: each such move is an applied entry with auto_fix (op move_cook, cook_date, cook_slot_id, from_date, from_slot_id); tell the user which dish now cooks where. An H2 issue with no_fix_found true has no verified fix (no_fix_reason says why): tell the user, do not guess one.`
 
 // changeOp is one op of apply_changes.
 type changeOp struct {
@@ -217,7 +217,11 @@ func toolApplyChanges(svc Services) Tool {
 					}
 					applied = append(applied, res)
 				}
-				var err error
+				fixed, err := settleCooks(ctx, svc, ws, in.Ops, &b, before)
+				if err != nil {
+					return err
+				}
+				applied = append(applied, fixed...)
 				after, afterEv, err = batchAfter(ctx, svc, ws, b, before)
 				return err
 			}
@@ -249,6 +253,62 @@ func toolApplyChanges(svc Services) Tool {
 			return mustJSON(result), ToolEffectNone, nil
 		},
 	}
+}
+
+// maxSettleRounds bounds the cook moves settleCooks makes after one call.
+const maxSettleRounds = 3
+
+// settleCooks keeps an away from creating a second cooking occasion: marking
+// cells away hands a cook to the first meal that still eats it, which can push
+// that day over the H2 limit. For each H2 issue the ops made new, it applies
+// the first verified move_cook option (the least disruptive: one cook, or all
+// of the day's cooks into one cell) and reports each move as an applied
+// entry with auto_fix, so the model tells the user. An issue without a
+// verified option stays, marked no_fix_found.
+func settleCooks(ctx context.Context, svc Services, ws []window.Window, ops []changeOp, b *batch, before planning.Evaluation) ([]map[string]any, error) {
+	if !slices.ContainsFunc(ops, func(op changeOp) bool { return op.Op == "away" }) {
+		return nil, nil
+	}
+	was := issueMap(before.Issues)
+	isNew := func(is planning.Issue) bool {
+		_, ok := was[issueKey(is)]
+		return !ok && is.Rule == "H2" && is.Code == planning.CodeTooManyCookOccasions
+	}
+	var out []map[string]any
+	for range maxSettleRounds {
+		ev, err := evalWindows(ctx, svc, ws, true, isNew)
+		if err != nil {
+			return nil, fmt.Errorf("read the plan after the away: %w", err)
+		}
+		i := slices.IndexFunc(ev.Issues, func(is planning.Issue) bool {
+			return isNew(is) && len(is.Options) > 0 && is.Options[0].Op.Op == "move_cook"
+		})
+		if i < 0 {
+			return out, nil
+		}
+		is, opt := ev.Issues[i], ev.Issues[i].Options[0]
+		opOps := opt.Ops
+		if len(opOps) == 0 {
+			opOps = []planning.OptionOp{opt.Op}
+		}
+		for _, o := range opOps {
+			raw, err := json.Marshal(o)
+			if err != nil {
+				return nil, err
+			}
+			var op changeOp
+			if err := json.Unmarshal(raw, &op); err != nil {
+				return nil, err
+			}
+			res, err := applyOp(ctx, svc, op, b)
+			if err != nil {
+				return nil, fmt.Errorf("move the cook after the away (%s): %w", opt.Name, err)
+			}
+			res["auto_fix"] = fmt.Sprintf("moved so that %s does not get a second cooking occasion (H2) from the away", is.Date)
+			out = append(out, res)
+		}
+	}
+	return out, nil
 }
 
 // dryRunNote closes a dry run's result: its new rows never existed.

@@ -295,6 +295,25 @@ func TestIssueOptions_H2SameDay(t *testing.T) {
 				[]planning.Plate{freshPlate, persisted(10, sun, lunch, false, curry, 1), persisted(11, sun, dinner, false, soup, 2)}),
 			ops: 2, cell: planning.OptionCell{Date: sun, SlotID: breakfast},
 		},
+		{
+			// The real plan after an away: a routine breakfast cooks oats, the
+			// lunch cooks the curry handed to it, the dinner cooks a dish and
+			// its side as two sessions. The oats are no occasion and stay; the
+			// dinner's two sessions move to the lunch cell together.
+			name: "routine breakfast session stays, a dish and its side move together",
+			s: func() planning.State {
+				s := h2DayState(
+					[]planning.Session{
+						persistedSession(3, oats, sun, breakfast, 1, false), persistedSession(1, curry, sun, lunch, 1, false),
+						persistedSession(2, soup, sun, dinner, 1, false), persistedSession(4, rice, sun, dinner, 1, false),
+					},
+					[]planning.Plate{persisted(13, sun, breakfast, false, oats, 3), persisted(10, sun, lunch, false, curry, 1), persisted(11, sun, dinner, false, soup, 2)})
+				s.Plates[2].Components = append(s.Plates[2].Components, planning.Component{ID: 120, FoodID: rice, Portions: f64(1), SessionID: 4})
+				setMode(&s, cell(sun, breakfast), availability.ModeRoutine)
+				return s
+			}(),
+			ops: 2, cell: planning.OptionCell{Date: sun, SlotID: lunch},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tgt := windowTarget(tc.s)

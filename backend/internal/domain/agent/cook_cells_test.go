@@ -188,3 +188,55 @@ func TestOptions_PassTheirOwnDryRun(t *testing.T) {
 		})
 	}
 }
+
+// An away that takes a cook's cell away hands the cook to the first meal that
+// eats it; when that day already cooks, the call moves that day's other cooks
+// into the same cell instead of leaving a second cooking occasion (the real
+// plan: away on Sunday, the curry cooked Sunday feeds Monday lunch, Monday
+// dinner cooks the salmon).
+func TestApplyChanges_AwayRehomesCooks(t *testing.T) {
+	e := newPlanToolEnv(t)
+	_, p := e.laterMealSession()
+	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "1"))
+	next := p.Date.AddDate(0, 0, 1).Format(time.DateOnly)
+	lunch, dinner := e.slotID("lunch"), e.slotID("dinner")
+	// The next day cooks at its dinner only (its breakfast plate is gone).
+	if q := e.plateAtCell(next, e.slotID("breakfast")); q != nil {
+		_, err := e.plates.Delete(context.Background(), q.ID)
+		require.NoError(t, err)
+	}
+	require.NotNil(t, e.plateAtCell(next, dinner))
+	before := e.planDump()
+
+	away := fmt.Sprintf(`{"op":"away","cells":[%s,%s]}`, cellJSON(p.DateString(), lunch), cellJSON(p.DateString(), dinner))
+	res := e.mustExec("apply_changes", `{"dry_run":true,"ops":[`+away+`]}`)
+	issues := res["after"].(map[string]any)["issues"].(map[string]any)
+	var autos []map[string]any
+	for _, a := range res["applied"].([]any) {
+		if m := a.(map[string]any); m["auto_fix"] != nil {
+			autos = append(autos, m)
+		}
+	}
+	require.NotEmpty(t, autos, "the call moves the other cooks of the day: %v %v", res["applied"], issues)
+	for _, m := range autos {
+		assert.Equal(t, "move_cook", m["op"])
+		assert.NotNil(t, m["cook_date"], "the result says where the cook went")
+	}
+	for _, is := range issues["new"].([]any) {
+		assert.NotEqual(t, "violation", is.(map[string]any)["severity"], "no new hard issue: %v", is)
+	}
+	assert.Equal(t, before, e.planDump(), "a dry run saves nothing")
+
+	// For real: the cooks are where the result says.
+	e.mustExec("apply_changes", `{"ops":[`+away+`]}`)
+	for _, m := range autos {
+		v := e.session(int64(m["session_id"].(float64)))
+		assert.Equal(t, m["cook_date"], v.CookDate.Format(time.DateOnly))
+		assert.EqualValues(t, m["cook_slot_id"], v.CookSlotID)
+	}
+	fresh := e.mustExec("get_plan", `{}`)
+	for _, is := range fresh["issues"].([]any) {
+		m := is.(map[string]any)
+		assert.NotEqual(t, "too_many_cook_occasions", m["code"], "no second cooking occasion is left: %v", m)
+	}
+}

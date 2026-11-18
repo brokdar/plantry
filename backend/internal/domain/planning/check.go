@@ -82,6 +82,10 @@ type Issue struct {
 	// Options are the ways to close a soft rule's gap, computed by
 	// Evaluate (S2/S3 only).
 	Options []Option `json:"options,omitempty"`
+	// NoFixFound is set on an H2 cook issue that has no verified option, with
+	// NoFixReason: the model must not guess a fix.
+	NoFixFound  bool   `json:"no_fix_found,omitempty"`
+	NoFixReason string `json:"no_fix_reason,omitempty"`
 }
 
 // Check applies the hard rules H1–H9 (spec §6.4, D21) to the target of s and
