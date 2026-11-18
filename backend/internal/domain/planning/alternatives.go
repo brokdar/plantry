@@ -70,6 +70,10 @@ type AltRequest struct {
 	// is evaluated as a light (hearty) meal and only candidates whose plate
 	// meets its cap (minimum) are kept. Empty: no such filter.
 	Light string
+	// TolerateFloor keeps a candidate that takes its day under the energy
+	// floor (the compound ways of Ways make that up on another meal; their
+	// own check drops the ones that do not).
+	TolerateFloor bool
 }
 
 // AltConstraints narrow the candidates. Zero values do not filter.
@@ -126,6 +130,8 @@ type Alternative struct {
 	rank altRank
 	// plateKcal is PlateKcal unrounded, for the light filter.
 	plateKcal float64
+	// next is the state with the change applied (Ways builds on it).
+	next State
 }
 
 // altRank is the ranking key, compared field by field (lower first).
@@ -236,7 +242,7 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 	blocked := map[string]Issue{} // per drop key the blocking issue that came closest
 	lightBest := math.NaN()       // the plate kcal closest to the light cap or minimum
 	for _, c := range cands {
-		a, why, by := s.tryAlt(t, pi, old, drop, c, base, hard, soft, len(baseCooks), cookedInWindow)
+		a, why, by := s.tryAlt(t, pi, old, drop, c, base, hard, soft, len(baseCooks), cookedInWindow, req.TolerateFloor)
 		if why != "" {
 			dropped[why]++
 			if by != nil && closer(why, *by, blocked[why]) {
@@ -743,7 +749,7 @@ func (c AltConstraints) matches(f FoodFacts, words [][]diet.Alt) bool {
 
 // tryAlt applies c to a copy of s, re-evaluates it and builds the result;
 // false when the change adds a hard issue.
-func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluation, hard, soft map[string]bool, baseCooks int, cookedInWindow map[int64]bool) (Alternative, string, *Issue) {
+func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluation, hard, soft map[string]bool, baseCooks int, cookedInWindow map[int64]bool, tolerateFloor bool) (Alternative, string, *Issue) {
 	p := s.Plates[pi]
 	next := s
 	next.Plates = slices.Clone(s.Plates)
@@ -784,7 +790,7 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 	}
 	var newIssues []Issue
 	for _, is := range ev.Issues {
-		if is.Severity == SeverityViolation && !hard[issueID(is)] {
+		if is.Severity == SeverityViolation && !hard[issueID(is)] && (!tolerateFloor || is.Code != CodeKcalBelowFloor) {
 			return Alternative{}, is.Rule + "." + is.Code, &is
 		}
 		if is.Severity == SeveritySoft && !soft[softKey(is)] {
@@ -827,6 +833,7 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 		a.WeekPct = math.Round(ev.Week.Pct*10) / 10
 	}
 	a.Ops = s.altOps(p, old, drop, c, a.CookAt)
+	a.next = next
 	y := newIndex(next, t)
 	a.rank = altRank{
 		newIssues: len(newIssues),

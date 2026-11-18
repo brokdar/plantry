@@ -40,13 +40,15 @@ func opItemProps(t *testing.T) map[string]any {
 func TestTool_ApplyChanges_Schema(t *testing.T) {
 	schema := schemaOf(t, "apply_changes")
 	props := schema["properties"].(map[string]any)
-	for _, k := range []string{"ops", "dry_run"} {
+	for _, k := range []string{"ops", "dry_run", "goal", "light"} {
 		if _, ok := props[k]; !ok {
 			t.Errorf("apply_changes schema missing %q", k)
 		}
 	}
-	if required, _ := schema["required"].([]any); len(required) != 1 || required[0] != "ops" {
-		t.Errorf("apply_changes requires ops; got %v", required)
+	// A call that only sets a light mark has no op: ops is optional (the
+	// handler asks for it when neither ops nor light is given).
+	if required, _ := schema["required"].([]any); len(required) != 0 {
+		t.Errorf("apply_changes requires nothing in the schema; got %v", required)
 	}
 	item := opItemProps(t)
 	enum := item["op"].(map[string]any)["enum"].([]any)

@@ -94,6 +94,7 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 	e.planner = planning.NewService(e.deps)
 	// The plate clock is the chat's today: meal operations refuse cells before it.
 	e.plates, e.avail = testsvc.PlanAt(db, nil, func() time.Time { return planToday })
+	e.changes = agent.NewChanges(sqlite.NewAIChangeRepo(db), e.plates, e.avail, sqlite.NewPlanLightRepo(db), sqlite.NewTxRunner(db), func() time.Time { return planToday })
 	foods := sqlite.NewFoodRepo(db)
 	var err error
 	e.ts, err = agent.NewToolSet(agent.Services{
@@ -102,10 +103,9 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 		Slots: slot.NewService(sqlite.NewSlotRepo(db)), Settings: set,
 		PlanView: testsvc.PlanView(db), Planner: e.planner, Cells: e.avail, Availability: e.avail,
 		Changes: sqlite.NewAIChangeRepo(db),
-		State:   testsvc.PlanState(db), Tx: sqlite.NewTxRunner(db), Light: sqlite.NewPlanLightRepo(db),
+		State:   testsvc.PlanState(db), Tx: sqlite.NewTxRunner(db), Light: sqlite.NewPlanLightRepo(db), Undo: e.changes,
 	})
 	require.NoError(t, err)
-	e.changes = agent.NewChanges(sqlite.NewAIChangeRepo(db), e.plates, e.avail, sqlite.NewPlanLightRepo(db), sqlite.NewTxRunner(db), func() time.Time { return planToday })
 	e.ctx = agent.WithWindow(agent.WithToday(ctx, planToday), window.Window{Start: planStart, End: planStart.AddDate(0, 0, 6)})
 
 	id, err := e.planner.Generate(ctx, planning.Request{Start: planStart, Today: planToday, Chooser: airun.ChooserHeuristic})

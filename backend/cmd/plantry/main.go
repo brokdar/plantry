@@ -302,6 +302,7 @@ func run() error {
 
 	aiRepo := sqlite.NewAIRepo(conn)
 	changeRepo := sqlite.NewAIChangeRepo(conn)
+	changes := agent.NewChanges(changeRepo, plateSvc, availabilitySvc, planLight, txRunner, time.Now)
 	tools, err := agent.NewToolSet(agent.Services{
 		Foods:             foodSvc,
 		NutritionResolver: nutritionResolver,
@@ -320,13 +321,14 @@ func run() error {
 		},
 		Light: planLight,
 		Tx:    txRunner,
+		Undo:  changes,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
 	}
 	agentSvc := agent.NewService(aiRepo, llmResolver, tools, profileSvc, settingsSvc,
 		agent.PlanContext{Build: planBuilder.Build, Summary: planning.RenderPlanSummary}, time.Now).WithRecorder(runRecorder)
-	aiHandler := handlers.NewAIHandler(agentSvc, agent.NewChanges(changeRepo, plateSvc, availabilitySvc, planLight, txRunner, time.Now), llmResolver)
+	aiHandler := handlers.NewAIHandler(agentSvc, changes, llmResolver)
 
 	// Run log read side: runs, insights and prices. Costs are computed on
 	// read from the built-in table plus ai.price_overrides.

@@ -194,8 +194,8 @@ func TestPrompt_OversizedProfileCutsOnRuneBoundary(t *testing.T) {
 func TestPrompt_V18(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
-		"Playbook, light or hearty meal", "Playbook, replace a dish", "Playbook, away",
-		"find_alternatives with light lighter or heartier", "what main", "check a fix from the issue's options",
+		"Playbook, light, hearty or more protein", "Playbook, replace a dish", "Playbook, away",
+		"find_ways with the goal", "what main", "check a fix from the issue's options",
 		"Cooking occasions per day", "a routine cell add none",
 		"worsened", "Report a worsened issue like a new one",
 	} {
@@ -206,6 +206,14 @@ func TestPrompt_V18(t *testing.T) {
 	for _, gone := range []string{"list_slots", "get_profile", "code execution", "call apply_changes with dry_run true first", "only for a change of more than one step", "S5 a DGE"} {
 		if strings.Contains(prompt, gone) {
 			t.Errorf("prompt must not contain %q", gone)
+		}
+	}
+	// E006: the relative-request playbook names no rule code and no dry run.
+	a := strings.Index(prompt, "Playbook, light, hearty or more protein")
+	block := prompt[a : a+strings.Index(prompt[a:], "Playbook, replace a dish")]
+	for _, bad := range []string{"S6", "H9", "dry run", "dry_run"} {
+		if strings.Contains(block, bad) {
+			t.Errorf("the light/hearty playbook must not say %q", bad)
 		}
 	}
 	if strings.Count(prompt, "Priority when rules conflict") > 0 {
