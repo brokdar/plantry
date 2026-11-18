@@ -25,7 +25,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h16"
+const HeuristicVersion = "h17"
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.
@@ -859,7 +859,12 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		}
 	}
 
-	prop := last
+	// No saved plate holds a dish above the portion cap, whatever the chooser
+	// left (the checker flagged it and the repairs had their turns).
+	prop, capNotes := capPortions(base, last)
+	if len(capNotes) > 0 {
+		prop.Notes = joinNotes(append([]string{prop.Notes}, capNotes...)...)
+	}
 	merged := Merge(base, j.target, prop)
 	issues := Check(merged, j.target)
 	stage(StageChecking, issueAttrs(issues)...)

@@ -398,6 +398,20 @@ func TestCheck_H7(t *testing.T) {
 			name: "zero portions", target: sunDinner, prop: one(planning.ProposedComponent{FoodID: curry}),
 			want: []string{planning.CodeInvalidPortions},
 		},
+		// The portion cap is per eater and judges dishes only.
+		{name: "1.5 portions pass", target: sunDinner, prop: one(planning.ProposedComponent{FoodID: curry, Portions: 1.5})},
+		{
+			name: "1.75 portions fail", target: sunDinner, prop: one(planning.ProposedComponent{FoodID: curry, Portions: 1.75}),
+			want: []string{planning.CodePortionsOverCap},
+		},
+		{
+			name: "3 eaters with 1 portion each pass", target: sunDinner,
+			prop: planning.Proposal{Plates: []planning.ProposedPlate{{Date: day(sun), SlotID: dinner, Eaters: 3, Components: []planning.ProposedComponent{fresh(curry)}}}},
+		},
+		{
+			name: "an eat-as-is add-on in grams is not judged", target: sunDinner,
+			prop: one(fresh(curry), planning.ProposedComponent{FoodID: egg, Grams: 600}),
+		},
 		{name: "duplicate session key", target: sunDinner, prop: planning.Proposal{
 			Sessions: []planning.ProposedSession{session("s1", curry, sun, dinner, 1), session("s1", curry, sun, dinner, 1)},
 			Plates:   []planning.ProposedPlate{pplate(sun, dinner, onKey(curry, "s1"))},
@@ -408,6 +422,17 @@ func TestCheck_H7(t *testing.T) {
 			return s
 		}, target: sunDinner, prop: one(fresh(curry)), want: []string{planning.CodeInvalidPortions}},
 	})
+}
+
+func TestCheck_PortionsOverCapIssueNamesValueCapAndFix(t *testing.T) {
+	s := baseState()
+	p := planning.Proposal{Plates: []planning.ProposedPlate{pplate(sun, dinner, planning.ProposedComponent{FoodID: curry, Portions: 2.5})}}
+	got := only(check(s, targetCells(cell(sun, dinner)), p), "H7")
+	require.Len(t, got, 1)
+	assert.Equal(t, planning.SeverityViolation, got[0].Severity)
+	assert.Equal(t, 2.5, got[0].Params["portions"])
+	assert.Equal(t, planning.MaxDishPortions, got[0].Params["max_portions"])
+	assert.Contains(t, got[0].Params["hint"], "side or a no-cook add-on")
 }
 
 func TestCheck_H7DuplicateKeysInFirstSeenOrder(t *testing.T) {

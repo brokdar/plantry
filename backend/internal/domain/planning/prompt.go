@@ -18,7 +18,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p17"
+const PromptVersion = "p18"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -69,7 +69,7 @@ var submitPlanSchema = `{
               "type": "object",
               "properties": {
                 "food_id": {"type": "integer"},
-                "portions": {"type": "number", "description": "Portions PER EATER of a recipe, usually 1; up to 1.5 to reach the day's kcal target, raising the main of a non-light meal before adding no-cook items (never the number of eaters: 3 eaters eating 1 portion each consume 3 portions of the session). Omit for a no-cook leaf."},
+                "portions": {"type": "number", "description": "Portions PER EATER of a recipe, usually 1; at most 1.5 (more is a hard violation: close the day's kcal gap with a side or a no-cook add-on, never a bigger dish) (never the number of eaters: 3 eaters eating 1 portion each consume 3 portions of the session). Omit for a no-cook leaf."},
                 "grams": {"type": "number", "description": "Grams PER EATER of a leaf from the no-cook table, at most 2 servings (no session, no cooking occasion). Instead of portions."},
                 "session_key": {"type": "string", "description": "Key of a session you propose."},
                 "session_id": {"type": "integer", "description": "Id of a fixed session with free portions."}
@@ -400,7 +400,7 @@ Hard rules (a checker rejects violations):
 		fmt.Fprintf(b, "H5 at most %d days of the week have an omnivore recipe.\n", *s.Profile.MeatDaysPerWeekMax)
 	}
 	b.WriteString("H6 fixed plates and sessions stay as they are; propose sessions only on fill cells.\n")
-	b.WriteString("H7 sessions and components are candidate recipes, portions are positive, every plate has a component.\n")
+	b.WriteString("H7 sessions and components are candidate recipes, portions are positive and at most 1.5 per eater, every plate has a component.\n")
 	if w := s.Settings.VarietyWeeks; w > 0 {
 		fmt.Fprintf(b, "H8 variety: don't cook a main or standalone recipe eaten or cooked within the %d weeks before (last_eaten) or earlier in this plan, unless the candidates run out.\n", w)
 	}

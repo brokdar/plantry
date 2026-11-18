@@ -411,7 +411,7 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp bool) {
 			if _, seen := h.topUpBase[key]; !seen {
 				h.topUpBase[key] = c.Portions
 			}
-			raised = max(min(raised, math.Floor(h.topUpBase[key]*maxTopUp*4+epsilon)/4), c.Portions)
+			raised = max(min(raised, math.Floor(h.topUpBase[key]*maxTopUp*4+epsilon)/4, MaxDishPortions), c.Portions)
 			h.prop.Sessions[si].Portions += eaters * (raised - c.Portions)
 			c.Portions = raised
 		}

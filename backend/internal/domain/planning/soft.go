@@ -86,7 +86,7 @@ const (
 	roundGrams      = 10
 	roundPortions   = 0.25
 	minAddPortions  = 0.5
-	maxAddPortions  = 2.0
+	maxAddPortions  = MaxDishPortions
 	proteinKcalPerG = 4
 )
 
@@ -494,6 +494,10 @@ func (x *index) candidates(day time.Time, want float64) []optCand {
 				n := math.Round(*comp.Portions*raiseFactor/roundPortions) * roundPortions
 				if n <= *comp.Portions {
 					n = *comp.Portions + roundPortions
+				}
+				n = math.Min(n, MaxDishPortions)
+				if n <= *comp.Portions {
+					continue
 				}
 				from := *comp.Portions
 				c.opt.Portions, c.opt.From = &n, &from

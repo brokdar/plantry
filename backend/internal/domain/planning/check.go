@@ -42,6 +42,7 @@ const (
 	CodeSessionFoodMismatch   = "session_food_mismatch"
 	CodeDuplicateSessionKey   = "duplicate_session_key"
 	CodeInvalidPortions       = "invalid_portions"
+	CodePortionsOverCap       = "portions_over_cap"
 	CodePlateWithoutComponent = "plate_without_components"
 	CodePlateOutsideTarget    = "plate_outside_target"
 	CodePlateOnConfirmedCell  = "plate_on_confirmed_cell"
@@ -66,6 +67,11 @@ const (
 	CodeWeekFishBelowDGE  = "week_fish_below_dge"
 	CodeWeekLegumesBelow  = "week_legumes_below_dge"
 )
+
+// MaxDishPortions is the most portions of a cooked dish one eater gets on a
+// generated plate. The way to more energy is a side or an add-on; guests
+// raise the eaters, not the portions per eater. Chat edits are not bound by it.
+const MaxDishPortions = 1.5
 
 // Issue is one finding of the checker (D22). Plates and sessions of a
 // proposal have no id yet: their issues carry the cell, and a proposed
@@ -444,8 +450,13 @@ func (x *index) component(p Plate, c Component) []Issue {
 	// A routine cell's plate copies its preset (D8), leaves included.
 	if p.Proposed() && !x.routine(p.Cell()) {
 		if f.Kind == food.KindComposed {
-			if c.Portions == nil || !(*c.Portions > 0) {
+			switch {
+			case c.Portions == nil || !(*c.Portions > 0):
 				out = append(out, issue("H7", CodeInvalidPortions, SeverityViolation).onPlate(p).with("food_id", c.FoodID))
+			case *c.Portions > MaxDishPortions+epsilon:
+				out = append(out, issue("H7", CodePortionsOverCap, SeverityViolation).onPlate(p).
+					with("food_id", c.FoodID).with("name", f.Name).with("portions", *c.Portions).with("max_portions", MaxDishPortions).
+					with("hint", "Keep the dish at 1.5 portions per eater or less and close the energy gap with a side or a no-cook add-on; the S2/S3 issues of the day list the computed options."))
 			}
 		} else if c.Grams == nil || !(*c.Grams > 0) {
 			// A leaf is allowed with grams (a no-cook item), never with portions.
