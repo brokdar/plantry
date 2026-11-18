@@ -578,6 +578,9 @@ func addCookedElsewhere(ctx context.Context, svc Services, p *plate.Plate, comp 
 	if err := guardDate(ctx, cd); err != nil {
 		return nil, err
 	}
+	if err := checkCookCell(ctx, svc, plate.CellKey{Date: cd, SlotID: op.CookAt.SlotID}); err != nil {
+		return nil, err
+	}
 	f, err := svc.Foods.Get(ctx, op.FoodID)
 	if err != nil {
 		return nil, err

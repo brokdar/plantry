@@ -1,0 +1,170 @@
+package agent_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
+)
+
+// awayCells marks the three slots of date as away (a real write).
+func (e *planToolEnv) awayCells(date string) []string {
+	e.t.Helper()
+	var cells []string
+	for _, s := range []string{"breakfast", "lunch", "dinner"} {
+		cells = append(cells, cellJSON(date, e.slotID(s)))
+	}
+	e.mustExec("apply_changes", `{"ops":[{"op":"away","cells":[`+strings.Join(cells, ",")+`]}]}`)
+	return cells
+}
+
+// A cook cell that is marked No plate is refused by every op that names one,
+// with the reason and at most three valid cells nearby.
+func TestApplyChanges_CookCellUnavailable(t *testing.T) {
+	e := newPlanToolEnv(t)
+	v, p := e.laterMealSession()
+	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "3"))
+	day := p.DateString()
+	breakfast := e.slotID("breakfast")
+	e.mustExec("apply_changes", `{"ops":[{"op":"away","cells":[`+cellJSON(day, breakfast)+`]}]}`)
+	other := e.plateAtCell(p.Date.AddDate(0, 0, 2).Format(time.DateOnly), e.slotID("lunch"))
+	require.NotNil(t, other)
+
+	for _, tc := range []struct{ name, op string }{
+		{"move_cook", fmt.Sprintf(`{"op":"move_cook","session_id":%d,"cook_at":%s}`, v.ID, cellJSON(day, breakfast))},
+		{"add cook_at", fmt.Sprintf(`{"op":"add","plate_id":%d,"food_id":%d,"portions":1,"position":"main","cook_at":%s}`, other.ID, e.unusedFood("main"), cellJSON(day, breakfast))},
+		{"replace cook_at", fmt.Sprintf(`{"op":"replace","plate_id":%d,"position":"main","food_id":%d,"cook_at":%s}`, other.ID, e.unusedFood("main"), cellJSON(day, breakfast))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := e.planDump()
+			_, err := e.exec("apply_changes", `{"dry_run":true,"ops":[`+tc.op+`]}`)
+			require.ErrorIs(t, err, domain.ErrCellUnavailable)
+			assert.Contains(t, err.Error(), "nobody is home")
+			_, hint, ok := strings.Cut(err.Error(), "instead: ")
+			require.True(t, ok, err.Error())
+			n := strings.Count(hint, "slot_id")
+			assert.True(t, n >= 1 && n <= 3, "up to three valid cells: %s", hint)
+			assert.NotContains(t, hint, day+" slot_id "+fmt.Sprint(breakfast), "the away cell is not suggested")
+			assert.Equal(t, before, e.planDump())
+		})
+	}
+}
+
+// An away op earlier in the same call counts for a later move_cook.
+func TestApplyChanges_CookCellMadeAwayInTheSameCall(t *testing.T) {
+	e := newPlanToolEnv(t)
+	v, p := e.laterMealSession()
+	day, breakfast := p.DateString(), e.slotID("breakfast")
+	_, err := e.exec("apply_changes", fmt.Sprintf(`{"dry_run":true,"ops":[{"op":"away","cells":[%s]},{"op":"move_cook","session_id":%d,"cook_at":%s}]}`,
+		cellJSON(day, breakfast), v.ID, cellJSON(day, breakfast)))
+	require.ErrorIs(t, err, domain.ErrCellUnavailable)
+}
+
+// walkOptions collects every option object (and its op list) in a tool result.
+func walkOptions(v any, out *[][]any) {
+	switch x := v.(type) {
+	case map[string]any:
+		if opts, ok := x["options"].([]any); ok {
+			for _, o := range opts {
+				m := o.(map[string]any)
+				if ops, ok := m["ops"].([]any); ok {
+					*out = append(*out, ops)
+				} else if op, ok := m["op"]; ok {
+					*out = append(*out, []any{op})
+				}
+			}
+		}
+		for _, c := range x {
+			walkOptions(c, out)
+		}
+	case []any:
+		for _, c := range v.([]any) {
+			walkOptions(c, out)
+		}
+	}
+}
+
+// Property: every option the tools emit, for the plan states below, passes its
+// own dry run without a new hard issue and names no cook cell that is away.
+func TestOptions_PassTheirOwnDryRun(t *testing.T) {
+	d5 := planStart.AddDate(0, 0, 5).Format(time.DateOnly)
+	// Each state returns the day its probe marks away (a dry run) and the cells
+	// it made away for real.
+	states := map[string]func(e *planToolEnv) (string, []string){
+		"generated plan": func(e *planToolEnv) (string, []string) { return d5, nil },
+		"tight cook limit": func(e *planToolEnv) (string, []string) {
+			require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "1"))
+			return d5, nil
+		},
+		// A batch cooks at a dinner and feeds the next lunch: away on the
+		// dinner day hands its cook to that lunch, over the cook limit.
+		"cook day goes away": func(e *planToolEnv) (string, []string) {
+			_, p := e.laterMealSession()
+			require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "1"))
+			return p.DateString(), nil
+		},
+		"cells already away": func(e *planToolEnv) (string, []string) {
+			_, p := e.laterMealSession()
+			require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "1"))
+			return p.DateString(), e.awayCells(p.Date.AddDate(0, 0, -1).Format(time.DateOnly))
+		},
+	}
+	for name, setup := range states {
+		t.Run(name, func(t *testing.T) {
+			e := newPlanToolEnv(t)
+			day, away := setup(e)
+			var cells []string
+			for _, s := range []string{"breakfast", "lunch", "dinner"} {
+				cells = append(cells, cellJSON(day, e.slotID(s)))
+			}
+			var results []map[string]any
+			results = append(results, e.mustExec("get_plan", `{}`))
+			results = append(results, e.mustExec("apply_changes", `{"dry_run":true,"ops":[{"op":"away","cells":[`+strings.Join(cells, ",")+`]}]}`))
+			awayDay := map[string]bool{}
+			for _, c := range append(away, cells...) {
+				var r struct {
+					Date   string `json:"date"`
+					SlotID int64  `json:"slot_id"`
+				}
+				require.NoError(t, json.Unmarshal([]byte(c), &r))
+				awayDay[fmt.Sprint(r.Date, r.SlotID)] = true
+			}
+
+			checked := 0
+			for i, res := range results {
+				var options [][]any
+				walkOptions(res, &options)
+				for _, ops := range options {
+					for _, o := range ops {
+						m := o.(map[string]any)
+						if c, ok := m["cook_at"].(map[string]any); ok && i == 1 {
+							assert.False(t, awayDay[fmt.Sprint(c["date"], int64(c["slot_id"].(float64)))], "option cooks on an away cell: %v", m)
+						}
+					}
+					raw, err := json.Marshal(ops)
+					require.NoError(t, err)
+					dry, err := e.exec("apply_changes", `{"dry_run":true,"ops":`+string(raw)+`}`)
+					if err != nil {
+						t.Errorf("option %s fails its dry run: %v", raw, err)
+						continue
+					}
+					checked++
+					issues, _ := dry["after"].(map[string]any)["issues"].(map[string]any)
+					for _, is := range issues["new"].([]any) {
+						m := is.(map[string]any)
+						assert.NotEqual(t, "violation", m["severity"], "option %s adds a hard issue: %v", raw, m)
+					}
+				}
+			}
+			t.Logf("%d options checked", checked)
+		})
+	}
+}

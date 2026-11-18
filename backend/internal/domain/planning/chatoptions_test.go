@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -91,6 +92,61 @@ func TestIssueOptions_H2(t *testing.T) {
 	assert.Equal(t, "move_cook", opts[0].Op.Op)
 	assert.NotNil(t, opts[0].Op.SessionID)
 	assert.NotNil(t, opts[0].Op.CookAt)
+}
+
+// H2 options never cook on a cell marked No plate, however near it is.
+func TestIssueOptions_H2SkipsNoneCells(t *testing.T) {
+	build := func(none ...plateCellKey) planning.State {
+		s := baseState()
+		s.Settings.MaxCookOccasionsPerDay = 1
+		s.Sessions = []planning.Session{
+			persistedSession(1, curry, sun, lunch, 1, false),
+			persistedSession(2, soup, sun, dinner, 1, false),
+		}
+		s.Plates = []planning.Plate{persisted(10, sun, lunch, false, curry, 1), persisted(11, sun, dinner, false, soup, 2)}
+		for i := range s.Plates {
+			s.Plates[i].Components[0].ID, s.Plates[i].Components[0].Position = int64(100+i), plate.PositionMain
+		}
+		for _, c := range none {
+			setMode(&s, c, availability.ModeNone)
+		}
+		return s
+	}
+	free := optionsOf(t, build(), "H2")
+	require.NotEmpty(t, free)
+	for _, tc := range []struct {
+		name string
+		none []plateCellKey
+	}{
+		{"first option's cell", []plateCellKey{{Date: day(sun), SlotID: free[0].SlotID}}},
+		{"the cell of every move", func() []plateCellKey {
+			var out []plateCellKey
+			for _, o := range free {
+				if o.Action == "move_cook" {
+					d, err := time.Parse(time.DateOnly, o.Date)
+					require.NoError(t, err)
+					out = append(out, plateCellKey{Date: d, SlotID: o.SlotID})
+				}
+			}
+			return out
+		}()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := build(tc.none...)
+			tgt := planning.WindowTarget(s)
+			ev := planning.Evaluate(s, tgt)
+			for _, is := range planning.IssueOptions(s, tgt, ev, ev.Issues, nil) {
+				for _, o := range is.Options {
+					if o.Action != "move_cook" {
+						continue
+					}
+					for _, n := range tc.none {
+						assert.False(t, o.Date == n.Date.Format(time.DateOnly) && o.SlotID == n.SlotID, "option %+v cooks on a none cell", o)
+					}
+				}
+			}
+		})
+	}
 }
 
 // A far-over-cap plate (main plus composed side plus add-on) gets a

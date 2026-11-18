@@ -181,6 +181,8 @@ func (r *repairer) describe(v Issue, seen map[string]bool) string {
 		return fmt.Sprintf("H1: %s holds %d plates, exactly one is allowed. Fix: keep one plate for that cell.", where, intParam(v, "count"))
 	case "H1." + CodePlateInNoneCell:
 		return fmt.Sprintf("H1: %s is a no-plate cell. Fix: remove the plate you put there.", where)
+	case "H1." + CodeCookInNoneCell:
+		return fmt.Sprintf("H1: %s is a no-plate cell, nobody is home to cook there. Fix: cook that session on a plan cell instead.", where)
 	case "H2." + CodeTooManyCookOccasions:
 		return r.describeH2(v)
 	case "H3." + plate.WarnDeficit, "H3." + plate.WarnFrozenDeficit, "H4." + plate.WarnLeftoverBeforeCook, "H4." + plate.WarnPastKeepDays:

@@ -78,11 +78,36 @@ func TestCheck_H1(t *testing.T) {
 		},
 		{
 			name: "plate in a none cell", state: noneDinner, target: satDinner,
-			want: []string{planning.CodePlateInNoneCell},
+			want: []string{planning.CodePlateInNoneCell, planning.CodeCookInNoneCell},
 		},
 		{
 			name: "none cell left empty", state: noneDinner, target: func(planning.State) planning.Target {
 				return planning.Target{Cells: []plateCellKey{cell(sat, dinner)}, PlateIDs: []int64{70}, SessionIDs: []int64{7}}
+			},
+		},
+		{
+			name: "proposed cook on a none cell", target: satDinner,
+			state: func() planning.State {
+				s := baseState()
+				setMode(&s, cell(sat, dinner), availability.ModeNone)
+				return s
+			},
+			prop: planning.Proposal{
+				Sessions: []planning.ProposedSession{session("s1", chili, sat, dinner, 1)},
+				Plates:   []planning.ProposedPlate{pplate(sat, lunch, onKey(chili, "s1"))},
+			},
+			want: []string{planning.CodeCookInNoneCell},
+		},
+		{
+			name: "cook on a routine cell is fine", target: satDinner,
+			state: func() planning.State {
+				s := baseState()
+				setMode(&s, cell(sat, dinner), availability.ModeRoutine)
+				return s
+			},
+			prop: planning.Proposal{
+				Sessions: []planning.ProposedSession{session("s1", chili, sat, dinner, 1)},
+				Plates:   []planning.ProposedPlate{pplate(sat, dinner, onKey(chili, "s1"))},
 			},
 		},
 		{

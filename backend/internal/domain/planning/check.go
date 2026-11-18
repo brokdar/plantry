@@ -29,6 +29,7 @@ const (
 	CodeMissingPlate          = "missing_plate"
 	CodeExtraPlate            = "extra_plate"
 	CodePlateInNoneCell       = "plate_in_none_cell"
+	CodeCookInNoneCell        = "cook_in_none_cell"
 	CodeTooManyCookOccasions  = "too_many_cook_occasions"
 	CodeDietIncompatible      = "diet_incompatible"
 	CodeMeatDaysExceeded      = "meat_days_exceeded"
@@ -224,7 +225,8 @@ func (i Issue) with(k string, v any) Issue {
 }
 
 // h1: every plan or routine cell in the target holds exactly one plate; no
-// plate sits in a none cell.
+// plate sits in a none cell and no uncooked session cooks on one (nobody is
+// home to cook).
 func (x *index) h1() []Issue {
 	var out []Issue
 	for _, c := range x.s.Cells {
@@ -242,6 +244,11 @@ func (x *index) h1() []Issue {
 			out = append(out, issue("H1", CodeMissingPlate, SeverityViolation).atCell(key).with("mode", string(c.Mode)))
 		case len(plates) > 1:
 			out = append(out, issue("H1", CodeExtraPlate, SeverityViolation).atCell(key).with("count", len(plates)))
+		}
+	}
+	for _, ss := range x.s.Sessions {
+		if c, ok := x.cells[idOf(ss.CookCell())]; ok && c.Mode == availability.ModeNone && ss.CookedAt == nil && x.checked(ss) {
+			out = append(out, issue("H1", CodeCookInNoneCell, SeverityViolation).onSession(ss))
 		}
 	}
 	return out

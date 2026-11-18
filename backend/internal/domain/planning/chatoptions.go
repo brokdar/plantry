@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
@@ -347,7 +348,7 @@ func (x *index) cookOptions(ev Evaluation, t Target, is Issue) []Option {
 			if tries >= maxCellTries || len(opts) >= maxCookMoves {
 				break
 			}
-			if dayOf(c.Date) == dayOf(day) || c.Date.Before(x.s.Today) || !x.s.Window.Contains(c.Date) || x.routine(k) || !x.inTarget(k) {
+			if dayOf(c.Date) == dayOf(day) || c.Date.Before(x.s.Today) || !x.s.Window.Contains(c.Date) || c.Mode == availability.ModeNone || x.routine(k) || !x.inTarget(k) {
 				continue
 			}
 			tries++

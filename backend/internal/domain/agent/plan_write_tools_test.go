@@ -100,7 +100,7 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 		Foods: food.NewService(foods), NutritionResolver: food.NewNutritionResolver(foods),
 		Plates: e.plates, Profile: profile.NewService(sqlite.NewProfileRepo(db)),
 		Slots: slot.NewService(sqlite.NewSlotRepo(db)), Settings: set,
-		PlanView: testsvc.PlanView(db), Planner: e.planner, Cells: e.avail,
+		PlanView: testsvc.PlanView(db), Planner: e.planner, Cells: e.avail, Availability: e.avail,
 		Changes: sqlite.NewAIChangeRepo(db),
 		State:   testsvc.PlanState(db), Tx: sqlite.NewTxRunner(db), Light: sqlite.NewPlanLightRepo(db),
 	})
