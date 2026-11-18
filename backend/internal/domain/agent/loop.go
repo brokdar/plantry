@@ -175,6 +175,11 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		usage.CacheReadTokens += res.resp.Usage.CacheReadTokens
 		usage.CacheWriteTokens += res.resp.Usage.CacheWriteTokens
 
+		// The model declined: run none of what it started, say so.
+		if res.resp.StopReason == llm.StopReasonRefusal {
+			return fail("error.ai.refused", fmt.Errorf("%w: the model refused the request", domain.ErrAIRefused))
+		}
+
 		// Persist the assistant message (text + any tool_use blocks).
 		// A cut tool input is replayed as `{}`; the run steps keep the raw text.
 		replay := llm.ReplayMessage(res.resp.Message)

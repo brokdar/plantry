@@ -168,6 +168,15 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			}
 			return partial, fmt.Errorf("%w: %w", domain.ErrAIProviderFailed, err)
 		}
+		if resp.StopReason == llm.StopReasonRefusal {
+			// The model declined: no repair can change that, and nothing is
+			// run or saved.
+			var partial Proposal
+			if last != nil {
+				partial = *last
+			}
+			return partial, fmt.Errorf("%w: the model refused the request", domain.ErrAIRefused)
+		}
 		continuation = false
 		if resp.StopReason == llm.StopReasonPauseTurn && !hasToolUse(resp) {
 			// The server paused a long turn (code execution): resend it as

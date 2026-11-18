@@ -1074,6 +1074,7 @@
       "change_not_undoable": "This change did not alter anything, so there is nothing to undo.",
       "iterations_exceeded": "The AI ran too many tool steps — try a simpler request.",
       "rate_limit_exceeded": "You're sending too many AI requests. Please wait a minute.",
+      "refused": "The assistant declined this request, so nothing was changed. Rephrase it or plan without the assistant.",
       "invalid_date": "A chat date is not a valid YYYY-MM-DD date."
     },
     "import": {
