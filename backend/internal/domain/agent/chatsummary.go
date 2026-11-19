@@ -94,7 +94,7 @@ func chatFacts(st planning.State) string {
 	for _, p := range ev.Plates {
 		withPlates[p.Date] = true
 	}
-	b.WriteString("\nKcal per eater and day" + target + "; then target if moved, band, floor, room to the band top, cooking slots, light or hearty meals:\n")
+	b.WriteString("\nKcal per eater and day" + target + "; then target if moved, range, minimum, room to the top of the range, cooking slots, light or filling meals:\n")
 	for _, d := range ev.Days {
 		if !withPlates[d.Date] {
 			continue
@@ -107,13 +107,13 @@ func chatFacts(st planning.State) string {
 			fmt.Fprintf(&b, " | target %.0f", *d.TargetKcal)
 		}
 		if d.BandHigh > 0 {
-			fmt.Fprintf(&b, " | band %.0f-%.0f | floor %.0f | room %.0f", d.BandLow, d.BandHigh, d.FloorKcal, d.RoomKcal)
+			fmt.Fprintf(&b, " | range %.0f-%.0f | minimum %.0f | room %.0f", d.BandLow, d.BandHigh, d.FloorKcal, d.RoomKcal)
 		}
 		if len(d.CookSlots) > 0 {
 			b.WriteString(" | cooks " + strings.Join(d.CookSlots, ", "))
 		}
 		if len(d.LightMeals) > 0 {
-			b.WriteString(" | " + strings.Join(d.LightMeals, ", "))
+			b.WriteString(" | " + plainWords(strings.Join(d.LightMeals, ", ")))
 		}
 		b.WriteByte('\n')
 	}

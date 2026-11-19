@@ -2,6 +2,7 @@ package agent_test
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -169,7 +170,13 @@ func TestChatPrompt_RealisticWeekFitsWithRoomToSpare(t *testing.T) {
 	// The stored light mark, the routine and the day numbers are there.
 	assert.Contains(t, prompt, "plan, light meal")
 	assert.Contains(t, prompt, "routine, not cooking")
-	assert.Contains(t, prompt, "| band ")
+	assert.Contains(t, prompt, "| range ")
+	// E030: the whole prompt as the app sends it, the plan summary and the
+	// facts included, holds none of the planner's words (a hit names where).
+	banned := regexp.MustCompile(`(?i)\b(bands?|floors?|caps?|soft|hard|violations?|drafts?|sessions?|occasions?|hearty|add-ons?|dry[- ]run|the tools?)\b`)
+	for _, m := range banned.FindAllStringIndex(prompt, -1) {
+		t.Errorf("planner word %q in the chat prompt: ...%s...", prompt[m[0]:m[1]], prompt[max(0, m[0]-50):min(len(prompt), m[1]+50)])
+	}
 	assert.Contains(t, prompt, "light dinner")
 	assert.Contains(t, prompt, "| vegan |", "diet class in the foods list")
 }

@@ -135,7 +135,9 @@ func (s *ToolSet) register(t Tool) error {
 	}
 	t.Description = plainWords(t.Description)
 	t.Schema = json.RawMessage(plainWords(string(t.Schema)))
-	schema, err := gojsonschema.NewSchema(gojsonschema.NewBytesLoader(t.Schema))
+	// The model reads the level "filling"; the stored word "hearty" stays valid.
+	check := strings.ReplaceAll(string(t.Schema), `"enum":["light","filling"]`, `"enum":["light","filling","hearty"]`)
+	schema, err := gojsonschema.NewSchema(gojsonschema.NewStringLoader(check))
 	if err != nil {
 		return fmt.Errorf("compile schema: %w", err)
 	}
@@ -257,6 +259,7 @@ func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessag
 		}
 		return nil, ToolEffectNone, fmt.Errorf("%w: %s", domain.ErrInvalidInput, msg)
 	}
+	input = fillingToHearty(input)
 	out, effect, err := t.Handler(ctx, input)
 	if err != nil {
 		err = plainError{err}
@@ -316,7 +319,7 @@ func defaultTools(svc Services) []Tool {
 	for i := range tools {
 		tools[i].CodeCallable = codeCallableTools[tools[i].Name]
 		if tools[i].Name == "undo_last_change" || tools[i].Name == "regenerate" {
-			tools[i].Handler = withReport(svc, tools[i].Handler)
+			tools[i].Handler = withReport(svc, tools[i].Handler, tools[i].Name == "undo_last_change")
 		}
 		if tools[i].Name == applyChangesName || tools[i].Name == "undo_last_change" || tools[i].Name == "regenerate" {
 			tools[i].Description += reportNote

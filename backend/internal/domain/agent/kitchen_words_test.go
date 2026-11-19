@@ -72,6 +72,9 @@ func TestChatModelReadsKitchenWords(t *testing.T) {
 	for name, text := range texts {
 		assert.Empty(t, plannerWord.FindAllString(text, -1), name)
 		assert.Empty(t, cookWord.FindAllString(text, -1), name)
+		if strings.HasPrefix(name, "description") || strings.HasPrefix(name, "schema") || name == "prompt" {
+			assert.NotContains(t, strings.ToLower(text), "hearty", name+": the level reads as filling")
+		}
 	}
 	assert.Contains(t, strings.ToLower(texts["result of check an away"]), `"report"`)
 }
