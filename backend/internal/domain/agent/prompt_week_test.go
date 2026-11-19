@@ -159,7 +159,7 @@ func TestChatPrompt_RealisticWeekFitsWithRoomToSpare(t *testing.T) {
 	// The facts come before the cells, and every food and day is in them.
 	assert.Less(t, strings.Index(prompt, "Foods on the plan"), strings.Index(prompt, "Cells (date"))
 	assert.Less(t, strings.Index(prompt, "Kcal per eater and day"), strings.Index(prompt, "Cells (date"))
-	assert.Contains(t, prompt, "food_id 110 Gebratener Reis mit Ei", "the later foods are not cut")
+	assert.Contains(t, prompt, "Gebratener Reis mit Ei | id 110 |", "the later foods are not cut")
 	for d := range 7 {
 		assert.Contains(t, prompt, fmt.Sprintf("%s: ", st.Window.Start.AddDate(0, 0, d).Format(time.DateOnly)))
 	}

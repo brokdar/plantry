@@ -32,8 +32,11 @@ type changeReport struct {
 	AlsoChanged []string `json:"also_changed,omitempty"`
 	// Week holds only what this change made better or worse for the week.
 	Week []string `json:"week,omitempty"`
-	// NewWarnings are the warnings and problems this change made new or worse.
+	// NewWarnings are the warnings and problems that did not exist before the
+	// change. Worse holds an earlier one that got worse by a real step (see
+	// worseStep), with its figure before and after.
 	NewWarnings []string `json:"new_warnings,omitempty"`
+	Worse       []string `json:"worse,omitempty"`
 	// EarlierWarnings counts the warnings that existed before and are
 	// unaffected: do not list them.
 	EarlierWarnings int `json:"earlier_warnings_unaffected"`
@@ -276,7 +279,7 @@ func buildReport(in reportInput) changeReport {
 	r.Leftovers = leftovers(bs, as)
 	r.AlsoChanged = alsoChanged(as, in.applied)
 	r.Week = weekFacts(in, bs, as)
-	r.NewWarnings, r.EarlierWarnings = warnings(in, as)
+	r.NewWarnings, r.Worse, r.EarlierWarnings = warnings(in, as)
 	return r
 }
 
@@ -572,12 +575,11 @@ func weekFacts(in reportInput, bs, as planning.State) []string {
 	return out
 }
 
-// warnings are the issues this change made new or worse, each as one plain
-// sentence, and the number of earlier ones it left as they were.
-func warnings(in reportInput, as planning.State) ([]string, int) {
+// warnings are the issues that did not exist before the change, the earlier
+// ones that got worse by a real step, each as one plain sentence, and the
+// number of earlier ones left as they were (or moved by less than a step).
+func warnings(in reportInput, as planning.State) (out, worse []string, unaffected int) {
 	was := issueMap(in.before.Issues)
-	var out []string
-	unaffected := 0
 	issues := slices.Clone(in.after.Issues)
 	slices.SortFunc(issues, func(a, b planning.Issue) int { return strings.Compare(a.Date+a.Code, b.Date+b.Code) })
 	for _, is := range issues {
@@ -586,12 +588,27 @@ func warnings(in reportInput, as planning.State) ([]string, int) {
 		case !ok:
 			out = append(out, issueSentence(is, as))
 		case worsened(b, is):
-			out = append(out, issueSentence(is, as)+" This got worse with the change.")
+			bb, _ := badness(b)
+			ab, _ := badness(is)
+			worse = append(worse, fmt.Sprintf("%s It was already open and got worse: %s beyond its limit before, %s now.", issueSentence(is, as), badnessWords(is.Code, bb), badnessWords(is.Code, ab)))
 		default:
 			unaffected++
 		}
 	}
-	return out, unaffected
+	return out, worse, unaffected
+}
+
+// badnessWords says a badness value with its unit.
+func badnessWords(code string, v float64) string {
+	switch code {
+	case planning.CodeKcalBelowBand, planning.CodeKcalAboveBand, planning.CodeKcalBelowFloor, planning.CodeMealNotLight, planning.CodeMealNotHearty:
+		return fmtNum(math.Round(v)) + " kcal"
+	case planning.CodeProteinLow, planning.CodeWeekProteinLow, planning.CodeWeekMeatAboveDGE:
+		return fmtNum(math.Round(v)) + " g"
+	case planning.CodeWeekKcalBelowBand, planning.CodeWeekKcalAboveBand, planning.CodeWeekCarbsRange, planning.CodeWeekFatRange:
+		return fmtNum(math.Round(v*10)/10) + " points"
+	}
+	return fmtNum(v)
 }
 
 func paramNum(is planning.Issue, k string) float64 {

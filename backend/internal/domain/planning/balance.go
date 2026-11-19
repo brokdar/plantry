@@ -3,6 +3,7 @@ package planning
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"strings"
@@ -50,6 +51,7 @@ func balancePlan(in ChooseInput, prop Proposal) (Proposal, []string) {
 				break
 			}
 		}
+		h.growShort()
 		after := Evaluate(Merge(in.State, in.Target, h.prop), in.Target)
 		if k := newHard(hard, after); k != "" {
 			dropped = "Balancing was dropped: it would have added a hard-rule issue (" + k + ")."
@@ -285,6 +287,110 @@ func (h *planner) addSide(date time.Time, limit float64) {
 	for _, o := range opts {
 		if next, ok := applyAdd(h.prop, merged, o.pi, o.c); ok {
 			h.prop, h.sided[dayOf(date)] = next, true
+			return
+		}
+	}
+}
+
+// growShort is the last lift: what the passes above left under (the day-count
+// and size caps of the adds were used on gaps that have since moved), by
+// growing the adds the days already hold (growAddOns): the days under their
+// band up to its low end, then, while the week is under its target, the days
+// furthest under theirs, never by more than the week still lacks.
+func (h *planner) growShort() {
+	y, days := h.dayAccounts()
+	for _, d := range days {
+		if low := d.Adjusted * y.pol.DayLow; d.Kcal < low-epsilon {
+			h.growAddOns(d.Date, low)
+		}
+	}
+	for range days {
+		_, days = h.dayAccounts()
+		gap := 0.0
+		var worst *DayKcal
+		for i, d := range days {
+			gap += d.Gap
+			if d.Gap > 0 && (worst == nil || d.Gap > worst.Gap) {
+				worst = &days[i]
+			}
+		}
+		if gap <= 0 || worst == nil {
+			return
+		}
+		before := worst.Kcal
+		h.growAddOns(worst.Date, before+min(worst.Gap, gap))
+		if _, after := h.dayAccounts(); slices.IndexFunc(after, func(a DayKcal) bool { return dayOf(a.Date) == dayOf(worst.Date) && a.Kcal > before+epsilon }) < 0 {
+			return
+		}
+	}
+}
+
+// growAddOns raises the no-cook adds a day already holds, up to their caps
+// (addCapG), while the day is under limit: the day's add-on count is used
+// up, but its adds were sized to the gap of the moment and can carry more.
+// The denser food grows first; a step that adds a hard or add-on issue, or
+// takes the day past its band top, is dropped. Balancing a model's plan only.
+func (h *planner) growAddOns(date time.Time, limit float64) {
+	base := Evaluate(Merge(h.s, h.in.Target, h.prop), h.in.Target)
+	hard := hardKeys(base.Issues)
+	for range maxDayAddOns * 2 {
+		y, days := h.dayAccounts()
+		var dk *DayKcal
+		for i := range days {
+			if dayOf(days[i].Date) == dayOf(date) {
+				dk = &days[i]
+			}
+		}
+		if dk == nil || limit-dk.Kcal < epsilon {
+			return
+		}
+		type grow struct {
+			pi, ci int
+			grams  float64
+			dens   float64
+		}
+		var opts []grow
+		for pi, p := range h.prop.Plates {
+			if dayOf(p.Date) != dayOf(date) || p.PlateID != 0 || h.s.lightMeal(p.Date, p.SlotID) {
+				continue
+			}
+			for ci, c := range p.Components {
+				f, ok := h.s.Foods[c.FoodID]
+				if !ok || c.Grams <= 0 || f.Macros.Kcal <= 0 || !f.NutritionComplete {
+					continue
+				}
+				// Never past the usual serving (or where the add already was).
+				capG := math.Max(c.Grams, math.Min(addCapG(f, dk.Adjusted), ServingGrams(f)))
+				g := math.Min(capG, math.Floor((c.Grams+(limit-dk.Kcal)*100/f.Macros.Kcal)/roundGrams)*roundGrams)
+				if g > c.Grams+epsilon {
+					opts = append(opts, grow{pi, ci, g, f.Macros.Kcal})
+				}
+			}
+		}
+		slices.SortStableFunc(opts, func(a, b grow) int { return cmp.Compare(b.dens, a.dens) })
+		done := false
+		for _, o := range opts {
+			next := cloneProposal(h.prop)
+			next.Plates[o.pi].Components[o.ci].Grams = o.grams
+			merged := Merge(h.s, h.in.Target, next)
+			ny := newIndex(merged, h.in.Target)
+			var after *DayKcal
+			for _, a := range ny.dayAccounts([]time.Time{date}) {
+				after = &a
+			}
+			if after == nil || after.Kcal <= dk.Kcal || after.Kcal > dk.Adjusted*y.pol.DayHigh {
+				continue
+			}
+			if newHard(hard, Evaluate(merged, h.in.Target)) != "" {
+				continue
+			}
+			if base := y.baseAddOnKeys(); slices.ContainsFunc(slices.Collect(maps.Keys(ny.addOnKeys())), func(k string) bool { return !base[k] }) {
+				continue
+			}
+			h.prop, done = next, true
+			break
+		}
+		if !done {
 			return
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
@@ -162,8 +163,68 @@ var kitchenWords = []struct {
 	{regexp.MustCompile(`\bSession\b`), "Batch"},
 }
 
+// passBack are the result fields the model sends back to a tool unchanged
+// (ops, light and goal of a way, a cook_at cell, a move target, the cells of
+// an away op): they keep ISO dates in modelDates.
+var passBack = map[string]bool{"ops": true, "op": true, "light": true, "goal": true, "cook_at": true, "to": true, "cells": true, "pulse": true, "occupant": true}
+
+// modelDates is a tool result as the model reads it: every ISO date outside
+// passBack fields becomes "Wed 25 Nov". The run log and the audit keep the
+// result as the tool produced it (machine dates); only the copy in the
+// conversation changes.
+func modelDates(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return raw
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if dec.Decode(&v) != nil {
+		return raw
+	}
+	out, err := json.Marshal(datesWalk(v))
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
+func datesWalk(v any) any {
+	switch x := v.(type) {
+	case string:
+		return plainDates(x)
+	case []any:
+		for i := range x {
+			x[i] = datesWalk(x[i])
+		}
+	case map[string]any:
+		for k, e := range x {
+			if !passBack[k] {
+				x[k] = datesWalk(e)
+			}
+		}
+	}
+	return v
+}
+
+var isoDay = regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}\b`)
+
+// plainDates replaces every ISO date in a text with the day as people say it
+// ("Wed 25 Nov"), weekday included: the model repeats the dates it reads and
+// computes weekdays wrongly. Other helpers of the package (the guard's texts)
+// call it too.
+func plainDates(s string) string {
+	return isoDay.ReplaceAllStringFunc(s, func(d string) string {
+		if t, err := time.Parse(time.DateOnly, d); err == nil {
+			return dayLabel(t)
+		}
+		return d
+	})
+}
+
 // plainWords rewrites a text with kitchenWords.
 func plainWords(s string) string {
+	s = plainDates(s)
 	for _, w := range kitchenWords {
 		s = w.re.ReplaceAllString(s, w.to)
 	}
@@ -213,3 +274,28 @@ type plainError struct{ err error }
 
 func (e plainError) Error() string { return plainWords(e.err.Error()) }
 func (e plainError) Unwrap() error { return e.err }
+
+// dropAfterWeek removes the week ledger from the "after" block of a result
+// that carries a report: the report holds what the change did to the week, and
+// the model recited the rest (weekly fat of an unrelated 40 %) as news.
+func dropAfterWeek(raw json.RawMessage) json.RawMessage {
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(raw, &obj) != nil || obj["report"] == nil || obj["after"] == nil {
+		return raw
+	}
+	var after map[string]json.RawMessage
+	if json.Unmarshal(obj["after"], &after) != nil || after["week"] == nil {
+		return raw
+	}
+	delete(after, "week")
+	b, err := json.Marshal(after)
+	if err != nil {
+		return raw
+	}
+	obj["after"] = b
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return raw
+	}
+	return out
+}

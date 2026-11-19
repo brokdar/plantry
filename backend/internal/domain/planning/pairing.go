@@ -43,36 +43,50 @@ func (s State) addOnFits(p Plate, f FoodFacts, slot string) bool {
 		return false
 	}
 	name := diet.Fold(f.Name)
+	if f.Composed() {
+		// A recipe added or swapped in as a side: only the protein pairing
+		// applies (cheese and nuts are leaf rules).
+		return s.pairsWithPlate(p, f, name, slot)
+	}
 	has := func(words []string) bool {
 		return slices.ContainsFunc(words, func(w string) bool { return strings.Contains(name, w) })
 	}
 	if has(cheeseWords) {
 		return false
 	}
-	meatOrFish := false
-	dairyOnPlate, saladMain := false, false
-	for _, c := range p.Components {
-		g, ok := s.Foods[c.FoodID]
-		if !ok {
-			continue
-		}
-		if g.Groups.MeatG > 0 || g.Groups.FishG > 0 {
-			meatOrFish = true
-		}
-		gn := diet.Fold(g.Name)
-		for _, w := range dairyWords {
-			dairyOnPlate = dairyOnPlate || strings.Contains(gn, w)
-		}
-		if c.FoodID == s.mainOf(p) {
-			// A salad beside a ragù does not make the plate a salad: only a
-			// main that is a salad takes nuts.
-			for _, w := range saladWords {
-				saladMain = saladMain || strings.Contains(gn, w)
+	if has(nutWords) && !strings.Contains(name, "coconut") && !strings.Contains(name, "kokos") {
+		dairyOnPlate, saladMain := false, false
+		for _, c := range p.Components {
+			g, ok := s.Foods[c.FoodID]
+			if !ok {
+				continue
+			}
+			gn := diet.Fold(g.Name)
+			for _, w := range dairyWords {
+				dairyOnPlate = dairyOnPlate || strings.Contains(gn, w)
+			}
+			if c.FoodID == s.mainOf(p) {
+				// A salad beside a ragù does not make the plate a salad: only a
+				// main that is a salad takes nuts.
+				for _, w := range saladWords {
+					saladMain = saladMain || strings.Contains(gn, w)
+				}
 			}
 		}
-	}
-	if has(nutWords) && !strings.Contains(name, "coconut") && !strings.Contains(name, "kokos") {
 		return slot == "breakfast" || dairyOnPlate || saladMain
+	}
+	return s.pairsWithPlate(p, f, name, slot)
+}
+
+// pairsWithPlate is the protein pairing of a food (leaf or recipe) next to a
+// plate: tofu, tempeh, egg, meat and fish never go on a plate that holds meat
+// or fish.
+func (s State) pairsWithPlate(p Plate, f FoodFacts, name, slot string) bool {
+	meatOrFish := false
+	for _, c := range p.Components {
+		if g, ok := s.Foods[c.FoodID]; ok && (g.Groups.MeatG > 0 || g.Groups.FishG > 0) {
+			meatOrFish = true
+		}
 	}
 	words := strings.FieldsFunc(name, func(r rune) bool { return r == ' ' || r == ',' || r == '(' || r == ')' })
 	tofuOrEgg := slices.ContainsFunc(words, func(w string) bool {

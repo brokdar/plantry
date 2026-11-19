@@ -71,9 +71,50 @@ func TestAdviceFor_NothingUnasked(t *testing.T) {
 		"a day under min": {planning.Evaluation{Issues: []planning.Issue{floor, soft}}, "under its minimum"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			next, _ := adviceFor(ctx, Services{}, planningWindow, planning.Evaluation{}, tt.after, true)
+			next, _ := adviceFor(ctx, Services{}, planningWindow, planning.Evaluation{}, tt.after, false, nil)
 			assert.Contains(t, next, tt.want)
 			assert.NotContains(t, next, "apply it now")
+			// A check of a requested change says to save it, never to ask.
+			dry, _ := adviceFor(ctx, Services{}, planningWindow, planning.Evaluation{}, tt.after, true, nil)
+			if tt.want != "" {
+				assert.Contains(t, dry, "NOT saved")
+				assert.Contains(t, dry, "never ask first")
+			}
 		})
 	}
+}
+
+// A named dish that raises the week's meat by a real step over its limit is
+// saved and its week effect told; a rise of a few grams says nothing.
+func TestAdviceFor_WeekMeat(t *testing.T) {
+	meatIssue := planning.Issue{Rule: "S7", Code: planning.CodeWeekMeatAboveDGE, Severity: planning.SeveritySoft, Params: map[string]any{"meat_g": 471.0, "max_g": 300.0}}
+	ev := func(meatG float64) planning.Evaluation {
+		return planning.Evaluation{Week: &planning.WeekEval{MeatG: meatG}, Issues: []planning.Issue{meatIssue}}
+	}
+	ctx := context.Background()
+	next, _ := adviceFor(ctx, Services{}, planningWindow, ev(321), ev(471), false, nil)
+	assert.Contains(t, next, "the week's meat goes from 321 to 471 g, over the 300 g limit")
+	assert.Contains(t, next, "swap a meat meal for a vegetarian one")
+	dry, _ := adviceFor(ctx, Services{}, planningWindow, ev(321), ev(471), true, nil)
+	assert.Contains(t, dry, "never ask first")
+	small, _ := adviceFor(ctx, Services{}, planningWindow, ev(321), ev(325), false, nil)
+	assert.Empty(t, small, "4 g more is not a step")
+	under, _ := adviceFor(ctx, Services{}, planningWindow, ev(100), planning.Evaluation{Week: &planning.WeekEval{MeatG: 200}}, false, nil)
+	assert.Empty(t, under, "still under the limit")
+}
+
+// A recommended offer never creates a warning: an alternative that lists no
+// new issue but whose own check does make one is skipped.
+func TestFirstClean_SkipsWhatItsCheckDirties(t *testing.T) {
+	op := []planning.OptionOp{{Op: "swap"}}
+	dirty := planning.Alternative{Name: "Tuna pasta", Ops: op}
+	clean := planning.Alternative{Name: "Lentil curry", Ops: op}
+	listed := planning.Alternative{Name: "Pizza", Ops: op, NewIssues: []planning.Issue{{Code: "x"}}}
+	calls := 0
+	checks := func(ops []planning.OptionOp) bool { calls++; return calls > 1 }
+	got, ok := firstClean([]planning.Alternative{listed, dirty, clean}, checks)
+	assert.True(t, ok)
+	assert.Equal(t, "Lentil curry", got.Name)
+	_, ok = firstClean([]planning.Alternative{listed, dirty}, func([]planning.OptionOp) bool { return false })
+	assert.False(t, ok)
 }

@@ -164,6 +164,8 @@ type PlateEval struct {
 	Intent  string  `json:"intent,omitempty"`
 	MaxKcal float64 `json:"max_kcal,omitempty"`
 	MinKcal float64 `json:"min_kcal,omitempty"`
+	// Kind is "cold_plate" for a meal of no-cook foods and no recipe.
+	Kind string `json:"kind,omitempty"`
 }
 
 // ComponentEval is one food on a plate: its portions (composed) or grams
@@ -229,6 +231,9 @@ func evaluate(s State, t Target, weekOpts bool) Evaluation {
 			pe.Components = append(pe.Components, ce)
 		}
 		x.markIntent(&pe, p)
+		if x.s.isColdPlate(p) {
+			pe.Kind = ColdPlateKind
+		}
 		ev.Plates = append(ev.Plates, pe)
 	}
 

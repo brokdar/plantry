@@ -57,6 +57,13 @@ func MeaningfulKcal(before, delta float64) bool {
 	return delta >= math.Min(RelMinKcal, RelMinShare*before)-1e-9
 }
 
+// MeaningfulMealKcal is MeaningfulKcal for one meal: a noticeable step is a
+// tenth of the meal whatever its size (a big dinner raised by 8 % is not
+// "heartier").
+func MeaningfulMealKcal(before, delta float64) bool {
+	return delta >= RelMinShare*before-1e-9
+}
+
 // WayRequest asks for the ways to reach goal on one plate (lighter, heartier,
 // more_protein) or, for more_protein only, on the day of Date.
 type WayRequest struct {
@@ -463,6 +470,9 @@ func (w *waySearch) check(next State) wayCheck {
 			r.other = true
 		}
 	}
+	if MeatOverStep(w.base, r.ev) {
+		r.other = true
+	}
 	if a, b := w.base.Week, r.ev.Week; a != nil && b != nil && b.MeatG > a.MeatG+1 &&
 		slices.ContainsFunc(r.ev.Issues, func(is Issue) bool { return is.Code == CodeWeekMeatAboveDGE }) {
 		r.worse = append(r.worse, PlainText(CodeWeekMeatAboveDGE).Label)
@@ -525,21 +535,21 @@ func (w *waySearch) outOfBand(ev Evaluation) bool {
 func JudgeRelative(goal string, meal bool, maxKcal, minKcal float64, before, after WayFigures) (changed, reached bool, why string) {
 	switch goal {
 	case GoalLighter:
-		changed = MeaningfulKcal(before.MealKcal, before.MealKcal-after.MealKcal)
+		changed = MeaningfulMealKcal(before.MealKcal, before.MealKcal-after.MealKcal)
 		reached = maxKcal <= 0 || after.MealKcal <= maxKcal+0.5
 		switch {
 		case !changed:
-			why = fmt.Sprintf("the meal holds %.0f kcal after, %.0f before: not lighter by a meaningful amount (at least %.0f kcal)", after.MealKcal, before.MealKcal, math.Min(RelMinKcal, RelMinShare*before.MealKcal))
+			why = fmt.Sprintf("the meal holds %.0f kcal after, %.0f before: not lighter by a meaningful amount (at least %.0f kcal)", after.MealKcal, before.MealKcal, RelMinShare*before.MealKcal)
 		case !reached:
 			why = fmt.Sprintf("lighter, but not a light meal yet: it now holds %.0f kcal (was %.0f), a light meal holds at most %.0f kcal", after.MealKcal, before.MealKcal, maxKcal)
 		}
 		return changed, reached, why
 	case GoalHeartier:
-		changed = MeaningfulKcal(before.MealKcal, after.MealKcal-before.MealKcal)
+		changed = MeaningfulMealKcal(before.MealKcal, after.MealKcal-before.MealKcal)
 		reached = minKcal <= 0 || after.MealKcal >= minKcal-0.5
 		switch {
 		case !changed:
-			why = fmt.Sprintf("the meal holds %.0f kcal after, %.0f before: not heartier by a meaningful amount (at least %.0f kcal)", after.MealKcal, before.MealKcal, math.Min(RelMinKcal, RelMinShare*before.MealKcal))
+			why = fmt.Sprintf("the meal holds %.0f kcal after, %.0f before: not heartier by a meaningful amount (at least %.0f kcal)", after.MealKcal, before.MealKcal, RelMinShare*before.MealKcal)
 		case !reached:
 			why = fmt.Sprintf("heartier, but not a filling meal yet: it now holds %.0f kcal (was %.0f), a filling meal holds at least %.0f kcal", after.MealKcal, before.MealKcal, minKcal)
 		}
@@ -653,7 +663,7 @@ func (w *waySearch) noWayWhy(res WayResult) string {
 	switch w.goal {
 	case GoalLighter:
 		return fmt.Sprintf("This meal cannot get meaningfully lighter on its own: it holds %.0f kcal (a change needs at least %.0f kcal) and the day holds %.0f kcal, its minimum is %.0f kcal, so the day has only %.0f kcal of room. A light meal holds at most %.0f kcal.",
-			res.Before.MealKcal, math.Min(RelMinKcal, RelMinShare*res.Before.MealKcal), res.Before.DayKcal, res.FloorKcal, math.Max(0, res.Before.DayKcal-res.FloorKcal), res.MaxKcal)
+			res.Before.MealKcal, RelMinShare*res.Before.MealKcal, res.Before.DayKcal, res.FloorKcal, math.Max(0, res.Before.DayKcal-res.FloorKcal), res.MaxKcal)
 	case GoalHeartier:
 		return fmt.Sprintf("This meal cannot get meaningfully heartier on its own without taking the day (%.0f kcal) over its band top of %.0f kcal.", res.Before.DayKcal, res.BandHigh)
 	case GoalLowerDay, GoalRaiseDay:
@@ -1549,7 +1559,7 @@ func (w *waySearch) sideSwapEdits(s State, pi int) []wayEdit {
 					continue
 				}
 				ops := append(slices.Clone(pre), a.Ops...)
-				out = append(out, wayEdit{s: a.next, ops: ops, what: append(slices.Clone(what), "swap "+s.Foods[p.Components[side].FoodID].Name+" for "+a.Name), cost: 4 + len(pre), kind: "swap", group: "sideswap", plate: p.ID})
+				out = append(out, wayEdit{s: a.next, ops: ops, what: append(slices.Clone(what), "swap "+food.Quote(s.Foods[p.Components[side].FoodID].Name)+" for "+food.Quote(a.Name)), cost: 4 + len(pre), kind: "swap", group: "sideswap", plate: p.ID})
 			}
 		}
 	}
