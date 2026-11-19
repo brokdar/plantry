@@ -21,13 +21,13 @@ func TestPlainReply(t *testing.T) {
 		{"hearty minimum", "It now meets the hearty minimum.", "It now meets the minimum for a filling meal."},
 		{"light cap", "It is over the light cap.", "It is over the limit for a light meal."},
 		{"cooking occasion", "so no new cooking occasion is added. Two cooking occasions that day.", "so no new cooking time is added. Two cooking times that day."},
-		{"add-on", "The bread is over the add-on limit; add-ons are capped.", "The bread is over the limit for extras; extras are capped."},
+		{"add-on", "The bread is over the add-on limit; add-ons are capped.", "The bread is over the limit for sides; sides are capped."},
 		{"issues", "No soft issues and no hard issues.", "No warnings and no problems."},
 		{"the tool", "I didn't mark it as light because the tool only allows that once the limit is met.", "I didn't mark it as light because it only allows that once the limit is met."},
 		{"food id", "The Herb omelette (food_id 188) is a vegetarian main.", "The Herb omelette is a vegetarian main."},
 		{"id in text", "Plate plate_id 34 is lighter.", "Plate it is lighter."},
 		{"iso date", "Moved to 2026-11-26 dinner.", "Moved to Thu 26 Nov dinner."},
-		{"german", "Ciabatta überschreitet die Zusatzgrenze von 120 g.", "Ciabatta überschreitet die Grenze für Extras von 120 g."},
+		{"german", "Ciabatta überschreitet die Zusatzgrenze von 120 g.", "Ciabatta überschreitet die Grenze für Beilagen von 120 g."},
 		{"kept: a food called floor lamp cake", "A band of onions, floor plan, hard cheese and soft pretzel stay.", "A band of onions, floor plan, hard cheese and soft pretzel stay."},
 	} {
 		assert.Equal(t, c.want, agent.PlainReply(c.in), c.name)
