@@ -73,7 +73,11 @@ func (h *planner) topUpFloors() {
 	y, days := h.dayAccounts()
 	for _, dk := range days {
 		if floor := dk.Floor(y.pol); dk.Kcal < floor {
+			// The safety floor comes before how the plate looks: any verified food.
+			pair := h.s.PairAddOns
+			h.s.PairAddOns = false
 			h.liftDay(dk, floor, true)
+			h.s.PairAddOns = pair
 		}
 	}
 	h.closeProteinGaps()
@@ -286,7 +290,13 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 			return cmp.Or(cmp.Compare(over(a), over(b)), cmp.Compare(b.protein, a.protein), cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal)))
 		}
 		// Sweets are out and the protein pass has its own add, so a filler
-		// is the food that fits the kcal gap best.
+		// is the food that fits the kcal gap best. A model's plan gets, within 25 kcal
+		// of each other, a vegetable or salad before bread before the rest (sideFitRank).
+		if h.balance {
+			if ba, bb := math.Round(math.Abs(need-a.kcal)/25), math.Round(math.Abs(need-b.kcal)/25); ba != bb || sideFitRank(h.s.Foods[a.opt.FoodID]) != sideFitRank(h.s.Foods[b.opt.FoodID]) {
+				return cmp.Or(cmp.Compare(ba, bb), cmp.Compare(sideFitRank(h.s.Foods[a.opt.FoodID]), sideFitRank(h.s.Foods[b.opt.FoodID])))
+			}
+		}
 		return cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal))
 	})
 	for _, c := range cands {
@@ -349,6 +359,10 @@ func spreadAdds(y *index, merged State, date time.Time, cands []optCand, used ma
 	for _, pi := range plates {
 		for _, c := range cands {
 			if held[c.opt.FoodID] {
+				continue
+			}
+			// The candidates were checked against the day's last plate: each plate has its own fit.
+			if f := merged.Foods[c.opt.FoodID]; !f.Composed() && !merged.addOnFits(merged.Plates[pi], f, slotName(merged, merged.Plates[pi].SlotID)) {
 				continue
 			}
 			c.plate = pi

@@ -139,7 +139,7 @@ func TestBalancePlan_GrowsTheAddsADayHolds(t *testing.T) {
 	s := balanceState()
 	s.Profile.KcalTarget = f64(2600)
 	for i := range 8 {
-		addOnFood(&s, int64(900+i), "Nuts "+string(rune('A'+i)), 400)
+		addOnFood(&s, int64(900+i), "Olives "+string(rune('A'+i)), 400)
 	}
 	prop := freshPlan(s)
 	n := 0

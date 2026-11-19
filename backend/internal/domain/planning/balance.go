@@ -38,6 +38,8 @@ func balancePlan(in ChooseInput, prop Proposal) (Proposal, []string) {
 	for _, trim := range []bool{true, false} {
 		h := newPlanner(in)
 		h.balance, h.sided = true, map[int]bool{}
+		// A model's plan gets sides that fit the plate, by the rule the chat uses (addOnFits).
+		h.s.PairAddOns = pairInPlanner
 		h.prop = cloneProposal(prop)
 		if trim {
 			h.trimAddOns()
@@ -350,6 +352,7 @@ func (h *planner) growAddOns(date time.Time, limit float64) {
 			dens   float64
 		}
 		var opts []grow
+		merged := Merge(h.s, h.in.Target, h.prop)
 		for pi, p := range h.prop.Plates {
 			if dayOf(p.Date) != dayOf(date) || p.PlateID != 0 || h.s.lightMeal(p.Date, p.SlotID) {
 				continue
@@ -357,6 +360,10 @@ func (h *planner) growAddOns(date time.Time, limit float64) {
 			for ci, c := range p.Components {
 				f, ok := h.s.Foods[c.FoodID]
 				if !ok || c.Grams <= 0 || f.Macros.Kcal <= 0 || !f.NutritionComplete {
+					continue
+				}
+				// An add that does not fit its plate (a nut beside a pasta) is not made bigger.
+				if mi := slices.IndexFunc(merged.Plates, func(mp Plate) bool { return mp.ID == -int64(pi+1) }); mi >= 0 && !merged.addOnFits(merged.Plates[mi], f, slotName(merged, p.SlotID)) {
 					continue
 				}
 				// Never past the usual serving (or where the add already was).

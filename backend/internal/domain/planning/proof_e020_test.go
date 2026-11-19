@@ -292,3 +292,53 @@ func TestPromptCost(t *testing.T) {
 		fmt.Printf("COLUMN %-20s %d\n", k, cols[k])
 	}
 }
+
+func sidesOf(in planning.ChooseInput, pl planning.ProposedPlate) string {
+	main := int64(0)
+	for _, c := range pl.Components {
+		if f := in.State.Foods[c.FoodID]; f.Composed() && f.Role == "main" {
+			main = c.FoodID
+			break
+		}
+	}
+	var out []string
+	for _, c := range pl.Components {
+		if c.FoodID == main {
+			continue
+		}
+		f := in.State.Foods[c.FoodID]
+		q := fmt.Sprintf("%.0f g", c.Grams)
+		if c.Grams == 0 {
+			q = fmt.Sprintf("x%.2g", c.Portions)
+		}
+		out = append(out, fmt.Sprintf("%s %s", f.Name, q))
+	}
+	return strings.Join(out, ", ")
+}
+
+// TestE034_Sides prints, per plate, the sides the balancing pass chose with and without the pairing rules.
+func TestE034_Sides(t *testing.T) {
+	round := os.Getenv("PLANTRY_PROOF_ROUND")
+	if round == "" {
+		t.Skip("PLANTRY_PROOF_ROUND not set")
+	}
+	for _, label := range strings.Split(os.Getenv("PLANTRY_PROOF_ONLY"), ",") {
+		dir := filepath.Join(round, "runs", "gen-"+label+"-r1")
+		in := proofInput(t, round, dir, label)
+		calls, _ := firstEvaluate(t, dir)
+		raw := calls[0]
+		old := planning.SetPairInPlanner(false)
+		_, before, err := planning.PlannerView(in, raw, true)
+		require.NoError(t, err)
+		planning.SetPairInPlanner(true)
+		_, after, err := planning.PlannerView(in, raw, true)
+		require.NoError(t, err)
+		planning.SetPairInPlanner(old)
+		for i := range after.Plates {
+			b, a := sidesOf(in, before.Plates[i]), sidesOf(in, after.Plates[i])
+			if a != b {
+				fmt.Printf("SIDES %s %s %s/%d:\n   before: %s\n   after:  %s\n", label, after.Plates[i].Date.Format("Mon 02"), "slot", after.Plates[i].SlotID, b, a)
+			}
+		}
+	}
+}
