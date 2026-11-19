@@ -85,3 +85,30 @@ func TestDemoteUnclean(t *testing.T) {
 	assert.Len(t, got, 1, "without a clean one the unclean stays")
 	assert.Contains(t, got[0].Why, "creates a new warning", "and says so")
 }
+
+// Breakfast food is not food for lunch or dinner; sweet leaves only where the
+// plan itself eats one at a meal.
+func TestMealFits(t *testing.T) {
+	muesli := FoodFacts{ID: 20, Name: "Muesli with yogurt and berries", Kind: food.KindComposed, Role: food.RoleStandalone, Tags: []string{"Breakfast"}}
+	oats := FoodFacts{ID: 21, Name: "Rolled oats", Kind: food.KindLeaf}
+	plain := FoodFacts{ID: 22, Name: "Granola", Kind: food.KindLeaf}
+	honey := FoodFacts{ID: 23, Name: "Honey", Kind: food.KindLeaf, Sweet: true}
+	jam := FoodFacts{ID: 24, Name: "Jam", Kind: food.KindLeaf, Sweet: true, LeafRole: food.RoleDessert}
+	ragu := FoodFacts{ID: 1, Name: "Beef ragù", Kind: food.KindComposed, Role: food.RoleMain}
+	s := State{PairAddOns: true, Foods: map[int64]FoodFacts{20: muesli, 21: oats, 22: plain, 23: honey, 24: jam, 1: ragu}}
+	for _, f := range []FoodFacts{muesli, oats, plain} {
+		assert.True(t, s.MealFits(f, "breakfast"), f.Name)
+		assert.False(t, s.MealFits(f, "dinner"), f.Name)
+		assert.False(t, s.MealFits(f, "lunch"), f.Name)
+	}
+	assert.False(t, s.MealFits(honey, "dinner"), "a sweet leaf is not a dinner side")
+	assert.True(t, s.MealFits(jam, "dinner"), "a dessert may be sweet")
+	assert.True(t, s.MealFits(ragu, "dinner"))
+	// The plan itself eats muesli and honey at dinner: then they fit there.
+	s.SlotNames = map[int64]string{3: "slot.dinner"}
+	s.Plates = []Plate{{ID: 5, SlotID: 3, Components: []Component{{FoodID: 20}, {FoodID: 23}}}}
+	assert.True(t, s.MealFits(muesli, "dinner"))
+	assert.True(t, s.MealFits(honey, "dinner"))
+	// As a add-on a standalone recipe is never offered.
+	assert.False(t, s.addOnFits(Plate{}, muesli, "breakfast"), "a whole meal is no side")
+}

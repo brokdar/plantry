@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
 // Pairing rules for a no-cook add-on (a gap filler, a protein add, a side
@@ -33,14 +34,68 @@ var (
 	saladWords  = []string{"salad", "salat"}
 )
 
+// breakfastWords are the names of leaves that are breakfast food.
+var breakfastWords = []string{"muesli", "musli", "oat", "hafer", "porridge", "cereal", "cornflake", "granola"}
+
+// MealFits reports whether food f belongs at a meal of slot (the plate's slot
+// short name) at all, whatever else is on the plate: a breakfast dish
+// (a recipe tagged Breakfast or Brunch, a recipe that is a whole standalone
+// meal planned nowhere else, a leaf named muesli, oats, porridge, cereal) is
+// not food for lunch or dinner unless the plan already eats it there, and a
+// sweet leaf that is not a dessert only where the plan already has one at a
+// lunch or dinner. Planner and chat tools share it.
+func (s State) MealFits(f FoodFacts, slot string) bool {
+	if slot == "breakfast" {
+		return true
+	}
+	if s.breakfastFood(f) && !s.eatenAtMeals(func(g FoodFacts) bool { return g.ID == f.ID }) {
+		return false
+	}
+	if f.Sweet && f.LeafRole != food.RoleDessert && !s.eatenAtMeals(func(g FoodFacts) bool { return g.Sweet }) {
+		return false
+	}
+	return true
+}
+
+// breakfastFood: the data says so by tag or name; a standalone recipe is a
+// whole meal, never an add-on.
+func (s State) breakfastFood(f FoodFacts) bool {
+	if f.Composed() {
+		for _, t := range f.Tags {
+			if strings.EqualFold(t, "breakfast") || strings.EqualFold(t, "brunch") {
+				return true
+			}
+		}
+		return false
+	}
+	name := diet.Fold(f.Name)
+	return slices.ContainsFunc(breakfastWords, func(w string) bool { return strings.Contains(name, w) })
+}
+
+// eatenAtMeals reports whether a lunch or dinner plate of the plan holds a
+// food that matches.
+func (s State) eatenAtMeals(match func(FoodFacts) bool) bool {
+	for _, p := range s.Plates {
+		if !slices.ContainsFunc(lightSlots, func(n string) bool { return s.slotIs(p.SlotID, n) }) {
+			continue
+		}
+		for _, c := range p.Components {
+			if g, ok := s.Foods[c.FoodID]; ok && match(g) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // addOnFits reports whether leaf f may be added to plate p (slot is the
 // plate's slot short name).
 func (s State) addOnFits(p Plate, f FoodFacts, slot string) bool {
 	if !s.PairAddOns {
 		return true
 	}
-	if s.Avoid[f.ID] {
-		return false
+	if s.Avoid[f.ID] || !s.MealFits(f, slot) || (f.Composed() && f.Role == food.RoleStandalone) {
+		return false // a standalone recipe is a whole meal, never an add-on
 	}
 	name := diet.Fold(f.Name)
 	if f.Composed() {
