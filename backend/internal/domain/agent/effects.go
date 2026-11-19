@@ -102,7 +102,7 @@ func changeEffect(ctx context.Context, svc Services, a affected) map[string]any 
 		dates[p.DateString()] = true
 		names := make([]string, len(p.Components))
 		for i, c := range p.Components {
-			names[i] = food.Data(c.FoodName)
+			names[i] = food.Quote(c.FoodName)
 			if c.FoodRole != nil && *c.FoodRole != "" {
 				names[i] += " (" + *c.FoodRole + ")"
 			}

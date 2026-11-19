@@ -389,7 +389,7 @@ func settleCooks(ctx context.Context, svc Services, ws []window.Window, ops []ch
 			}
 			res, err := applyOp(ctx, svc, op, b)
 			if err != nil {
-				return nil, fmt.Errorf("move the cook after the away (%s): %w", opt.Name, err)
+				return nil, fmt.Errorf("move the cook after the away (%s): %w", food.Quote(opt.Name), err)
 			}
 			res["auto_fix"] = fmt.Sprintf("moved so that %s does not get a second cooking time from the away", is.Date)
 			out = append(out, res)
@@ -734,7 +734,7 @@ func addCookedElsewhere(ctx context.Context, svc Services, p *plate.Plate, comp 
 		return nil, err
 	}
 	if f.Kind != food.KindComposed {
-		return nil, fmt.Errorf("%w: cook_at needs a recipe, %s is a leaf food (eat it without cooking)", domain.ErrInvalidInput, f.Name)
+		return nil, fmt.Errorf("%w: cook_at needs a recipe, %s is a leaf food (eat it without cooking)", domain.ErrInvalidInput, food.Quote(f.Name))
 	}
 	portions := 1.0
 	if comp.Portions != nil {
@@ -779,7 +779,7 @@ func opSetPortions(ctx context.Context, svc Services, op changeOp, b *batch) (ma
 	if plate.Exceeds(cur.Consumed, *op.Portions) || plate.Exceeds(cur.FrozenConsumed, frozen) {
 		return nil, fmt.Errorf("%w: %s would cook %s portions (%s frozen) but its plates eat %s (%s from the freezer); "+
 			"set at least %s portions (%s frozen), or reduce the plates' eaters or portions first",
-			domain.ErrInvalidInput, food.Data(cur.FoodName), fnum(*op.Portions), fnum(frozen), fnum(cur.Consumed), fnum(cur.FrozenConsumed), fnum(cur.Consumed), fnum(cur.FrozenConsumed))
+			domain.ErrInvalidInput, food.Quote(cur.FoodName), fnum(*op.Portions), fnum(frozen), fnum(cur.Consumed), fnum(cur.FrozenConsumed), fnum(cur.Consumed), fnum(cur.FrozenConsumed))
 	}
 	v, err := svc.Plates.SetSessionPortions(ctx, op.SessionID, plate.SessionPortions{Portions: *op.Portions, FrozenPortions: frozen, Note: sess.Note})
 	if err != nil {

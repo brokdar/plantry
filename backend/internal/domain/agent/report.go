@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
@@ -389,7 +390,7 @@ func leftovers(bs, as planning.State) []string {
 		switch {
 		case wasOK && !nowOK:
 			if was.eaten > 0.005 {
-				out = append(out, fmt.Sprintf("The %s batch cooked %s (%s) is no longer needed: nothing eats it now.", was.dish, was.cooked.Format("Mon 2 Jan"), portionWord(was.portions)))
+				out = append(out, fmt.Sprintf("The %s batch cooked %s (%s) is no longer needed: nothing eats it now.", food.Quote(was.dish), was.cooked.Format("Mon 2 Jan"), portionWord(was.portions)))
 			}
 		case !wasOK:
 		default:
@@ -407,11 +408,11 @@ func leftovers(bs, as planning.State) []string {
 			}
 			switch {
 			case math.Abs(free) <= 0.005 && math.Abs(was.portions-now.portions) >= 0.005:
-				out = append(out, fmt.Sprintf("The %s batch cooked %s was resized from %s to %s; nothing is left over.", now.dish, now.cooked.Format("Mon 2 Jan"), portionWord(was.portions), portionWord(now.portions)))
+				out = append(out, fmt.Sprintf("The %s batch cooked %s was resized from %s to %s; nothing is left over.", food.Quote(now.dish), now.cooked.Format("Mon 2 Jan"), portionWord(was.portions), portionWord(now.portions)))
 			case free > 0.005:
-				out = append(out, fmt.Sprintf("%s of %s cooked %s (%s%s) is left over: the meals now eat %s. %s", portionWord(free), now.dish, now.cooked.Format("Mon 2 Jan"), portionWord(now.portions), frozen, fmtNum(now.eaten), resized))
+				out = append(out, fmt.Sprintf("%s of %s cooked %s (%s%s) is left over: the meals now eat %s. %s", portionWord(free), food.Quote(now.dish), now.cooked.Format("Mon 2 Jan"), portionWord(now.portions), frozen, fmtNum(now.eaten), resized))
 			case free < -0.005:
-				out = append(out, fmt.Sprintf("The meals need %s more of %s than the batch cooked %s holds (%s). %s", portionWord(-free), now.dish, now.cooked.Format("Mon 2 Jan"), portionWord(now.portions), resized))
+				out = append(out, fmt.Sprintf("The meals need %s more of %s than the batch cooked %s holds (%s). %s", portionWord(-free), food.Quote(now.dish), now.cooked.Format("Mon 2 Jan"), portionWord(now.portions), resized))
 			}
 		}
 	}
@@ -445,7 +446,7 @@ func asDate(v any) (time.Time, bool) {
 func sessionDish(st planning.State, id int64) string {
 	for _, s := range st.Sessions {
 		if s.ID == id {
-			return foodName(st, s.FoodID)
+			return food.Quote(foodName(st, s.FoodID))
 		}
 	}
 	return ""
@@ -565,7 +566,7 @@ func weekFacts(in reportInput, bs, as planning.State) []string {
 	slices.Sort(dishes)
 	for _, d := range dishes {
 		if len(am[d]) >= 2 && !slices.Equal(am[d], bm[d]) {
-			out = append(out, fmt.Sprintf("%s is now the main of %d meals: %s.", d, len(am[d]), strings.Join(am[d], ", ")))
+			out = append(out, fmt.Sprintf("%s is now the main of %d meals: %s.", food.Quote(d), len(am[d]), strings.Join(am[d], ", ")))
 		}
 	}
 	return out
@@ -653,7 +654,7 @@ func issueSentence(is planning.Issue, st planning.State) string {
 	case planning.CodeWeekCarbsRange, planning.CodeWeekFatRange:
 		return fmt.Sprintf("%s: %.0f%% of the week's energy; the range is %.0f-%.0f%%.", cap1(planning.PlainText(is.Code).Label), n("pct"), n("range_low_pct"), n("range_high_pct"))
 	case planning.CodeDishRepeats:
-		return fmt.Sprintf("%v is the main of %.0f meals; the limit is %.0f.", is.Params["name"], n("meals"), n("max"))
+		return fmt.Sprintf("%s is the main of %.0f meals; the limit is %.0f.", food.Quote(fmt.Sprint(is.Params["name"])), n("meals"), n("max"))
 	case planning.CodeMeatDaysExceeded:
 		return fmt.Sprintf("%.0f days of the week have meat; the limit is %.0f.", n("days"), n("max"))
 	case planning.CodeAddOnExcess:
@@ -661,15 +662,15 @@ func issueSentence(is planning.Issue, st planning.State) string {
 			"light_meal": "an extra on a light meal", "duplicates_main": "already in the main", "over_cap": fmt.Sprintf("over the usual serving of %.0f g", n("max_grams")),
 			"day_limit": "more extras that day than usual", "repeated": "the same extra on too many meals",
 		}[fmt.Sprint(is.Params["reason"])]
-		return fmt.Sprintf("%s: %v %.0f g is %s.", where, is.Params["name"], n("grams"), why)
+		return fmt.Sprintf("%s: %s %.0f g is %s.", where, food.Quote(fmt.Sprint(is.Params["name"])), n("grams"), why)
 	}
 	switch is.Code {
 	case planning.CodeVarietyRepeat, planning.CodeVarietyRelaxed, planning.CodeVarietyRepeatWeek:
 		if dish := issueDish(is, st); dish != "" {
 			if is.Code == planning.CodeVarietyRepeatWeek {
-				return fmt.Sprintf("%s: %s is cooked more than once this week.", where, dish)
+				return fmt.Sprintf("%s: %s is cooked more than once this week.", where, food.Quote(dish))
 			}
-			return fmt.Sprintf("%s: %s was cooked or eaten too recently before.", where, dish)
+			return fmt.Sprintf("%s: %s was cooked or eaten too recently before.", where, food.Quote(dish))
 		}
 	}
 	return where + ": " + planning.PlainText(is.Code).Message
