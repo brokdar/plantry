@@ -136,6 +136,18 @@ func TestPlan_Targets(t *testing.T) {
 	assert.Zero(t, p.Targets.CarbsG, "a missing percentage gives 0 g")
 }
 
+// E035: with a body weight the protein target is the nutrition policy's g per kg.
+func TestPlan_TargetsProteinFollowsThePolicyWithAWeight(t *testing.T) {
+	f := newFixture()
+	f.profile.p.KcalTarget = ptr(2200.0)
+	f.profile.p.ProteinPct = ptr(25.0)
+	f.profile.p.WeightKg = ptr(75.0)
+	start := date("2026-10-31")
+	p, err := f.service().Plan(ctx, &start, start)
+	require.NoError(t, err)
+	assert.InDelta(t, 75, p.Targets.ProteinG, 1e-9, "75 kg x 1.0 g/kg, not 25 % of 2200 kcal (137.5 g)")
+}
+
 // B4-AC4
 func TestPlan_LeafWithMissingNutrition(t *testing.T) {
 	f := newFixture()
