@@ -40,7 +40,7 @@ var (
 	dairyWords     = []string{"yogurt", "joghurt", "skyr", "quark", "milk", "milch", "kefir"}
 	pastaWords     = []string{"pasta", "nudel", "spaghetti", "penne", "lasagn", "tagliatelle", "gnocchi", "fusilli", "macaroni", "makkaroni", "risotto"}
 	starchWords    = []string{"rice", "reis", "kartoffel", "potato", "couscous", "polenta", "bulgur", "brot", "bread", "sandwich", "wrap"}
-	breakfastWords = []string{"muesli", "mueslli", "musli", "oat", "hafer", "porridge", "cereal", "granola", "cornflake"}
+	breakfastWords = []string{"muesli", "musli", "oat", "hafer", "porridge", "cereal", "granola", "cornflake"}
 	fruitWords     = []string{"fruit salad", "obstsalat", "fruchtsalat", "kompott", "compote"}
 	saladWords     = []string{"salad", "salat"}
 )
