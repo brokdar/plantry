@@ -209,3 +209,24 @@ func TestBuildReport_NamesAColdPlate(t *testing.T) {
 	}
 	assert.Contains(t, kinds, "cold plate, nothing to cook")
 }
+
+// E042: a regenerate says what it did to the cooking of other days, and why
+// the new meals may hold no meat.
+func TestOtherCookingDays(t *testing.T) {
+	before := reportState(2, 1, 1) // Fri dinner cooks Salmon for Fri and Sat dinner
+	after := before
+	after.Plates = before.Plates[:1] // Sat dinner's plate is gone: the batch feeds one meal
+	got := otherCookingDays(before, after, map[string]bool{rd(2).Format(time.DateOnly): true})
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0], "cooking: was Salmon at dinner for")
+	assert.Contains(t, got[0], "now Salmon at dinner for")
+	assert.Empty(t, otherCookingDays(before, before, nil), "nothing changed, nothing said")
+	assert.Empty(t, otherCookingDays(before, after, map[string]bool{rd(1).Format(time.DateOnly): true}), "the days the run wrote are not other days")
+}
+
+func TestWeekEffect_SaysWhyNoMeatFits(t *testing.T) {
+	w := weekEffect(&planning.WeekEffect{MeatG: 321, LimitG: 300}, &planning.WeekEffect{MeatG: 233, LimitG: 300})
+	assert.Contains(t, w.MeatNote, "holds 233 g of meat per person against a limit of 300 g: 67 g is left")
+	w = weekEffect(&planning.WeekEffect{MeatG: 100, LimitG: 300}, &planning.WeekEffect{MeatG: 120, LimitG: 300})
+	assert.Empty(t, w.MeatNote)
+}

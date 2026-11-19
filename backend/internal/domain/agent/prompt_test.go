@@ -195,7 +195,7 @@ func TestPrompt_V18(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
 		"Playbook, light, filling, more protein, lower or raise a day", "Playbook, replace a dish", "Playbook, away",
-		"call find_ways (goal, plate_id or date)", "what main", "check a fix from the issue's options",
+		"call find_ways (goal, plate_id or date; to_limit true", "what main", "check a fix from the issue's options",
 		"Cooking times per day", "a routine cell add none",
 		"worsened", "Report a worsened issue like a new one",
 	} {

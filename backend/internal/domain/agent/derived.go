@@ -69,8 +69,13 @@ func addDerived(name string, raw json.RawMessage) json.RawMessage {
 				m["meal_vs_limit"], changed = s, true
 			}
 		}
-		if k, ok := after[dayKey].(float64); ok && (low > 0 || high > 0) {
-			m["day_vs_range"], changed = vsRange(k, low, high), true
+		// A way that moves the day's range (it ends a light mark) carries its own.
+		l, h := low, high
+		if own := num(m["range_low"]); own > 0 {
+			l, h = own, num(m["range_high"])
+		}
+		if k, ok := after[dayKey].(float64); ok && (l > 0 || h > 0) {
+			m["day_vs_range"], changed = vsRange(k, l, h), true
 		}
 	}
 	switch name {

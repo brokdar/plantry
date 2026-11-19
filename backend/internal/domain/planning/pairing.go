@@ -123,6 +123,15 @@ func (s State) addOnFits(p Plate, f FoodFacts, slot string) bool {
 	if s.secondStarch(p, f, name) {
 		return false
 	}
+	// A second cultured dairy (skyr on top of yogurt) is no new kind: raise the
+	// one there instead.
+	if has(dairyWords) && slices.ContainsFunc(p.Components, func(c Component) bool {
+		g, ok := s.Foods[c.FoodID]
+		gn := diet.Fold(g.Name)
+		return ok && !g.Composed() && c.FoodID != f.ID && slices.ContainsFunc(dairyWords, func(w string) bool { return strings.Contains(gn, w) })
+	}) {
+		return false
+	}
 	if slot != "breakfast" && has(breakfastWords) {
 		return false
 	}
@@ -222,4 +231,68 @@ func sideFitRank(f FoodFacts) int {
 		return 1
 	}
 	return 2
+}
+
+// MisfitSides are the ids of the plate's side components that do not fit its
+// main (any more): a starch beside a pasta, rice or potato main, nuts beside a
+// pasta, a second starch among the sides, a second cultured dairy. Used after
+// a main was replaced, so a side that belonged to the old main goes.
+func (s State) MisfitSides(p Plate) []int64 {
+	mainID := s.mainOf(p)
+	var out []int64
+	starches := 0
+	dairy := 0
+	for _, c := range p.Components {
+		f, ok := s.Foods[c.FoodID]
+		if !ok || c.FoodID == mainID || c.ID <= 0 {
+			continue
+		}
+		name := diet.Fold(f.Name)
+		misfit := false
+		if sideRoleOf(f) == food.RoleSideStarch {
+			starches++
+			misfit = s.mainHas(p, pastaWords) || s.mainHas(p, starchWords) || starches > 1
+		}
+		if !f.Composed() && slices.ContainsFunc(nutWords, func(w string) bool { return strings.Contains(name, w) }) && !strings.Contains(name, "coconut") && s.mainHas(p, pastaWords) {
+			misfit = true
+		}
+		if !f.Composed() && slices.ContainsFunc(dairyWords, func(w string) bool { return strings.Contains(name, w) }) {
+			dairy++
+			misfit = misfit || dairy > 1
+		}
+		if misfit {
+			out = append(out, c.ID)
+		}
+	}
+	return out
+}
+
+// SameKind says whether adding food f to plate p would put a second food of
+// the same kind on it (cultured dairy on dairy, a starch on a starch, bread on
+// bread or on a pasta, rice or potato main). existing is the component already
+// there when it is a side that can be raised instead (ID > 0).
+func (s State) SameKind(p Plate, f FoodFacts) (existing Component, kind string, ok bool) {
+	name := diet.Fold(f.Name)
+	mainID := s.mainOf(p)
+	if !f.Composed() && slices.ContainsFunc(dairyWords, func(w string) bool { return strings.Contains(name, w) }) {
+		for _, c := range p.Components {
+			g, found := s.Foods[c.FoodID]
+			gn := diet.Fold(g.Name)
+			if found && !g.Composed() && c.FoodID != f.ID && slices.ContainsFunc(dairyWords, func(w string) bool { return strings.Contains(gn, w) }) {
+				return c, "cultured dairy", true
+			}
+		}
+	}
+	if sideRoleOf(f) == food.RoleSideStarch {
+		for _, c := range p.Components {
+			g, found := s.Foods[c.FoodID]
+			if found && c.FoodID != mainID && c.FoodID != f.ID && sideRoleOf(g) == food.RoleSideStarch {
+				return c, "starch", true
+			}
+		}
+		if s.mainHas(p, pastaWords) || s.mainHas(p, starchWords) {
+			return Component{}, "starch (the main is a pasta, rice or potato dish)", true
+		}
+	}
+	return Component{}, "", false
 }

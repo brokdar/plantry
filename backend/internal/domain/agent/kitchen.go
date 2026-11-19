@@ -72,10 +72,17 @@ func (r *removedMemo) avoid(ctx context.Context) map[int64]bool {
 // recommendation, with the reason in one phrase: the first way when it creates
 // no new warning (the named meal alone, as the household asked), else the first
 // clean offer, else the first way or offer with the warning it creates named.
-func recommend(ways, offers []planning.Way) {
+func recommend(ways, offers []planning.Way, toLimit bool) {
 	clean := func(a planning.Way) bool { return len(a.NewIssues) == 0 && len(a.Worsened) == 0 }
 	mark := func(a *planning.Way, because string) { a.Recommended, a.Because = true, because }
 	switch {
+	case toLimit && len(offers) > 0 && offers[0].Reaches && (len(ways) == 0 || !ways[0].Reaches):
+		// A light meal was asked for and only the offer is one.
+		because := "the only way to a light meal: it reaches the limit"
+		if !clean(offers[0]) {
+			because += ", but it creates a new warning (see why)"
+		}
+		mark(&offers[0], because)
 	case len(ways) > 0 && clean(ways[0]) && ways[0].Reaches:
 		mark(&ways[0], "the least change that reaches the goal, no new warning")
 	case len(ways) > 0 && clean(ways[0]):

@@ -36,10 +36,14 @@ func guardDayMains(base State, t Target, in Proposal, skip map[int64]bool) (Prop
 		}
 		next, note, replaced := x.distinctMain(base, t, out, merged, pi, other, skip)
 		if !replaced {
-			if cold, coldNote, ok := x.coldFirstMeal(base, t, out, merged, early, pi, other, skip); ok {
+			cold, coldNote, ok, why := x.coldFirstMeal(base, t, out, merged, early, pi, other, skip)
+			switch {
+			case ok:
 				next, note = cold, coldNote
-			} else if x.hasNoColdFoods(merged, skip) {
+			case x.hasNoColdFoods(merged, skip):
 				note += " The household has no suitable no-cook foods (a bread, a protein, a raw vegetable) for a cold plate."
+			case why != "":
+				note += " " + why
 			}
 		}
 		out = next
@@ -188,11 +192,11 @@ func (x *index) hasNoColdFoods(s State, skip map[int64]bool) bool {
 // cooks on its own cell, and the earlier one holds no recipe. The plan after
 // it must break no hard rule and add no soft issue the balancing pass does not
 // own (energy, protein, carbs and fat).
-func (x *index) coldFirstMeal(base State, t Target, in Proposal, merged State, early, late int, other int64, skip map[int64]bool) (Proposal, string, bool) {
+func (x *index) coldFirstMeal(base State, t Target, in Proposal, merged State, early, late int, other int64, skip map[int64]bool) (Proposal, string, bool, string) {
 	ep, lp := merged.Plates[early], merged.Plates[late]
 	i := int(-ep.ID) - 1
 	if !ep.Proposed() || i < 0 || i >= len(in.Plates) || in.Plates[i].PlateID != 0 {
-		return in, "", false
+		return in, "", false, ""
 	}
 	var dk *DayKcal
 	for _, a := range x.dayAccounts([]time.Time{ep.Date}) {
@@ -208,7 +212,7 @@ func (x *index) coldFirstMeal(base State, t Target, in Proposal, merged State, e
 	}
 	comps, ok := merged.composeColdPlate(skip, aim, dayTarget)
 	if !ok {
-		return in, "", false
+		return in, "", false, ""
 	}
 	out := in
 	out.Plates = slices.Clone(in.Plates)
@@ -247,18 +251,30 @@ func (x *index) coldFirstMeal(base State, t Target, in Proposal, merged State, e
 	for _, is := range after.Issues {
 		switch is.Severity {
 		case SeverityViolation:
-			if !hard[issueID(is)] {
-				return in, "", false
+			// The day's energy is lifted after the guards: judged on the balanced plan below.
+			if !hard[issueID(is)] && is.Code != CodeKcalBelowFloor {
+				return in, "", false, ""
 			}
 		case SeveritySoft:
 			// Energy, protein and the weekly shares are the balancing pass's to lift.
 			if !soft[softKey(is)] && is.Rule != "S2" && is.Rule != "S3" && is.Rule != "S4" && is.Rule != "S5" {
-				return in, "", false
+				return in, "", false, ""
 			}
 		}
 	}
+	bin := ChooseInput{State: base, Target: t}
+	for id := range skip {
+		bin.Exclude = append(bin.Exclude, id)
+	}
+	bal, _ := balancePlan(bin, out)
+	if k := newHard(hard, Evaluate(Merge(base, t, bal), t)); k != "" {
+		if strings.Contains(k, CodeKcalBelowFloor) {
+			return in, "", false, "A cold plate at lunch would leave the day under its minimum, so the dish stays."
+		}
+		return in, "", false, ""
+	}
 	if cookDays(after) > cookDays(ev) {
-		return in, "", false
+		return in, "", false, ""
 	}
 	var parts []string
 	kcal := 0.0
@@ -271,7 +287,7 @@ func (x *index) coldFirstMeal(base State, t Target, in Proposal, merged State, e
 	if x.cooksAt(out, ep.Date, lp.SlotID) {
 		dinner = "dinner is cooked fresh: " + food.Quote(foodName(merged, other))
 	}
-	return out, fmt.Sprintf("Day variety: %s: %s is a cold plate (about %.0f kcal, nothing to cook): %s; %s.", ep.Date.Weekday(), slotName(merged, ep.SlotID), kcal, strings.Join(parts, ", "), dinner), true
+	return out, fmt.Sprintf("Day variety: %s: %s is a cold plate (about %.0f kcal, nothing to cook): %s; %s.", ep.Date.Weekday(), slotName(merged, ep.SlotID), kcal, strings.Join(parts, ", "), dinner), true, ""
 }
 
 func sameCell(d1 time.Time, s1 int64, d2 time.Time, s2 int64) bool {

@@ -348,6 +348,12 @@ func verifiedAlternatives(ctx context.Context, svc Services, w window.Window, po
 		if len(newHard(r.before, r.after)) > 0 {
 			continue
 		}
+		if applied, ok := r.result["applied"].([]map[string]any); ok {
+			if extra, said := refitOpsOf(applied); len(extra) > 0 {
+				a.Ops = append(extra, a.Ops...)
+				a.Also = strings.Join(said, "; ")
+			}
+		}
 		a.NewIssues = newWarnings(r.before, r.after)
 		a.Recommended, a.Because = false, ""
 		if len(a.NewIssues) == 0 {

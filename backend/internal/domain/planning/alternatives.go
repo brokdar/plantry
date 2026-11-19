@@ -74,6 +74,9 @@ type AltRequest struct {
 	// floor (the compound ways of Ways make that up on another meal; their
 	// own check drops the ones that do not).
 	TolerateFloor bool
+	// KeepMeat keeps a candidate that raises the week's meat over its limit: the
+	// user named the dish, so it is listed (with the warning) instead of dropped.
+	KeepMeat bool
 	// NoLimit lists every verified candidate (Ways picks among them itself).
 	NoLimit bool
 }
@@ -123,6 +126,9 @@ type Alternative struct {
 	// weekly ledger's pct (0 without a target).
 	DayPct  float64 `json:"day_pct"`
 	WeekPct float64 `json:"week_pct"`
+	// Also names the other steps of the same change (a side that no longer
+	// fits the new main is swapped), their ops are in Ops.
+	Also string `json:"also,omitempty"`
 	// WeekMeatG is the week's meat after the change, per eater (g).
 	WeekMeatG        float64 `json:"week_meat_g,omitempty"`
 	CookOccasionsDay int     `json:"cook_occasions_day"`
@@ -263,7 +269,7 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 	blocked := map[string]Issue{} // per drop key the blocking issue that came closest
 	lightBest := math.NaN()       // the plate kcal closest to the light cap or minimum
 	for _, c := range cands {
-		a, why, by := s.tryAlt(t, pi, old, drop, c, base, hard, soft, len(baseCooks), cookedInWindow, req.TolerateFloor)
+		a, why, by := s.tryAlt(t, pi, old, drop, c, base, hard, soft, len(baseCooks), cookedInWindow, req.TolerateFloor, req.KeepMeat)
 		if why != "" {
 			dropped[why]++
 			if by != nil && closer(why, *by, blocked[why]) {
@@ -791,7 +797,7 @@ func (c AltConstraints) matches(f FoodFacts, words [][]diet.Alt) bool {
 
 // tryAlt applies c to a copy of s, re-evaluates it and builds the result;
 // false when the change adds a hard issue.
-func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluation, hard, soft map[string]bool, baseCooks int, cookedInWindow map[int64]bool, tolerateFloor bool) (Alternative, string, *Issue) {
+func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluation, hard, soft map[string]bool, baseCooks int, cookedInWindow map[int64]bool, tolerateFloor, keepMeat bool) (Alternative, string, *Issue) {
 	p := s.Plates[pi]
 	next := s
 	next.Plates = slices.Clone(s.Plates)
@@ -830,7 +836,7 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 	if why := newNutritionGap(base, ev, p); why != "" {
 		return Alternative{}, why, nil
 	}
-	if MeatOverStep(base, ev) {
+	if !keepMeat && MeatOverStep(base, ev) {
 		return Alternative{}, "S7." + CodeWeekMeatAboveDGE, nil
 	}
 	var newIssues []Issue

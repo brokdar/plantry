@@ -572,7 +572,13 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		b.plate(p)
 		b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(old)...)
 		b.note(op, map[string]any{"food": food.Data(old.FoodName), "to": food.Data(pc.FoodName), "date": p.DateString()})
-		return opResult(op, p, pc), nil
+		out := opResult(op, p, pc)
+		if pc.Position == plate.PositionMain {
+			if steps := refitSides(ctx, svc, p.ID, b); len(steps) > 0 {
+				out["refit"] = steps
+			}
+		}
+		return out, nil
 	case "set_quantity":
 		q := op.quantity()
 		if q.empty() {
@@ -732,6 +738,9 @@ func opAdd(ctx context.Context, svc Services, op changeOp, b *batch) (map[string
 		}
 	default:
 		return nil, fmt.Errorf("%w: add needs plate_id or date + slot_id", domain.ErrInvalidInput)
+	}
+	if err := sameKindRefusal(ctx, svc, p, op.FoodID); err != nil {
+		return nil, err
 	}
 	comp := op.quantity().component(op.FoodID)
 	comp.Position = plate.Position(op.Position)
@@ -1208,4 +1217,33 @@ func cookingMoved(ctx context.Context, svc Services, w window.Window, fixed []ma
 		facts["nothing_else_changed"] = true
 	}
 	return facts
+}
+
+// sameKindRefusal refuses an add that would put a second food of the same kind
+// on the plate (skyr on top of yogurt, bread beside potatoes) and says what to
+// do: raise the one there, or pick another kind.
+func sameKindRefusal(ctx context.Context, svc Services, p *plate.Plate, foodID int64) error {
+	w, ok := windowFrom(ctx)
+	if !ok || svc.State == nil {
+		return nil
+	}
+	st, err := svc.State(ctx, w, todayFrom(ctx))
+	if err != nil {
+		return nil
+	}
+	f, ok := st.Foods[foodID]
+	pi := indexPlate(st, p.ID)
+	if !ok || pi < 0 {
+		return nil
+	}
+	existing, kind, same := st.SameKind(st.Plates[pi], f)
+	if !same {
+		return nil
+	}
+	hint := "add another kind of food"
+	if existing.ID > 0 {
+		hint = fmt.Sprintf("raise it instead (set_quantity on plate_component_id %d, within its usual serving) or add another kind of food", existing.ID)
+		return fmt.Errorf("%w: %s would be a second %s on this plate beside %s: %s", domain.ErrInvalidInput, food.Quote(f.Name), kind, food.Quote(st.Foods[existing.FoodID].Name), hint)
+	}
+	return fmt.Errorf("%w: %s would be a second %s on this plate: %s", domain.ErrInvalidInput, food.Quote(f.Name), kind, hint)
 }

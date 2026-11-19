@@ -9,6 +9,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -560,6 +561,7 @@ func toolRegenerate(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			weekBefore := weekOf(ctx, svc, w)
+			stBefore, haveBefore := windowState(ctx, svc, w)
 			req := planning.Request{Start: w.Start, Today: todayFrom(ctx), Scope: sc, Instruction: in.Instruction, Light: light}
 			var id int64
 			if sc.Kind == planning.ScopeWindow {
@@ -601,6 +603,13 @@ func toolRegenerate(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			out.Week = weekEffect(weekBefore, weekOf(ctx, svc, w))
+			if stAfter, ok := windowState(ctx, svc, w); ok && haveBefore {
+				scoped := map[string]bool{}
+				for _, c := range out.Changed {
+					scoped[c.Date] = true
+				}
+				out.OtherDays = otherCookingDays(stBefore, stAfter, scoped)
+			}
 			params["count"] = len(out.Changed)
 			if sc.Kind == planning.ScopeSide {
 				if name, ok := newSideName(before, out.Changed); ok {
@@ -708,14 +717,21 @@ type regenerateOut struct {
 	Notes    string            `json:"notes,omitempty"`
 	Changed  []changedPlateOut `json:"changed"`
 	Week     *weekOut          `json:"week,omitempty"`
+	// OtherDays says, per day outside the plates the run wrote, how its cooking
+	// changed (a batch now for fewer or more meals, moved or gone).
+	OtherDays []string `json:"other_days,omitempty"`
 }
 
 // weekOut is what the run did to the week: the window's meat per person
 // against its limit, and the repeats the plan holds (E019).
 type weekOut struct {
-	MeatG   meatOut  `json:"meat_g"`
-	Repeats []string `json:"same_dish_twice"`
+	MeatG    meatOut  `json:"meat_g"`
+	MeatNote string   `json:"meat_note,omitempty"`
+	Repeats  []string `json:"same_dish_twice"`
 }
+
+// meatMainG is about the meat in one meat dish per person, for the meat note.
+const meatMainG = 100
 
 type meatOut struct {
 	Before float64 `json:"before"`
@@ -742,6 +758,10 @@ func weekEffect(before, after *planning.WeekEffect) *weekOut {
 	}
 	r := math.Round
 	out := &weekOut{MeatG: meatOut{Before: r(before.MeatG), After: r(after.MeatG), Limit: r(after.LimitG)}, Repeats: after.Repeats}
+	// A fact for the reply: why the new meals may hold no meat dish.
+	if after.LimitG > 0 && after.LimitG-after.MeatG < meatMainG {
+		out.MeatNote = fmt.Sprintf("The week now holds %.0f g of meat per person against a limit of %.0f g: %.0f g is left, less than one meat dish.", r(after.MeatG), r(after.LimitG), r(max(after.LimitG-after.MeatG, 0)))
+	}
 	if out.Repeats == nil {
 		out.Repeats = []string{}
 	}
@@ -802,3 +822,52 @@ func changedPlates(ctx context.Context, svc Services, from, to time.Time, runID 
 
 // fnum formats a portion count for an error message.
 func fnum(v float64) string { return strconv.FormatFloat(v, 'g', -1, 64) }
+
+// windowState reads the planning state of the window; false when it cannot be read.
+func windowState(ctx context.Context, svc Services, w window.Window) (planning.State, bool) {
+	if svc.State == nil {
+		return planning.State{}, false
+	}
+	st, err := svc.State(ctx, w, todayFrom(ctx))
+	return st, err == nil
+}
+
+// otherCookingDays lists the days outside scoped (ISO dates of the plates the
+// run wrote) whose cooking differs before and after: "Wed 25 Nov: the Tofu
+// stir-fry (for Fri 27 Nov lunch) was cooked for 2 meals, now for 1".
+func otherCookingDays(before, after planning.State, scoped map[string]bool) []string {
+	bc, ac := cookingByDay(before), cookingByDay(after)
+	days := map[string]bool{}
+	for d := range bc {
+		days[d] = true
+	}
+	for d := range ac {
+		days[d] = true
+	}
+	keys := make([]string, 0, len(days))
+	for d := range days {
+		if !scoped[d] {
+			keys = append(keys, d)
+		}
+	}
+	slices.Sort(keys)
+	var out []string
+	for _, d := range keys {
+		if sameCooking(bc[d], ac[d]) {
+			continue
+		}
+		out = append(out, fmt.Sprintf("%s cooking: was %s, now %s.", dayLabelStr(d), cookingWords(bc[d]), cookingWords(ac[d])))
+	}
+	return out
+}
+
+func cookingWords(ds []reportDish) string {
+	if len(ds) == 0 {
+		return "nothing"
+	}
+	parts := make([]string, len(ds))
+	for i, d := range ds {
+		parts[i] = fmt.Sprintf("%s at %s for %s", d.Dish, d.At, strings.Join(d.Eaten, ", "))
+	}
+	return strings.Join(parts, "; ")
+}
