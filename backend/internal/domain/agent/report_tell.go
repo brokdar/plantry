@@ -161,6 +161,21 @@ func buildTell(in reportInput, r changeReport) []string {
 				s += fmt.Sprintf(", %s (%s)", d.Status, d.Range)
 			}
 			add(s + ".")
+			// Protein before and after, in grams, when the day's protein moved.
+			for _, a := range in.after.Days {
+				if dayLabelStr(a.Date) != d.Day {
+					continue
+				}
+				for _, b := range in.before.Days {
+					if b.Date == a.Date && absf(a.ProteinG-b.ProteinG) >= 5 {
+						p := fmt.Sprintf("%s: protein %.0f g → %.0f g", d.Day, b.ProteinG, a.ProteinG)
+						if a.ProteinTargetG > 0 {
+							p += fmt.Sprintf(" (wanted %.0f g)", a.ProteinTargetG)
+						}
+						add(p + ".")
+					}
+				}
+			}
 		}
 	}
 	for _, c := range r.Cooking {
@@ -196,9 +211,6 @@ func buildTell(in reportInput, r changeReport) []string {
 	}
 	for _, s := range r.Worse {
 		add("Worse: " + s)
-	}
-	if len(r.NewWarnings)+len(r.Worse) > 0 && len(out) < maxTell {
-		add("Offer one fix for the warning above as a question.")
 	}
 	if len(out) > maxTell {
 		out = out[:maxTell]

@@ -30,6 +30,8 @@ func TestPlainReply(t *testing.T) {
 		{"german", "Ciabatta überschreitet die Zusatzgrenze von 120 g.", "Ciabatta überschreitet die Grenze für Beilagen von 120 g."},
 		{"required rule", "This is a warning, not a required rule, and the day stays above its minimum of 1650.", "This is a warning, not a must, and the day stays above its minimum of 1650."},
 		{"required-rule problem", "It is a warning, not a required-rule breach, for Tue.", "It is a warning, not a must, for Tue."},
+		{"article", "Shall I look for an add-on? An add-on limit applies.", "Shall I look for a side? A limit for sides applies."},
+		{"german plural", "Die Zusatz-Warnungen bleiben offen.", "Die Warnungen zu Beilagen bleiben offen."},
 		{"kept: tool in the kitchen", "Use the tool for peeling.", "Use the tool for peeling."},
 		{"kept: a band", "She plays in the band.", "She plays in the band."},
 		{"kept: an occasion", "A special cooking occasion.", "A special cooking occasion."},

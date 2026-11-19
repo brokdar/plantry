@@ -27,6 +27,9 @@ type State struct {
 	// PairAddOns turns on the add-on pairing rules (addOnFits) for the chat
 	// tools; the planner's own top-ups keep their candidates.
 	PairAddOns bool
+	// CookPile: an away call re-anchors the cooks of a day under CookTogether,
+	// so a move may bring any number of dishes onto one cooking time.
+	CookPile bool
 
 	Window window.Window
 	Today  time.Time

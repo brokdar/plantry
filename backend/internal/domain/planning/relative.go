@@ -32,10 +32,13 @@ const (
 	GoalLowerDay = "lower_day"
 	GoalRaiseDay = "raise_day"
 
-	// RelMinKcal and RelMinShare: a meaningful change of a meal's energy is
-	// at least RelMinShare of the meal or RelMinKcal, whichever is smaller.
-	RelMinKcal  = 80.0
-	RelMinShare = 0.10
+	// The real step of a relative request, defined once: a meal moves by at
+	// least RelMinShare of itself, a day by at least RelMinDayKcal or
+	// RelMinDayShare of itself (the larger), protein by RelMinProteinG. A way
+	// below it is not a way.
+	RelMinShare    = 0.10
+	RelMinDayKcal  = 100.0
+	RelMinDayShare = 0.05
 	// RelMinProteinG is a meaningful change of protein, meal or day.
 	RelMinProteinG = 10.0
 
@@ -52,10 +55,14 @@ const (
 )
 
 // MeaningfulKcal reports whether a change of delta kcal (in the asked
-// direction) on a meal of before kcal is a meaningful change of food.
+// direction) on a day of before kcal is a meaningful change of food.
 func MeaningfulKcal(before, delta float64) bool {
-	return delta >= math.Min(RelMinKcal, RelMinShare*before)-1e-9
+	return delta >= dayStep(before)-1e-9
 }
+
+// dayStep is the real step of a day request: 100 kcal or 5 % of the day,
+// whichever is more.
+func dayStep(day float64) float64 { return math.Max(RelMinDayKcal, RelMinDayShare*day) }
 
 // MeaningfulMealKcal is MeaningfulKcal for one meal: a noticeable step is a
 // tenth of the meal whatever its size (a big dinner raised by 8 % is not
@@ -582,7 +589,7 @@ func (w *waySearch) outOfBand(ev Evaluation) bool {
 
 // JudgeRelative decides a relative request: changed is true when the food
 // moved in the asked direction by a meaningful amount (energy: at least
-// RelMinShare of the meal or RelMinKcal, the smaller; protein: RelMinProteinG
+// RelMinShare of the meal, a day by dayStep; protein: RelMinProteinG
 // of the meal, or of the day when meal is false). reached is true when the
 // meal is at or under its light cap (maxKcal > 0) or at or over its hearty
 // minimum (minKcal > 0); for more_protein it equals changed. A request is
@@ -617,7 +624,7 @@ func JudgeRelative(goal string, meal bool, maxKcal, minKcal float64, before, aft
 		reached = maxKcal <= 0 || after.DayKcal <= maxKcal+0.5
 		switch {
 		case !changed:
-			why = fmt.Sprintf("the day holds %.0f kcal after, %.0f before: not lower by a meaningful amount (at least %.0f kcal)", after.DayKcal, before.DayKcal, math.Min(RelMinKcal, RelMinShare*before.DayKcal))
+			why = fmt.Sprintf("the day holds %.0f kcal after, %.0f before: not lower by a meaningful amount (at least %.0f kcal)", after.DayKcal, before.DayKcal, dayStep(before.DayKcal))
 		case !reached:
 			why = fmt.Sprintf("lower, but not in the lowered range yet: the day holds %.0f kcal (was %.0f), the range tops at %.0f kcal", after.DayKcal, before.DayKcal, maxKcal)
 		}
@@ -627,7 +634,7 @@ func JudgeRelative(goal string, meal bool, maxKcal, minKcal float64, before, aft
 		reached = minKcal <= 0 || after.DayKcal >= minKcal-0.5
 		switch {
 		case !changed:
-			why = fmt.Sprintf("the day holds %.0f kcal after, %.0f before: not higher by a meaningful amount (at least %.0f kcal)", after.DayKcal, before.DayKcal, math.Min(RelMinKcal, RelMinShare*before.DayKcal))
+			why = fmt.Sprintf("the day holds %.0f kcal after, %.0f before: not higher by a meaningful amount (at least %.0f kcal)", after.DayKcal, before.DayKcal, dayStep(before.DayKcal))
 		case !reached:
 			why = fmt.Sprintf("higher, but not in the raised range yet: the day holds %.0f kcal (was %.0f), the range starts at %.0f kcal", after.DayKcal, before.DayKcal, minKcal)
 		}

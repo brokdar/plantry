@@ -240,10 +240,22 @@ func checkMarks(st planning.State, light []planning.LightIntent, ev planning.Eva
 			kcal, _ := is.Params["kcal"].(float64)
 			if is.Code == planning.CodeMealNotLight {
 				limit, _ := is.Params["max_kcal"].(float64)
-				return fmt.Errorf("%w: the %s on %s would still hold %.0f kcal, more than a light meal holds at most (%.0f kcal): make it smaller first (find_ways with goal lighter shows how) or leave the light mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, limit)
+				return markRefusal{
+					err: fmt.Errorf("%w: the %s on %s would still hold %.0f kcal, more than a light meal holds at most (%.0f kcal): make it smaller first (find_ways with goal lighter shows how) or leave the light mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, limit),
+					tell: []string{
+						fmt.Sprintf("I did not mark %s %s as light and saved nothing: it would still hold %.0f kcal, more than a light meal (at most %.0f kcal).", dayLabelStr(l.Date), l.Slot, kcal, limit),
+						"I can make it smaller first, or leave the light mark off: say so if you want one of them.",
+					},
+				}
 			}
 			least, _ := is.Params["min_kcal"].(float64)
-			return fmt.Errorf("%w: the %s on %s would hold only %.0f kcal, less than a filling meal holds at least (%.0f kcal): make it bigger first (find_ways with goal heartier shows how) or leave the filling mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, least)
+			return markRefusal{
+				err: fmt.Errorf("%w: the %s on %s would hold only %.0f kcal, less than a filling meal holds at least (%.0f kcal): make it bigger first (find_ways with goal heartier shows how) or leave the filling mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, least),
+				tell: []string{
+					fmt.Sprintf("I did not mark %s %s as filling and saved nothing: it would hold only %.0f kcal, less than a filling meal (at least %.0f kcal).", dayLabelStr(l.Date), l.Slot, kcal, least),
+					"I can make it bigger first, or leave the filling mark off: say so if you want one of them.",
+				},
+			}
 		}
 	}
 	return nil
@@ -356,14 +368,24 @@ func nextStepText(ways, offers []planning.Way, res planning.WayResult) string {
 	switch {
 	case res.Impossible:
 		return fmt.Sprintf("change nothing: say why with the numbers (%s); offer offer[0] as the nearest safe option and ask whether to do it", res.EmptyWhy)
+	case (res.Goal == planning.GoalLighter || res.Goal == planning.GoalHeartier) && len(ways) > 0 && !ways[0].Reaches:
+		// Out of reach of the limit, a real step is still what was asked: apply it
+		// now, say how far it got, and offer the rest.
+		limit := fmt.Sprintf("a filling meal holds at least %.0f kcal", res.MinKcal)
+		if res.Goal == planning.GoalLighter {
+			limit = fmt.Sprintf("a light meal holds at most %.0f kcal and going lower would take the day under its minimum of %.0f kcal unless another meal grows", res.MaxKcal, res.FloorKcal)
+		}
+		text := fmt.Sprintf("apply ways[0] now and do not ask first: it takes the meal from %.0f to %.0f kcal, a real step and as far as the day allows (%s). Tell the user plainly how far it got and why it stops there", ways[0].Before.MealKcal, ways[0].After.MealKcal, limit)
+		if len(offers) > 0 {
+			text += fmt.Sprintf(". If the user asked for another meal to make up the difference (a bigger lunch) or has said yes to that, apply offer[0] instead of ways[0]: it takes the meal to %.0f kcal; otherwise offer it as the way further", offers[0].After.MealKcal)
+		}
+		return text
 	case len(ways) > 0 && len(offers) > 0:
 		return "apply ways[0] now with apply_changes (its ops, light and goal as returned), tell the user what changed with before and after, say if it is not yet a light (hearty) meal, and present the recommended one as your recommendation: apply an offer only when the user says yes"
-	case len(ways) > 0 && res.Goal == planning.GoalLighter && !ways[0].Reaches && res.FloorKcal > 0:
-		return fmt.Sprintf("apply ways[0] now with apply_changes (its ops, light and goal as returned), then tell the user what changed with before and after, and that it stays above a light meal because lighter would take the day under its minimum of %.0f kcal unless the other meals grew past their usual size", res.FloorKcal)
 	case len(ways) > 0:
 		return "apply ways[0] now with apply_changes (its ops, light and goal as returned), then tell the user what changed with before and after"
 	case len(offers) > 0:
-		return "nothing safe to apply on its own: explain why with the numbers and present the offer marked recommended as a question; apply it only when the user says yes"
+		return "nothing can be applied on its own here: explain why with the numbers and present the offer marked recommended in the same sentence as the explanation ('I would ...'). If the user already asked for the other meal to make up the difference (a bigger lunch) or has said yes to it, apply offer[0] now; otherwise apply it only when the user says yes"
 	}
 	return "nothing to apply: explain why with the numbers and what the user could change"
 }
@@ -376,3 +398,14 @@ func slicesDeleteFlag(why string) []string {
 	}
 	return []string{strings.TrimSpace(why)}
 }
+
+// markRefusal is a refused light or filling mark: the error for the log and
+// the short tell the reply says (what was refused, why with the number, the
+// one thing that can be done instead).
+type markRefusal struct {
+	err  error
+	tell []string
+}
+
+func (e markRefusal) Error() string { return e.err.Error() }
+func (e markRefusal) Unwrap() error { return e.err }

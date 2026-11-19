@@ -68,7 +68,7 @@ func TestAdviceFor_NothingUnasked(t *testing.T) {
 		want  string
 	}{
 		"nothing new":     {planning.Evaluation{}, ""},
-		"a soft issue":    {planning.Evaluation{Issues: []planning.Issue{soft}}, "offer the option marked recommended as a question"},
+		"a soft issue":    {planning.Evaluation{Issues: []planning.Issue{soft}}, "state the option marked recommended as your closing offer"},
 		"a day under min": {planning.Evaluation{Issues: []planning.Issue{floor, soft}}, "under its minimum"},
 	} {
 		t.Run(name, func(t *testing.T) {

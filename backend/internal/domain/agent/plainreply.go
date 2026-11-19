@@ -48,6 +48,9 @@ var replyRules = []replyRule{
 // planLine says a line talks about the plan.
 var planLine = regexp.MustCompile(`(?i)\d|\b(kcal|calories?|energy|protein|target|range|minimum|limit|warnings?|problems?|issues?|dinner|lunch|breakfast|batch|plan|week|weekly|day|days|portions?|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\b`)
 
+// anArticle repairs "an side" after a replacement.
+var anArticle = regexp.MustCompile(`\b([Aa])n (sides?|musts?|limits?|ranges?|minimum|cooking|filling|problems?|warnings?)\b`)
+
 var quoted = regexp.MustCompile(`"[^"\n]*"|“[^”\n]*”`)
 
 // plainReply rewrites a reply text; ISO dates become "Wed 25 Nov". Quoted
@@ -66,7 +69,7 @@ func plainReply(s string) string {
 				}
 				seg = r.re.ReplaceAllString(seg, r.to)
 			}
-			return seg
+			return anArticle.ReplaceAllString(seg, "$1 $2")
 		}
 		for _, m := range quoted.FindAllStringIndex(line, -1) {
 			b.WriteString(rewrite(line[last:m[0]]))

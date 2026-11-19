@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
+	"strings"
 )
 
 // The model must never need arithmetic: it subtracted a limit from a meal
@@ -97,6 +99,17 @@ func addDerived(name string, raw json.RawMessage) json.RawMessage {
 		if req, ok := obj["request"].(map[string]any); ok {
 			entry(req, "meal_kcal", "day_kcal", num(req["max_kcal"]), num(req["min_kcal"]))
 		}
+		if cookingMovedTell(obj) {
+			changed = true
+		}
+		if addOfferTell(obj) {
+			changed = true
+		}
+	}
+	if name == "find_ways" {
+		if s := waysClosing(obj); s != "" {
+			obj["closing"], changed = s, true
+		}
 	}
 	if !changed {
 		return raw
@@ -155,3 +168,204 @@ func dryRunView(raw json.RawMessage) json.RawMessage {
 
 // modelView is a tool result as the model reads it in the conversation.
 func modelView(raw json.RawMessage) json.RawMessage { return dryRunView(modelDates(raw)) }
+
+// offerSentence says the verified offer of a saved change as the closing
+// statement of the reply, or "" when there is none: the first of the result's
+// offers, else the first option of an issue the change made new.
+func offerSentence(obj map[string]any) string {
+	if list, _ := obj["offers"].([]any); len(list) > 0 {
+		if o, ok := list[0].(map[string]any); ok {
+			if what, _ := o["what"].(string); what != "" {
+				s := "I can also " + what
+				if eff, _ := o["effect"].(map[string]any); eff != nil {
+					day, _ := eff["day"].(string)
+					if k := num(eff["day_kcal_after"]); day != "" && k > 0 {
+						s += fmt.Sprintf(" (%s would then hold %.0f kcal)", day, math.Round(k))
+					}
+				}
+				return s + ": say so if you want it."
+			}
+		}
+	}
+	after, _ := obj["after"].(map[string]any)
+	issues, _ := after["issues"].(map[string]any)
+	news, _ := issues["new"].([]any)
+	for _, n := range news {
+		is, _ := n.(map[string]any)
+		opts, _ := is["options"].([]any)
+		if len(opts) == 0 {
+			continue
+		}
+		o, _ := opts[0].(map[string]any)
+		name, _ := o["name"].(string)
+		date, _ := o["date"].(string)
+		what := ""
+		amount := ""
+		switch {
+		case num(o["grams"]) > 0:
+			amount = fmt.Sprintf("%.0f g of ", math.Round(num(o["grams"])))
+		case num(o["portions"]) > 0:
+			amount = fmt.Sprintf("%s portions of ", fmtNum(num(o["portions"])))
+		}
+		switch o["action"] {
+		case "add":
+			what = "add " + amount + name
+		case "raise":
+			what = "raise " + name + " to " + strings.TrimSuffix(amount, " of ")
+		case "remove":
+			what = "leave out " + name
+		case "swap":
+			what = "swap in " + name
+		case "portions":
+			what = "change the portions of " + name + " to " + strings.TrimSuffix(amount, " of ")
+		case "move_cook":
+			what = "cook it on another day"
+		}
+		if what == "" || (name == "" && o["action"] != "move_cook") {
+			continue
+		}
+		if date != "" {
+			what += " on " + dayLabelStr(date)
+		}
+		s := "I can also " + what
+		if k := num(o["day_kcal"]); k > 0 {
+			s += fmt.Sprintf(" (the day would then hold %.0f kcal)", math.Round(k))
+		}
+		return s + ": say so if you want it."
+	}
+	return ""
+}
+
+// addOfferTell makes the offer the last item of report.tell.
+func addOfferTell(obj map[string]any) bool {
+	if obj["dry_run"] == true {
+		return false
+	}
+	rep, _ := obj["report"].(map[string]any)
+	if rep == nil {
+		return false
+	}
+	s := offerSentence(obj)
+	if s == "" {
+		return false
+	}
+	tell, _ := rep["tell"].([]any)
+	rep["tell"] = append(tell, s)
+	return true
+}
+
+// waysClosing is the ready closing sentence for the first offer of a find_ways
+// result (a step beyond the asked meal, never applied unasked), in the style of
+// the last report.tell item; "" without an offer.
+func waysClosing(obj map[string]any) string {
+	list, _ := obj["offer"].([]any)
+	for _, e := range list {
+		o, _ := e.(map[string]any)
+		what, _ := o["what"].(string)
+		if what == "" {
+			continue
+		}
+		s := "I can also " + what
+		var notes []string
+		if o["changes_other_meal"] == true {
+			notes = append(notes, "it also changes another meal")
+		}
+		if after, _ := o["after"].(map[string]any); after != nil {
+			if k := num(after["day_kcal"]); k > 0 {
+				notes = append(notes, fmt.Sprintf("the day would then hold %.0f kcal", math.Round(k)))
+			}
+		}
+		if len(notes) > 0 {
+			s += " (" + strings.Join(notes, "; ") + ")"
+		}
+		return s + ": say so if you want it."
+	}
+	return ""
+}
+
+// cookingMovedTell turns the cooking_moved facts of an away call into at most
+// three tell items: where everything is now cooked and what each dish feeds,
+// and that nothing else changed. The per-dish cooking lines of the same moves
+// (the cooking day lists, "now cooked", "no longer cooked", the automatic fix)
+// are dropped so nothing repeats or contradicts it.
+func cookingMovedTell(obj map[string]any) bool {
+	cm, _ := obj["cooking_moved"].(map[string]any)
+	rep, _ := obj["report"].(map[string]any)
+	if cm == nil || rep == nil {
+		return false
+	}
+	groups, _ := cm["cooked_now"].([]any)
+	var items []string
+	var days []string
+	for _, g := range groups {
+		m, _ := g.(map[string]any)
+		day, _ := m["day"].(string)
+		if day == "" {
+			continue
+		}
+		day = dayLabelStr(day)
+		days = append(days, day)
+		at, _ := m["cooking_time"].(string)
+		if at != "" {
+			at = " at " + at
+		}
+		var dishes []string
+		ds, _ := m["dishes"].([]any)
+		for _, d := range ds {
+			dm, _ := d.(map[string]any)
+			dish, _ := dm["dish"].(string)
+			var feeds []string
+			switch f := dm["feeds"].(type) {
+			case []any:
+				for _, x := range f {
+					if s, ok := x.(string); ok {
+						feeds = append(feeds, s)
+					}
+				}
+			case string:
+				feeds = append(feeds, f)
+			}
+			if dish != "" {
+				dishes = append(dishes, dish+" for "+strings.Join(feeds, ", "))
+			}
+		}
+		if len(dishes) == 0 {
+			continue
+		}
+		items = append(items, fmt.Sprintf("Everything that moved is now cooked together on %s%s, one cooking time: %s.", day, at, strings.Join(dishes, "; ")))
+	}
+	if len(items) == 0 {
+		return false
+	}
+	if cm["nothing_else_changed"] == true {
+		items = append(items, "Nothing else in the week changed.")
+	}
+	var kept []any
+	insertAt := -1
+	tell, _ := rep["tell"].([]any)
+	for _, it := range tell {
+		s, _ := it.(string)
+		drop := strings.Contains(s, "is now cooked") || strings.Contains(s, "no longer cooked") ||
+			strings.HasPrefix(s, "To keep one cooking time")
+		for _, d := range days {
+			drop = drop || strings.HasPrefix(s, d+" you cook")
+		}
+		if drop {
+			if insertAt < 0 {
+				insertAt = len(kept)
+			}
+			continue
+		}
+		kept = append(kept, it)
+	}
+	if insertAt < 0 {
+		insertAt = len(kept)
+	}
+	add := make([]any, len(items))
+	for i, s := range items {
+		add[i] = s
+	}
+	out := append(append(slices.Clone(kept[:insertAt]), add...), kept[insertAt:]...)
+	rep["tell"] = out
+	return true
+}
