@@ -224,7 +224,7 @@ func toolApplyChanges(svc Services) Tool {
 			if !ok {
 				return nil, ToolEffectNone, fmt.Errorf("%w: no plan window in this conversation turn", domain.ErrInvalidInput)
 			}
-			run, err := runApply(ctx, svc, w, applyInput{Ops: in.Ops, DryRun: in.DryRun, Light: light, Goal: in.Goal}, ignoredFields(input))
+			run, err := runGuarded(ctx, svc, w, applyInput{Ops: in.Ops, DryRun: in.DryRun, Light: light, Goal: in.Goal}, ignoredFields(input))
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -552,7 +552,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		b.removed = append(b.removed, pc.FoodID)
 		b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(pc)...)
 		b.note(op, map[string]any{"food": pc.FoodName, "date": p.DateString()})
-		return map[string]any{"op": op.Op, "plate_component_id": op.PlateComponentID, "removed": true}, nil
+		return map[string]any{"op": op.Op, "plate_component_id": op.PlateComponentID, "removed": true, "food": pc.FoodName, "date": p.DateString()}, nil
 	case "create_plate":
 		d, err := parseOpDate(op.Date)
 		if err != nil {

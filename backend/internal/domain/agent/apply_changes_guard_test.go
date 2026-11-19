@@ -54,7 +54,7 @@ func TestApplyChanges_UndoRevertsTheWholeBatch(t *testing.T) {
 
 	ch := e.change(ctx, "apply_changes", fmt.Sprintf(`{"ops":[
 		{"op":"set_eaters","plate_id":%d,"eaters":3},
-		{"op":"add","date":%q,"slot_id":%d,"food_id":%d,"portions":1}]}`, p.ID, p.DateString(), slotID, e.sides[0]))
+		{"op":"create_plate","date":%q,"slot_id":%d}]}`, p.ID, p.DateString(), slotID))
 	assert.Len(t, opsOf(ch), 2, "one line entry per op")
 	assert.Equal(t, before["ai_changes"]+1, e.dbCounts()["ai_changes"], "one change for the call")
 	assert.Equal(t, before["plates"]+1, e.dbCounts()["plates"])

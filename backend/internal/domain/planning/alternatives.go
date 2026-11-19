@@ -600,7 +600,7 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 			!req.Constraints.matches(f, words) {
 			continue
 		}
-		if req.What == AltAdd && !f.Composed() && !s.addOnFits(p, f, slotName(s, p.SlotID)) {
+		if (req.What == AltAdd || req.What == AltSide) && !f.Composed() && !s.addOnFits(p, f, slotName(s, p.SlotID)) {
 			continue
 		}
 		comp := Component{FoodID: id, Proposed: true}

@@ -156,7 +156,6 @@ type weekSwap struct {
 	oldMeatG  float64 // the replaced main's meat per eater
 	newMeatG  float64
 	plateMeat float64
-	rankMeat  float64
 }
 
 // swapPlates are the indices of the plates a swap may change, largest meat

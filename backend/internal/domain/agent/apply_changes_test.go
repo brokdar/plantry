@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
+
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
@@ -134,6 +136,7 @@ func TestApplyChanges_FailingOpRollsBackTheBatch(t *testing.T) {
 // batch. cook_at puts it on the existing cook cell, so H2 stays quiet.
 func TestApplyChanges_CookAtSharesTheCookCell(t *testing.T) {
 	e := newPlanToolEnv(t)
+	e.setCookLimit(1)
 	p, _ := e.freshMain()
 	slotID := e.emptyOtherSlot(p)
 	side := e.sides[0]
@@ -173,4 +176,9 @@ func TestFindFoods_NoCookReturnsLeaves(t *testing.T) {
 		assert.Contains(t, f, "per_100g")
 	}
 	assert.Equal(t, []string{"Gurke"}, names)
+}
+
+func (e *planToolEnv) setCookLimit(n int) {
+	e.t.Helper()
+	require.NoError(e.t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", fmt.Sprint(n)))
 }

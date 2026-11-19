@@ -327,3 +327,102 @@ func TestFindWays_NextStepWithAnOffer(t *testing.T) {
 		}
 	}
 }
+
+// mainComponentID returns the id of the plate's main component.
+func mainComponentID(t *testing.T, p plate.Plate) int64 {
+	t.Helper()
+	for _, c := range p.Components {
+		if c.FoodRole != nil && *c.FoodRole == "main" {
+			return c.ID
+		}
+	}
+	t.Fatalf("plate %d has no main", p.ID)
+	return 0
+}
+
+// E018b: a write never leaves a day under its minimum. Of several ops the safe
+// subset is saved and the rest is named with numbers; a single unsafe op is
+// refused (nothing saved); explicit away and all-safe calls are untouched.
+func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
+	e := relEnv(t)
+	ctx, _ := e.chat()
+	var dinners []plate.Plate
+	for _, p := range e.draftMeals() {
+		if p.SlotID == e.slotID("dinner") {
+			dinners = append(dinners, p)
+		}
+	}
+	require.GreaterOrEqual(t, len(dinners), 2)
+	a, b := dinners[0], dinners[1]
+	require.NotEqual(t, a.DateString(), b.DateString())
+
+	// A floor just under day A's kcal: any real cut of A falls under it.
+	gp := e.mustExec("get_plan", fmt.Sprintf(`{"from":%q,"to":%q}`, a.DateString(), a.DateString()))
+	var kcal float64
+	for _, d := range gp["evaluation"].(map[string]any)["days"].([]any) {
+		if m := d.(map[string]any); m["date"] == a.DateString() {
+			kcal = m["kcal"].(float64)
+		}
+	}
+	require.Positive(t, kcal)
+	e.sql(`UPDATE user_profile SET kcal_target = ? WHERE id = 1`, (kcal-5)/0.75)
+	portions := func(p plate.Plate, id int64) float64 {
+		for _, q := range e.week() {
+			if q.ID == p.ID {
+				for _, c := range q.Components {
+					if c.ID == id {
+						return *c.Portions
+					}
+				}
+			}
+		}
+		t.Fatal("component gone")
+		return 0
+	}
+	ma, mb := mainComponentID(t, a), mainComponentID(t, b)
+	cut := fmt.Sprintf(`{"op":"set_quantity","plate_component_id":%d,"portions":0.5}`, ma)
+	raise := fmt.Sprintf(`{"op":"set_quantity","plate_component_id":%d,"portions":1.5}`, mb)
+	was := portions(a, ma)
+
+	t.Run("the safe subset is saved, the unsafe op named with numbers", func(t *testing.T) {
+		res, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(`{"ops":[`+cut+`,`+raise+`]}`))
+		require.NoError(t, err)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal(res, &got))
+		skipped := relMaps(got["skipped"])
+		require.Len(t, skipped, 1)
+		assert.EqualValues(t, 1, skipped[0]["op"])
+		assert.Contains(t, skipped[0]["why"], "under its minimum")
+		assert.Contains(t, got["next"], "safe part is applied (1 of 2")
+		assert.InDelta(t, was, portions(a, ma), 1e-9, "the unsafe cut was not saved")
+		assert.InDelta(t, 1.5, portions(b, mb), 1e-9, "the safe raise was")
+		for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
+			assert.NotEqual(t, "violation", is["severity"])
+		}
+	})
+	t.Run("a single unsafe op is refused, not half-applied", func(t *testing.T) {
+		res, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(`{"ops":[`+cut+`]}`))
+		require.NoError(t, err)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal(res, &got))
+		assert.Equal(t, false, got["saved"])
+		assert.Contains(t, got["refused"], "under its minimum")
+		assert.Contains(t, got["next"], "nothing was saved")
+		assert.InDelta(t, was, portions(a, ma), 1e-9)
+	})
+	t.Run("a call that is all safe has no skipped part", func(t *testing.T) {
+		res, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(`{"dry_run":true,"ops":[`+raise+`]}`))
+		require.NoError(t, err)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal(res, &got))
+		assert.Nil(t, got["skipped"])
+	})
+	t.Run("away is explicit and not judged", func(t *testing.T) {
+		res, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(fmt.Sprintf(`{"ops":[{"op":"away","date":%q}]}`, a.DateString())))
+		require.NoError(t, err)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal(res, &got))
+		assert.Nil(t, got["skipped"])
+		assert.Nil(t, got["saved"])
+	})
+}

@@ -64,7 +64,7 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 	set := testsvc.Settings(db)
 	for k, v := range map[string]string{
 		"plan.shopping_day": "5", "plan.batch_cooking": "true", "plan.default_keep_days": "3",
-		"plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "true",
+		"plan.max_cook_occasions_per_day": "3", "plan.variety_weeks": "3", "plan.freezing_enabled": "true",
 	} {
 		require.NoError(t, set.Set(ctx, k, v))
 	}

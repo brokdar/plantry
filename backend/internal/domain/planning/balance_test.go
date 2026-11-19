@@ -27,8 +27,10 @@ func freshPlan(s planning.State) planning.Proposal {
 		if c.SlotID == breakfast {
 			continue
 		}
-		p.Plates = append(p.Plates, planning.ProposedPlate{Date: c.Date, SlotID: c.SlotID, Eaters: 1,
-			Components: []planning.ProposedComponent{{FoodID: int64(101 + n%7), Portions: 1}}})
+		p.Plates = append(p.Plates, planning.ProposedPlate{
+			Date: c.Date, SlotID: c.SlotID, Eaters: 1,
+			Components: []planning.ProposedComponent{{FoodID: int64(101 + n%7), Portions: 1}},
+		})
 		n++
 	}
 	return p
@@ -106,7 +108,7 @@ func TestBalancePlan(t *testing.T) {
 		prop := freshPlan(s)
 		prop.Plates = prop.Plates[:0:0]
 		for _, c := range s.Cells {
-			if c.SlotID != breakfast && !(c.Date.Equal(day(tue)) && c.SlotID == dinner) {
+			if c.SlotID != breakfast && (!c.Date.Equal(day(tue)) || c.SlotID != dinner) {
 				prop.Plates = append(prop.Plates, planning.ProposedPlate{Date: c.Date, SlotID: c.SlotID, Eaters: 1, Components: []planning.ProposedComponent{{FoodID: 102, Portions: 1}}})
 			}
 		}
