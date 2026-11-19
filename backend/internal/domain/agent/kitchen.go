@@ -124,26 +124,12 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 		if err != nil || res.Current == nil {
 			continue
 		}
-		// The cleanest replacement (the list is ranked by new warnings); one that
-		// still creates a warning says which.
-		for _, a := range res.Alternatives {
-			if len(a.Ops) == 0 {
-				continue
-			}
-			offer := map[string]any{
+		// The cleanest replacement (the list is ranked by new warnings).
+		if a, ok := firstClean(res.Alternatives, func(ops []planning.OptionOp) bool { return offerIsClean(ctx, svc, w, ops) }); ok {
+			offers = append(offers, map[string]any{
 				"what": fmt.Sprintf("replace %s on %s with %s", res.Current.Name, plainDay(is.Date), a.Name), "ops": a.Ops,
 				"recommended": len(offers) == 0, "recommended_because": "removes the repeat, no new warning",
-			}
-			if len(a.NewIssues) > 0 {
-				var labels []string
-				for _, ni := range a.NewIssues {
-					labels = append(labels, planning.PlainText(ni.Code).Label)
-				}
-				offer["creates_warning"] = labels
-				offer["recommended_because"] = "removes the repeat; the closest available, it creates a warning (creates_warning)"
-			}
-			offers = append(offers, offer)
-			break
+			})
 		}
 	}
 	// A named meat dish saves, and its week effect is told with one way to
@@ -200,7 +186,7 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 	case options:
 		return lead + " made new issues: report them and offer the option marked recommended as a question" + tail, nil
 	}
-	return lead + " made new issues: report them plainly" + tail, nil
+	return lead + " made new issues: report them plainly", nil
 }
 
 // repeatedPlate is the latest draft plate that eats the dish a repeat warning
@@ -261,7 +247,7 @@ func meatBalanceOffer(ctx context.Context, svc Services, w window.Window, touche
 			continue
 		}
 		for _, a := range res.Alternatives {
-			if len(a.NewIssues) == 0 && len(a.Ops) > 0 && a.WeekMeatG < bestMeat {
+			if len(a.NewIssues) == 0 && len(a.Ops) > 0 && a.WeekMeatG < bestMeat && offerIsClean(ctx, svc, w, a.Ops) {
 				bestMeat = a.WeekMeatG
 				best = map[string]any{
 					"what": fmt.Sprintf("replace %s on %s with %s: the week's meat falls from %.0f to %.0f g", res.Current.Name, dayLabel(p.Date), a.Name, now, a.WeekMeatG),

@@ -132,17 +132,9 @@ func nonNil(w []planning.Way) []planning.Way {
 // non-empty reason means the way is not offered: the call failed or it adds a
 // hard issue.
 func checkWay(ctx context.Context, svc Services, w window.Window, goal applyGoal, date string, way planning.Way) (planning.Way, string) {
-	ops := make([]changeOp, 0, len(way.Ops))
-	for _, o := range way.Ops {
-		raw, err := json.Marshal(o)
-		if err != nil {
-			return way, err.Error()
-		}
-		var op changeOp
-		if err := json.Unmarshal(raw, &op); err != nil {
-			return way, err.Error()
-		}
-		ops = append(ops, op)
+	ops, err := changeOpsOf(way.Ops)
+	if err != nil {
+		return way, err.Error()
 	}
 	light, err := parseLight(way.Light)
 	if err != nil {

@@ -102,3 +102,19 @@ func TestAdviceFor_WeekMeat(t *testing.T) {
 	under, _ := adviceFor(ctx, Services{}, planningWindow, ev(100), planning.Evaluation{Week: &planning.WeekEval{MeatG: 200}}, false, nil)
 	assert.Empty(t, under, "still under the limit")
 }
+
+// A recommended offer never creates a warning: an alternative that lists no
+// new issue but whose own check does make one is skipped.
+func TestFirstClean_SkipsWhatItsCheckDirties(t *testing.T) {
+	op := []planning.OptionOp{{Op: "swap"}}
+	dirty := planning.Alternative{Name: "Tuna pasta", Ops: op}
+	clean := planning.Alternative{Name: "Lentil curry", Ops: op}
+	listed := planning.Alternative{Name: "Pizza", Ops: op, NewIssues: []planning.Issue{{Code: "x"}}}
+	calls := 0
+	checks := func(ops []planning.OptionOp) bool { calls++; return calls > 1 }
+	got, ok := firstClean([]planning.Alternative{listed, dirty, clean}, checks)
+	assert.True(t, ok)
+	assert.Equal(t, "Lentil curry", got.Name)
+	_, ok = firstClean([]planning.Alternative{listed, dirty}, func([]planning.OptionOp) bool { return false })
+	assert.False(t, ok)
+}

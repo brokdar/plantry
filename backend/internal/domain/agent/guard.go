@@ -257,15 +257,62 @@ func replacementOffer(ctx context.Context, svc Services, w window.Window, op cha
 			if err != nil || res.Current == nil {
 				return nil
 			}
-			for _, a := range res.Alternatives {
-				if len(a.NewIssues) == 0 && len(a.Ops) > 0 {
-					return map[string]any{
-						"what": fmt.Sprintf("replace %s on %s with %s so the day stays above its minimum", res.Current.Name, dayLabel(p.Date), a.Name),
-						"ops":  a.Ops, "recommended": first, "recommended_because": "keeps the day above its minimum, no new warning",
-					}
+			if a, ok := firstClean(res.Alternatives, func(ops []planning.OptionOp) bool { return offerIsClean(ctx, svc, w, ops) }); ok {
+				return map[string]any{
+					"what": fmt.Sprintf("replace %s on %s with %s so the day stays above its minimum", res.Current.Name, dayLabel(p.Date), a.Name),
+					"ops":  a.Ops, "recommended": first, "recommended_because": "keeps the day above its minimum, no new warning",
 				}
 			}
 		}
 	}
 	return nil
+}
+
+// changeOpsOf reads the ops of a planner way or alternative as apply_changes ops.
+func changeOpsOf(in []planning.OptionOp) ([]changeOp, error) {
+	ops := make([]changeOp, 0, len(in))
+	for _, o := range in {
+		raw, err := json.Marshal(o)
+		if err != nil {
+			return nil, err
+		}
+		var op changeOp
+		if err := json.Unmarshal(raw, &op); err != nil {
+			return nil, err
+		}
+		ops = append(ops, op)
+	}
+	return ops, nil
+}
+
+// firstClean is the best-ranked alternative that lists no new issue and passes
+// the check of its own ops: a recommended offer never creates a warning.
+func firstClean(alts []planning.Alternative, clean func([]planning.OptionOp) bool) (planning.Alternative, bool) {
+	for _, a := range alts {
+		if len(a.NewIssues) == 0 && len(a.Ops) > 0 && clean(a.Ops) {
+			return a, true
+		}
+	}
+	return planning.Alternative{}, false
+}
+
+// offerIsClean runs an offer's ops through the check apply_changes uses
+// (rolled back) and says whether it adds no problem and no warning, by the same
+// issue keys as report.new_warnings: guard, offers and report share one set.
+func offerIsClean(ctx context.Context, svc Services, w window.Window, in []planning.OptionOp) bool {
+	ops, err := changeOpsOf(in)
+	if err != nil || len(ops) == 0 {
+		return false
+	}
+	r, err := runApply(ctx, svc, w, applyInput{Ops: ops, DryRun: true, quiet: true}, nil)
+	if err != nil {
+		return false
+	}
+	was := issueMap(r.before.Issues)
+	for _, is := range r.after.Issues {
+		if _, old := was[issueKey(is)]; !old {
+			return false
+		}
+	}
+	return true
 }
