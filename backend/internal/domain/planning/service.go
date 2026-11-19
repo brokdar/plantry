@@ -18,6 +18,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plainwords"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/setup"
@@ -893,6 +894,8 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		if !prop.OwnSet {
 			own = orig.Notes
 		}
+		// The model's own sentence goes through the reply rewriter the chat uses.
+		own = plainwords.Reply(own)
 		prop.Notes = joinNotes(append([]string{own}, savedPlanNotes(cin, orig, prop)...)...)
 		runLog = map[string]any{"chooser_notes": chooserNotes, "changes": append(slices.Clone(capNotes), finishNotes...)}
 		// A plan that still breaks a hard rule keeps the chooser's warnings: they are true of it.

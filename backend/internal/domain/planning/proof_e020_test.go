@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -193,6 +194,33 @@ func proofOne(t *testing.T, round, dir, label string) {
 		}
 		_ = json.Unmarshal(ab2, &v2)
 		fmt.Printf("  second evaluation: issues=%d levers=%d accepted=%q\n", len(v2.Issues), len(v2.Levers), v2.Accept)
+	}
+	{
+		words := regexp.MustCompile(`(?i)\b(bands?|floors?|caps?|hearty|occasions?|add-ons?|soft|hard|sessions?|violations?)\b`)
+		var v any
+		_ = json.Unmarshal(planning.KitchenJSON(ab), &v)
+		counts := map[string]int{}
+		var walk func(v any)
+		walk = func(v any) {
+			switch x := v.(type) {
+			case string:
+				if strings.Contains(x, " ") {
+					for _, m := range words.FindAllString(x, -1) {
+						counts[strings.ToLower(m)]++
+					}
+				}
+			case []any:
+				for _, e := range x {
+					walk(e)
+				}
+			case map[string]any:
+				for _, e := range x {
+					walk(e)
+				}
+			}
+		}
+		walk(v)
+		fmt.Printf("  WORDS in the evaluate_plan result prose: %v\n", counts)
 	}
 	if h, ok := after["variety_hints"]; ok {
 		fmt.Printf("  VARIETY: %v\n", h)

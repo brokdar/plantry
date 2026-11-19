@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -19,7 +20,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p26"
+const PromptVersion = "p27"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -93,22 +94,22 @@ var submitPlanSchema = `{
 // evaluatePlanTool takes submit_plan's input and returns the evaluation of
 // that plan without saving anything.
 func evaluatePlanTool() llm.Tool {
-	return llm.Tool{
+	return withKitchenWords(llm.Tool{
 		Name: evaluatePlanName,
 		Description: "Dry run: same input as submit_plan, saves nothing. Returns JSON for the plan as it would stand, compact: only the days your plan puts a plate on, numbers rounded (kcal whole, the rest one decimal), and every field that is 0, false or empty left out (an absent field is 0 / false / none; complete and nutrition_complete show only when false: a planned meal of the day has no plate / a food lacks nutrition data): " +
 			"{days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete,nutrition_missing}], meat_days, meat_days_max, " +
 			"plates:[{date,slot_id,plate_id,eaters,kcal,protein_g,components (only on the plates you proposed, plate_id negative):[{food_id,name,role,portions|grams,kcal,protein_g,session_key}]}], issues:[{rule,code,severity violation|warning|soft,date,slot_id,params,options:[{action add|raise,food_id,name,date,slot_id,portions|grams,from,kcal_delta,protein_delta_g,day_kcal,day_protein_pct,cook_occasions,new_meat_day,op}]}], week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only), meat_g? (sum over the week.days counted, limit 300 x days / 7), fish_meals?, legume_meals?, produce_g_per_day? (DGE food groups, per eater)}, totals:{violations,warnings,soft}, autofix:[string] (only when Go corrected the plan)}. issues hold the hard violations and warnings of the whole plan and the soft issues (S2, S3) of the listed days only; totals count exactly the issues listed. " +
 			"Hard rules (violation) must be fixed before submit_plan; soft rules (S2 day kcal outside the day band of its target, S3 protein under 90% of the day's target (or the share under target), S4 the weekly average outside the week band, S5 weekly carb or fat share outside its range, S6 a meal named in light that is not lighter, S7 a DGE weekly food rule missed on 5 or more complete days (week_meat_above_dge, week_fish_below_dge, week_legumes_below_dge)) should be fixed when an option fits; the week matters most. With light requests the days list light (meal|day) and normal_target_kcal, and week.target_kcal is the target after them (week.normal_target_kcal the normal one). The kcal target is a target, not a limit. H9 (a day below its safety floor) is a hard rule. Call it as often as needed.",
 		Schema: json.RawMessage(submitPlanSchema),
-	}
+	})
 }
 
 func submitPlanTool() llm.Tool {
-	return llm.Tool{
+	return withKitchenWords(llm.Tool{
 		Name:        submitPlanName,
 		Description: "Submit the complete plan for the cells marked fill: every session you propose and every plate. Evaluate it with evaluate_plan first. A plan with hard violations is sent back with the evaluation (same shape as evaluate_plan's result).",
 		Schema:      json.RawMessage(submitPlanSchema),
-	}
+	})
 }
 
 // EstimateTokens is the character-based input token estimate (D18): one
@@ -178,7 +179,7 @@ func renderPrompt(in ChooseInput) (string, []FoodFacts) {
 		fmt.Fprintf(&b, "(%d more recipes left out for length.)\n", omitted)
 	}
 	b.WriteString(tail.String())
-	return b.String(), trimmed
+	return kitchenProse(b.String()), trimmed
 }
 
 // RenderPlanSummary renders the plan window of s for the chat's system prompt
@@ -964,4 +965,79 @@ func writeRecentMains(b *strings.Builder, s State) {
 		names = names[:maxRecentNames]
 	}
 	fmt.Fprintf(b, "\nEaten within the last %d weeks (H8: do not cook these as mains unless the candidates run out): %s%s.\n", weeks, strings.Join(names, ", "), more)
+}
+
+// kitchenProse puts the planner's words in the prose of what the planner model
+// reads into the words of the chat boundary and of the saved note: range,
+// minimum, limit, filling, cooking time, side. Identifiers (kcal_below_band,
+// band_low, cook_occasions) hold an underscore and stay: they are field names the
+// model reads and passes back, as are the severity values and the batch field
+// `sessions`, which are the plan's data format, not prose.
+func kitchenProse(s string) string {
+	for _, r := range kitchenProseRules {
+		s = r.re.ReplaceAllString(s, r.to)
+	}
+	return s
+}
+
+var kitchenProseRules = []struct {
+	re *regexp.Regexp
+	to string
+}{
+	{regexp.MustCompile(`\bSoft rules\b`), "Warnings"},
+	{regexp.MustCompile(`\bsoft rules\b`), "warnings"},
+	{regexp.MustCompile(`\bHard rules\b`), "Musts"},
+	{regexp.MustCompile(`\bhard rules\b`), "musts"},
+	{regexp.MustCompile(`\b(?:safety )?floors?\b`), "minimum"},
+	{regexp.MustCompile(`\bbands\b`), "ranges"},
+	{regexp.MustCompile(`\bband\b`), "range"},
+	{regexp.MustCompile(`\bcaps\b`), "limits"},
+	{regexp.MustCompile(`\bcap\b`), "limit"},
+	{regexp.MustCompile(`\bHearty\b`), "Filling"},
+	{regexp.MustCompile(`\bhearty\b`), "filling"},
+	{regexp.MustCompile(`\b(?i:(?:cooking|cook) occasions)\b`), "cooking times"},
+	{regexp.MustCompile(`\b(?i:(?:cooking|cook)? ?occasion)\b`), "cooking time"},
+	{regexp.MustCompile(`\bAdd-ons\b`), "Sides"},
+	{regexp.MustCompile(`\badd-ons\b`), "sides"},
+	{regexp.MustCompile(`\bAdd-on\b`), "Side"},
+	{regexp.MustCompile(`\badd-on\b`), "side"},
+	{regexp.MustCompile(`\bdrafts?\b`), "plan"},
+}
+
+// withKitchenWords puts a tool description's prose in kitchen words.
+func withKitchenWords(t llm.Tool) llm.Tool {
+	t.Description = kitchenProse(t.Description)
+	return t
+}
+
+// kitchenJSON puts the prose strings of a result (the ones with a space in
+// them) in kitchen words; keys, ids and one-word values stay.
+func kitchenJSON(raw []byte) []byte {
+	var v any
+	if json.Unmarshal(raw, &v) != nil {
+		return raw
+	}
+	var walk func(v any) any
+	walk = func(v any) any {
+		switch x := v.(type) {
+		case string:
+			if strings.Contains(x, " ") {
+				return kitchenProse(x)
+			}
+		case []any:
+			for i := range x {
+				x[i] = walk(x[i])
+			}
+		case map[string]any:
+			for k, e := range x {
+				x[k] = walk(e)
+			}
+		}
+		return v
+	}
+	out, err := json.Marshal(walk(v))
+	if err != nil {
+		return raw
+	}
+	return out
 }

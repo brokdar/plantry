@@ -621,7 +621,7 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 	if err != nil {
 		return fail("error: encode evaluation")
 	}
-	res.ToolResultContent = out
+	res.ToolResultContent = kitchenJSON(out)
 	return res
 }
 
@@ -634,5 +634,5 @@ func evaluationFeedback(in ChooseInput, prop Proposal) string {
 	if err != nil {
 		return ""
 	}
-	return "\nEvaluation of this plan (the same result evaluate_plan returns): " + string(out)
+	return "\nEvaluation of this plan (the same result evaluate_plan returns): " + string(kitchenJSON(out))
 }

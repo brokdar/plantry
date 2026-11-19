@@ -119,6 +119,19 @@ func plannerView(in ChooseInput, prop Proposal, offered bool) (map[string]any, E
 			view["repeats"] = repeats
 		}
 	}
+	// What the code wrote for the model reads in the same kitchen words as the chat.
+	for _, k := range []string{"code_changes", "open_levers", "cooking_hints", "variety_hints"} {
+		if lines, ok := view[k].([]string); ok {
+			out := make([]string, len(lines))
+			for i, l := range lines {
+				out[i] = kitchenProse(l)
+			}
+			view[k] = out
+		}
+	}
+	if a, ok := view["accepted_shortfall"].(string); ok {
+		view["accepted_shortfall"] = kitchenProse(a)
+	}
 	return view, ev, done
 }
 

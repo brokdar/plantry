@@ -1,6 +1,8 @@
 package planning_test
 
 import (
+	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -80,4 +82,28 @@ func TestRenderPrompt_NamesTheRecentMains(t *testing.T) {
 	prompt := planning.RenderPrompt(planning.ChooseInput{State: s, Target: windowTarget(s)})
 	assert.Contains(t, prompt, "Eaten within the last 3 weeks (H8: do not cook these as mains unless the candidates run out): ")
 	assert.Contains(t, prompt, "Main 1")
+}
+
+var plannerBanned = regexp.MustCompile(`(?i)\b(bands?|floors?|caps?|hearty|occasions?|add-ons?)\b`)
+
+// E038: the prose the planner model reads uses the chat boundary's kitchen words.
+func TestPlannerProseUsesKitchenWords(t *testing.T) {
+	s := batchCooker()
+	s.Profile.KcalTarget = f64(2000)
+	in := planning.ChooseInput{State: s, Target: windowTarget(s)}
+	prompt := planning.RenderPrompt(in)
+	assert.NotRegexp(t, plannerBanned, prompt, "the system prompt")
+	for _, tl := range planning.PlannerTools() {
+		assert.NotRegexp(t, plannerBanned, tl.Description, tl.Name)
+	}
+	view, _, _ := planning.PlannerViewOf(in, freshPlan(s))
+	raw, _ := json.Marshal(view)
+	raw = planning.KitchenJSON(raw)
+	// Field names hold underscores (band_low, cook_occasions) and stay; the prose does not.
+	for _, line := range strings.Split(string(raw), "\"") {
+		if strings.Contains(line, " ") {
+			assert.NotRegexp(t, plannerBanned, line, "the evaluate_plan result")
+		}
+	}
+	assert.True(t, strings.Contains(prompt, "range"))
 }

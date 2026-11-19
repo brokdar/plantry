@@ -132,3 +132,9 @@ func SetPairInPlanner(on bool) bool {
 
 // Autofix exposes the plan corrections made before every evaluation.
 var Autofix = autofix
+
+// PlannerTools are the planner's two tools.
+func PlannerTools() []llm.Tool { return []llm.Tool{evaluatePlanTool(), submitPlanTool()} }
+
+// KitchenJSON exposes the kitchen-word pass over a planner result.
+var KitchenJSON = kitchenJSON
