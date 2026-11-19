@@ -232,7 +232,7 @@ func TestToolSet_NoListSlotsNoGetProfile(t *testing.T) {
 func TestPrompt_SaysPortionsPerEater(t *testing.T) {
 	prompt, _ := agent.ComposePrompt(nil, "", "", time.Time{})
 	assert.Contains(t, prompt, "portions per eater")
-	assert.Equal(t, "v36", agent.PromptVersion)
+	assert.Equal(t, "v37", agent.PromptVersion)
 }
 
 // B2-AC6: the chat modes and week ids are gone from the agent package.

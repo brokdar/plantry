@@ -274,7 +274,7 @@ func (h *planner) addSide(date time.Time, limit float64) {
 				f.Macros.Kcal*c.comp.Multiplier() > dk.Adjusted*maxSideKcalShare {
 				continue
 			}
-			a, why, _ := merged.tryAlt(h.in.Target, pi, -1, nil, c, base, hard, soft, len(y.occasions[dayOf(p.Date)]), cooked, false)
+			a, why, _ := merged.tryAlt(h.in.Target, pi, -1, nil, c, base, hard, soft, len(y.occasions[dayOf(p.Date)]), cooked, false, false)
 			if why != "" || len(a.NewIssues) > 0 || a.rank.addsCook || a.DayKcal > dk.Adjusted*y.pol.DayHigh ||
 				math.Abs(dk.Adjusted-a.DayKcal) >= math.Abs(dk.Adjusted-dk.Kcal) {
 				continue

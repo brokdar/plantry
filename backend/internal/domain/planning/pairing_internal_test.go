@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 func TestAddOnFits(t *testing.T) {
@@ -133,4 +134,34 @@ func TestMealFits(t *testing.T) {
 	assert.True(t, s.MealFits(honey, "dinner"))
 	// As a add-on a standalone recipe is never offered.
 	assert.False(t, s.addOnFits(Plate{}, muesli, "breakfast"), "a whole meal is no side")
+}
+
+// A second food of the same kind never goes on a plate; the one there is raised.
+func TestSameKindAndMisfitSides(t *testing.T) {
+	yogurt := FoodFacts{ID: 1, Name: "Greek yogurt", Kind: food.KindLeaf}
+	skyr := FoodFacts{ID: 2, Name: "Skyr (natural)", Kind: food.KindLeaf}
+	pasta := FoodFacts{ID: 3, Name: "Pasta al pomodoro", Kind: food.KindComposed, Role: food.RoleMain}
+	chili := FoodFacts{ID: 4, Name: "Chili", Kind: food.KindComposed, Role: food.RoleMain}
+	potatoes := FoodFacts{ID: 5, Name: "Roast potatoes", Kind: food.KindComposed, Role: food.RoleSideStarch}
+	bread := FoodFacts{ID: 6, Name: "Ciabatta", Kind: food.KindLeaf, LeafRole: food.RoleSideStarch}
+	s := State{PairAddOns: true, Foods: map[int64]FoodFacts{1: yogurt, 2: skyr, 3: pasta, 4: chili, 5: potatoes, 6: bread}}
+	plate := func(ids ...int64) Plate {
+		p := Plate{}
+		for i, id := range ids {
+			p.Components = append(p.Components, Component{ID: int64(10 + i), FoodID: id, Position: map[bool]plate.Position{true: plate.PositionMain, false: plate.PositionSide}[i == 0]})
+		}
+		return p
+	}
+	_, kind, ok := s.SameKind(plate(4, 1), skyr)
+	assert.True(t, ok, "skyr on yogurt")
+	assert.Equal(t, "cultured dairy", kind)
+	assert.False(t, s.addOnFits(plate(4, 1), skyr, "dinner"), "an add-on of the same kind does not fit")
+	_, _, ok = s.SameKind(plate(4), skyr)
+	assert.False(t, ok, "the first one is fine")
+	ex, kind, ok := s.SameKind(plate(4, 5), bread)
+	assert.True(t, ok, "bread beside potatoes: %s", kind)
+	assert.Positive(t, ex.ID, "the potatoes can be raised instead")
+	// A pasta main takes no potatoes; a chili main does.
+	assert.Equal(t, []int64{11}, s.MisfitSides(plate(3, 5)))
+	assert.Empty(t, s.MisfitSides(plate(4, 5)))
 }

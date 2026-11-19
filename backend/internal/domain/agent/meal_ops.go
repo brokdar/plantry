@@ -234,6 +234,11 @@ func opReplace(ctx context.Context, svc Services, op changeOp, b *batch) (map[st
 	b.note(op, map[string]any{"food": oldName, "to": food.Data(pc.FoodName), "date": after.DateString()})
 	out := opResult(op, after, pc)
 	out["position"] = string(pc.Position)
+	if pc.Position == plate.PositionMain {
+		if steps := refitSides(ctx, svc, after.ID, b); len(steps) > 0 {
+			out["refit"] = steps
+		}
+	}
 	return mealResult(out, res, b), nil
 }
 

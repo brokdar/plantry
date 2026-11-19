@@ -50,7 +50,7 @@ func TestRecommend_ExactlyOne(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			recommend(tt.ways, tt.offers)
+			recommend(tt.ways, tt.offers, false)
 			assert.Equal(t, 1, count(tt.ways, tt.offers))
 			if tt.wantWay {
 				assert.True(t, tt.ways[0].Recommended)

@@ -239,7 +239,7 @@ func (x *index) swapsFor(t Target, base Evaluation, pis []int, mode swapMode, sk
 				case mode == swapFish && c.food.Groups.FishG*m < minMealG:
 					continue
 				}
-				a, why, _ := x.s.tryAlt(t, pi, old, nil, c, base, hard, soft, len(x.occasions[dayOf(p.Date)]), cookedInWindow, false)
+				a, why, _ := x.s.tryAlt(t, pi, old, nil, c, base, hard, soft, len(x.occasions[dayOf(p.Date)]), cookedInWindow, false, false)
 				if why != "" || len(a.NewIssues) > 0 || (a.rank.addsCook && mode != swapDistinct) || !x.dayHolds(a, dayPct[p.Date.Format(time.DateOnly)]) {
 					continue
 				}

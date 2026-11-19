@@ -486,3 +486,115 @@ func TestApplyChanges_SwapWithASource(t *testing.T) {
 	res := e.mustExec("apply_changes", fmt.Sprintf(`{"dry_run":true,"ops":[{"op":"swap","plate_component_id":%d,"food_id":%d,"cook_at":{"date":%q,"slot_id":%d}}]}`, mainComponentID(t, p), food, p.DateString(), p.SlotID))
 	assert.EqualValues(t, food, applied0(t, res)["food_id"])
 }
+
+// What a way or an offer promises is what the write does: its ops, light and
+// goal applied on a fresh copy of the plan give the same meal and day kcal,
+// the same reach of the limit and no change the way did not list.
+func TestFindWays_PromiseIsTheResult(t *testing.T) {
+	e := relEnv(t)
+	dinner := func(e *planToolEnv) int64 {
+		for _, p := range e.draftMeals() {
+			if p.SlotID == e.slotID("dinner") {
+				return p.ID
+			}
+		}
+		t.Fatal("no dinner")
+		return 0
+	}
+	id := dinner(e)
+	for _, in := range []string{
+		fmt.Sprintf(`{"goal":"lighter","plate_id":%d}`, id),
+		fmt.Sprintf(`{"goal":"lighter","plate_id":%d,"to_limit":true}`, id),
+		fmt.Sprintf(`{"goal":"heartier","plate_id":%d}`, id),
+	} {
+		res := e.mustExec("find_ways", in)
+		items := append(relMaps(res["ways"]), func() []map[string]any {
+			if _, ok := res["offer"]; ok {
+				return relMaps(res["offer"])
+			}
+			return nil
+		}()...)
+		for n, it := range items {
+			e2 := relEnv(t)
+			call := map[string]any{"ops": it["ops"], "goal": res["goal"]}
+			if l, ok := it["light"]; ok {
+				call["light"] = l
+			}
+			raw, err := json.Marshal(call)
+			require.NoError(t, err)
+			got, err := e2.exec("apply_changes", string(raw))
+			require.NoError(t, err, "%s #%d", in, n)
+			req := got["request"].(map[string]any)["after"].(map[string]any)
+			pa := it["after"].(map[string]any)
+			assert.InDelta(t, pa["meal_kcal"], req["meal_kcal"], 1, "%s #%d %v: meal kcal", in, n, it["what"])
+			assert.InDelta(t, pa["day_kcal"], req["day_kcal"], 1, "%s #%d %v: day kcal", in, n, it["what"])
+			// The day against its range is what the saved plan shows, also for a way
+			// that ends a light mark and so moves the range.
+			if days, ok := got["report"].(map[string]any)["days"].([]any); ok && len(days) > 0 {
+				status := fmt.Sprint(days[0].(map[string]any)["status"])
+				promised := fmt.Sprint(it["day_vs_range"])
+				assert.Equal(t, strings.Contains(promised, "below"), strings.Contains(status, "under"), "%s #%d %v: promised %q, saved %q", in, n, it["what"], promised, status)
+				assert.Equal(t, strings.Contains(promised, "above"), strings.Contains(status, "over"), "%s #%d: promised %q, saved %q", in, n, promised, status)
+			}
+			listed := 0
+			for _, a := range got["applied"].([]any) {
+				assert.Nil(t, a.(map[string]any)["auto_fix"], "%s #%d: no change the way did not list", in, n)
+				listed++
+			}
+			assert.Len(t, it["ops"], listed, "%s #%d", in, n)
+		}
+	}
+}
+
+// A light meal asked for (to_limit) is met only at the limit: every offer
+// listed reaches it, and when no way does, the recommended one is an offer that
+// does and next says so.
+func TestFindWays_ToLimitOffersOnlyWhatReaches(t *testing.T) {
+	e := relEnv(t)
+	for _, p := range e.draftMeals() {
+		if p.SlotID != e.slotID("dinner") {
+			continue
+		}
+		res := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lighter","plate_id":%d,"to_limit":true}`, p.ID))
+		ways := relMaps(res["ways"])
+		var offers []map[string]any
+		if _, ok := res["offer"]; ok {
+			offers = relMaps(res["offer"])
+		}
+		for _, o := range offers {
+			assert.Equal(t, true, o["reaches_cap"], "%v does not reach the light limit", o["what"])
+		}
+		reaching := len(ways) > 0 && ways[0]["reaches_cap"] == true
+		if !reaching && len(offers) > 0 {
+			assert.Equal(t, true, offers[0]["recommended"], "the offer that reaches is the recommendation")
+			assert.Contains(t, res["next"], "asked for a light meal")
+		}
+	}
+}
+
+// A replaced main takes its old side's misfit with it: the side that belonged
+// to the old dish is swapped for one that fits the new main, in the same
+// change, and the result says so.
+func TestApplyChanges_ReplaceMainRefitsTheSides(t *testing.T) {
+	e := relEnv(t)
+	p, _ := e.twoDinners()
+	var sideFood int64
+	for _, c := range p.Components {
+		if c.FoodRole != nil && *c.FoodRole != "main" {
+			sideFood = c.FoodID
+		}
+	}
+	require.NotZero(t, sideFood, "the dinner has a side")
+	e.sql(`UPDATE foods SET name = 'Roast potatoes', role = 'side_starch' WHERE id = ?`, sideFood)
+	pasta := e.unusedFood("main")
+	e.sql(`UPDATE foods SET name = 'Pasta al pomodoro' WHERE id = ?`, pasta)
+	res := e.mustExec("apply_changes", fmt.Sprintf(`{"dry_run":true,"ops":[{"op":"replace","plate_id":%d,"position":"main","food_id":%d}]}`, p.ID, pasta))
+	steps, _ := applied0(t, res)["refit"].([]any)
+	require.NotEmpty(t, steps, "the potatoes beside the pasta are refitted: %v", res["applied"])
+	assert.Contains(t, fmt.Sprint(steps[0]), "does not fit the new main")
+	for _, c := range relMaps(res["after"].(map[string]any)["plates"]) {
+		if int64(c["plate_id"].(float64)) == p.ID {
+			assert.NotContains(t, fmt.Sprint(c["components"]), "Roast potatoes")
+		}
+	}
+}

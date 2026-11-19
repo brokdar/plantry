@@ -85,6 +85,11 @@ type WayRequest struct {
 	// without a number named, Ways first changes food inside the day's own
 	// range and offers the mark only when that cannot meet the wish.
 	Marked bool
+	// ToLimit: the user asked for a LIGHT (filling) meal, not just a lighter
+	// one: only a way at or under the light limit (at or over the filling
+	// minimum) meets it, so the search also swaps the whole meal for a lighter
+	// one and lets the other meal grow up to a filling meal.
+	ToLimit bool
 }
 
 // WayFigures are per eater: the energy and protein of the meal and of its
@@ -123,6 +128,10 @@ type Way struct {
 	Light  []LightIntent `json:"light,omitempty"`
 	Before WayFigures    `json:"before"`
 	After  WayFigures    `json:"after"`
+	// RangeLow and RangeHigh are the day's range AFTER the way (a way that ends
+	// a meal's light mark moves it), read from the check of its exact ops.
+	RangeLow  float64 `json:"range_low,omitempty"`
+	RangeHigh float64 `json:"range_high,omitempty"`
 	// NewIssues are the soft issues the way adds (without options).
 	NewIssues []Issue    `json:"new_issues,omitempty"`
 	Ops       []OptionOp `json:"ops"`
@@ -219,6 +228,8 @@ type waySearch struct {
 	tried      int
 	// noMark: a day goal searched without a day mark (the range stays).
 	noMark bool
+	// toLimit: see WayRequest.ToLimit.
+	toLimit bool
 }
 
 // Ways returns up to maxWays ways to reach req.Goal, best first, each applied
@@ -257,7 +268,7 @@ func waysDay(s State, t Target, req WayRequest) (WayResult, error) {
 
 func ways(s State, t Target, req WayRequest) (WayResult, error) {
 	s.PairAddOns = true
-	w := &waySearch{t: t, goal: req.Goal, pi: -1, noMark: !req.Marked && (req.Goal == GoalLowerDay || req.Goal == GoalRaiseDay) && req.TargetKcal <= 0}
+	w := &waySearch{t: t, goal: req.Goal, pi: -1, toLimit: req.ToLimit, noMark: !req.Marked && (req.Goal == GoalLowerDay || req.Goal == GoalRaiseDay) && req.TargetKcal <= 0}
 	switch req.Goal {
 	case GoalLighter, GoalHeartier, GoalMoreProtein, GoalLowerDay, GoalRaiseDay:
 	default:
@@ -363,6 +374,9 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 			if rc := w.check(c.s); !rc.other && !rc.floor && (w.goal == GoalLighter || !w.outOfBand(rc.ev)) {
 				a := w.way(c, rc, intent)
 				a.ChangesOther = true
+				if w.toLimit && !a.Reaches {
+					continue
+				}
 				if d, ok := w.dayEval(rc.ev); ok && w.outOfBand(rc.ev) {
 					a.BelowBand = true
 					a.Why = fmt.Sprintf("the day then holds %.0f kcal, %.0f under its band (%.0f to %.0f kcal): the closest the other meal can get it", d.Kcal, d.BandLow-d.Kcal, d.BandLow, d.BandHigh)
@@ -389,7 +403,7 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 			// the other meal grow gets it to its cap.
 			// A light meal that does not fit the day is still a lighter one: the
 			// other meal grows within its bound and the offer says how far it got.
-			if way.Meaningful && w.goal == GoalLighter {
+			if way.Meaningful && w.goal == GoalLighter && (!w.toLimit || way.Reaches) {
 				offer(e, r.ev)
 			}
 		case w.goal == GoalHeartier && w.outOfBand(r.ev):
@@ -761,6 +775,9 @@ func (w *waySearch) primary(s State) []wayEdit {
 			out = append(out, w.removeEdits(s, pi)...)
 			out = append(out, w.leanEdits(s, pi)...)
 			out = append(out, w.swapEdits(s, p, AltMain, 0)...)
+			if w.toLimit {
+				out = append(out, w.swapEdits(s, p, AltMeal, 0)...)
+			}
 			out = append(out, w.sideSwapEdits(s, pi)...)
 		case GoalLowerDay:
 			out = append(out, w.quantityEdits(s, pi, -1)...)
@@ -1424,6 +1441,12 @@ func (w *waySearch) mealBound(s State, q Plate) (float64, string) {
 		}
 	}
 	slot := slotName(s, q.SlotID)
+	if w.toLimit {
+		// A light meal asked for: the other meal may grow to a filling one.
+		if _, min, err := MealLimit(s, w.t, q.ID, GoalHeartier); err == nil && min > best {
+			return math.Max(min, cur), fmt.Sprintf("a filling %s (%.0f kcal)", slot, min)
+		}
+	}
 	if best > 0 {
 		return math.Max(best, cur), fmt.Sprintf("the biggest %s of your plan (%.0f kcal)", slot, best)
 	}
