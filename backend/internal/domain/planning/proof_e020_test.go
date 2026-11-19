@@ -141,7 +141,7 @@ func proofOne(t *testing.T, round, dir, label string) {
 	raw, ordinal := calls[0], 1
 	for i, c := range calls {
 		// A first call that is a partial draft (cells without a plate) is not a draft yet.
-		v, _, err := planning.PlannerView(in, c)
+		v, _, err := planning.PlannerView(in, c, false)
 		require.NoError(t, err)
 		b, _ := json.Marshal(v)
 		if !strings.Contains(string(b), `"missing_plate"`) {
@@ -151,7 +151,7 @@ func proofOne(t *testing.T, round, dir, label string) {
 	}
 	before, err := planning.LegacyView(in, raw)
 	require.NoError(t, err)
-	after, done, err := planning.PlannerView(in, raw)
+	after, done, err := planning.PlannerView(in, raw, false)
 	require.NoError(t, err)
 	bb, _ := json.Marshal(before)
 	ab, _ := json.Marshal(after)
@@ -183,6 +183,17 @@ func proofOne(t *testing.T, round, dir, label string) {
 	sort.Strings(items)
 	fmt.Printf("PROOF %s (call #%d): before=%d chars (stored first eval %d) after=%d chars; must-act=%d\n  issues: %s\n  levers: %v\n  repeats: %v\n  code_changes: %d\n",
 		label, ordinal, len(bb), stored, len(ab), act, strings.Join(items, "; "), parsed.Levers, parsed.Repeats, len(parsed.Changes))
+	if again, _, err := planning.PlannerView(in, raw, true); err == nil {
+		ab2, _ := json.Marshal(again)
+		var v2 struct {
+			Issues  []struct{ Rule, Code, Severity string }
+			Levers  []string `json:"open_levers"`
+			Accept  string   `json:"accepted_shortfall"`
+			Changes []string `json:"code_changes"`
+		}
+		_ = json.Unmarshal(ab2, &v2)
+		fmt.Printf("  second evaluation: issues=%d levers=%d accepted=%q\n", len(v2.Issues), len(v2.Levers), v2.Accept)
+	}
 	if os.Getenv("PLANTRY_PROOF_DUMP") != "" {
 		var v struct {
 			Days []map[string]any `json:"days"`

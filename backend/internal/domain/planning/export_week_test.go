@@ -11,13 +11,13 @@ var SameFamily = sameFamily
 
 // PlannerView exposes the evaluate_plan result of a proposal (E020): the
 // result map and the finished proposal.
-func PlannerView(in ChooseInput, raw []byte) (map[string]any, Proposal, error) {
+func PlannerView(in ChooseInput, raw []byte, offered bool) (map[string]any, Proposal, error) {
 	prop, err := parseProposal(raw, in)
 	if err != nil {
 		return nil, Proposal{}, err
 	}
 	prop, _ = autofix(in, prop)
-	view, _, done := plannerView(in, prop)
+	view, _, done := plannerView(in, prop, offered)
 	return view, done, nil
 }
 
@@ -38,7 +38,14 @@ func LegacyView(in ChooseInput, raw []byte) (map[string]any, error) {
 var FinishProposal = finishProposal
 
 // PlannerViewOf exposes the evaluate_plan result of a proposal.
-var PlannerViewOf = plannerView
+func PlannerViewOf(in ChooseInput, prop Proposal) (map[string]any, Evaluation, Proposal) {
+	return plannerView(in, prop, false)
+}
+
+// PlannerViewAgain is PlannerViewOf for a later evaluation of the run.
+func PlannerViewAgain(in ChooseInput, prop Proposal) (map[string]any, Evaluation, Proposal) {
+	return plannerView(in, prop, true)
+}
 
 // GuardDayMains exposes the day's distinct-mains guard.
 var GuardDayMains = guardDayMains

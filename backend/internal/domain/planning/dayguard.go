@@ -28,11 +28,18 @@ func guardDayMains(base State, t Target, in Proposal, skip map[int64]bool) (Prop
 	for _, d := range newIndex(Merge(base, t, in), t).days {
 		merged := Merge(base, t, out)
 		x := newIndex(merged, t)
-		pi, other, ok := x.sameMainPair(d)
+		pi, early, other, ok := x.sameMainPair(d)
 		if !ok {
 			continue
 		}
-		next, note := x.distinctMain(base, t, out, merged, pi, other, skip)
+		next, note, replaced := x.distinctMain(base, t, out, merged, pi, other, skip)
+		if !replaced {
+			if cold, coldNote, ok := x.coldFirstMeal(base, t, out, merged, early, pi, other, skip); ok {
+				next, note = cold, coldNote
+			} else if x.hasNoColdFoods(merged, skip) {
+				note += " The household has no suitable no-cook foods (a bread, a protein, a raw vegetable) for a cold plate."
+			}
+		}
 		out = next
 		notes = append(notes, note)
 	}
@@ -42,7 +49,7 @@ func guardDayMains(base State, t Target, in Proposal, skip map[int64]bool) (Prop
 // sameMainPair finds a day whose lunch and dinner hold the same main and
 // returns the plate to change (the later one, or the proposed one when only
 // one is) and the main they share.
-func (x *index) sameMainPair(d time.Time) (int, int64, bool) {
+func (x *index) sameMainPair(d time.Time) (late, early int, shared int64, ok bool) {
 	var pis []int
 	for i, p := range x.s.Plates {
 		if dayOf(p.Date) == dayOf(d) && !p.Confirmed && x.mealOf(p.SlotID) == mealFull && !x.routine(p.Cell()) && x.mainIndex(p) >= 0 {
@@ -59,7 +66,7 @@ func (x *index) sameMainPair(d time.Time) (int, int64, bool) {
 	for i, a := range pis {
 		for _, b := range pis[i+1:] {
 			if mainOf(a) == mainOf(b) && x.s.Plates[a].Proposed() {
-				return a, mainOf(a), true
+				return a, b, mainOf(a), true
 			}
 		}
 	}
@@ -71,16 +78,16 @@ func (x *index) sameMainPair(d time.Time) (int, int64, bool) {
 		for i, p := range x.s.Plates {
 			if i != a && dayOf(p.Date) == dayOf(x.s.Plates[a].Date) && p.Confirmed && x.mealOf(p.SlotID) == mealFull && x.mainIndex(p) >= 0 &&
 				p.Components[x.mainIndex(p)].FoodID == mainOf(a) {
-				return a, mainOf(a), true
+				return a, i, mainOf(a), true
 			}
 		}
 	}
-	return 0, 0, false
+	return 0, 0, 0, false
 }
 
 // distinctMain replaces the main of plate pi (which repeats other) when a
 // verified replacement exists; the note says what was done or why not.
-func (x *index) distinctMain(base State, t Target, in Proposal, merged State, pi int, other int64, skip map[int64]bool) (Proposal, string) {
+func (x *index) distinctMain(base State, t Target, in Proposal, merged State, pi int, other int64, skip map[int64]bool) (Proposal, string, bool) {
 	p := merged.Plates[pi]
 	label := fmt.Sprintf("%s: lunch and dinner both hold %s", p.Date.Weekday(), foodName(merged, other))
 	ev := Evaluate(merged, t)
@@ -120,9 +127,9 @@ func (x *index) distinctMain(base State, t Target, in Proposal, merged State, pi
 			continue
 		}
 		how := map[int]string{0: "leftovers of a batch the week already has", 1: "a no-cook dish", 2: "a fresh main within the day's cooking limit"}[pref(sw)]
-		return next, fmt.Sprintf("Day variety: %s: %s replaced the repeated %s (%s).", x.cellLabel(p), sw.c.food.Name, foodName(merged, other), how)
+		return next, fmt.Sprintf("Day variety: %s: %s replaced the repeated %s (%s).", x.cellLabel(p), sw.c.food.Name, foodName(merged, other), how), true
 	}
-	return in, fmt.Sprintf("Day variety: %s: kept, no other main fits (%s).", label, x.noDistinctReason(len(sws)))
+	return in, fmt.Sprintf("Day variety: %s: kept, no other main fits (%s).", label, x.noDistinctReason(len(sws))), false
 }
 
 // noDistinctReason says why no replacement was found. verified is the number
@@ -165,4 +172,114 @@ func (x *index) windowMeatG() float64 {
 		}
 	}
 	return g
+}
+
+// hasNoColdFoods reports that the library cannot make a cold plate.
+func (x *index) hasNoColdFoods(s State, skip map[int64]bool) bool {
+	_, ok := s.composeColdPlate(skip, 1, 0)
+	return !ok
+}
+
+// coldFirstMeal turns the day's earlier meal (plate early) into a cold plate
+// when no other main fits (the household's choice over a second cook or the
+// same dish twice): the later meal (plate late) keeps the dish, which then
+// cooks on its own cell, and the earlier one holds no recipe. The plan after
+// it must break no hard rule and add no soft issue the balancing pass does not
+// own (energy, protein, carbs and fat).
+func (x *index) coldFirstMeal(base State, t Target, in Proposal, merged State, early, late int, other int64, skip map[int64]bool) (Proposal, string, bool) {
+	ep, lp := merged.Plates[early], merged.Plates[late]
+	i := int(-ep.ID) - 1
+	if !ep.Proposed() || i < 0 || i >= len(in.Plates) || in.Plates[i].PlateID != 0 {
+		return in, "", false
+	}
+	var dk *DayKcal
+	for _, a := range x.dayAccounts([]time.Time{ep.Date}) {
+		dk = &a
+	}
+	// Without a kcal target the plate is one serving of each food.
+	aim, dayTarget := 0.0, 0.0
+	if dk != nil && dk.Adjusted > 0 {
+		aim, dayTarget = dk.Adjusted/float64(max(dk.Planned, 1)), dk.Adjusted
+		if merged.lightMeal(ep.Date, ep.SlotID) {
+			aim *= LightMealShare
+		}
+	}
+	comps, ok := merged.composeColdPlate(skip, aim, dayTarget)
+	if !ok {
+		return in, "", false
+	}
+	out := in
+	out.Plates = slices.Clone(in.Plates)
+	out.Sessions = slices.Clone(in.Sessions)
+	old := out.Plates[i]
+	out.Plates[i].Components = comps
+	for _, c := range old.Components {
+		if c.SessionKey == "" {
+			continue
+		}
+		for k, ss := range out.Sessions {
+			if ss.Key != c.SessionKey {
+				continue
+			}
+			out.Sessions[k].Portions = ss.Portions - ep.Eaters*c.Portions
+			out.Sessions[k].FrozenPortions = min(ss.FrozenPortions, max(out.Sessions[k].Portions, 0))
+			// The cook no longer feeds the cold meal: it cooks on the cell that still eats it.
+			if sameCell(ss.CookDate, ss.CookSlotID, ep.Date, ep.SlotID) && usesSession(out.Plates, ss.Key) {
+				out.Sessions[k].CookDate, out.Sessions[k].CookSlotID = lp.Date, lp.SlotID
+			}
+			break
+		}
+	}
+	out.Sessions = slices.DeleteFunc(out.Sessions, func(ss ProposedSession) bool { return ss.Portions <= epsilon })
+	ev := Evaluate(merged, t)
+	hard, soft := hardKeys(ev.Issues), softKeys(ev.Issues)
+	nm := Merge(base, t, out)
+	after := Evaluate(nm, t)
+	for _, is := range after.Issues {
+		switch is.Severity {
+		case SeverityViolation:
+			if !hard[issueID(is)] {
+				return in, "", false
+			}
+		case SeveritySoft:
+			// Energy, protein and the weekly shares are the balancing pass's to lift.
+			if !soft[softKey(is)] && is.Rule != "S2" && is.Rule != "S3" && is.Rule != "S4" && is.Rule != "S5" {
+				return in, "", false
+			}
+		}
+	}
+	if cookDays(after) > cookDays(ev) {
+		return in, "", false
+	}
+	var parts []string
+	kcal := 0.0
+	for _, c := range comps {
+		f := merged.Foods[c.FoodID]
+		parts = append(parts, fmt.Sprintf("%s %s g", strings.ToLower(f.Name), num(c.Grams)))
+		kcal += f.Macros.Kcal * c.Grams / 100
+	}
+	dinner := "dinner is " + foodName(merged, other)
+	if x.cooksAt(out, ep.Date, lp.SlotID) {
+		dinner = "dinner is cooked fresh: " + foodName(merged, other)
+	}
+	return out, fmt.Sprintf("Day variety: %s: %s is a cold plate (about %.0f kcal, nothing to cook): %s; %s.", ep.Date.Weekday(), slotName(merged, ep.SlotID), kcal, strings.Join(parts, ", "), dinner), true
+}
+
+func sameCell(d1 time.Time, s1 int64, d2 time.Time, s2 int64) bool {
+	return dayOf(d1) == dayOf(d2) && s1 == s2
+}
+
+// usesSession reports whether a proposed plate still eats the session.
+func usesSession(plates []ProposedPlate, key string) bool {
+	return slices.ContainsFunc(plates, func(p ProposedPlate) bool {
+		return slices.ContainsFunc(p.Components, func(c ProposedComponent) bool { return c.SessionKey == key })
+	})
+}
+
+// cooksAt reports whether the proposal cooks something on the cell.
+func (x *index) cooksAt(p Proposal, d time.Time, slot int64) bool {
+	return slices.ContainsFunc(p.Sessions, func(ss ProposedSession) bool { return sameCell(ss.CookDate, ss.CookSlotID, d, slot) }) ||
+		slices.ContainsFunc(p.Plates, func(pl ProposedPlate) bool {
+			return sameCell(pl.Date, pl.SlotID, d, slot) && slices.ContainsFunc(pl.Components, func(c ProposedComponent) bool { return c.SessionKey == "" && c.SessionID == 0 && c.Portions > 0 })
+		})
 }

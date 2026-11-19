@@ -2,6 +2,7 @@ package planning_test
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -45,9 +46,47 @@ func TestPlannerView(t *testing.T) {
 		require.NoError(t, json.Unmarshal(raw, &levers))
 		require.NotEmpty(t, levers)
 		assert.Contains(t, levers[0], "of its energy target")
-		assert.Contains(t, levers[0], "higher-energy main on ")
+		assert.Contains(t, levers[0], "richer main on ")
 		assert.Contains(t, levers[0], "add a cooking day")
 		assert.Regexp(t, `about \d+ kcal more per person`, levers[0])
+	})
+	t.Run("a binding cooking-day limit accepts the shortfall with a note and never offers a cooking day", func(t *testing.T) {
+		s := balanceState()
+		s.Profile.KcalTarget = f64(6000)
+		in := planning.ChooseInput{State: s, Target: windowTarget(s)}
+		prop := freshPlan(s)
+		prop.MaxCookDays = 7
+		view, ev, done := planning.PlannerViewOf(in, prop)
+		require.Less(t, ev.Week.Pct, 95.0)
+		assert.NotContains(t, view, "open_levers", "no richer main exists: nothing open")
+		raw, _ := json.Marshal(view)
+		assert.NotContains(t, string(raw), "add a cooking day")
+		assert.NotContains(t, string(raw), "kcal_below_band")
+		assert.NotContains(t, string(raw), "week_kcal_below_band")
+		acc, _ := view["accepted_shortfall"].(string)
+		assert.Contains(t, acc, "under")
+		assert.Contains(t, acc, "seven cooking days cannot carry more")
+		assert.Contains(t, acc, "% of its energy target")
+		_, notes := planning.FinishProposal(in, prop)
+		assert.True(t, slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, "cannot carry more") }), "the saved plan's note says which days are light")
+		_ = done
+	})
+	t.Run("a richer main is offered once under a binding limit, then the gap is accepted", func(t *testing.T) {
+		s := balanceState()
+		s.Profile.KcalTarget = f64(3400)
+		rich := s.Foods[110]
+		rich.Macros.Kcal = 2000
+		s.Foods[110] = rich
+		in := planning.ChooseInput{State: s, Target: windowTarget(s)}
+		prop := freshPlan(s)
+		prop.MaxCookDays = 7
+		first, _, _ := planning.PlannerViewOf(in, prop)
+		raw, _ := json.Marshal(first["open_levers"])
+		assert.Contains(t, string(raw), "richer main")
+		assert.NotContains(t, string(raw), "add a cooking day")
+		again, _, _ := planning.PlannerViewAgain(in, prop)
+		assert.NotContains(t, again, "open_levers")
+		assert.Contains(t, again["accepted_shortfall"], "cannot carry more")
 	})
 	t.Run("a confirmed plate is untouched in the preview", func(t *testing.T) {
 		s := balanceState()

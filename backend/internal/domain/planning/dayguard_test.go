@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
 
@@ -20,6 +22,20 @@ func sameDishDay() (planning.State, planning.Target, planning.Proposal) {
 		Plates:   []planning.ProposedPlate{pplate(tue, lunch, onKey(104, "s1")), pplate(tue, dinner, onKey(104, "s1"))},
 	}
 	return s, tgt, p
+}
+
+// coldFoods adds a bread, a protein and a raw vegetable to the state's no-cook leaves.
+func coldFoods(s *planning.State) {
+	add := func(id int64, name string, role food.Role, kcal, protein, serving float64) {
+		s.Foods[id] = planning.FoodFacts{
+			ID: id, Name: name, Kind: food.KindLeaf, LeafRole: role, DietClass: "vegan", NoCook: true, NutritionComplete: true,
+			Macros: nutrition.Macros{Kcal: kcal, Protein: protein}, ServingG: serving,
+		}
+		s.NoCook = append(s.NoCook, id)
+	}
+	add(950, "Bread", food.RoleSideStarch, 216, 7, 50)
+	add(951, "Tofu", "", 144, 17, 100)
+	add(952, "Cucumber", food.RoleSideVeg, 15, 0.7, 100)
 }
 
 func mainAt(p planning.Proposal, date string, slot int64) planning.ProposedComponent {
@@ -48,6 +64,50 @@ func TestGuardDayMains(t *testing.T) {
 		}
 		require.Len(t, got.Sessions, 1)
 		assert.InDelta(t, 1, got.Sessions[0].Portions, 1e-9, "the new batch no longer feeds the dinner")
+	})
+	t.Run("with no other main the earlier meal becomes a cold plate and the dinner cooks on its own cell", func(t *testing.T) {
+		s, tgt, p := sameDishDay()
+		coldFoods(&s)
+		got, notes := planning.GuardDayMains(s, tgt, p, nil)
+		require.Len(t, notes, 1)
+		assert.Contains(t, notes[0], "slot 1 is a cold plate")
+		assert.Contains(t, notes[0], "is a cold plate")
+		assert.Contains(t, notes[0], "dinner is cooked fresh: Main 4")
+		var lunchPlate planning.ProposedPlate
+		for _, pl := range got.Plates {
+			if pl.SlotID == lunch {
+				lunchPlate = pl
+			}
+		}
+		require.GreaterOrEqual(t, len(lunchPlate.Components), 3)
+		for _, c := range lunchPlate.Components {
+			assert.Zero(t, c.Portions, "no recipe on a cold plate")
+			assert.Positive(t, c.Grams)
+			assert.Empty(t, c.SessionKey)
+		}
+		require.Len(t, got.Sessions, 1)
+		assert.EqualValues(t, dinner, got.Sessions[0].CookSlotID, "the dish cooks at dinner now")
+		assert.InDelta(t, 1, got.Sessions[0].Portions, 1e-9)
+		merged := planning.Merge(s, tgt, got)
+		ev := planning.Evaluate(merged, tgt)
+		var kinds []string
+		for _, pe := range ev.Plates {
+			kinds = append(kinds, pe.Kind)
+		}
+		assert.Contains(t, kinds, planning.ColdPlateKind)
+		for _, is := range ev.Issues {
+			assert.NotEqual(t, "S9", is.Rule, "a cold plate holds no add-on excess")
+		}
+		for _, v := range violations(ev.Issues) {
+			assert.Equal(t, "plate_outside_target", v.Code)
+		}
+	})
+	t.Run("without suitable no-cook foods the same dish stays and the note says so", func(t *testing.T) {
+		s, tgt, p := sameDishDay()
+		got, notes := planning.GuardDayMains(s, tgt, p, nil)
+		assert.Equal(t, p, got)
+		require.Len(t, notes, 1)
+		assert.Contains(t, notes[0], "no suitable no-cook foods")
 	})
 	t.Run("a fresh main is used when the day may cook twice", func(t *testing.T) {
 		s, tgt, p := sameDishDay()
