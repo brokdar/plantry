@@ -65,6 +65,12 @@ func TestE022_RealData(t *testing.T) {
 		svc.Wait()
 		require.NotEmpty(t, in.Target.Cells)
 
+		if os.Getenv("PLANTRY_PROOF_NOCOOK") != "" {
+			for _, id := range in.State.NoCook {
+				f := in.State.Foods[id]
+				fmt.Printf("NOCOOK %d %-28s composed=%v role=%q leaf=%q kcal=%.0f prot=%.1f serv=%.0f sweet=%v diet=%s\n", id, f.Name, f.Composed(), f.Role, f.LeafRole, f.Macros.Kcal, f.Macros.Protein, f.ServingG, f.Sweet, f.DietClass)
+			}
+		}
 		calls, _ := lastSubmit(t, filepath.Join(round, "runs", "replan-thu-r1", "run.db"))
 		raw := calls[len(calls)-1]
 		before, err := planning.LegacyView(in, raw)
@@ -76,6 +82,34 @@ func TestE022_RealData(t *testing.T) {
 		fmt.Printf("E022 model plan\n  before: %s\n  after:  %s\n  week meat g: %.0f -> %.0f (limit 300 x days/7)\n  notes: %v\n",
 			mains(in.State, prop.Plates), mains(in.State, done.Plates), meatOf(in.State, in.Target, prop), meatOf(in.State, in.Target, done), view["code_changes"])
 		_ = before
+		raw2, _ := json.Marshal(view)
+		var v struct {
+			Days   []map[string]any `json:"days"`
+			Issues []map[string]any `json:"issues"`
+			Week   map[string]any   `json:"week"`
+		}
+		_ = json.Unmarshal(raw2, &v)
+		for _, d := range v.Days {
+			if d["date"] == "2026-11-26" {
+				fmt.Printf("  Thursday kcal %v, band %v-%v, target %v, protein %v of %v\n", d["kcal"], d["band_low"], d["band_high"], d["target_kcal"], d["protein_g"], d["protein_target_g"])
+			}
+		}
+		for _, is := range v.Issues {
+			fmt.Printf("  issue %v/%v %v %v\n", is["rule"], is["code"], is["severity"], is["date"])
+		}
+		for _, pl := range done.Plates {
+			if pl.Date.Equal(thu) {
+				for _, c := range pl.Components {
+					f := in.State.Foods[c.FoodID]
+					k := f.Macros.Kcal * c.Portions
+					if c.Grams > 0 {
+						k = f.Macros.Kcal * c.Grams / 100
+					}
+					fmt.Printf("  slot %d: %s portions %.2f grams %.0f kcal %.0f\n", pl.SlotID, f.Name, c.Portions, c.Grams, k)
+				}
+			}
+		}
+		fmt.Printf("  week: %v\n", v.Week)
 	})
 
 	// (1) the heuristic regenerate, saved through the service.

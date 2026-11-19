@@ -441,7 +441,7 @@ func (x *index) editablePlates(day time.Time) []int {
 	var out []int
 	for i, p := range x.s.Plates {
 		// A light meal stays light: no option or top-up adds to its plate.
-		if dayOf(p.Date) == dayOf(day) && !p.Confirmed && x.s.Window.Contains(p.Date) && !x.routine(p.Cell()) && !x.s.lightMeal(p.Date, p.SlotID) {
+		if dayOf(p.Date) == dayOf(day) && !p.Confirmed && x.s.Window.Contains(p.Date) && !x.routine(p.Cell()) && !x.s.lightMeal(p.Date, p.SlotID) && !x.s.isColdPlate(p) {
 			out = append(out, i)
 		}
 	}
