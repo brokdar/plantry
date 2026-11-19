@@ -1,6 +1,9 @@
 package agent
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 // WithToday lets the external tests pin the chat's today, which the past-date
 // guard (D7) reads.
@@ -65,3 +68,12 @@ var PlainReply = plainReply
 
 // DropAfterWeek exposes the trimming of the after block.
 var DropAfterWeek = dropAfterWeek
+
+// RefusalTell is the tell of a refused mark, nil for any other error.
+func RefusalTell(err error) []string {
+	var r markRefusal
+	if errors.As(err, &r) {
+		return r.tell
+	}
+	return nil
+}

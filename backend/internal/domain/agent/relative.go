@@ -240,10 +240,22 @@ func checkMarks(st planning.State, light []planning.LightIntent, ev planning.Eva
 			kcal, _ := is.Params["kcal"].(float64)
 			if is.Code == planning.CodeMealNotLight {
 				limit, _ := is.Params["max_kcal"].(float64)
-				return fmt.Errorf("%w: the %s on %s would still hold %.0f kcal, more than a light meal holds at most (%.0f kcal): make it smaller first (find_ways with goal lighter shows how) or leave the light mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, limit)
+				return markRefusal{
+					err: fmt.Errorf("%w: the %s on %s would still hold %.0f kcal, more than a light meal holds at most (%.0f kcal): make it smaller first (find_ways with goal lighter shows how) or leave the light mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, limit),
+					tell: []string{
+						fmt.Sprintf("I did not mark %s %s as light and saved nothing: it would still hold %.0f kcal, more than a light meal (at most %.0f kcal).", dayLabelStr(l.Date), l.Slot, kcal, limit),
+						"I can make it smaller first, or leave the light mark off: say so if you want one of them.",
+					},
+				}
 			}
 			least, _ := is.Params["min_kcal"].(float64)
-			return fmt.Errorf("%w: the %s on %s would hold only %.0f kcal, less than a filling meal holds at least (%.0f kcal): make it bigger first (find_ways with goal heartier shows how) or leave the filling mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, least)
+			return markRefusal{
+				err: fmt.Errorf("%w: the %s on %s would hold only %.0f kcal, less than a filling meal holds at least (%.0f kcal): make it bigger first (find_ways with goal heartier shows how) or leave the filling mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, least),
+				tell: []string{
+					fmt.Sprintf("I did not mark %s %s as filling and saved nothing: it would hold only %.0f kcal, less than a filling meal (at least %.0f kcal).", dayLabelStr(l.Date), l.Slot, kcal, least),
+					"I can make it bigger first, or leave the filling mark off: say so if you want one of them.",
+				},
+			}
 		}
 	}
 	return nil
@@ -386,3 +398,14 @@ func slicesDeleteFlag(why string) []string {
 	}
 	return []string{strings.TrimSpace(why)}
 }
+
+// markRefusal is a refused light or filling mark: the error for the log and
+// the short tell the reply says (what was refused, why with the number, the
+// one thing that can be done instead).
+type markRefusal struct {
+	err  error
+	tell []string
+}
+
+func (e markRefusal) Error() string { return e.err.Error() }
+func (e markRefusal) Unwrap() error { return e.err }

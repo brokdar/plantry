@@ -291,10 +291,15 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 				// Tool errors are fed back to the model as tool_result with is_error.
 				// This gives the model a chance to correct its arguments or try a
 				// different approach instead of failing the whole turn.
-				errorPayload := withChange(mustMarshal(map[string]string{
+				payload := map[string]any{
 					"error":       err.Error(),
 					"message_key": errorMessageKey(err),
-				}), change)
+				}
+				var refusal markRefusal
+				if errors.As(err, &refusal) {
+					payload["tell"] = refusal.tell
+				}
+				errorPayload := withChange(mustMarshal(payload), change)
 				resultBlocks = append(resultBlocks, llm.ContentBlock{
 					Type:              llm.ContentTypeToolResult,
 					ToolResultID:      call.ToolUseID,

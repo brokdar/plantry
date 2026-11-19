@@ -156,3 +156,34 @@ func TestDropAfterWeek_DropsMeatDays(t *testing.T) {
 	assert.NotContains(t, out, `"week"`)
 	assert.Contains(t, out, `"days":[]`)
 }
+
+// E036b: the moved cooking of an away call is told in at most three items,
+// and the per-dish lines of the same moves are gone.
+func TestAddDerived_CookingMovedIsTold(t *testing.T) {
+	in := `{"dry_run":false,"report":{"tell":["Sun 22 Nov is away: the day is not counted.","Mon 23 Nov you cook (1 cooking time): \"A\" at lunch for x.","The \"A\" is now cooked on Mon 23 Nov at lunch instead of Sun 22 Nov at dinner.","To keep one cooking time a day, \"A\" is now cooked at Mon 23 Nov lunch instead of Sun dinner.","Weekly energy: 1935 kcal a day."]},
+		"cooking_moved":{"cooked_now":[{"day":"Mon 23 Nov","cooking_time":"lunch","dishes":[{"dish":"\"A\"","feeds":["Mon 23 Nov lunch","Tue 24 Nov lunch"]},{"dish":"\"B\"","feeds":["Mon 23 Nov dinner"]}]}],"nothing_else_changed":true}}`
+	var res struct {
+		Report struct {
+			Tell []string `json:"tell"`
+		} `json:"report"`
+	}
+	require.NoError(t, json.Unmarshal(agent.AddDerived("apply_changes", json.RawMessage(in)), &res))
+	assert.Equal(t, []string{
+		"Sun 22 Nov is away: the day is not counted.",
+		`Everything that moved is now cooked together on Mon 23 Nov at lunch, one cooking time: "A" for Mon 23 Nov lunch, Tue 24 Nov lunch; "B" for Mon 23 Nov dinner.`,
+		"Nothing else in the week changed.",
+		"Weekly energy: 1935 kcal a day.",
+	}, res.Report.Tell)
+}
+
+// E036b: find_ways gets a ready closing sentence for its first offer.
+func TestAddDerived_WaysClosing(t *testing.T) {
+	var res map[string]any
+	out := agent.AddDerived("find_ways", json.RawMessage(`{"offer":[{"what":"halve the salmon and leave out the yogurt","changes_other_meal":true,"after":{"day_kcal":1934}}],"ways":[]}`))
+	require.NoError(t, json.Unmarshal(out, &res))
+	assert.Equal(t, "I can also halve the salmon and leave out the yogurt (it also changes another meal; the day would then hold 1934 kcal): say so if you want it.", res["closing"])
+	var none map[string]any
+	out = agent.AddDerived("find_ways", json.RawMessage(`{"ways":[]}`))
+	require.NoError(t, json.Unmarshal(out, &none))
+	assert.NotContains(t, none, "closing")
+}
