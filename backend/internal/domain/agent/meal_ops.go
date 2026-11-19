@@ -490,7 +490,7 @@ func opCopy(ctx context.Context, svc Services, op changeOp, b *batch) (map[strin
 // names a field the op does not know.
 var opFields = map[string]string{
 	"add":              "food_id, plate_id or date + slot_id, portions or amount + unit, optional session_id, cook_at {date, slot_id}, position (main|side|extra)",
-	"swap":             "plate_component_id, food_id, optional portions or amount + unit",
+	"swap":             "plate_component_id, food_id, optional portions or amount + unit, optional session_id (eat from that batch), cook_at {date, slot_id}",
 	"set_quantity":     "plate_component_id, portions or amount + unit",
 	"remove":           "plate_component_id",
 	"create_plate":     "date, slot_id, optional eaters, note",
@@ -508,7 +508,7 @@ var opFields = map[string]string{
 // opKeys are the JSON keys of each op (besides "op").
 var opKeys = map[string][]string{
 	"add":              {"food_id", "plate_id", "date", "slot_id", "portions", "amount", "unit", "session_id", "cook_at", "position"},
-	"swap":             {"plate_component_id", "food_id", "portions", "amount", "unit"},
+	"swap":             {"plate_component_id", "food_id", "portions", "amount", "unit", "session_id", "cook_at"},
 	"set_quantity":     {"plate_component_id", "portions", "amount", "unit"},
 	"remove":           {"plate_component_id"},
 	"create_plate":     {"date", "slot_id", "eaters", "note"},

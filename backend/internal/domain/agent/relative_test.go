@@ -474,3 +474,15 @@ func TestApplyChanges_ReplaceByComponentAlone(t *testing.T) {
 	res := e.mustExec("apply_changes", fmt.Sprintf(`{"dry_run":true,"ops":[{"op":"replace","plate_component_id":%d,"food_id":%d}]}`, mainComponentID(t, p), food))
 	assert.EqualValues(t, food, applied0(t, res)["food_id"])
 }
+
+// A swap that carries session_id or cook_at is a replace, not a refused field.
+func TestApplyChanges_SwapWithASource(t *testing.T) {
+	e := relEnv(t)
+	p, _ := e.twoDinners()
+	food := e.unusedFood("main")
+	_, err := e.exec("apply_changes", fmt.Sprintf(`{"dry_run":true,"ops":[{"op":"swap","plate_component_id":%d,"food_id":%d,"session_id":999999}]}`, mainComponentID(t, p), food))
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "unknown field", "session_id on a swap is accepted, a wrong id is another error")
+	res := e.mustExec("apply_changes", fmt.Sprintf(`{"dry_run":true,"ops":[{"op":"swap","plate_component_id":%d,"food_id":%d,"cook_at":{"date":%q,"slot_id":%d}}]}`, mainComponentID(t, p), food, p.DateString(), p.SlotID))
+	assert.EqualValues(t, food, applied0(t, res)["food_id"])
+}

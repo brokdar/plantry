@@ -470,10 +470,29 @@ func (x *index) groupedCookMove(t Target, day time.Time, resolves func(State) bo
 // brings cooks onto it: nobody cooks three dishes at a Monday lunch.
 const maxDishesAtOnce = 2
 
+// CookingPolicy is what an away call does with a day whose cooks no longer fit
+// one cooking time, one switch for the household's choice:
+//   - CookTogether: every dish of the day cooks at one cooking time, however
+//     many (the old behaviour);
+//   - CookTwoTimes: the day keeps two cooking times and the call says so (no
+//     automatic fix; the day's cooking problem stays reported);
+//   - CookColdPlate: one cooking time with at most two dishes; the dish that
+//     does not fit gets a no-cook side instead, in the same change.
+type CookingPolicy string
+
+const (
+	CookTogether  CookingPolicy = "together"
+	CookTwoTimes  CookingPolicy = "two_times"
+	CookColdPlate CookingPolicy = "cold_plate"
+)
+
+// CookPolicy is the policy in force.
+var CookPolicy = CookColdPlate
+
 // tooManyDishes reports whether the move from s to next piles more than
 // maxDishesAtOnce dishes onto cell k (unless k already held more).
 func tooManyDishes(s, next State, k plate.CellKey) bool {
-	return cooksAtCell(next, k) > max(maxDishesAtOnce, cooksAtCell(s, k))
+	return CookPolicy != CookTogether && cooksAtCell(next, k) > max(maxDishesAtOnce, cooksAtCell(s, k))
 }
 
 // partialCookMove is the option for a day whose cooks do not all fit one
@@ -483,6 +502,9 @@ func tooManyDishes(s, next State, k plate.CellKey) bool {
 // the swaps; only when the day then holds one cooking time and nothing new
 // breaks.
 func (x *index) partialCookMove(t Target, day time.Time, resolves func(State) bool) []Option {
+	if CookPolicy != CookColdPlate {
+		return nil
+	}
 	var group []Session
 	for _, ss := range x.s.Sessions {
 		if ss.ID > 0 && !ss.Confirmed && !ss.Proposed() && dayOf(ss.CookDate) == dayOf(day) && !x.routine(ss.CookCell()) {
@@ -529,7 +551,6 @@ func (x *index) partialCookMove(t Target, day time.Time, resolves func(State) bo
 		if len(ops) == 0 || len(rest) == 0 {
 			continue
 		}
-		nMoves := len(ops)
 		ok := true
 		for _, ss := range rest {
 			swapped := false
@@ -563,12 +584,10 @@ func (x *index) partialCookMove(t Target, day time.Time, resolves func(State) bo
 		if !ok || !resolves(next) {
 			continue
 		}
-		// The swap changes a dish, so it is offered, never applied on its own:
-		// its first op is the swap (an away call only applies a move_cook).
-		swaps, moves := ops[nMoves:], ops[:nMoves]
-		ops = append(slices.Clone(swaps), moves...)
+		// Under the cold-plate policy the call applies it itself (moves first, then
+		// the swap): one change, one undo step; the result names each step.
 		return []Option{{
-			Action: "swap", FoodID: group[0].FoodID, Name: strings.Join(left, ", ") + ", and cook " + strings.Join(names, ", ") + " with the other dish of that day", Date: date, SlotID: c.SlotID,
+			Action: "move_cook", FoodID: group[0].FoodID, Name: strings.Join(left, ", ") + ", and cook " + strings.Join(names, ", ") + " with the other dish of that day", Date: date, SlotID: c.SlotID,
 			CookOccasions: len(newIndex(next, t).occasions[dayOf(day)]), Op: ops[0], Ops: ops,
 		}}
 	}

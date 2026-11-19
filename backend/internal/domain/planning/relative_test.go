@@ -85,7 +85,7 @@ func TestWays_LighterChangesOnlyThisMealAndOffersTheRest(t *testing.T) {
 		assert.NotEqual(t, "compound", w.Kind, "a compound way is never a default")
 		assert.False(t, w.ChangesOther)
 		assert.Empty(t, w.Moved)
-		assert.True(t, planning.MeaningfulKcal(res.Before.MealKcal, res.Before.MealKcal-w.After.MealKcal), w.What)
+		assert.True(t, planning.MeaningfulMealKcal(res.Before.MealKcal, res.Before.MealKcal-w.After.MealKcal), w.What)
 		assert.GreaterOrEqual(t, w.After.DayKcal, res.FloorKcal, "%s keeps the day above its floor", w.What)
 		for _, op := range w.Ops {
 			assert.Contains(t, []int64{30, 31, 0}, derefInt(op.PlateComponentID)-0, "ops touch dinner only: %v", op)
@@ -144,7 +144,7 @@ func TestWays_HeartierEvenWhenAboveTheMinimum(t *testing.T) {
 	assert.InDelta(t, 833, res.MinKcal, 0.5)
 	require.NotEmpty(t, res.Ways, "850 kcal is above the minimum and still has to get heartier")
 	for _, w := range res.Ways {
-		assert.True(t, planning.MeaningfulKcal(res.Before.MealKcal, w.After.MealKcal-res.Before.MealKcal), w.What)
+		assert.True(t, planning.MeaningfulMealKcal(res.Before.MealKcal, w.After.MealKcal-res.Before.MealKcal), w.What)
 		assert.NotEmpty(t, w.Ops, "never a mark alone")
 	}
 }

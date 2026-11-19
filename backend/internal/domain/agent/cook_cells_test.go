@@ -217,10 +217,16 @@ func TestApplyChanges_AwayRehomesCooks(t *testing.T) {
 			autos = append(autos, m)
 		}
 	}
+	var moves []map[string]any
 	for _, m := range autos {
-		assert.Equal(t, "move_cook", m["op"])
-		assert.NotNil(t, m["cook_date"], "the result says where the cook went")
 		assert.NotRegexp(t, ruleToken, m["auto_fix"], "auto_fix names no rule code")
+		if m["op"] != "move_cook" {
+			// A dish that did not fit one cooking time is swapped in the same change.
+			assert.Contains(t, m["auto_fix"], "at most two dishes", "the swap says why")
+			continue
+		}
+		moves = append(moves, m)
+		assert.NotNil(t, m["cook_date"], "the result says where the cook went")
 	}
 	// A move never piles more than two dishes onto one cooking time unless the
 	// plan already did; what cannot be placed stays a reported problem with a
@@ -245,7 +251,7 @@ func TestApplyChanges_AwayRehomesCooks(t *testing.T) {
 
 	// For real: the cooks are where the result says, and none is piled up.
 	e.mustExec("apply_changes", `{"ops":[`+away+`]}`)
-	for _, m := range autos {
+	for _, m := range moves {
 		v := e.session(int64(m["session_id"].(float64)))
 		assert.Equal(t, m["cook_date"], v.CookDate.Format(time.DateOnly))
 		assert.EqualValues(t, m["cook_slot_id"], v.CookSlotID)

@@ -102,10 +102,10 @@ func TestApplyChanges_ForeignFields(t *testing.T) {
 		})
 	}
 
-	t.Run("swap with session_id is refused", func(t *testing.T) {
+	t.Run("swap with session_id is a replace, not a refused field", func(t *testing.T) {
 		_, err := e.exec("apply_changes", fmt.Sprintf(`{"ops":[{"op":"swap","plate_component_id":%d,"food_id":%d,"session_id":3}]}`, old.ID, food))
-		require.ErrorIs(t, err, domain.ErrInvalidInput)
-		assert.Contains(t, err.Error(), `op 1 (swap): unknown field "session_id"`)
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "unknown field")
 	})
 }
 

@@ -67,7 +67,7 @@ var applyChangesSchema = `{
 const applyChangesDescription = `Change the plan in one call: a list of ops that run in order in ONE transaction (any failing op rolls everything back and names it, numbered from 1). With dry_run true nothing is saved: you get the same result (saved is false): use it only for a what-if question; an explicit request is saved at once with dry_run false, no check first. Rows a checked change creates do not exist afterwards: their ids are left out everywhere (applied, after, issues and an option's op) and marked "provisional": true, an option whose op uses one is marked too, so never use them in a later call; to apply, send the full op list again with dry_run false (the result then has the real ids; a checked change says so in dry_run_note). A field an op does not take is refused (the error names the fields it takes), except plate_id, plate_component_id, food_id, date, slot_id, note and eaters: those are ignored and listed in that op's applied entry as ignored_fields (the op did not use them). Quantities are per eater: a recipe takes portions (usually 1), a leaf takes amount + unit (e.g. 100 + "g") and rejects portions.
 Ops (fields):
 - add: food_id, the plate by plate_id OR by date + slot_id (the plate is created when the cell is empty), portions | amount+unit. Optional position main|side|extra (else derived). Optional session_id: a recipe component eats from that existing cook session (leftover, no new cooking). Optional cook_at {date, slot_id}: a recipe is cooked on that other cell (a new session cooking there, e.g. with the lunch batch) and the plate eats it (portions = eaters x portions).
-- swap: plate_component_id, food_id (the new food), optional portions | amount+unit (else the current one is kept).
+- swap: plate_component_id, food_id (the new food), optional portions | amount+unit (else the current one is kept), optional session_id (eat from that batch) or cook_at {date, slot_id} (then it is a replace).
 - set_quantity: plate_component_id + portions | amount+unit.
 - remove: plate_component_id.
 - create_plate: date, slot_id, optional eaters, note.
@@ -229,6 +229,12 @@ func toolApplyChanges(svc Services) Tool {
 			}
 			// A replace that names its component needs no plate_id: the component knows it.
 			for i, op := range in.Ops {
+				// A swap that names its source (a batch to eat from, a cell to cook in)
+				// is a replace: the models send it that way.
+				if op.Op == "swap" && (op.SessionID != 0 || op.CookAt != nil) && op.PlateComponentID != 0 {
+					in.Ops[i].Op = "replace"
+					op.Op = "replace"
+				}
 				if op.Op == "replace" && op.PlateID == 0 && op.PlateComponentID != 0 {
 					if pc, err := svc.Plates.GetComponent(ctx, op.PlateComponentID); err == nil {
 						in.Ops[i].PlateID = pc.PlateID
@@ -380,7 +386,7 @@ const maxSettleRounds = 3
 // entry with auto_fix, so the model tells the user. An issue without a
 // verified option stays, marked no_fix_found.
 func settleCooks(ctx context.Context, svc Services, ws []window.Window, ops []changeOp, b *batch, before planning.Evaluation) ([]map[string]any, error) {
-	if !slices.ContainsFunc(ops, func(op changeOp) bool { return op.Op == "away" }) {
+	if !slices.ContainsFunc(ops, func(op changeOp) bool { return op.Op == "away" }) || planning.CookPolicy == planning.CookTwoTimes {
 		return nil, nil
 	}
 	was := issueMap(before.Issues)
@@ -418,7 +424,10 @@ func settleCooks(ctx context.Context, svc Services, ws []window.Window, ops []ch
 			if err != nil {
 				return nil, fmt.Errorf("move the cook after the away (%s): %w", food.Quote(opt.Name), err)
 			}
-			res["auto_fix"] = fmt.Sprintf("moved so that %s does not get a second cooking time from the away", is.Date)
+			res["auto_fix"] = fmt.Sprintf("moved so that %s does not get a second cooking time from the away", dayLabelStr(is.Date))
+			if o.Op != "move_cook" {
+				res["auto_fix"] = fmt.Sprintf("so that %s keeps one cooking time with at most two dishes: %s", dayLabelStr(is.Date), opt.Name)
+			}
 			out = append(out, res)
 		}
 	}
