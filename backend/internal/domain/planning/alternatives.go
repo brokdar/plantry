@@ -434,7 +434,7 @@ func dropWords(candidates int, dropped map[string]int, blocked map[string]Issue,
 		case "H9." + CodeKcalBelowFloor:
 			out = append(out, fmt.Sprintf("%s: %d would leave the day under its kcal floor; the best reaches %.0f kcal, the floor is %.0f kcal", PlainText(CodeKcalBelowFloor).Label, n, num(is, "kcal"), num(is, "floor_kcal")))
 		case "H2." + CodeTooManyCookOccasions:
-			out = append(out, fmt.Sprintf("%s: %d would add a cooking occasion to a day that already has its maximum (%.0f of %.0f)", PlainText(CodeTooManyCookOccasions).Label, n, num(is, "count"), num(is, "max")))
+			out = append(out, fmt.Sprintf("%s: %d would add a cooking time to a day that already has its maximum (%.0f of %.0f)", PlainText(CodeTooManyCookOccasions).Label, n, num(is, "count"), num(is, "max")))
 		case "S6." + CodeMealNotLight:
 			out = append(out, fmt.Sprintf("light: %d would keep the meal over its cap of %.0f kcal; the lightest plate is %.0f kcal", n, lightMax, lightBest))
 		case "S6b." + CodeMealNotHearty:

@@ -196,7 +196,7 @@ func TestPrompt_V18(t *testing.T) {
 	for _, want := range []string{
 		"Playbook, light, hearty, more protein, lower or raise a day", "Playbook, replace a dish", "Playbook, away",
 		"call find_ways (goal, plate_id or date)", "what main", "check a fix from the issue's options",
-		"Cooking occasions per day", "a routine cell add none",
+		"Cooking times per day", "a routine cell add none",
 		"worsened", "Report a worsened issue like a new one",
 	} {
 		if !strings.Contains(prompt, want) {

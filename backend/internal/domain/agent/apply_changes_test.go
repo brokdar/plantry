@@ -141,18 +141,18 @@ func TestApplyChanges_CookAtSharesTheCookCell(t *testing.T) {
 	alone, err := e.exec("apply_changes", fmt.Sprintf(
 		`{"dry_run":true,"ops":[{"op":"add","date":%q,"slot_id":%d,"food_id":%d,"portions":1}]}`, p.DateString(), slotID, side))
 	require.NoError(t, err)
-	assert.Contains(t, issueRules(t, alone, "new"), "cooking occasions per day", "cooking the side in its own cell is a second occasion")
+	assert.Contains(t, issueRules(t, alone, "new"), "cooking times per day", "cooking the side in its own cell is a second occasion")
 
 	shared, err := e.exec("apply_changes", fmt.Sprintf(
 		`{"ops":[{"op":"add","date":%q,"slot_id":%d,"food_id":%d,"portions":1,"cook_at":{"date":%q,"slot_id":%d}}]}`,
 		p.DateString(), slotID, side, p.DateString(), p.SlotID))
 	require.NoError(t, err)
-	assert.NotContains(t, issueRules(t, shared, "new"), "cooking occasions per day")
+	assert.NotContains(t, issueRules(t, shared, "new"), "cooking times per day")
 	days := shared["after"].(map[string]any)["days"].([]any)
 	require.NotEmpty(t, days)
 	day := days[0].(map[string]any)
 	assert.Equal(t, p.DateString(), day["date"])
-	assert.EqualValues(t, 1, day["cook_occasions"], "one cooking occasion that day")
+	assert.EqualValues(t, 1, day["cooking_times"], "one cooking occasion that day")
 }
 
 // find_foods no_cook returns leaves that need no cooking (raw produce) and

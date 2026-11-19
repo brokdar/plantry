@@ -494,7 +494,7 @@ func JudgeRelative(goal string, meal bool, maxKcal, minKcal float64, before, aft
 		case !changed:
 			why = fmt.Sprintf("the meal holds %.0f kcal after, %.0f before: not lighter by a meaningful amount (at least %.0f kcal)", after.MealKcal, before.MealKcal, math.Min(RelMinKcal, RelMinShare*before.MealKcal))
 		case !reached:
-			why = fmt.Sprintf("lighter, but not a light meal yet: it now holds %.0f kcal (was %.0f), its light cap is %.0f kcal", after.MealKcal, before.MealKcal, maxKcal)
+			why = fmt.Sprintf("lighter, but not a light meal yet: it now holds %.0f kcal (was %.0f), a light meal holds at most %.0f kcal", after.MealKcal, before.MealKcal, maxKcal)
 		}
 		return changed, reached, why
 	case GoalHeartier:
@@ -504,7 +504,7 @@ func JudgeRelative(goal string, meal bool, maxKcal, minKcal float64, before, aft
 		case !changed:
 			why = fmt.Sprintf("the meal holds %.0f kcal after, %.0f before: not heartier by a meaningful amount (at least %.0f kcal)", after.MealKcal, before.MealKcal, math.Min(RelMinKcal, RelMinShare*before.MealKcal))
 		case !reached:
-			why = fmt.Sprintf("heartier, but not a hearty meal yet: it now holds %.0f kcal (was %.0f), its hearty minimum is %.0f kcal", after.MealKcal, before.MealKcal, minKcal)
+			why = fmt.Sprintf("heartier, but not a filling meal yet: it now holds %.0f kcal (was %.0f), a filling meal holds at least %.0f kcal", after.MealKcal, before.MealKcal, minKcal)
 		}
 		return changed, reached, why
 	}
@@ -614,7 +614,7 @@ func (w *waySearch) way(e wayEdit, r wayCheck, intent *LightIntent) Way {
 func (w *waySearch) noWayWhy(res WayResult) string {
 	switch w.goal {
 	case GoalLighter:
-		return fmt.Sprintf("This meal cannot get meaningfully lighter on its own: it holds %.0f kcal (a change needs at least %.0f kcal) and the day holds %.0f kcal, its minimum is %.0f kcal, so the day has only %.0f kcal of room. Its light cap is %.0f kcal.",
+		return fmt.Sprintf("This meal cannot get meaningfully lighter on its own: it holds %.0f kcal (a change needs at least %.0f kcal) and the day holds %.0f kcal, its minimum is %.0f kcal, so the day has only %.0f kcal of room. A light meal holds at most %.0f kcal.",
 			res.Before.MealKcal, math.Min(RelMinKcal, RelMinShare*res.Before.MealKcal), res.Before.DayKcal, res.FloorKcal, math.Max(0, res.Before.DayKcal-res.FloorKcal), res.MaxKcal)
 	case GoalHeartier:
 		return fmt.Sprintf("This meal cannot get meaningfully heartier on its own without taking the day (%.0f kcal) over its band top of %.0f kcal.", res.Before.DayKcal, res.BandHigh)
