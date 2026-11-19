@@ -17,7 +17,10 @@ import (
 
 var (
 	plannerWord = regexp.MustCompile(`(?i)\b(bands?|floors?|caps?|soft|hard|violations?|drafts?|sessions?)\b`)
-	isoDate     = regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}\b`)
+	// E017b: the words of the last paid round, also inside identifiers
+	// (band_low_pct, floor_kcal, cook_occasions: "_" separates words here).
+	cookWord = regexp.MustCompile(`(?i)(^|[^a-z])(bands?|floors?|caps?|occasions?|add-ons?|hearty minimum)([^a-z]|$)`)
+	isoDate  = regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}\b`)
 )
 
 // E017: the chat model reads kitchen words. The planner's words (band, floor,
@@ -68,6 +71,7 @@ func TestChatModelReadsKitchenWords(t *testing.T) {
 	require.Contains(t, res, "report", "an undo carries a report")
 	for name, text := range texts {
 		assert.Empty(t, plannerWord.FindAllString(text, -1), name)
+		assert.Empty(t, cookWord.FindAllString(text, -1), name)
 	}
 	assert.Contains(t, strings.ToLower(texts["result of check an away"]), `"report"`)
 }

@@ -74,7 +74,7 @@ func TestRenderPlanSummary(t *testing.T) {
 		"| none | no plate, leave empty",
 		"session_id 4 | food_id ",
 		"portions 4, frozen 1 | eaten 3, of which frozen 0 | keeps until 2026-11-10",
-		"Issues:\n- cooking occasions per day (problem) " + sat + " count=2\n",
+		"Open now: 1 problems, 0 warnings.",
 	} {
 		assert.Contains(t, got, want)
 	}
@@ -85,5 +85,5 @@ func TestRenderPlanSummary(t *testing.T) {
 }
 
 func TestRenderPlanSummary_NoIssues(t *testing.T) {
-	require.Contains(t, planning.RenderPlanSummary(summaryState(), nil), "Issues: none.")
+	require.Contains(t, planning.RenderPlanSummary(summaryState(), nil), "Open now: nothing.")
 }

@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
+
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
@@ -134,6 +136,7 @@ func TestApplyChanges_FailingOpRollsBackTheBatch(t *testing.T) {
 // batch. cook_at puts it on the existing cook cell, so H2 stays quiet.
 func TestApplyChanges_CookAtSharesTheCookCell(t *testing.T) {
 	e := newPlanToolEnv(t)
+	e.setCookLimit(1)
 	p, _ := e.freshMain()
 	slotID := e.emptyOtherSlot(p)
 	side := e.sides[0]
@@ -141,18 +144,18 @@ func TestApplyChanges_CookAtSharesTheCookCell(t *testing.T) {
 	alone, err := e.exec("apply_changes", fmt.Sprintf(
 		`{"dry_run":true,"ops":[{"op":"add","date":%q,"slot_id":%d,"food_id":%d,"portions":1}]}`, p.DateString(), slotID, side))
 	require.NoError(t, err)
-	assert.Contains(t, issueRules(t, alone, "new"), "cooking occasions per day", "cooking the side in its own cell is a second occasion")
+	assert.Contains(t, issueRules(t, alone, "new"), "cooking times per day", "cooking the side in its own cell is a second occasion")
 
 	shared, err := e.exec("apply_changes", fmt.Sprintf(
 		`{"ops":[{"op":"add","date":%q,"slot_id":%d,"food_id":%d,"portions":1,"cook_at":{"date":%q,"slot_id":%d}}]}`,
 		p.DateString(), slotID, side, p.DateString(), p.SlotID))
 	require.NoError(t, err)
-	assert.NotContains(t, issueRules(t, shared, "new"), "cooking occasions per day")
+	assert.NotContains(t, issueRules(t, shared, "new"), "cooking times per day")
 	days := shared["after"].(map[string]any)["days"].([]any)
 	require.NotEmpty(t, days)
 	day := days[0].(map[string]any)
 	assert.Equal(t, p.DateString(), day["date"])
-	assert.EqualValues(t, 1, day["cook_occasions"], "one cooking occasion that day")
+	assert.EqualValues(t, 1, day["cooking_times"], "one cooking occasion that day")
 }
 
 // find_foods no_cook returns leaves that need no cooking (raw produce) and
@@ -173,4 +176,9 @@ func TestFindFoods_NoCookReturnsLeaves(t *testing.T) {
 		assert.Contains(t, f, "per_100g")
 	}
 	assert.Equal(t, []string{"Gurke"}, names)
+}
+
+func (e *planToolEnv) setCookLimit(n int) {
+	e.t.Helper()
+	require.NoError(e.t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", fmt.Sprint(n)))
 }

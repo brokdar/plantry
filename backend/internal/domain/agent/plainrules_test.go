@@ -95,8 +95,20 @@ func TestPlainRules_NoFixAndCookInNoneCell(t *testing.T) {
 	out := agent.PlainRules(raw)
 	require.NoError(t, json.Unmarshal(out, &res))
 	assert.NotRegexp(t, ruleToken, string(out))
-	assert.Equal(t, "cooking occasions per day", res.Issues[0]["label"])
+	assert.Equal(t, "cooking times per day", res.Issues[0]["label"])
 	assert.Equal(t, true, res.Issues[0]["no_fix_found"])
 	assert.Equal(t, "ask the user", res.Issues[0]["no_fix_reason"])
 	assert.Equal(t, "cooking in a no-plate slot", res.Issues[1]["label"])
+}
+
+// E017b: planner words inside result keys and reason values read as kitchen
+// words; the keys the model passes back (session_id) stay.
+func TestPlainRules_KeysAndReasonsInKitchenWords(t *testing.T) {
+	raw := json.RawMessage(`{"issues":[{"rule":"S2","code":"kcal_below_band","severity":"soft","params":{"band_low_kcal":1815,"band_high_kcal":2218,"floor_kcal":1650,"band_low_pct":95}},
+		{"rule":"S9","code":"add_on_excess","severity":"soft","session_id":4,"params":{"reason":"over_cap","max_grams":200}}],"days":[{"cook_occasions":1}]}`)
+	out := string(agent.PlainRules(raw))
+	for _, want := range []string{`"range_low_kcal"`, `"range_high_kcal"`, `"minimum_kcal"`, `"range_low_pct"`, `"cooking_times":1`, `"over the usual serving"`, `"session_id"`} {
+		assert.Contains(t, out, want)
+	}
+	assert.NotRegexp(t, `band|floor|occasion|over_cap`, out)
 }

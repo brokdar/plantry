@@ -57,9 +57,9 @@ func IssueOptions(s State, t Target, ev Evaluation, issues []Issue, keep func(Is
 			break
 		}
 		if light {
-			out[i].Options = x.lightOptions(ev, t, is)
+			out[i].Options = recommendFirst(x.lightOptions(ev, t, is))
 		} else {
-			out[i].Options = x.cookOptions(ev, t, is)
+			out[i].Options = recommendFirst(x.cookOptions(ev, t, is))
 			if len(out[i].Options) == 0 {
 				out[i].NoFixFound = true
 				out[i].NoFixReason = "no verified way to move a cook or swap a dish brings this day within the limit; it needs a change of plan (fewer cooked dishes that day), ask the user"

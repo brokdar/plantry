@@ -21,6 +21,13 @@ import (
 // plan window. The caller (the context builder, or a read model) fills it
 // with bounded queries; nothing here does I/O.
 type State struct {
+	// Avoid are foods the user removed earlier in the conversation: no way,
+	// option or alternative adds them again (set by the chat tools).
+	Avoid map[int64]bool
+	// PairAddOns turns on the add-on pairing rules (addOnFits) for the chat
+	// tools; the planner's own top-ups keep their candidates.
+	PairAddOns bool
+
 	Window window.Window
 	Today  time.Time
 	// Cells are the window's resolved cells in (date, slot order) order.

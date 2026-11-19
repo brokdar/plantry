@@ -77,6 +77,9 @@ type ToolSet struct {
 
 // Services aggregates the domain services the default tool set depends on.
 type Services struct {
+	// Removed remembers the foods the user had removed in a conversation, so
+	// no way, option or alternative adds one back (set by NewToolSet).
+	Removed           *removedMemo
 	Foods             *food.Service
 	NutritionResolver *food.NutritionResolver
 	Plates            *plate.Service
@@ -110,6 +113,9 @@ type Services struct {
 
 // NewToolSet builds the default tool set wired to the given services.
 func NewToolSet(svc Services) (*ToolSet, error) {
+	if svc.Removed == nil {
+		svc.Removed = &removedMemo{}
+	}
 	ts := &ToolSet{
 		byName:  map[string]*Tool{},
 		schemas: map[string]*gojsonschema.Schema{},

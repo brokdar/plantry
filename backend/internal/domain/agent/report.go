@@ -641,9 +641,9 @@ func issueSentence(is planning.Issue, st planning.State) string {
 	case planning.CodeProteinLow:
 		return fmt.Sprintf("%s has %.0f g protein; the minimum is %.0f g.", where, n("protein_g"), n("min_g"))
 	case planning.CodeMealNotLight:
-		return fmt.Sprintf("%s is meant to be light but holds %.0f kcal; the limit is %.0f kcal.", where, n("kcal"), n("max_kcal"))
+		return fmt.Sprintf("%s is meant to be light (at most %.0f kcal) but holds %.0f kcal.", where, n("max_kcal"), n("kcal"))
 	case planning.CodeMealNotHearty:
-		return fmt.Sprintf("%s is meant to be hearty but holds %.0f kcal; the minimum is %.0f kcal.", where, n("kcal"), n("min_kcal"))
+		return fmt.Sprintf("%s is meant to be filling (at least %.0f kcal) but holds %.0f kcal.", where, n("min_kcal"), n("kcal"))
 	case planning.CodeWeekMeatAboveDGE:
 		return fmt.Sprintf("The week's meat is %.0f g; the limit is %.0f g.", n("meat_g"), n("max_g"))
 	case planning.CodeWeekKcalBelowBand, planning.CodeWeekKcalAboveBand:
@@ -658,8 +658,8 @@ func issueSentence(is planning.Issue, st planning.State) string {
 		return fmt.Sprintf("%.0f days of the week have meat; the limit is %.0f.", n("days"), n("max"))
 	case planning.CodeAddOnExcess:
 		why := map[string]string{
-			"light_meal": "an extra on a light meal", "duplicates_main": "already in the main", "over_cap": fmt.Sprintf("over the limit of %.0f g", n("max_grams")),
-			"day_limit": "more extras that day than the limit", "repeated": "the same extra on too many meals",
+			"light_meal": "an extra on a light meal", "duplicates_main": "already in the main", "over_cap": fmt.Sprintf("over the usual serving of %.0f g", n("max_grams")),
+			"day_limit": "more extras that day than usual", "repeated": "the same extra on too many meals",
 		}[fmt.Sprint(is.Params["reason"])]
 		return fmt.Sprintf("%s: %v %.0f g is %s.", where, is.Params["name"], n("grams"), why)
 	}

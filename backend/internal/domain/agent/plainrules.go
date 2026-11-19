@@ -48,6 +48,11 @@ func plainWalk(v any, key string) any {
 				return to
 			}
 		}
+		if key == "reason" {
+			if to, ok := plainReasons[x]; ok {
+				return to
+			}
+		}
 		if proseKeys[key] {
 			return plainWords(x)
 		}
@@ -69,10 +74,7 @@ func plainWalk(v any, key string) any {
 				out[k] = e
 				continue
 			}
-			name := k
-			if to, ok := plainKeys[k]; ok {
-				name = to
-			}
+			name := plainIdent(k)
 			out[name] = plainWalk(e, k)
 		}
 		if _, ok := out["rule"].(string); ok {
@@ -134,6 +136,14 @@ var kitchenWords = []struct {
 	{regexp.MustCompile(`\bFloor\b`), "Minimum"},
 	{regexp.MustCompile(`\bfloor\b`), "minimum"},
 	{regexp.MustCompile(`\bband_(low|high)`), "range_$1"},
+	{regexp.MustCompile(`\bcook_occasions`), "cooking_times"},
+	{regexp.MustCompile(`\b(?i:cooking occasions)\b`), "cooking times"},
+	{regexp.MustCompile(`\b(?i:cooking occasion)\b`), "cooking time"},
+	{regexp.MustCompile(`\bAdd-ons\b`), "Extras"},
+	{regexp.MustCompile(`\badd-ons\b`), "extras"},
+	{regexp.MustCompile(`\bAdd-on\b`), "Extra"},
+	{regexp.MustCompile(`\badd-on\b`), "extra"},
+	{regexp.MustCompile(`\b(?i:hearty minimum)\b`), "least a filling meal holds"},
 	{regexp.MustCompile(`\breached_band\b`), "reached_range"},
 	{regexp.MustCompile(`\breaches_cap\b`), "reaches_limit"},
 	{regexp.MustCompile(`\bbands\b`), "ranges"},
@@ -164,6 +174,35 @@ func plainWords(s string) string {
 var plainKeys = map[string]string{
 	"sessions": "batches", "draft": "pending", "floor_kcal": "minimum_kcal",
 	"band_low": "range_low", "band_high": "range_high", "reached_band": "reached_range", "reaches_cap": "reaches_limit", "violations": "problems", "soft": "advice",
+}
+
+// plainReasons are the reason values of an extras issue, as words.
+var plainReasons = map[string]string{
+	"light_meal": "an extra on a light meal", "duplicates_main": "already in the main", "over_cap": "over the usual serving",
+	"day_limit": "too many extras that day", "repeated": "the same extra on too many meals",
+}
+
+var identParts = []struct {
+	re *regexp.Regexp
+	to string
+}{
+	{regexp.MustCompile(`(^|_)band(_|$)`), "${1}range${2}"},
+	{regexp.MustCompile(`(^|_)floor(_|$)`), "${1}minimum${2}"},
+	{regexp.MustCompile(`(^|_)cap(_|$)`), "${1}limit${2}"},
+	{regexp.MustCompile(`^cook_occasions`), "cooking_times"},
+}
+
+// plainIdent renames a result key: the exact renames of plainKeys, else the
+// planner words inside it (below_band, floor_kcal, band_low_pct,
+// cook_occasions_day).
+func plainIdent(k string) string {
+	if to, ok := plainKeys[k]; ok {
+		return to
+	}
+	for _, p := range identParts {
+		k = p.re.ReplaceAllString(k, p.to)
+	}
+	return k
 }
 
 // plainValues renames enum values that carry planner words.

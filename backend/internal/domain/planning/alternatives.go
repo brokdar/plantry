@@ -74,6 +74,8 @@ type AltRequest struct {
 	// floor (the compound ways of Ways make that up on another meal; their
 	// own check drops the ones that do not).
 	TolerateFloor bool
+	// NoLimit lists every verified candidate (Ways picks among them itself).
+	NoLimit bool
 }
 
 // AltConstraints narrow the candidates. Zero values do not filter.
@@ -122,6 +124,10 @@ type Alternative struct {
 	DayPct           float64 `json:"day_pct"`
 	WeekPct          float64 `json:"week_pct"`
 	CookOccasionsDay int     `json:"cook_occasions_day"`
+	// Recommended marks the first alternative (one per result); Because
+	// says why in one phrase.
+	Recommended bool   `json:"recommended,omitempty"`
+	Because     string `json:"recommended_because,omitempty"`
 	// NewIssues are the soft issues the change adds (without options).
 	NewIssues []Issue `json:"new_issues"`
 	// Ops are the apply_changes ops that make the change, in order.
@@ -285,8 +291,15 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 		listed[a.FoodID] = true
 		return false
 	})
-	if len(out) > limit {
+	if len(out) > limit && !req.NoLimit {
 		out = out[:limit]
+	}
+	if len(out) > 0 {
+		out[0].Recommended = true
+		out[0].Because = "the best-ranked candidate: no new problem, the fewest new warnings, no extra cooking where possible"
+		if len(out[0].NewIssues) > 0 {
+			out[0].Because = "the best-ranked candidate, but it creates a new warning (see new_issues)"
+		}
 	}
 	res := AltResult{Alternatives: out}
 	if old >= 0 {
@@ -434,7 +447,7 @@ func dropWords(candidates int, dropped map[string]int, blocked map[string]Issue,
 		case "H9." + CodeKcalBelowFloor:
 			out = append(out, fmt.Sprintf("%s: %d would leave the day under its kcal floor; the best reaches %.0f kcal, the floor is %.0f kcal", PlainText(CodeKcalBelowFloor).Label, n, num(is, "kcal"), num(is, "floor_kcal")))
 		case "H2." + CodeTooManyCookOccasions:
-			out = append(out, fmt.Sprintf("%s: %d would add a cooking occasion to a day that already has its maximum (%.0f of %.0f)", PlainText(CodeTooManyCookOccasions).Label, n, num(is, "count"), num(is, "max")))
+			out = append(out, fmt.Sprintf("%s: %d would add a cooking time to a day that already has its maximum (%.0f of %.0f)", PlainText(CodeTooManyCookOccasions).Label, n, num(is, "count"), num(is, "max")))
 		case "S6." + CodeMealNotLight:
 			out = append(out, fmt.Sprintf("light: %d would keep the meal over its cap of %.0f kcal; the lightest plate is %.0f kcal", n, lightMax, lightBest))
 		case "S6b." + CodeMealNotHearty:
@@ -585,6 +598,9 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 		if onPlate[id] || !fitsPosition(f, req.What, kind) || !fitsDiet(f.DietClass, household) ||
 			(req.Constraints.Diet != "" && !fitsDiet(f.DietClass, diet.Class(req.Constraints.Diet))) ||
 			!req.Constraints.matches(f, words) {
+			continue
+		}
+		if (req.What == AltAdd || req.What == AltSide) && !f.Composed() && !s.addOnFits(p, f, slotName(s, p.SlotID)) {
 			continue
 		}
 		comp := Component{FoodID: id, Proposed: true}
