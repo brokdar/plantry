@@ -90,7 +90,7 @@ func recommend(ways, offers []planning.Way) {
 // about what it left: when the ops made issues new it says to report them and
 // offer the recommended fix as a question, applying nothing unasked, and for a
 // dish that now repeats on another plate it offers a verified replacement.
-func adviceFor(ctx context.Context, svc Services, w window.Window, before, after planning.Evaluation, dry bool) (string, []map[string]any) {
+func adviceFor(ctx context.Context, svc Services, w window.Window, before, after planning.Evaluation, dry bool, applied []map[string]any) (string, []map[string]any) {
 	was := issueMap(before.Issues)
 	var fresh []planning.Issue
 	options, hard := false, false
@@ -124,39 +124,69 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 		if err != nil || res.Current == nil {
 			continue
 		}
-		// The cleanest replacement (the list is ranked by new warnings); one that
-		// still creates a warning says which.
-		for _, a := range res.Alternatives {
-			if len(a.Ops) == 0 {
-				continue
-			}
-			offer := map[string]any{
-				"what": fmt.Sprintf("replace %s on %s with %s", res.Current.Name, is.Date, a.Name), "ops": a.Ops,
+		// The cleanest replacement (the list is ranked by new warnings).
+		if a, ok := firstClean(res.Alternatives, func(ops []planning.OptionOp) bool { return offerIsClean(ctx, svc, w, ops) }); ok {
+			offers = append(offers, map[string]any{
+				"what": fmt.Sprintf("replace %s on %s with %s", res.Current.Name, dayLabelStr(is.Date), a.Name), "ops": a.Ops,
 				"recommended": len(offers) == 0, "recommended_because": "removes the repeat, no new warning",
-			}
-			if len(a.NewIssues) > 0 {
-				var labels []string
-				for _, ni := range a.NewIssues {
-					labels = append(labels, planning.PlainText(ni.Code).Label)
-				}
-				offer["creates_warning"] = labels
-				offer["recommended_because"] = "removes the repeat; the closest available, it creates a warning (creates_warning)"
-			}
-			offers = append(offers, offer)
-			break
+			})
 		}
+	}
+	// A named meat dish saves, and its week effect is told with one way to
+	// balance it (a meat meal elsewhere swapped); tools never offer such a dish.
+	meat := ""
+	if planning.MeatOverStep(before, after) {
+		var limit float64
+		for _, is := range after.Issues {
+			if is.Code == planning.CodeWeekMeatAboveDGE {
+				limit = paramNum(is, "max_g")
+			}
+		}
+		meat = fmt.Sprintf("the week's meat goes from %.0f to %.0f g, over the %.0f g limit", before.Week.MeatG, after.Week.MeatG, limit)
+		if !dry && len(offers) == 0 {
+			if o := meatBalanceOffer(ctx, svc, w, touchedPlates(applied), after.Week.MeatG); o != nil {
+				offers = append(offers, o)
+			}
+		}
+	}
+	// A check says what the change would do; a saved change says what it did.
+	// The offer is the extra step: it is never applied unasked.
+	lead, tail := "the change is done as asked and", "; do not apply the offer unasked"
+	var what string
+	switch {
+	case len(offers) > 0:
+		what = "repeat a dish"
+	case hard:
+		what = "leave a day under its minimum"
+	case options, len(fresh) > 0:
+		what = "make new issues"
+	case meat != "":
+		what = "raise the week's meat"
+	default:
+		return "", nil
+	}
+	if dry {
+		// Warnings never stop a requested change: it is saved, then reported.
+		return "NOT saved (a check). A question about what would happen: answer from this result. A requested change: save it now with the same ops and dry_run false, never ask first; it would " + what + ", which you then report", offers
+	}
+	if meat != "" {
+		text := lead + " now " + meat + ": tell the user"
+		if len(offers) > 0 {
+			text += ", present offers[0] (a meat meal swapped for a vegetarian one) as your recommended way to balance it"
+		} else {
+			text += " and offer to swap a meat meal for a vegetarian one"
+		}
+		return text + tail, offers
 	}
 	switch {
 	case len(offers) > 0:
-		return "the change is done as asked and now repeats a dish: tell the user, present offers[0] as your recommended way out, and apply nothing unasked", offers
+		return lead + " now repeats a dish: tell the user, present offers[0] as your recommended way out" + tail, offers
 	case hard:
-		return "the change is done as asked and left a day under its minimum: tell the user plainly and offer the fix marked recommended as a question; apply nothing unasked", nil
+		return lead + " left a day under its minimum: tell the user plainly and offer the fix marked recommended as a question" + tail, nil
 	case options:
-		return "the change is done as asked and made new issues: report them and offer the option marked recommended as a question; apply nothing unasked", nil
-	case len(fresh) > 0:
-		return "the change is done as asked and made new issues: report them plainly; apply nothing unasked", nil
+		return lead + " made new issues: report them and offer the option marked recommended as a question" + tail, nil
 	}
-	return "", nil
+	return lead + " made new issues: report them plainly", nil
 }
 
 // repeatedPlate is the latest draft plate that eats the dish a repeat warning
@@ -178,4 +208,53 @@ func repeatedPlate(st planning.State, is planning.Issue) int64 {
 		}
 	}
 	return best.ID
+}
+
+// touchedPlates are the plates the applied ops of a call named.
+func touchedPlates(applied []map[string]any) map[int64]bool {
+	out := map[int64]bool{}
+	for _, a := range applied {
+		switch id := a["plate_id"].(type) {
+		case int64:
+			out[id] = true
+		case float64:
+			out[int64(id)] = true
+		}
+	}
+	return out
+}
+
+// meatBalanceOffer is the verified swap of a meat main on another draft plate
+// for a vegetarian one that takes the most meat off the week, with no new
+// problem or warning; nil when none helps by a real step.
+func meatBalanceOffer(ctx context.Context, svc Services, w window.Window, touched map[int64]bool, now float64) map[string]any {
+	if svc.State == nil {
+		return nil
+	}
+	st, err := svc.State(ctx, w, todayFrom(ctx))
+	if err != nil {
+		return nil
+	}
+	st.Avoid, st.PairAddOns = svc.Removed.avoid(ctx), true
+	var best map[string]any
+	bestMeat := now - planning.MeatStepG
+	for _, p := range st.Plates {
+		if touched[p.ID] || p.Confirmed || !st.Window.Contains(p.Date) {
+			continue
+		}
+		res, err := planning.Alternatives(st, planning.WindowTarget(st), planning.AltRequest{PlateID: p.ID, What: planning.AltMain, Constraints: planning.AltConstraints{Diet: "vegetarian"}, Limit: 5})
+		if err != nil || res.Current == nil {
+			continue
+		}
+		for _, a := range res.Alternatives {
+			if len(a.NewIssues) == 0 && len(a.Ops) > 0 && a.WeekMeatG < bestMeat && offerIsClean(ctx, svc, w, a.Ops) {
+				bestMeat = a.WeekMeatG
+				best = map[string]any{
+					"what": fmt.Sprintf("replace %s on %s with %s: the week's meat falls from %.0f to %.0f g", res.Current.Name, dayLabel(p.Date), a.Name, now, a.WeekMeatG),
+					"ops":  a.Ops, "recommended": true, "recommended_because": "takes the most meat off the week, no new warning",
+				}
+			}
+		}
+	}
+	return best
 }

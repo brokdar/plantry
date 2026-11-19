@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"slices"
 	"sort"
 )
 
@@ -109,33 +108,33 @@ func addDerived(name string, raw json.RawMessage) json.RawMessage {
 	return out
 }
 
-// dryRunView is an apply_changes result as the model reads it. A check
-// (dry_run true) must not look like a write: it opens with saved false and a
-// plain sentence, and what it computed is named for what it is (what would be
-// applied, the plan if applied, the report if applied). A saved write opens
-// with saved true. Other results are returned as they are.
+// dryRunView is an apply_changes result as the model reads it: the first key
+// is saved (true or false), the second a status sentence, and a check names
+// what it computed for what it is (would_apply, plan_if_applied,
+// report_if_applied), so it never looks like a write. dry_run is dropped:
+// saved says it. A result without both fields is returned as it is.
 func dryRunView(raw json.RawMessage) json.RawMessage {
 	var obj map[string]json.RawMessage
-	if json.Unmarshal(raw, &obj) != nil {
+	if json.Unmarshal(raw, &obj) != nil || obj["saved"] == nil || obj["status"] == nil {
 		return raw
 	}
 	var dry bool
-	if d, ok := obj["dry_run"]; !ok || json.Unmarshal(d, &dry) != nil {
-		return raw
+	if d, ok := obj["dry_run"]; ok {
+		_ = json.Unmarshal(d, &dry)
 	}
-	delete(obj, "dry_run")
 	rename := map[string]string{}
-	head := `{"saved":true`
 	if dry {
-		head = `{"saved":false,"nothing_changed":"This is only a check of what would happen. Nothing was saved: say what would change and ask, never that it was added, changed or removed."`
 		rename = map[string]string{"applied": "would_apply", "after": "plan_if_applied", "report": "report_if_applied"}
 	}
+	out := []byte(`{"saved":` + string(obj["saved"]) + `,"status":` + string(obj["status"]))
+	delete(obj, "saved")
+	delete(obj, "status")
+	delete(obj, "dry_run")
 	keys := make([]string, 0, len(obj))
 	for k := range obj {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	out := []byte(head)
 	for _, k := range keys {
 		name := k
 		if to, ok := rename[k]; ok {
@@ -148,7 +147,7 @@ func dryRunView(raw json.RawMessage) json.RawMessage {
 		out = append(out, obj[k]...)
 	}
 	out = append(out, '}')
-	if !json.Valid(out) || slices.Contains(keys, "saved") {
+	if !json.Valid(out) {
 		return raw
 	}
 	return out

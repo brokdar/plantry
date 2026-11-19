@@ -38,7 +38,8 @@ func (r *repairer) advisories() []string {
 	if r.in.Side != nil {
 		return r.sideRoleChanged()
 	}
-	return append(append(r.missingMains(), r.cookDaysAdvice()...), r.weekAdvice()...)
+	// The week's meat and fish are finished in Go (guardWeek): no repair for them.
+	return append(r.missingMains(), r.cookDaysAdvice()...)
 }
 
 // cookDaysAdvice is the advisory for a plan that cooks on more days than the
@@ -52,28 +53,6 @@ func (r *repairer) cookDaysAdvice() []string {
 		return []string{fmt.Sprintf("The plan cooks on %d days, but the instruction allows %d. Fix: cook bigger batches on fewer days and let other plates eat them as leftovers (keep days and freezing permitting).", n, limit)}
 	}
 	return nil
-}
-
-// weekAdvice are the week's meat and fish advisories (weekAdvisories), kept
-// only where the last guard would act on the plan: a swap that holds on the
-// whole plan, not just on its own dry run.
-func (r *repairer) weekAdvice() []string {
-	meat := meatAllowed(r.in.State)
-	if !meat && !fishAllowed(r.in.State) {
-		return nil
-	}
-	adv := weekAdvisories(EvaluateWeek(r.s, r.in.Target), r.in.Instruction)
-	if len(adv) == 0 {
-		return nil
-	}
-	_, notes := guardWeek(r.in.State, r.in.Target, r.prop, idSet(r.in.Exclude), r.in.Instruction)
-	return slices.DeleteFunc(adv, func(a string) bool {
-		prefix := "Weekly fish"
-		if strings.HasPrefix(a, "The week holds ") && !strings.HasPrefix(a, "The week holds no fish") {
-			prefix = "Weekly meat"
-		}
-		return !slices.ContainsFunc(notes, func(n string) bool { return strings.HasPrefix(n, prefix) })
-	})
 }
 
 // sideRoleChanged reports a side swap whose new side has another role than

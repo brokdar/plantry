@@ -56,3 +56,6 @@ var (
 	ModelView  = modelView
 	AddDerived = addDerived
 )
+
+// NewWarnings exposes the guard's set of warnings a write makes.
+var NewWarnings = newWarnings

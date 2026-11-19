@@ -45,11 +45,11 @@ func TestWorsened_NeedsARealStep(t *testing.T) {
 // E024-3 and E024-5: the model reads days as "Wed 25 Nov" (ids and the fields
 // it sends back keep ISO dates), and a check never looks like a write.
 func TestModelView_DatesAndDryRun(t *testing.T) {
-	raw := json.RawMessage(`{"dry_run":true,"dry_run_note":"Nothing was saved.","applied":[{"op":"swap","date":"2026-11-25"}],
+	raw := json.RawMessage(`{"saved":false,"status":"Nothing changed: check","dry_run":true,"dry_run_note":"Nothing was saved.","applied":[{"op":"swap","date":"2026-11-25"}],
 		"after":{"days":[{"date":"2026-11-25","kcal":1800}],"message":"Wed 2026-11-25 is over"},"report":{"changed":[]},
 		"ways":[{"ops":[{"op":"add","date":"2026-11-25"}],"light":[{"date":"2026-11-25","scope":"meal"}]}]}`)
 	out := string(agent.ModelView(raw))
-	assert.Regexp(t, `^\{"saved":false,"nothing_changed":"`, out, "a check opens with saved false")
+	assert.Regexp(t, `^\{"saved":false,"status":"Nothing changed`, out, "a check opens with saved false and a status")
 	assert.Contains(t, out, `"would_apply"`)
 	assert.Contains(t, out, `"plan_if_applied"`)
 	assert.Contains(t, out, `"report_if_applied"`)
@@ -59,8 +59,8 @@ func TestModelView_DatesAndDryRun(t *testing.T) {
 	assert.Contains(t, out, `"ops":[{"date":"2026-11-25","op":"add"}]`, "an op the model sends back keeps its date")
 	assert.Contains(t, out, `"light":[{"date":"2026-11-25"`, "so does a light entry")
 
-	saved := string(agent.ModelView(json.RawMessage(`{"dry_run":false,"applied":[],"after":{},"report":{}}`)))
-	assert.Regexp(t, `^\{"saved":true`, saved)
+	saved := string(agent.ModelView(json.RawMessage(`{"saved":true,"status":"Saved.","dry_run":false,"applied":[],"after":{},"report":{}}`)))
+	assert.Regexp(t, `^\{"saved":true,"status":"Saved\."`, saved)
 	assert.Contains(t, saved, `"report"`)
 
 	other := json.RawMessage(`{"items":[{"id":1,"last_eaten":"2026-10-20"}]}`)
@@ -93,4 +93,20 @@ func TestAddDerived(t *testing.T) {
 	require.NoError(t, json.Unmarshal(agent.AddDerived("find_alternatives", alts), &al))
 	assert.Equal(t, "inside its range", al.Alternatives[0]["day_vs_range"])
 	assert.Equal(t, "within the most a light meal holds", al.Alternatives[0]["meal_vs_limit"])
+}
+
+// E024 with E025: the guard and the report read the same warning set, so a
+// write is never refused for a worsening the report would not mention.
+func TestGuardAndReportShareTheWarningSet(t *testing.T) {
+	meat := func(g float64) planning.Issue {
+		return issueWith("S7", planning.CodeWeekMeatAboveDGE, "", map[string]any{"meat_g": g, "max_g": 300.0})
+	}
+	fat := func(p float64) planning.Issue {
+		return issueWith("S5", planning.CodeWeekFatRange, "", map[string]any{"pct": p, "range_low_pct": 25.0, "range_high_pct": 35.0})
+	}
+	ev := func(is ...planning.Issue) planning.Evaluation { return planning.Evaluation{Issues: is} }
+	assert.Empty(t, agent.NewWarnings(ev(meat(321), fat(39.7)), ev(meat(325), fat(39.9))), "meat 321 to 325 g and fat 39.7 to 39.9 are the same warnings")
+	got := agent.NewWarnings(ev(meat(321), fat(39.7)), ev(meat(350), fat(39.9)))
+	require.Len(t, got, 1)
+	assert.Equal(t, planning.CodeWeekMeatAboveDGE, got[0].Code)
 }

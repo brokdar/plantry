@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -32,9 +33,9 @@ func hardWhy(is planning.Issue) string {
 	if is.Code == planning.CodeKcalBelowFloor {
 		kcal, _ := is.Params["kcal"].(float64)
 		floor, _ := is.Params["floor_kcal"].(float64)
-		return fmt.Sprintf("%s would fall to %.0f kcal, under its minimum of %.0f kcal", is.Date, kcal, floor)
+		return fmt.Sprintf("%s would fall to %.0f kcal, under its minimum of %.0f kcal", dayLabelStr(is.Date), kcal, floor)
 	}
-	return fmt.Sprintf("it would create a problem on %s: %s", is.Date, planning.PlainText(is.Code).Label)
+	return fmt.Sprintf("it would create a problem on %s: %s", dayLabelStr(is.Date), planning.PlainText(is.Code).Label)
 }
 
 // runGuarded is apply_changes' write path: a call whose ops would leave a day
@@ -216,11 +217,11 @@ func containsInt(l []int, v int) bool {
 func describeOp(op changeOp, r applyRun) string {
 	if applied, ok := r.result["applied"].([]map[string]any); ok && len(applied) > 0 {
 		if food, ok := applied[0]["food"].(string); ok {
-			return fmt.Sprintf("%s %s on %v", op.Op, food, applied[0]["date"])
+			return fmt.Sprintf("%s %s on %v", op.Op, food, dayLabelStr(fmt.Sprint(applied[0]["date"])))
 		}
 	}
 	if op.Date != "" {
-		return fmt.Sprintf("%s on %s", op.Op, op.Date)
+		return fmt.Sprintf("%s on %s", op.Op, dayLabelStr(op.Date))
 	}
 	return op.Op
 }
@@ -246,15 +247,116 @@ func replacementOffer(ctx context.Context, svc Services, w window.Window, op cha
 			if err != nil || res.Current == nil {
 				return nil
 			}
-			for _, a := range res.Alternatives {
-				if len(a.NewIssues) == 0 && len(a.Ops) > 0 {
-					return map[string]any{
-						"what": fmt.Sprintf("replace %s on %s with %s so the day stays above its minimum", res.Current.Name, p.Date.Format("2006-01-02"), a.Name),
-						"ops":  a.Ops, "recommended": first, "recommended_because": "keeps the day above its minimum, no new warning",
-					}
+			if a, ok := firstClean(res.Alternatives, func(ops []planning.OptionOp) bool { return offerIsClean(ctx, svc, w, ops) }); ok {
+				return map[string]any{
+					"what": fmt.Sprintf("replace %s on %s with %s so the day stays above its minimum", res.Current.Name, dayLabel(p.Date), a.Name),
+					"ops":  a.Ops, "recommended": first, "recommended_because": "keeps the day above its minimum, no new warning",
 				}
 			}
 		}
 	}
 	return nil
+}
+
+// changeOpsOf reads the ops of a planner way or alternative as apply_changes ops.
+func changeOpsOf(in []planning.OptionOp) ([]changeOp, error) {
+	ops := make([]changeOp, 0, len(in))
+	for _, o := range in {
+		raw, err := json.Marshal(o)
+		if err != nil {
+			return nil, err
+		}
+		var op changeOp
+		if err := json.Unmarshal(raw, &op); err != nil {
+			return nil, err
+		}
+		ops = append(ops, op)
+	}
+	return ops, nil
+}
+
+// firstClean is the best-ranked alternative that lists no new issue and passes
+// the check of its own ops: a recommended offer never creates a warning.
+func firstClean(alts []planning.Alternative, clean func([]planning.OptionOp) bool) (planning.Alternative, bool) {
+	for _, a := range alts {
+		if len(a.NewIssues) == 0 && len(a.Ops) > 0 && clean(a.Ops) {
+			return a, true
+		}
+	}
+	return planning.Alternative{}, false
+}
+
+// offerIsClean runs an offer's ops through the check apply_changes uses
+// (rolled back) and says whether it adds no problem and no warning, by the same
+// issue keys as report.new_warnings: guard, offers and report share one set.
+func offerIsClean(ctx context.Context, svc Services, w window.Window, in []planning.OptionOp) bool {
+	ops, err := changeOpsOf(in)
+	if err != nil || len(ops) == 0 {
+		return false
+	}
+	r, err := runApply(ctx, svc, w, applyInput{Ops: ops, DryRun: true, quiet: true}, nil)
+	if err != nil {
+		return false
+	}
+	was := issueMap(r.before.Issues)
+	for _, is := range r.after.Issues {
+		if _, old := was[issueKey(is)]; !old {
+			return false
+		}
+	}
+	return true
+}
+
+// newWarnings are the issues a write of ops makes new, or worse by the same
+// measure the report uses: what report.new_warnings would say.
+func newWarnings(before, after planning.Evaluation) []planning.Issue {
+	was := issueMap(before.Issues)
+	var out []planning.Issue
+	for _, is := range after.Issues {
+		b, old := was[issueKey(is)]
+		if !old || worsened(b, is) {
+			is.Options = nil
+			out = append(out, is)
+		}
+	}
+	return out
+}
+
+// verifiedAlternatives passes the pool of find_alternatives through the check
+// of a write of each candidate's own ops, so what the model is shown carries
+// the warnings the write would produce (a dish repeated this week is only
+// seen there). Clean candidates come first, in rank; a candidate that makes a
+// problem is dropped; one that only makes a warning is listed after them with
+// that warning, up to n, and is never recommended: only the first clean one is.
+func verifiedAlternatives(ctx context.Context, svc Services, w window.Window, pool []planning.Alternative, n int) []planning.Alternative {
+	var clean, warned []planning.Alternative
+	for _, a := range pool {
+		ops, err := changeOpsOf(a.Ops)
+		if err != nil || len(ops) == 0 {
+			continue
+		}
+		r, err := runApply(ctx, svc, w, applyInput{Ops: ops, DryRun: true, quiet: true}, nil)
+		if err != nil {
+			continue
+		}
+		if len(newHard(r.before, r.after)) > 0 {
+			continue
+		}
+		a.NewIssues = newWarnings(r.before, r.after)
+		a.Recommended, a.Because = false, ""
+		if len(a.NewIssues) == 0 {
+			clean = append(clean, a)
+		} else {
+			warned = append(warned, a)
+		}
+	}
+	out := slices.Concat(clean, warned)
+	if len(out) > n {
+		out = out[:n]
+	}
+	if len(clean) > 0 {
+		out[0].Recommended = true
+		out[0].Because = "the best-ranked candidate: no new problem, no new warning, no extra cooking where possible"
+	}
+	return out
 }

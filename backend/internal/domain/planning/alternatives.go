@@ -121,8 +121,10 @@ type Alternative struct {
 	DayKcal       float64 `json:"day_kcal"`
 	// DayPct and WeekPct are the day's kcal against its target and the
 	// weekly ledger's pct (0 without a target).
-	DayPct           float64 `json:"day_pct"`
-	WeekPct          float64 `json:"week_pct"`
+	DayPct  float64 `json:"day_pct"`
+	WeekPct float64 `json:"week_pct"`
+	// WeekMeatG is the week's meat after the change (not shown to the model).
+	WeekMeatG        float64 `json:"-"`
 	CookOccasionsDay int     `json:"cook_occasions_day"`
 	// Recommended marks the first alternative (one per result); Because
 	// says why in one phrase.
@@ -183,6 +185,19 @@ type AltCurrent struct {
 	Intent       string  `json:"intent,omitempty"`
 	MaxKcal      float64 `json:"max_kcal"`
 	MinKcal      float64 `json:"min_kcal"`
+}
+
+// MeatStepG is how much more weekly meat counts as a real step.
+const MeatStepG = 25.0
+
+// MeatOverStep reports whether the change from before to after raises the
+// week's meat by a real step while the week is over its meat limit: such a
+// change is never offered by a tool; one the user names is saved and its
+// week effect told.
+func MeatOverStep(before, after Evaluation) bool {
+	a, b := before.Week, after.Week
+	return a != nil && b != nil && b.MeatG >= a.MeatG+MeatStepG &&
+		slices.ContainsFunc(after.Issues, func(is Issue) bool { return is.Code == CodeWeekMeatAboveDGE })
 }
 
 // EmptyReason says why nothing fits: how many candidates fit the position
@@ -600,7 +615,7 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 			!req.Constraints.matches(f, words) {
 			continue
 		}
-		if (req.What == AltAdd || req.What == AltSide) && !f.Composed() && !s.addOnFits(p, f, slotName(s, p.SlotID)) {
+		if (req.What == AltAdd || req.What == AltSide) && !s.addOnFits(p, f, slotName(s, p.SlotID)) {
 			continue
 		}
 		comp := Component{FoodID: id, Proposed: true}
@@ -804,6 +819,9 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 	if why := newNutritionGap(base, ev, p); why != "" {
 		return Alternative{}, why, nil
 	}
+	if MeatOverStep(base, ev) {
+		return Alternative{}, "S7." + CodeWeekMeatAboveDGE, nil
+	}
 	var newIssues []Issue
 	for _, is := range ev.Issues {
 		if is.Severity == SeverityViolation && !hard[issueID(is)] && (!tolerateFloor || is.Code != CodeKcalBelowFloor) {
@@ -847,6 +865,7 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 	}
 	if ev.Week != nil {
 		a.WeekPct = math.Round(ev.Week.Pct*10) / 10
+		a.WeekMeatG = ev.Week.MeatG
 	}
 	a.Ops = s.altOps(p, old, drop, c, a.CookAt)
 	a.next = next
