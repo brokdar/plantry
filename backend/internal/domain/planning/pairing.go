@@ -35,14 +35,13 @@ import (
 //   - A food the user removed earlier in the conversation (State.Avoid) is
 //     never added again.
 var (
-	cheeseWords    = []string{"cheese", "kase", "parmesan", "mozzarella", "feta", "cheddar", "gouda", "emmental", "ricotta", "halloumi", "mascarpone", "pecorino", "gruyere"}
-	nutWords       = []string{"nut", "nuss", "mandel", "almond", "peanut", "erdnuss", "cashew", "walnuss", "pistazie", "pistachio", "haselnuss"}
-	dairyWords     = []string{"yogurt", "joghurt", "skyr", "quark", "milk", "milch", "kefir"}
-	pastaWords     = []string{"pasta", "nudel", "spaghetti", "penne", "lasagn", "tagliatelle", "gnocchi", "fusilli", "macaroni", "makkaroni", "risotto"}
-	starchWords    = []string{"rice", "reis", "kartoffel", "potato", "couscous", "polenta", "bulgur", "brot", "bread", "sandwich", "wrap"}
-	breakfastWords = []string{"muesli", "mueslli", "musli", "oat", "hafer", "cereal", "granola", "cornflakes"}
-	fruitWords     = []string{"fruit salad", "obstsalat", "fruchtsalat", "kompott", "compote"}
-	saladWords     = []string{"salad", "salat"}
+	cheeseWords = []string{"cheese", "kase", "parmesan", "mozzarella", "feta", "cheddar", "gouda", "emmental", "ricotta", "halloumi", "mascarpone", "pecorino", "gruyere"}
+	nutWords    = []string{"nut", "nuss", "mandel", "almond", "peanut", "erdnuss", "cashew", "walnuss", "pistazie", "pistachio", "haselnuss"}
+	dairyWords  = []string{"yogurt", "joghurt", "skyr", "quark", "milk", "milch", "kefir"}
+	pastaWords  = []string{"pasta", "nudel", "spaghetti", "penne", "lasagn", "tagliatelle", "gnocchi", "fusilli", "macaroni", "makkaroni", "risotto"}
+	starchWords = []string{"rice", "reis", "kartoffel", "potato", "couscous", "polenta", "bulgur", "brot", "bread", "sandwich", "wrap"}
+	fruitWords  = []string{"fruit salad", "obstsalat", "fruchtsalat", "kompott", "compote"}
+	saladWords  = []string{"salad", "salat"}
 )
 
 // breakfastWords are the names of leaves that are breakfast food.
@@ -124,9 +123,6 @@ func (s State) addOnFits(p Plate, f FoodFacts, slot string) bool {
 		return false
 	}
 	if s.secondStarch(p, f, name) {
-		return false
-	}
-	if slot != "breakfast" && has(breakfastWords) {
 		return false
 	}
 	if has(nutWords) && !strings.Contains(name, "coconut") && !strings.Contains(name, "kokos") {
