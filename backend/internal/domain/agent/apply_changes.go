@@ -81,7 +81,7 @@ Ops (fields):
 - move_cook: session_id, cook_at {date, slot_id}: the batch cooks there instead (on or before every meal eating it, within keep days).
 - copy: plate_id, to [{date, slot_id}], as leftover (eat from the same batches) | fresh (cook again on each cell).
 Only draft plates in the future are changeable; a confirmed one needs the user to unlock it.
-Returns compact JSON (numbers rounded: kcal whole, other figures one decimal; a field that is 0, false or empty is left out, so absent means 0 / false / none; complete shows only when false) {dry_run, dry_run_note? (checks only), applied:[{op, plate_id?, plate_component_id?, session_id?, ..., also_changed?:[{what cook_moved|became_cooking_meal|cooks_fresh|batch_resized, session_id, plate_id, date, slot_id, from_date, from_slot_id, why?}]}] (move: date, slot_id, from_date, from_slot_id, occupant?, occupant_plate_id?; away: cells, removed_plates; move_cook: cook_date, cook_slot_id; copy: copies [{plate_id, date, slot_id}]; also_changed lists what else the op changed, tell the user in plain words), after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),intent? (light|hearty) with max_kcal? (light cap) or min_kcal? (hearty minimum),component_details (only these touched plates):[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,band_low,band_high (the day band, kcal),floor_kcal (the day energy floor),room_kcal (kcal left to the band top),protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,light_meals? (e.g. "light dinner"),complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only),meat_g? (per week, extrapolated to 7 days),fish_meals?,legume_meals?,produce_g_per_day? (DGE food groups per eater, display only)} (the weekly kcal ledger of the whole window: complete days only, per eater), issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],worsened:[{label,message,severity,date?,slot_id?,plate_id?,before:{params},after:{params}}] (open before and after, the numbers got worse, e.g. meat 321 to 471 g),total_open,new_more?,resolved_more?,worsened_more?}, change_id? (not when dry_run is true)}}. An issue is {label (the rule in plain words), message (one plain sentence), severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). A "day protein" option raises the day's protein; a "day energy" option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (the "day energy floor" is a day below its kcal safety floor) are hard rules: fix them. Soft issues (label "day energy": day kcal outside the day band; "day protein" and "weekly protein": protein under 90% of the day target (g/kg) or the share under target or the weekly average under target; "weekly energy": weekly average outside the week band; "weekly carbs" and "weekly fat": the share outside its range; "light meal": a light meal over its cap (max_kcal); "hearty meal": a hearty meal under its minimum (min_kcal); "weekly meat" (over 300 g), "weekly fish" and "weekly legumes": a DGE food rule missed; "dish as main too often": a dish as main of too many meals) never block saving. Options (computed, verified, each with a ready op; ops when it needs several): "day energy" below band and "day protein" add or raise food (action add|raise); "light meal" and "hearty meal" portions (a smaller or larger portion, 0.75-1.5), remove (an add-on, light meal only) or swap (a lighter or heartier main or side); "cooking occasions per day" move_cook (cook the batch on another cell) or swap (a leftover or no-cook food). A light meal or hearty meal option may leave the day under its band (a light or hearty request ranks above the day and week bands) but never under the day energy floor. Pass light (the user's light requests, meal unless they explicitly ask to eat less for the day) to judge the result under them; stored light requests apply without passing them again. A call with dry_run false that succeeds saves the light you pass (a date replaces that date's request, scope none clears it); a call with dry_run true saves nothing: days then show light and normal_target_kcal, week.target_kcal is the target after them and week.normal_target_kcal the normal one. Your request is not done while a hard issue (violation) it caused is open, unless you tell the user why; a soft issue you report and offer the fix for, without applying it. An away call that would leave a day with a second cooking occasion (cooking occasions per day) moves cooks itself: each such move is an applied entry with auto_fix (op move_cook, cook_date, cook_slot_id, from_date, from_slot_id); tell the user which dish now cooks where. An issue with no_fix_found true has no verified fix (no_fix_reason says why): tell the user, do not guess one.
+Returns compact JSON (numbers rounded: kcal whole, other figures one decimal; a field that is 0, false or empty is left out, so absent means 0 / false / none; complete shows only when false) {dry_run, dry_run_note? (checks only), applied:[{op, plate_id?, plate_component_id?, session_id?, ..., also_changed?:[{what cook_moved|became_cooking_meal|cooks_fresh|batch_resized, session_id, plate_id, date, slot_id, from_date, from_slot_id, why?}]}] (move: date, slot_id, from_date, from_slot_id, occupant?, occupant_plate_id?; away: cells, removed_plates; move_cook: cook_date, cook_slot_id; copy: copies [{plate_id, date, slot_id}]; also_changed lists what else the op changed, tell the user in plain words), after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),intent? (light|hearty) with max_kcal? (light cap) or min_kcal? (hearty minimum),component_details (only these touched plates):[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,band_low,band_high (the day band, kcal),floor_kcal (the day energy minimum),room_kcal (kcal left to the band top),protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,light_meals? (e.g. "light dinner"),complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only),meat_g? (per week, extrapolated to 7 days),fish_meals?,legume_meals?,produce_g_per_day? (DGE food groups per eater, display only)} (the weekly kcal ledger of the whole window: complete days only, per eater), issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],worsened:[{label,message,severity,date?,slot_id?,plate_id?,before:{params},after:{params}}] (open before and after, the numbers got worse, e.g. meat 321 to 471 g),total_open,new_more?,resolved_more?,worsened_more?}, change_id? (not when dry_run is true)}}. An issue is {label (the rule in plain words), message (one plain sentence), severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). A "day protein" option raises the day's protein; a "day energy" option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (the "day energy minimum" is a day below its kcal safety floor) are hard rules: fix them. Soft issues (label "day energy": day kcal outside the day band; "day protein" and "weekly protein": protein under 90% of the day target (g/kg) or the share under target or the weekly average under target; "weekly energy": weekly average outside the week band; "weekly carbs" and "weekly fat": the share outside its range; "light meal": a light meal over its cap (max_kcal); "hearty meal": a hearty meal under its minimum (min_kcal); "weekly meat" (over 300 g), "weekly fish" and "weekly legumes": a DGE food rule missed; "dish as main too often": a dish as main of too many meals) never block saving. Options (computed, verified, each with a ready op; ops when it needs several): "day energy" below band and "day protein" add or raise food (action add|raise); "light meal" and "hearty meal" portions (a smaller or larger portion, 0.75-1.5), remove (an add-on, light meal only) or swap (a lighter or heartier main or side); "cooking occasions per day" move_cook (cook the batch on another cell) or swap (a leftover or no-cook food). A light meal or hearty meal option may leave the day under its band (a light or hearty request ranks above the day and week bands) but never under the day energy minimum. Pass light (the user's light requests, meal unless they explicitly ask to eat less for the day) to judge the result under them; stored light requests apply without passing them again. A call with dry_run false that succeeds saves the light you pass (a date replaces that date's request, scope none clears it); a call with dry_run true saves nothing: days then show light and normal_target_kcal, week.target_kcal is the target after them and week.normal_target_kcal the normal one. Your request is not done while a hard issue (violation) it caused is open, unless you tell the user why; a soft issue you report and offer the fix for, without applying it. An away call that would leave a day with a second cooking occasion (cooking occasions per day) moves cooks itself: each such move is an applied entry with auto_fix (op move_cook, cook_date, cook_slot_id, from_date, from_slot_id); tell the user which dish now cooks where. An issue with no_fix_found true has no verified fix (no_fix_reason says why): tell the user, do not guess one.
 Every list of options carries one marked recommended: true: present it as your recommendation, apply it only when the user says yes. A call without a goal whose ops made issues new, left a day under its minimum or made a dish repeat has next (report what is new, offer the recommended fix as a question, apply nothing unasked) and, for a repeat, offers (a verified replacement, recommended).
 A relative request ("lighter", "heartier", "more protein"): take the ops, light and goal of a way from find_ways and pass them as returned; goal {kind lighter|heartier|more_protein|lower_day|raise_day, plate_id (a meal) | date (the day: more_protein, lower_day, raise_day)}. The result then has request:{goal, target, before, after (meal_kcal, meal_protein_g, day_kcal, day_protein_g; a day request only the day's), max_kcal? (light cap) or min_kcal? (hearty minimum), satisfied, reached_light (lighter), reached_hearty (heartier) or reached_band (lower_day, raise_day), why?}: satisfied is true when the food changed in the asked direction by a meaningful amount (at least 10% of the meal or 80 kcal, the smaller; protein at least 10 g); reached_light/reached_hearty say whether the meal also is at its cap or minimum (false: lighter, but not a light meal yet). A meal that already meets its cap or minimum still has to change. A light or hearty entry for a meal that misses its cap (minimum) after the ops is refused with the numbers, and so is one passed with a goal when the food did not change; a goal needs ops, a call that only sets light may leave ops out.`
 
@@ -247,12 +247,15 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 	if err != nil {
 		return applyRun{}, fmt.Errorf("read the plan before the change: %w", err)
 	}
+	// The plan as it is before the ops, for the change report.
+	beforeSt, beforeErr := svc.State(withLight(ctx, nil), w, todayFrom(ctx))
 	var (
 		applied []map[string]any
 		after   map[string]any
 		afterEv planning.Evaluation
 		request map[string]any
 		b       batch
+		rep     *changeReport
 	)
 	run := func(ctx context.Context) error {
 		for i, op := range in.Ops {
@@ -284,6 +287,7 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 				return err
 			}
 		}
+		rep = reportOf(ctx, svc, w, beforeSt, beforeErr, before, afterEv, applied)
 		if in.Goal != nil {
 			if request, err = judgeGoal(ctx, svc, w, *in.Goal, light, before, afterEv); err != nil {
 				return err
@@ -326,6 +330,9 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 				result["offers"] = offers
 			}
 		}
+	}
+	if rep != nil {
+		result["report"] = rep
 	}
 	if in.DryRun {
 		// The rollback is done: a row that is gone now was created by the dry run.
@@ -519,7 +526,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		}
 		b.plate(p)
 		b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(old)...)
-		b.note(op, map[string]any{"food": old.FoodName, "to": pc.FoodName, "date": p.DateString()})
+		b.note(op, map[string]any{"food": food.Data(old.FoodName), "to": food.Data(pc.FoodName), "date": p.DateString()})
 		return opResult(op, p, pc), nil
 	case "set_quantity":
 		q := op.quantity()
@@ -538,7 +545,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 			return nil, err
 		}
 		b.plate(p)
-		b.note(op, map[string]any{"food": pc.FoodName, "date": p.DateString()})
+		b.note(op, map[string]any{"food": food.Data(pc.FoodName), "date": p.DateString()})
 		return opResult(op, p, pc), nil
 	case "remove":
 		p, pc, err := componentOnPlate(ctx, svc, op.PlateComponentID)
@@ -551,7 +558,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		b.plate(p)
 		b.removed = append(b.removed, pc.FoodID)
 		b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(pc)...)
-		b.note(op, map[string]any{"food": pc.FoodName, "date": p.DateString()})
+		b.note(op, map[string]any{"food": food.Data(pc.FoodName), "date": p.DateString()})
 		return map[string]any{"op": op.Op, "plate_component_id": op.PlateComponentID, "removed": true, "food": pc.FoodName, "date": p.DateString()}, nil
 	case "create_plate":
 		d, err := parseOpDate(op.Date)
@@ -703,7 +710,7 @@ func opAdd(ctx context.Context, svc Services, op changeOp, b *batch) (map[string
 		b.aff.Dates = append(b.aff.Dates, op.CookAt.Date)
 	}
 	b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(added)...)
-	b.note(op, map[string]any{"food": added.FoodName, "date": got.DateString()})
+	b.note(op, map[string]any{"food": food.Data(added.FoodName), "date": got.DateString()})
 	return opResult(op, got, added), nil
 }
 
@@ -772,7 +779,7 @@ func opSetPortions(ctx context.Context, svc Services, op changeOp, b *batch) (ma
 	if plate.Exceeds(cur.Consumed, *op.Portions) || plate.Exceeds(cur.FrozenConsumed, frozen) {
 		return nil, fmt.Errorf("%w: %s would cook %s portions (%s frozen) but its plates eat %s (%s from the freezer); "+
 			"set at least %s portions (%s frozen), or reduce the plates' eaters or portions first",
-			domain.ErrInvalidInput, cur.FoodName, fnum(*op.Portions), fnum(frozen), fnum(cur.Consumed), fnum(cur.FrozenConsumed), fnum(cur.Consumed), fnum(cur.FrozenConsumed))
+			domain.ErrInvalidInput, food.Data(cur.FoodName), fnum(*op.Portions), fnum(frozen), fnum(cur.Consumed), fnum(cur.FrozenConsumed), fnum(cur.Consumed), fnum(cur.FrozenConsumed))
 	}
 	v, err := svc.Plates.SetSessionPortions(ctx, op.SessionID, plate.SessionPortions{Portions: *op.Portions, FrozenPortions: frozen, Note: sess.Note})
 	if err != nil {
@@ -780,7 +787,7 @@ func opSetPortions(ctx context.Context, svc Services, op changeOp, b *batch) (ma
 	}
 	b.aff.Sessions = append(b.aff.Sessions, v.ID)
 	b.aff.Dates = append(b.aff.Dates, v.CookDate.Format(time.DateOnly))
-	b.note(op, map[string]any{"food": v.FoodName, "date": v.CookDate.Format(time.DateOnly), "portions": v.Portions})
+	b.note(op, map[string]any{"food": food.Data(v.FoodName), "date": v.CookDate.Format(time.DateOnly), "portions": v.Portions})
 	return map[string]any{"op": op.Op, "session_id": v.ID, "portions": v.Portions, "frozen_portions": v.FrozenPortions}, nil
 }
 

@@ -159,7 +159,7 @@ func checkWay(ctx context.Context, svc Services, w window.Window, goal applyGoal
 			continue
 		}
 		if is.Severity == planning.SeverityViolation {
-			return way, fmt.Sprintf("%s: it adds a hard issue (%s)", way.What, planning.PlainText(is.Code).Label)
+			return way, fmt.Sprintf("%s: it adds a problem (%s)", way.What, planning.PlainText(is.Code).Label)
 		}
 		is.Options = nil
 		fresh = append(fresh, is)

@@ -34,7 +34,7 @@ func hardWhy(is planning.Issue) string {
 		floor, _ := is.Params["floor_kcal"].(float64)
 		return fmt.Sprintf("%s would fall to %.0f kcal, under its minimum of %.0f kcal", is.Date, kcal, floor)
 	}
-	return fmt.Sprintf("it would create a hard problem on %s: %s", is.Date, planning.PlainText(is.Code).Label)
+	return fmt.Sprintf("it would create a problem on %s: %s", is.Date, planning.PlainText(is.Code).Label)
 }
 
 // runGuarded is apply_changes' write path: a call whose ops would leave a day

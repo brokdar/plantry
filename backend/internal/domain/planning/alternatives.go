@@ -296,7 +296,7 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 	}
 	if len(out) > 0 {
 		out[0].Recommended = true
-		out[0].Because = "the best-ranked candidate: no new hard issue, the fewest new warnings, no extra cooking where possible"
+		out[0].Because = "the best-ranked candidate: no new problem, the fewest new warnings, no extra cooking where possible"
 		if len(out[0].NewIssues) > 0 {
 			out[0].Because = "the best-ranked candidate, but it creates a new warning (see new_issues)"
 		}

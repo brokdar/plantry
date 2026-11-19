@@ -69,12 +69,12 @@ func TestRenderPlanSummary(t *testing.T) {
 		"- Friday 2026-11-13\n",
 		"plate_id 11, confirmed, 2 eaters: Chili (component_id 21, food_id ",
 		", session_id 4 cook)",
-		"plate_id 12, draft, 1 eater: Oats (component_id 22",
+		"plate_id 12, pending, 1 eater: Oats (component_id 22",
 		"60 g/eater",
 		"| none | no plate, leave empty",
 		"session_id 4 | food_id ",
 		"portions 4, frozen 1 | eaten 3, of which frozen 0 | keeps until 2026-11-10",
-		"Issues:\n- cooking occasions per day (violation) " + sat + " count=2\n",
+		"Issues:\n- cooking occasions per day (problem) " + sat + " count=2\n",
 	} {
 		assert.Contains(t, got, want)
 	}

@@ -165,7 +165,7 @@ func TestChatPrompt_RealisticWeekFitsWithRoomToSpare(t *testing.T) {
 	}
 	// One-portion sessions on their own cell add nothing to the cell line.
 	assert.NotContains(t, prompt, "session_id 1 | food_id")
-	assert.Contains(t, prompt, "Cook sessions:")
+	assert.Contains(t, prompt, "Cook batches:")
 	// The stored light mark, the routine and the day numbers are there.
 	assert.Contains(t, prompt, "plan, light meal")
 	assert.Contains(t, prompt, "routine, not cooking")

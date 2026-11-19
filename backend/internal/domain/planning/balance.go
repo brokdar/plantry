@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -25,20 +26,135 @@ func balancePlan(in ChooseInput, prop Proposal) (Proposal, []string) {
 	if k := in.State.Profile.KcalTarget; k == nil || *k <= 0 || len(prop.Plates) == 0 {
 		return prop, nil
 	}
-	h := newPlanner(in)
-	h.balance, h.sided = true, map[int]bool{}
-	h.prop = cloneProposal(prop)
 	before := Evaluate(Merge(in.State, in.Target, prop), in.Target)
-	h.trimAddOns()
-	h.topUpFloors()
-	after := Evaluate(Merge(in.State, in.Target, h.prop), in.Target)
 	hard := hardKeys(before.Issues)
-	for k := range hardKeys(after.Issues) {
-		if !hard[k] {
-			return prop, nil
+	var best *planner
+	var bestEv Evaluation
+	var dropped string
+	// Two variants: trimming the flagged add-ons first, and lifting only. The
+	// week outweighs the add-on rule, so trimming that leaves the week short
+	// loses to keeping the add-ons.
+	for _, trim := range []bool{true, false} {
+		h := newPlanner(in)
+		h.balance, h.sided = true, map[int]bool{}
+		h.prop = cloneProposal(prop)
+		if trim {
+			h.trimAddOns()
+		}
+		// One pass leaves what its caps and order hid (a day lifted early can
+		// free room for another); repeat while the week still gains.
+		for range maxBalanceRounds {
+			pct := weekPct(Evaluate(Merge(in.State, in.Target, h.prop), in.Target))
+			h.topUpFloors()
+			if weekPct(Evaluate(Merge(in.State, in.Target, h.prop), in.Target))-pct < 0.1 {
+				break
+			}
+		}
+		after := Evaluate(Merge(in.State, in.Target, h.prop), in.Target)
+		if k := newHard(hard, after); k != "" {
+			dropped = "Balancing was dropped: it would have added a hard-rule issue (" + k + ")."
+			continue
+		}
+		if cookDays(after) > cookDays(before) {
+			dropped = "Balancing was dropped: it would have added cooking days."
+			continue
+		}
+		if best == nil || balanceScore(after) > balanceScore(bestEv) {
+			best, bestEv = h, after
 		}
 	}
-	return h.prop, balanceNotes(in.State, prop, h.prop)
+	if best == nil {
+		return prop, []string{dropped}
+	}
+	notes := append(balanceNotes(in.State, prop, best.prop), best.blockers(bestEv)...)
+	if n := addOnExcess(bestEv); n > 0 {
+		notes = append(notes, fmt.Sprintf("Add-on excess stays on %d plate(s): removing it left the week under its band, and the weekly energy ranks higher.", n))
+	}
+	return best.prop, notes
+}
+
+// newHard names a hard issue of ev that base lacks ("" when none).
+func newHard(base map[string]bool, ev Evaluation) string {
+	for k := range hardKeys(ev.Issues) {
+		if !base[k] {
+			return k
+		}
+	}
+	return ""
+}
+
+func addOnExcess(ev Evaluation) int {
+	n := 0
+	for _, is := range ev.Issues {
+		if is.Code == CodeAddOnExcess {
+			n++
+		}
+	}
+	return n
+}
+
+// balanceScore orders results: the week inside its band first, then fewer
+// add-on excess issues, then the week closer to its target.
+func balanceScore(ev Evaluation) float64 {
+	score := -math.Abs(weekPct(ev) - 100)
+	if weekPct(ev) >= 95 {
+		score += 1000
+	}
+	for _, is := range ev.Issues {
+		if is.Code == CodeAddOnExcess {
+			score -= 10
+		}
+	}
+	return score
+}
+
+// maxBalanceRounds bounds the repeats of the lift.
+const maxBalanceRounds = 3
+
+func weekPct(ev Evaluation) float64 {
+	if ev.Week == nil {
+		return 0
+	}
+	return ev.Week.Pct
+}
+
+// cookDays counts the days with a cooking occasion.
+func cookDays(ev Evaluation) int {
+	n := 0
+	for _, d := range ev.Days {
+		if d.CookOccasions > 0 {
+			n++
+		}
+	}
+	return n
+}
+
+// blockers says, per day still under its band or the week under 96 %, what
+// stopped the lift: the add-on limit used, no side that fits, portions at the
+// cap, a light meal. Nothing when the plan is balanced.
+func (h *planner) blockers(ev Evaluation) []string {
+	var out []string
+	for _, d := range ev.Days {
+		if d.Away || !d.Complete || d.TargetKcal == nil || d.Kcal >= d.BandLow-0.5 {
+			continue
+		}
+		var why []string
+		if len(h.s.Light) > 0 && (h.s.lightDay(dateOf(d.Date)) || len(d.LightMeals) > 0) {
+			why = append(why, "a light meal takes no add-ons")
+		}
+		if a := h.adds[dayOf(dateOf(d.Date))]; a != nil && a.filler >= maxFillerAdds {
+			why = append(why, "the day's add-on limit is used")
+		}
+		if !h.sided[dayOf(dateOf(d.Date))] {
+			why = append(why, "no side recipe fits the plates without a new cooking occasion")
+		}
+		why = append(why, "portions are at the 1.5 cap or cook with a fixed batch")
+		out = append(out, fmt.Sprintf("Balancing left %s %.0f kcal under its band: %s.", dateOf(d.Date).Weekday(), d.BandLow-d.Kcal, strings.Join(why, "; ")))
+	}
+	if w := ev.Week; w != nil && w.Pct < 96 && len(out) == 0 {
+		out = append(out, fmt.Sprintf("Balancing left the week at %.1f %% of its target: every day is in its band and the add-on, side and portion limits are used.", w.Pct))
+	}
+	return out
 }
 
 func cloneProposal(p Proposal) Proposal {
@@ -92,6 +208,17 @@ func (h *planner) trimAddOns() {
 			break
 		}
 	}
+}
+
+// meatFull reports whether the plan already holds the week's meat budget: a
+// dish with meat then keeps its portions (growing it would pass the limit).
+func (h *planner) meatFull() bool {
+	if !meatAllowed(h.s) {
+		return false
+	}
+	ev := Evaluate(Merge(h.s, h.in.Target, h.prop), h.in.Target)
+	w := ev.Week
+	return w != nil && w.Days >= minDGEDays && w.MeatG >= DGEMeatMaxG*float64(w.Days)/weekDays-1
 }
 
 // addSide adds one side recipe of the library to a day still under limit kcal

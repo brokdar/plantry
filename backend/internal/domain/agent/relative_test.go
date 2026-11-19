@@ -113,7 +113,7 @@ func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 				require.NoError(t, err, "plate %d %s: %v", p.ID, goal, way["what"])
 				fresh := relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"])
 				for _, is := range fresh {
-					assert.NotEqual(t, "violation", is["severity"], "%s %v adds %v", goal, way["what"], is["label"])
+					assert.NotEqual(t, "problem", is["severity"], "%s %v adds %v", goal, way["what"], is["label"])
 					// A new warning is allowed only when the way says so.
 					assert.Contains(t, fmt.Sprint(way["why"]), "new warning", "%s %v creates %v without saying", goal, way["what"], is["label"])
 				}
@@ -121,7 +121,7 @@ func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 				assert.Equal(t, true, req["satisfied"], "%s %v: %v", goal, way["what"], req["why"])
 				for _, k := range []string{"reached_light", "reached_hearty"} {
 					if v, ok := req[k]; ok {
-						assert.Equal(t, way["reaches_cap"], v, "%s %v", goal, way["what"])
+						assert.Equal(t, way["reaches_limit"], v, "%s %v", goal, way["what"])
 					}
 				}
 				checked++
@@ -165,7 +165,7 @@ func TestApplyChanges_MarkOnAMealThatMissesItsLimitIsRefused(t *testing.T) {
 		}
 	}
 	require.NotZero(t, p.ID)
-	for level, want := range map[string]string{"light": "light cap", "hearty": "hearty minimum"} {
+	for level, want := range map[string]string{"light": "limit", "hearty": "hearty minimum"} {
 		in := fmt.Sprintf(`{"dry_run":true,"light":[{"date":%q,"scope":"meal","slot":"dinner","level":%q}],"ops":[{"op":"set_eaters","plate_id":%d,"eaters":1}]}`, p.DateString(), level, p.ID)
 		_, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(in))
 		if level == "hearty" {
@@ -233,7 +233,7 @@ func TestFindWays_ApplyFirstWayStoresMarkAndSatisfies(t *testing.T) {
 		var res map[string]any
 		require.NoError(t, json.Unmarshal(out, &res))
 		ways := relMaps(res["ways"])
-		if len(ways) == 0 || ways[0]["reaches_cap"] != true || ways[0]["light"] == nil {
+		if len(ways) == 0 || ways[0]["reaches_limit"] != true || ways[0]["light"] == nil {
 			continue
 		}
 		got, err := e.applyWay(res, ways[0], false)
@@ -292,9 +292,9 @@ func TestFindWays_DayGoalsAndNextStep(t *testing.T) {
 				require.NoError(t, err, "%s %s: %v", goal, date, way["what"])
 				req := got["request"].(map[string]any)
 				assert.Equal(t, true, req["satisfied"], "%v", req["why"])
-				assert.Equal(t, true, req["reached_band"], "%v", req["why"])
+				assert.Equal(t, true, req["reached_range"], "%v", req["why"])
 				for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
-					assert.NotEqual(t, "violation", is["severity"])
+					assert.NotEqual(t, "problem", is["severity"])
 				}
 				checked++
 			}
@@ -394,10 +394,11 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 		assert.EqualValues(t, 1, skipped[0]["op"])
 		assert.Contains(t, skipped[0]["why"], "under its minimum")
 		assert.Contains(t, got["next"], "safe part is applied (1 of 2")
+		assert.Empty(t, plannerWord.FindAllString(string(res), -1), "kitchen words only")
 		assert.InDelta(t, was, portions(a, ma), 1e-9, "the unsafe cut was not saved")
 		assert.InDelta(t, 1.5, portions(b, mb), 1e-9, "the safe raise was")
 		for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
-			assert.NotEqual(t, "violation", is["severity"])
+			assert.NotEqual(t, "problem", is["severity"])
 		}
 	})
 	t.Run("a single unsafe op is refused, not half-applied", func(t *testing.T) {
@@ -408,6 +409,7 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 		assert.Equal(t, false, got["saved"])
 		assert.Contains(t, got["refused"], "under its minimum")
 		assert.Contains(t, got["next"], "nothing was saved")
+		assert.Empty(t, plannerWord.FindAllString(string(res), -1), "kitchen words only")
 		assert.InDelta(t, was, portions(a, ma), 1e-9)
 	})
 	t.Run("a call that is all safe has no skipped part", func(t *testing.T) {

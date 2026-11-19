@@ -867,7 +867,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	}
 	// The week's meat stays within its budget and holds a fish meal whenever a
 	// verified swap exists, whatever the chooser left (runs that span the week only).
-	if j.side == nil && distinctDays(j.target) >= minDGEDays {
+	if j.side == nil {
 		var weekNotes []string
 		prop, weekNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
 		if len(weekNotes) > 0 {
@@ -879,6 +879,10 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	if _, heuristic := j.chooser.(Heuristic); !heuristic && j.side == nil {
 		var balanceNotes []string
 		prop, balanceNotes = balancePlan(ChooseInput{State: base, Target: j.target, Exclude: j.exclude, Avoid: j.avoid, Locale: base.Profile.Locale}, prop)
+		// Raised portions may have passed the week's meat limit again.
+		var again []string
+		prop, again = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
+		balanceNotes = append(balanceNotes, again...)
 		if len(balanceNotes) > 0 {
 			prop.Notes = joinNotes(append([]string{prop.Notes}, balanceNotes...)...)
 		}

@@ -313,7 +313,7 @@ func TestApplyChanges_Away(t *testing.T) {
 			dry, real, ch := e.mealOp("[" + op + "]")
 			assert.Len(t, applied0(t, dry)["cells"], 3)
 			for _, res := range []map[string]any{dry, real} {
-				assert.NotContains(t, issueRules(t, res, "new"), "day energy floor", "a day away is not judged for calories")
+				assert.NotContains(t, issueRules(t, res, "new"), "day energy minimum", "a day away is not judged for calories")
 			}
 			for _, s := range slots {
 				assert.Nil(t, e.plateAtCell(day, s), "no plate on an away cell")
@@ -566,7 +566,7 @@ func TestFindAlternatives_GrowingSessionAppliesAsEvaluated(t *testing.T) {
 		}
 	}
 	require.NotNil(t, pick, "the exactly covering batch is offered: %v", res)
-	assert.Equal(t, "session", pick["source"])
+	assert.Equal(t, "batch", pick["source"])
 	ops, err := json.Marshal(pick["ops"])
 	require.NoError(t, err)
 	out := e.mustExec("apply_changes", `{"ops":`+string(ops)+`}`)

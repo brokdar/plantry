@@ -337,7 +337,7 @@ func (x *index) optionsFor(ev Evaluation, t Target, d DayEval, day time.Time, pr
 // hard issue and no new add-on warning.
 func recommendFirst(opts []Option) []Option {
 	if len(opts) > 0 {
-		opts[0].Recommended, opts[0].Because = true, "the best-ranked option that was checked: no new hard issue"
+		opts[0].Recommended, opts[0].Because = true, "the best-ranked option that was checked: no new problem"
 	}
 	return opts
 }

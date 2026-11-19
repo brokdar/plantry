@@ -166,7 +166,16 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			if last != nil {
 				partial = *last
 			}
-			return partial, fmt.Errorf("%w: %w", domain.ErrAIProviderFailed, err)
+			return partial, fmt.Errorf("%w: %w", failureSentinel(err), err)
+		}
+		if resp.StopReason == llm.StopReasonRefusal {
+			// The model declined: no repair can change that, and nothing is
+			// run or saved.
+			var partial Proposal
+			if last != nil {
+				partial = *last
+			}
+			return partial, fmt.Errorf("%w: the model refused the request", domain.ErrAIRefused)
 		}
 		continuation = false
 		if resp.StopReason == llm.StopReasonPauseTurn && !hasToolUse(resp) {
@@ -286,6 +295,21 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		}
 		req.Messages = append(req.Messages, repairMessage(resp.Message, feedback))
 	}
+}
+
+// failureSentinel is the domain error for a failed provider call: a limit and
+// a rejected key get their own (the user acts differently on each), a
+// timeout stays ErrAIProviderFailed and ends the run as a timeout when it is
+// a deadline.
+func failureSentinel(err error) error {
+	switch llm.FailureOf(err) {
+	case llm.FailureRateLimited:
+		return domain.ErrAIRateLimited
+	case llm.FailureKeyRejected:
+		return domain.ErrAIKeyRejected
+	case llm.FailureTimeout, llm.FailureOther:
+	}
+	return domain.ErrAIProviderFailed
 }
 
 // skeleton reports whether the first reply is a plan still to complete:
@@ -412,8 +436,9 @@ type submitPlan struct {
 		} `json:"components"`
 		Reason string `json:"reason"`
 	} `json:"plates"`
-	Light []LightIntent `json:"light"`
-	Notes string        `json:"notes"`
+	Light       []LightIntent `json:"light"`
+	Notes       string        `json:"notes"`
+	MaxCookDays int           `json:"max_cook_days"`
 }
 
 // parseProposal maps submit_plan's input to a Proposal. Ids are not
@@ -435,7 +460,7 @@ func parseProposal(input json.RawMessage, in ChooseInput) (Proposal, error) {
 	if err != nil {
 		return Proposal{}, err
 	}
-	p := Proposal{Notes: strings.TrimSpace(sp.Notes), Light: light}
+	p := Proposal{Notes: strings.TrimSpace(sp.Notes), Light: light, MaxCookDays: max(sp.MaxCookDays, 0)}
 	for i, s := range sp.Sessions {
 		if strings.TrimSpace(s.Key) == "" {
 			return Proposal{}, fmt.Errorf("sessions[%d].key is required", i)
@@ -585,6 +610,13 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 	view := ev.Compact(ev.ProposedView())
 	if len(fixes) > 0 {
 		view["autofix"] = fixes
+	}
+	if distinctDays(in.Target) < minDGEDays {
+		// A day or plate regenerate sits in a week: name the repeats it holds
+		// (the same dish at lunch and dinner, a dish family on adjacent days).
+		if repeats := newIndex(merged, in.Target).familyRepeats(); len(repeats) > 0 {
+			view["repeats"] = repeats
+		}
 	}
 	out, err := json.Marshal(view)
 	if err != nil {

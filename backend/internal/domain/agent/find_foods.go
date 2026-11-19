@@ -288,8 +288,8 @@ type foodItem struct {
 
 func newFoodItem(f *food.Food, d food.Detailed, defaultKeep int) foodItem {
 	it := foodItem{
-		ID: f.ID, Name: f.Name, Kind: string(f.Kind), DietClass: string(f.DietClass), CountsAsCooking: f.Kind == food.KindComposed,
-		NoCook: planning.NoCook(f), NutritionOK: d.Complete, Tags: f.Tags, Favorite: f.Favorite, Basis: "per_portion",
+		ID: f.ID, Name: food.Data(f.Name), Kind: string(f.Kind), DietClass: string(f.DietClass), CountsAsCooking: f.Kind == food.KindComposed,
+		NoCook: planning.NoCook(f), NutritionOK: d.Complete, Tags: food.DataTags(f.Tags), Favorite: f.Favorite, Basis: "per_portion",
 	}
 	if it.Tags == nil {
 		it.Tags = []string{}
@@ -307,7 +307,7 @@ func newFoodItem(f *food.Food, d food.Detailed, defaultKeep int) foodItem {
 		it.TotalMinutes = it.PrepMinutes + it.CookMinutes
 	}
 	for _, m := range d.Missing {
-		it.Missing = append(it.Missing, m.Name)
+		it.Missing = append(it.Missing, food.Data(m.Name))
 	}
 	m := macroOut{Kcal: round1(d.Macros.Kcal), Protein: round1(d.Macros.Protein), Fat: round1(d.Macros.Fat), Carbs: round1(d.Macros.Carbs)}
 	it.PerPortion = m

@@ -1101,6 +1101,11 @@
       "change_not_undoable": "Diese Änderung hat nichts verändert, es gibt nichts rückgängig zu machen.",
       "iterations_exceeded": "Die AI hat zu viele Schritte gemacht — bitte formuliere die Anfrage einfacher.",
       "rate_limit_exceeded": "Zu viele AI-Anfragen. Bitte warte eine Minute.",
+      "rate_limited": "Der AI-Anbieter ist ausgelastet oder sein Limit ist erreicht, deshalb wurde nichts geändert. Warte eine Minute und versuche es erneut.",
+      "key_rejected": "Der AI-Anbieter hat den API-Schlüssel abgelehnt, deshalb wurde nichts geändert. Prüfe den Schlüssel in den Einstellungen.",
+      "timeout": "Der Assistent hat zu lange gebraucht, deshalb wurde nichts weiter geändert. Bitte versuche es erneut.",
+      "cut_off": "Die Antwort wurde am Längenlimit abgeschnitten. Frag nach dem Rest oder kürze die Anfrage.",
+      "refused": "Der Assistent hat diese Anfrage abgelehnt, deshalb wurde nichts geändert. Formuliere sie um oder plane ohne den Assistenten.",
       "invalid_date": "Ein Chat-Datum ist kein gültiges Datum im Format JJJJ-MM-TT."
     },
     "import": {

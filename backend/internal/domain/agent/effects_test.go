@@ -23,7 +23,7 @@ func TestTool_MutationsReturnWhatChanged(t *testing.T) {
 	out := e.mustOp("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":%v}`, sid, v.Consumed+2))
 	after, ok := out["after"].(map[string]any)
 	require.True(t, ok, "set_session_portions carries an after block: %v", out)
-	sessions := after["sessions"].([]any)
+	sessions := after["batches"].([]any)
 	require.Len(t, sessions, 1)
 	s0 := sessions[0].(map[string]any)
 	assert.EqualValues(t, sid, s0["session_id"])
