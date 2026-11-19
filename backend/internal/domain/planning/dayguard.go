@@ -232,6 +232,13 @@ func (x *index) coldFirstMeal(base State, t Target, in Proposal, merged State, e
 			break
 		}
 	}
+	// Whatever else cooked on the cold meal's cell (a side cooked with the main) now
+	// cooks on the cell that still eats it, so the day keeps one cooking.
+	for k, ss := range out.Sessions {
+		if sameCell(ss.CookDate, ss.CookSlotID, ep.Date, ep.SlotID) && usesSession(out.Plates, ss.Key) {
+			out.Sessions[k].CookDate, out.Sessions[k].CookSlotID = lp.Date, lp.SlotID
+		}
+	}
 	out.Sessions = slices.DeleteFunc(out.Sessions, func(ss ProposedSession) bool { return ss.Portions <= epsilon })
 	ev := Evaluate(merged, t)
 	hard, soft := hardKeys(ev.Issues), softKeys(ev.Issues)

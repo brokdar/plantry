@@ -19,7 +19,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p25"
+const PromptVersion = "p26"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -140,6 +140,7 @@ func renderPrompt(in ChooseInput) (string, []FoodFacts) {
 	writeSessions(&head, x)
 	writeFixedCooks(&head, x)
 	writeKeepTable(&head, in)
+	writeRecentMains(&tail, s)
 	writeCorrections(&tail, s)
 	writeTask(&tail, in)
 
@@ -366,9 +367,9 @@ How a plan works:
 - Soft rules (reported by evaluate_plan, never block saving, aim to satisfy them): the ones only you decide: S1 at most the meat-day limit of days with an omnivore recipe on a plate (the meat column; a cook day without an eating plate is not a meat day); S6 a meal named light is lighter than its share; S7 the DGE food rules, judged on 5 or more complete days (meat at most 300 g per person per week, prorated by week.days, see the week meat budget; a fish meal and a legume meal, at least 50 g each per person, at least once a week; priority 5, never at the user's wishes: when evaluate_plan lists options on week_meat_above_dge or week_fish_below_dge take them, with no_fix_found leave them); S8 a recipe is the main of at most the user's limit of lunches and dinners, and H8 variety (last_eaten). Quantities are Go's, not yours: day energy (S2), protein (S3), the week (S4), carbs and fat (S5) and add-ons (S9). An H9 issue lists computed options; take one instead of computing by hand.
 - When a code execution tool is offered: for fan-out or comparing variants, write code that calls evaluate_plan on several drafts and prints only what you need (the cheapest plan that clears the hard rules); call submit_plan yourself, directly, with the plan you chose.
 - Evaluate before you submit: write the draft, call evaluate_plan with it, read days (kcal, protein, cook occasions, meat) and issues, change the plan, evaluate again. Do not simulate the checker in your head. Do not add up kcal, protein, meat days or keep windows in your reasoning: write a draft and call evaluate_plan, which computes them, then fix what it reports.
-- Sides and add-ons (foods eaten as they are) are added by Go after you submit to close energy and protein gaps: do not plan them.
+- Sides and add-ons (foods eaten as they are) are added by Go after you submit: do not plan them. Every component of your plan is a candidate recipe with portions per eater (never grams, never a single food). Fill every meal: a plate for every fill cell.
 - evaluate_plan shows your plan as it will be saved: Go has already balanced its quantities (portions up to 1.5, a side recipe, add-ons within their caps) and applied the weekly meat and fish swaps; code_changes lists what it changed and open_levers what only you can still change (a richer main on a named day, offered once; a further cooking day only when you gave no cooking-day limit). With a cooking-day limit, gaps no richer main closes come back as accepted_shortfall: they are accepted, the plan note tells the user which days are light, and you spend no more checks on them. What it shows is what submit_plan saves. Choose dishes, days, batches and the instruction; call evaluate_plan until no hard rule is broken and nothing is open, then submit.
-- The day budget table gives each day's target, band, floor, fixed kcal and what each open meal needs: use it to choose dishes of the right weight. Quantities, sides and day energy are settled by Go after you submit, so the draft only needs sensible dishes, cooking days and leftovers.
+- The day budget table gives each day's target, band, floor, fixed kcal and what each open meal needs: use it to choose dishes of the right weight. Go settles quantities and day energy after you submit, but not which dishes, which cooking days or which meals are leftovers: those are yours, and every fill cell needs its plate in the draft.
 - notes must match the plan evaluate_plan reports: never call a meal light while it has S6, nor a day within its band while it has S2.
 - Mix several different mains over the week rather than one recipe for most meals.
 - notes and reasons must describe the plan you submit, not an earlier idea.
@@ -933,4 +934,34 @@ func batchRole(x *index, p Plate, sessionID int64) string {
 		return "leftover"
 	}
 	return ""
+}
+
+// writeRecentMains names the mains eaten within the variety weeks before the
+// window (H8): the candidate table's last_eaten column holds the dates, this is
+// the answer to the date arithmetic, one line.
+// maxRecentNames bounds the names the recent-mains line lists.
+const maxRecentNames = 40
+
+func writeRecentMains(b *strings.Builder, s State) {
+	weeks := s.Settings.VarietyWeeks
+	if weeks <= 0 {
+		return
+	}
+	since := VarietySince(s.Window.Start, weeks)
+	var names []string
+	for _, f := range s.Foods {
+		if f.Composed() && varietyRole(f.Role) && isMain(f.Role, mealFull) && f.LastEaten != nil && !f.LastEaten.Before(since) {
+			names = append(names, cell(f.Name))
+		}
+	}
+	if len(names) == 0 {
+		return
+	}
+	slices.Sort(names)
+	more := ""
+	if len(names) > maxRecentNames {
+		more = fmt.Sprintf(" and %d more", len(names)-maxRecentNames)
+		names = names[:maxRecentNames]
+	}
+	fmt.Fprintf(b, "\nEaten within the last %d weeks (H8: do not cook these as mains unless the candidates run out): %s%s.\n", weeks, strings.Join(names, ", "), more)
 }

@@ -108,6 +108,25 @@ func TestGuardDayMains(t *testing.T) {
 			assert.Equal(t, "plate_outside_target", v.Code)
 		}
 	})
+	t.Run("a side cooked with the main moves with it, so the day keeps one cooking", func(t *testing.T) {
+		s, tgt, _ := sameDishDay()
+		coldFoods(&s)
+		p := planning.Proposal{
+			Sessions: []planning.ProposedSession{session("s1", 104, tue, lunch, 2), session("s9", 201, tue, lunch, 1)},
+			Plates:   []planning.ProposedPlate{pplate(tue, lunch, onKey(104, "s1")), pplate(tue, dinner, onKey(104, "s1"), onKey(201, "s9"))},
+		}
+		got, notes := planning.GuardDayMains(s, tgt, p, nil)
+		require.Len(t, notes, 1)
+		assert.Contains(t, notes[0], "cold plate")
+		for _, ss := range got.Sessions {
+			assert.EqualValues(t, dinner, ss.CookSlotID, "%s cooks at dinner", ss.Key)
+		}
+		for _, d := range planning.Evaluate(planning.Merge(s, tgt, got), tgt).Days {
+			if d.Date == tue {
+				assert.Equal(t, 1, d.CookOccasions)
+			}
+		}
+	})
 	t.Run("without suitable no-cook foods the same dish stays and the note says so", func(t *testing.T) {
 		s, tgt, p := sameDishDay()
 		got, notes := planning.GuardDayMains(s, tgt, p, nil)

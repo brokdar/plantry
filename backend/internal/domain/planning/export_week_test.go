@@ -129,3 +129,6 @@ func SetPairInPlanner(on bool) bool {
 	pairInPlanner = on
 	return old
 }
+
+// Autofix exposes the plan corrections made before every evaluation.
+var Autofix = autofix

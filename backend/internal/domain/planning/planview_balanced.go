@@ -28,11 +28,17 @@ func finishProposal(in ChooseInput, prop Proposal) (Proposal, []string) {
 	if in.Side != nil {
 		return prop, nil
 	}
+	// The light requests the proposal states stand for the passes below, like the checker's.
+	in.State.Light = MergeLight(in.State.Light, prop.Light)
 	skip := idSet(in.Exclude)
 	var notes []string
 	prop, capNotes := capPortions(in.State, prop)
 	notes = append(notes, capNotes...)
 	prop, n := fixCookLimit(in, prop)
+	notes = append(notes, n...)
+	prop, n = fixVariety(in, prop)
+	notes = append(notes, n...)
+	prop, n = trimLightMeals(in, prop)
 	notes = append(notes, n...)
 	prop, n = guardDayMains(in.State, in.Target, prop, skip)
 	notes = append(notes, n...)
@@ -73,6 +79,14 @@ func plannerView(in ChooseInput, prop Proposal, offered bool) (map[string]any, E
 		// The instruction rules fish out and the guard places none: nothing to act on.
 		ev.Issues = slices.DeleteFunc(ev.Issues, func(is Issue) bool { return is.Code == CodeWeekFishBelowDGE })
 	}
+	// A day a few kcal under its band is rounding, not a gap: not shown as one.
+	near := map[string]bool{}
+	for _, d := range ev.Days {
+		if d.Complete && !d.Away && d.Kcal < d.BandLow-0.5 && d.Kcal >= d.BandLow-gapTolerance(d.BandLow) {
+			near[d.Date] = true
+		}
+	}
+	ev.Issues = slices.DeleteFunc(ev.Issues, func(is Issue) bool { return is.Code == CodeKcalBelowBand && near[is.Date] })
 	levers, accepted, acceptedDates := openLevers(in, ev, merged, done, offered)
 	if accepted != "" {
 		ev.Issues = slices.DeleteFunc(ev.Issues, func(is Issue) bool {
@@ -91,6 +105,9 @@ func plannerView(in ChooseInput, prop Proposal, offered bool) (map[string]any, E
 	}
 	if accepted != "" {
 		view["accepted_shortfall"] = accepted
+	}
+	if hints := varietyHints(in, merged, ev); len(hints) > 0 {
+		view["variety_hints"] = hints
 	}
 	if hints := cookingHints(in, merged); len(hints) > 0 {
 		view["cooking_hints"] = hints
@@ -111,11 +128,15 @@ type gapDay struct {
 	kcal, band float64 // under its target, under its band
 }
 
+// gapTolerance is the kcal a day may sit under its band before the evaluation
+// calls it a gap: rounding of the sides (10 g steps), not a dish to change.
+func gapTolerance(bandLow float64) float64 { return math.Max(25, 0.015*bandLow) }
+
 // gapDays lists the days under their band, the furthest under target first.
 func gapDays(ev Evaluation) []gapDay {
 	var out []gapDay
 	for _, d := range ev.Days {
-		if d.Away || !d.Complete || d.TargetKcal == nil || d.Kcal >= d.BandLow-0.5 {
+		if d.Away || !d.Complete || d.TargetKcal == nil || d.Kcal >= d.BandLow-gapTolerance(d.BandLow) {
 			continue
 		}
 		out = append(out, gapDay{d.Date, *d.TargetKcal - d.Kcal, d.BandLow - d.Kcal})

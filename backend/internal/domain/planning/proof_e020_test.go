@@ -194,6 +194,9 @@ func proofOne(t *testing.T, round, dir, label string) {
 		_ = json.Unmarshal(ab2, &v2)
 		fmt.Printf("  second evaluation: issues=%d levers=%d accepted=%q\n", len(v2.Issues), len(v2.Levers), v2.Accept)
 	}
+	if h, ok := after["variety_hints"]; ok {
+		fmt.Printf("  VARIETY: %v\n", h)
+	}
 	if h, ok := after["cooking_hints"]; ok {
 		fmt.Printf("  HINTS: %v\n", h)
 	}
@@ -341,4 +344,56 @@ func TestE034_Sides(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestE038_LightMeals shows, per light meal, its kcal in the model's draft and after the finishing step.
+func TestE038_LightMeals(t *testing.T) {
+	round := os.Getenv("PLANTRY_PROOF_ROUND")
+	if round == "" {
+		t.Skip("PLANTRY_PROOF_ROUND not set")
+	}
+	dir := filepath.Join(round, "runs", "gen-light-r1")
+	in := proofInput(t, round, dir, "light")
+	calls, _ := firstEvaluate(t, dir)
+	for k, raw := range []json.RawMessage{calls[0], calls[len(calls)-1]} {
+		orig, err := planning.ParseForProof(raw, in)
+		require.NoError(t, err)
+		final, _ := planning.FinishProposal(in, orig)
+		evB := planning.Evaluate(planning.Merge(in.State, in.Target, orig), in.Target)
+		evA := planning.Evaluate(planning.Merge(in.State, in.Target, final), in.Target)
+		find := func(p planning.Proposal, date string, slot int64) planning.ProposedPlate {
+			for _, pl := range p.Plates {
+				if pl.Date.Format(time.DateOnly) == date && pl.SlotID == slot {
+					return pl
+				}
+			}
+			return planning.ProposedPlate{}
+		}
+		for i, pa := range evA.Plates {
+			if pa.Intent == "" {
+				continue
+			}
+			var pb planning.PlateEval
+			for _, e := range evB.Plates {
+				if e.Date == pa.Date && e.SlotID == pa.SlotID {
+					pb = e
+				}
+			}
+			_ = i
+			fmt.Printf("LIGHT call%d %s slot %d: raw %.0f -> final %.0f (max %.0f)\n   raw:   %s\n   final: %s\n", k, pa.Date, pa.SlotID, pb.Kcal, pa.Kcal, pa.MaxKcal, sidesOfAll(in, find(orig, pa.Date, pa.SlotID)), sidesOfAll(in, find(final, pa.Date, pa.SlotID)))
+		}
+	}
+}
+
+func sidesOfAll(in planning.ChooseInput, pl planning.ProposedPlate) string {
+	var out []string
+	for _, c := range pl.Components {
+		f := in.State.Foods[c.FoodID]
+		q := fmt.Sprintf("%.0fg", c.Grams)
+		if c.Grams == 0 {
+			q = fmt.Sprintf("x%.2g", c.Portions)
+		}
+		out = append(out, f.Name+" "+q)
+	}
+	return strings.Join(out, ", ")
 }

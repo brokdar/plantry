@@ -445,6 +445,14 @@ type submitPlan struct {
 // checked here: an unknown one is an H7 violation the repair fixes. A plate
 // without eaters gets the day's guests (D16), else the household's portions.
 func parseProposal(input json.RawMessage, in ChooseInput) (Proposal, error) {
+	// A reply that wraps the plan in {"params": {...}} is read as the plan.
+	var wrapped struct {
+		Params json.RawMessage `json:"params"`
+		Plates json.RawMessage `json:"plates"`
+	}
+	if json.Unmarshal(input, &wrapped) == nil && len(wrapped.Params) > 0 && len(wrapped.Plates) == 0 {
+		input = wrapped.Params
+	}
 	var sp submitPlan
 	if err := json.Unmarshal(input, &sp); err != nil {
 		var te *json.UnmarshalTypeError

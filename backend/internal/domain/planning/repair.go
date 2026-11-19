@@ -399,6 +399,31 @@ const (
 )
 
 func autofix(in ChooseInput, prop Proposal) (Proposal, []string) {
+	prop, gramNotes := recipeGrams(in.State, prop)
+	prop, notes := autofixSessions(in, prop)
+	return prop, append(gramNotes, notes...)
+}
+
+// recipeGrams turns a recipe the plan gave in grams (only leaves take grams)
+// into one portion of it.
+func recipeGrams(st State, prop Proposal) (Proposal, []string) {
+	var notes []string
+	out := prop
+	out.Plates = slices.Clone(prop.Plates)
+	for i, pl := range out.Plates {
+		pl.Components = slices.Clone(pl.Components)
+		for j, c := range pl.Components {
+			if f, ok := st.Foods[c.FoodID]; ok && f.Composed() && c.Grams > 0 && c.Portions == 0 && c.SessionKey == "" && c.SessionID == 0 {
+				pl.Components[j].Grams, pl.Components[j].Portions = 0, 1
+				notes = append(notes, fmt.Sprintf("%s is a recipe: one portion instead of %s g (only single foods take grams).", foodName(st, c.FoodID), num(c.Grams)))
+			}
+		}
+		out.Plates[i] = pl
+	}
+	return out, notes
+}
+
+func autofixSessions(in ChooseInput, prop Proposal) (Proposal, []string) {
 	s := Merge(in.State, in.Target, prop)
 	x := newIndex(s, in.Target)
 	set := s.Settings.BatchSettings
