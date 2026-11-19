@@ -264,8 +264,10 @@ func TestGuardWeek_SwapsWholeBatchesAndKeepsCookingDays(t *testing.T) {
 		portions := float64(len(g))
 		prop.Sessions = append(prop.Sessions, session(key, foods[gi], first.date, first.slot, portions))
 		for _, ci := range g {
-			prop.Plates = append(prop.Plates, planning.ProposedPlate{Date: day(cells[ci].date), SlotID: cells[ci].slot, Eaters: 1,
-				Components: []planning.ProposedComponent{{FoodID: foods[gi], Portions: 1, SessionKey: key}}})
+			prop.Plates = append(prop.Plates, planning.ProposedPlate{
+				Date: day(cells[ci].date), SlotID: cells[ci].slot, Eaters: 1,
+				Components: []planning.ProposedComponent{{FoodID: foods[gi], Portions: 1, SessionKey: key}},
+			})
 		}
 	}
 	for _, c := range s.Cells { // every breakfast cell holds a plate, so the week's days count

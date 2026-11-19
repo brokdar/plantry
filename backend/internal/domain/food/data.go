@@ -40,8 +40,7 @@ func DataTags(tags []string) []string {
 
 func data(s string, max int) string {
 	s = strings.Map(func(r rune) rune {
-		switch {
-		case unicode.IsControl(r) || unicode.IsSpace(r):
+		if unicode.IsControl(r) || unicode.IsSpace(r) {
 			return ' '
 		}
 		return r

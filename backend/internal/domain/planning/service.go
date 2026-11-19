@@ -847,13 +847,14 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 
 	// Without an empty plan cell (a side swap aside) there is nothing to
 	// choose, so no chooser runs: an LLM call would plan nothing at a cost.
+	cin := ChooseInput{
+		State: base, Target: j.target, EatersByDate: j.eaters, ExploreQuota: j.exploreQuota,
+		Avoid: j.avoid, AvoidBatches: j.avoidBatches, Exclude: j.exclude, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
+		Stage: func(st Stage) { stage(st) }, Logger: s.d.Logger,
+	}
 	if j.side != nil || hasOpenCell(base, j.target) {
 		stage(StageChoosing)
-		last, err = j.chooser.Choose(ctx, ChooseInput{
-			State: base, Target: j.target, EatersByDate: j.eaters, ExploreQuota: j.exploreQuota,
-			Avoid: j.avoid, AvoidBatches: j.avoidBatches, Exclude: j.exclude, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
-			Stage: func(st Stage) { stage(st) }, Logger: s.d.Logger,
-		})
+		last, err = j.chooser.Choose(ctx, cin)
 		if err != nil {
 			return fail("choosing", err)
 		}
@@ -866,25 +867,18 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		prop.Notes = joinNotes(append([]string{prop.Notes}, capNotes...)...)
 	}
 	// The week's meat stays within its budget and holds a fish meal whenever a
-	// verified swap exists, whatever the chooser left (runs that span the week only).
+	// verified swap exists, whatever the chooser left. A model's plan also gets
+	// its quantities finished in Go (portions, a side, add-ons), the way the
+	// heuristic sets its own: the same steps evaluate_plan showed the model.
 	if j.side == nil {
-		var weekNotes []string
-		prop, weekNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
-		if len(weekNotes) > 0 {
-			prop.Notes = joinNotes(append([]string{prop.Notes}, weekNotes...)...)
+		var finishNotes []string
+		if _, heuristic := j.chooser.(Heuristic); heuristic {
+			prop, finishNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
+		} else {
+			prop, finishNotes = finishProposal(cin, prop)
 		}
-	}
-	// A model's plan gets its quantities finished in Go (portions, a side,
-	// add-ons), the way the heuristic sets its own.
-	if _, heuristic := j.chooser.(Heuristic); !heuristic && j.side == nil {
-		var balanceNotes []string
-		prop, balanceNotes = balancePlan(ChooseInput{State: base, Target: j.target, Exclude: j.exclude, Avoid: j.avoid, Locale: base.Profile.Locale}, prop)
-		// Raised portions may have passed the week's meat limit again.
-		var again []string
-		prop, again = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
-		balanceNotes = append(balanceNotes, again...)
-		if len(balanceNotes) > 0 {
-			prop.Notes = joinNotes(append([]string{prop.Notes}, balanceNotes...)...)
+		if len(finishNotes) > 0 {
+			prop.Notes = joinNotes(append([]string{prop.Notes}, finishNotes...)...)
 		}
 	}
 	merged := Merge(base, j.target, prop)

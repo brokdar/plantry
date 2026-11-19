@@ -59,7 +59,7 @@ var genProviderFailures = []struct {
 }{
 	{"generic", errors.New("read tcp 10.0.0.2:5555: connection reset by peer"), "error.ai.provider_error"},
 	{"rate limit", genAPIErr{429}, "error.ai.rate_limited"},
-	{"timeout", fmt.Errorf("Post \"https://api.example/v1/messages\": %w", context.DeadlineExceeded), "error.plan.timeout"},
+	{"timeout", fmt.Errorf("post \"https://api.example/v1/messages\": %w", context.DeadlineExceeded), "error.plan.timeout"},
 	{"key rejected", genAPIErr{401}, "error.ai.key_rejected"},
 }
 
@@ -72,7 +72,8 @@ func translated(t *testing.T, key string) bool {
 		var node any
 		require.NoError(t, json.Unmarshal(raw, &node))
 		for _, part := range strings.Split(key, ".") {
-			m, ok := node.(map[string]any)
+			m, _ := node.(map[string]any)
+			var ok bool
 			if node, ok = m[part]; !ok {
 				return false
 			}
@@ -148,10 +149,13 @@ func TestGenerationFailure_ProviderFailsAfterTheFirstTurn(t *testing.T) {
 			raw, err := json.Marshal(e.validPlan())
 			require.NoError(t, err)
 			return fake.Turn{StopReason: "tool_use", Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{
-				{Type: "tool_use", ToolUseID: "tu_eval", ToolName: "evaluate_plan", ToolInput: raw}}}}
+				{Type: "tool_use", ToolUseID: "tu_eval", ToolName: "evaluate_plan", ToolInput: raw},
+			}}}
 		}, []string{planning.ContextStep, "llm_call", planning.EvaluationStep, "llm_call", planning.EvaluationStep}},
-		"after a plan to repair": {func(e *llmEnv) fake.Turn { return submit(t, "tu_1", e.h2Plan()) },
-			[]string{planning.ContextStep, "llm_call", "plan.attempt", planning.EvaluationStep, "llm_call", planning.EvaluationStep}},
+		"after a plan to repair": {
+			func(e *llmEnv) fake.Turn { return submit(t, "tu_1", e.h2Plan()) },
+			[]string{planning.ContextStep, "llm_call", "plan.attempt", planning.EvaluationStep, "llm_call", planning.EvaluationStep},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			e := newLLMEnvOver(t, func(c llm.Client) llm.Client { return &genFailOn{Client: c, n: 2, err: genAPIErr{500}} })

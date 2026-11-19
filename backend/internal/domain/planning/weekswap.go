@@ -6,7 +6,6 @@ import (
 	"math"
 	"regexp"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
@@ -156,7 +155,6 @@ type weekSwap struct {
 	oldMeatG  float64 // the replaced main's meat per eater
 	newMeatG  float64
 	plateMeat float64
-	rankMeat  float64
 }
 
 // swapPlates are the indices of the plates a swap may change, largest meat
@@ -633,31 +631,4 @@ func (x *index) swapNote(sw weekSwap, before, after Evaluation, mode swapMode) s
 	}
 	return fmt.Sprintf("Weekly meat: %s: %s replaced by %s to bring the week's meat from %.0f g toward its limit of %.0f g (now %.0f g).",
 		x.cellLabel(p), old, sw.c.food.Name, before.Week.MeatG, DGEMeatMaxG*float64(before.Week.Days)/weekDays, after.Week.MeatG)
-}
-
-// weekAdvisories are the repair advisories of the week's meat and fish
-// issues: each is raised only when a verified swap exists (ev from
-// EvaluateWeek), and carries the swaps in words.
-func weekAdvisories(ev Evaluation, instruction string) []string {
-	var out []string
-	for _, is := range ev.Issues {
-		if is.Rule != "S7" || is.NoFixFound || len(is.Options) == 0 {
-			continue
-		}
-		var lines []string
-		for _, o := range is.Options {
-			lines = append(lines, o.Why)
-		}
-		switch is.Code {
-		case CodeWeekMeatAboveDGE:
-			out = append(out, fmt.Sprintf("The week holds %v g of meat per person, above the %v g limit for its %v days (weekly meat rule). Verified fix, take swaps largest first until the week is within the limit (each keeps its day in band and breaks no rule): %s.",
-				is.Params["meat_g"], is.Params["max_g"], is.Params["days"], strings.Join(lines, "; ")))
-		case CodeWeekFishBelowDGE:
-			if noFish.MatchString(instruction) {
-				continue
-			}
-			out = append(out, fmt.Sprintf("The week holds no fish meal (weekly fish rule). Verified fix, take one of: %s.", strings.Join(lines, "; ")))
-		}
-	}
-	return out
 }

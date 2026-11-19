@@ -39,6 +39,7 @@ func (rejectingClient) Stream(_ context.Context, _ llm.Request, out chan<- llm.E
 	close(out)
 	return nil, rejectedKey{}
 }
+
 func (rejectingClient) Complete(context.Context, llm.Request) (string, error) {
 	return "", rejectedKey{}
 }

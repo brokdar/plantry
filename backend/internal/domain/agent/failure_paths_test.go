@@ -69,7 +69,7 @@ var providerFailures = []struct {
 }{
 	{"generic", errors.New("read tcp 10.0.0.2:5555: connection reset by peer"), "error.ai.stream_interrupted"},
 	{"rate limit", apiErr{429}, "error.ai.rate_limited"},
-	{"timeout", fmt.Errorf("Post \"https://api.example/v1/messages\": %w", context.DeadlineExceeded), "error.ai.timeout"},
+	{"timeout", fmt.Errorf("post \"https://api.example/v1/messages\": %w", context.DeadlineExceeded), "error.ai.timeout"},
 	{"key rejected", apiErr{401}, "error.ai.key_rejected"},
 }
 
@@ -82,7 +82,8 @@ func i18nHas(t *testing.T, key string) bool {
 		var node any
 		require.NoError(t, json.Unmarshal(raw, &node))
 		for _, part := range strings.Split(key, ".") {
-			m, ok := node.(map[string]any)
+			m, _ := node.(map[string]any)
+			var ok bool
 			if node, ok = m[part]; !ok {
 				return false
 			}

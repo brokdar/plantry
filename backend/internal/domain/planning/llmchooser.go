@@ -276,7 +276,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			}
 			noted := withNotes(prop, allFixes, advice, "")
 			last = &noted
-			feedback = rep.feedback(findings{violations, advice, fixes, sig == lastSig}) + evaluationFeedback(merged, in.Target)
+			feedback = rep.feedback(findings{violations, advice, fixes, sig == lastSig}) + evaluationFeedback(in, prop)
 			lastSig = sig
 		} else {
 			logAttempt(ctx, in.Logger, attempt, nil, perr)
@@ -604,19 +604,10 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 		return fail("error: " + err.Error() + "\nCall evaluate_plan again with the complete plan as valid JSON matching its schema.")
 	}
 	prop, fixes := autofix(in, prop)
-	merged := Merge(in.State, in.Target, prop)
-	ev := EvaluateWeek(merged, in.Target)
+	view, ev, _ := plannerView(in, prop)
 	RecordDryRun(ctx, n, func() Evaluation { return ev })
-	view := ev.Compact(ev.ProposedView())
 	if len(fixes) > 0 {
 		view["autofix"] = fixes
-	}
-	if distinctDays(in.Target) < minDGEDays {
-		// A day or plate regenerate sits in a week: name the repeats it holds
-		// (the same dish at lunch and dinner, a dish family on adjacent days).
-		if repeats := newIndex(merged, in.Target).familyRepeats(); len(repeats) > 0 {
-			view["repeats"] = repeats
-		}
 	}
 	out, err := json.Marshal(view)
 	if err != nil {
@@ -629,9 +620,9 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 // evaluationFeedback is the evaluate_plan result of a submitted plan, which
 // goes after the repair text so the model sees every rule, soft ones
 // included.
-func evaluationFeedback(merged State, t Target) string {
-	ev := EvaluateWeek(merged, t)
-	out, err := json.Marshal(ev.Compact(ev.ProposedView()))
+func evaluationFeedback(in ChooseInput, prop Proposal) string {
+	view, _, _ := plannerView(in, prop)
+	out, err := json.Marshal(view)
 	if err != nil {
 		return ""
 	}
