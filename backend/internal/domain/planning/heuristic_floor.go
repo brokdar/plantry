@@ -290,7 +290,9 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		return cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal))
 	})
 	for _, c := range cands {
-		if _, ok := y.verify(c, h.in.Target, base, d, band, protein); !ok {
+		o, ok := y.verify(c, h.in.Target, base, d, band, protein)
+		if !ok || (h.balance && o.CookOccasions > len(y.occasions[dayOf(date)])) {
+			// A model's plan keeps its cooking days: an add never cooks anew.
 			continue
 		}
 		at := merged.Plates[c.plate]
@@ -358,6 +360,7 @@ func spreadAdds(y *index, merged State, date time.Time, cands []optCand, used ma
 
 // topUpDay adds need kcal per eater to the day's growable components.
 func (h *planner) topUpDay(date time.Time, need float64, roundUp bool) {
+	meatFull := h.balance && h.meatFull()
 	sessions := map[string]int{}
 	for i, ss := range h.prop.Sessions {
 		sessions[ss.Key] = i
@@ -369,7 +372,7 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp bool) {
 		if h.balance && c.SessionKey == "" && c.SessionID == 0 && c.Portions > 0 && !h.s.lightMeal(p.Date, p.SlotID) {
 			// A component cooked fresh for its own plate has no session to grow.
 			f, known := h.s.Foods[c.FoodID]
-			return -1, known && f.Macros.Kcal > 0 && (f.Role == food.RoleMain || f.Role == food.RoleSideStarch)
+			return -1, known && f.Macros.Kcal > 0 && (f.Role == food.RoleMain || f.Role == food.RoleSideStarch) && !(meatFull && f.Groups.MeatG > 0)
 		}
 		if c.SessionKey == "" || !ok || c.Portions <= 0 || h.s.lightMeal(p.Date, p.SlotID) {
 			return 0, false
@@ -380,7 +383,7 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp bool) {
 			return 0, false
 		}
 		last := ss.CookDate.AddDate(0, 0, h.x.keepDays(c.FoodID))
-		return i, !p.Date.After(last) && f.Macros.Kcal > 0 && (f.Role == food.RoleMain || f.Role == food.RoleSideStarch)
+		return i, !p.Date.After(last) && f.Macros.Kcal > 0 && (f.Role == food.RoleMain || f.Role == food.RoleSideStarch) && !(meatFull && f.Groups.MeatG > 0)
 	}
 	var raisable float64
 	for _, p := range h.prop.Plates {

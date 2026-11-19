@@ -436,8 +436,9 @@ type submitPlan struct {
 		} `json:"components"`
 		Reason string `json:"reason"`
 	} `json:"plates"`
-	Light []LightIntent `json:"light"`
-	Notes string        `json:"notes"`
+	Light       []LightIntent `json:"light"`
+	Notes       string        `json:"notes"`
+	MaxCookDays int           `json:"max_cook_days"`
 }
 
 // parseProposal maps submit_plan's input to a Proposal. Ids are not
@@ -459,7 +460,7 @@ func parseProposal(input json.RawMessage, in ChooseInput) (Proposal, error) {
 	if err != nil {
 		return Proposal{}, err
 	}
-	p := Proposal{Notes: strings.TrimSpace(sp.Notes), Light: light}
+	p := Proposal{Notes: strings.TrimSpace(sp.Notes), Light: light, MaxCookDays: max(sp.MaxCookDays, 0)}
 	for i, s := range sp.Sessions {
 		if strings.TrimSpace(s.Key) == "" {
 			return Proposal{}, fmt.Errorf("sessions[%d].key is required", i)
@@ -609,6 +610,13 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 	view := ev.Compact(ev.ProposedView())
 	if len(fixes) > 0 {
 		view["autofix"] = fixes
+	}
+	if distinctDays(in.Target) < minDGEDays {
+		// A day or plate regenerate sits in a week: name the repeats it holds
+		// (the same dish at lunch and dinner, a dish family on adjacent days).
+		if repeats := newIndex(merged, in.Target).familyRepeats(); len(repeats) > 0 {
+			view["repeats"] = repeats
+		}
 	}
 	out, err := json.Marshal(view)
 	if err != nil {

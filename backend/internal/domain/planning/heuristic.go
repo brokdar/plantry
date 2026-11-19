@@ -39,7 +39,7 @@ func (Heuristic) Choose(ctx context.Context, in ChooseInput) (Proposal, error) {
 		prop, err = h.side(*in.Side)
 	} else {
 		h, prop, err = planWithForcedCooks(in, h)
-		if err == nil && distinctDays(in.Target) >= minDGEDays {
+		if err == nil {
 			// The week's meat budget and one fish meal, by verified swaps
 			// (the picks above only weigh them as tie-breaks).
 			var notes []string
@@ -707,7 +707,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		atCap := h.x.mealOf(c.SlotID) == mealFull && h.dishFull(f.ID)
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
 			b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
-			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), dge.fish(f), dge.legume(f), dge.meat(f), fit,
+			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
 	return best(cands)
