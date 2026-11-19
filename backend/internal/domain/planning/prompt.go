@@ -192,7 +192,10 @@ func renderPrompt(in ChooseInput) (string, []FoodFacts) {
 func RenderPlanSummary(s State, issues []Issue) string {
 	var b strings.Builder
 	writeDates(&b, s)
-	writeSettings(&b, ChooseInput{State: s})
+	var settings strings.Builder
+	writeSettings(&settings, ChooseInput{State: s})
+	// The chat reads cooking times; the planner's own prompt keeps its words.
+	b.WriteString(strings.ReplaceAll(settings.String(), "cooking occasions", "cooking times"))
 	x := newIndex(s, Target{})
 	writeSummaryCells(&b, x)
 	writeSummarySessions(&b, x)
@@ -223,7 +226,7 @@ func writeSummaryCells(b *strings.Builder, x *index) {
 		case s.lightMeal(c.Date, c.SlotID):
 			mode += ", light meal"
 		case s.heartyMeal(c.Date, c.SlotID):
-			mode += ", hearty meal"
+			mode += ", filling meal"
 		}
 		fmt.Fprintf(b, "%s | %d %s | %s | %s\n", weekdayDate(c.Date), c.SlotID, slotName(s, c.SlotID), mode, content)
 	}

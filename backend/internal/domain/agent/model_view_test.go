@@ -110,3 +110,13 @@ func TestGuardAndReportShareTheWarningSet(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, planning.CodeWeekMeatAboveDGE, got[0].Code)
 }
+
+// E030: the model reads the hearty level as "filling" in results and sends
+// "filling" back; the tool maps it to the stored level.
+func TestModelView_FillingLevel(t *testing.T) {
+	raw := json.RawMessage(`{"days":[{"light_level":"hearty","light_meals":["hearty dinner"]}],"request":{"reached_hearty":true},"ways":[{"light":[{"date":"2026-11-25","level":"hearty"}]}]}`)
+	out := string(agent.ModelView(raw))
+	assert.NotContains(t, out, "hearty")
+	assert.Contains(t, out, `"reached_filling":true`)
+	assert.Contains(t, out, `"light":[{"date":"2026-11-25","level":"filling"}]`, "a light entry the model passes back says filling")
+}

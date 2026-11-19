@@ -40,6 +40,8 @@ type changeReport struct {
 	// EarlierWarnings counts the warnings that existed before and are
 	// unaffected: do not list them.
 	EarlierWarnings int `json:"earlier_warnings_unaffected"`
+	// Note is set by an undo: the plan is back as it was before the change.
+	Note string `json:"note,omitempty"`
 	// NotCovered says what the report could not compute.
 	NotCovered []string `json:"not_covered,omitempty"`
 }
@@ -738,7 +740,7 @@ func reportOf(ctx context.Context, svc Services, w window.Window, beforeSt plann
 // outside apply_changes (undo_last_change, regenerate): the plan is read
 // before and after the call. A result that is not an object, a failed call or
 // an unreadable plan returns the result as it is.
-func withReport(svc Services, h ToolHandler) ToolHandler {
+func withReport(svc Services, h ToolHandler, undo bool) ToolHandler {
 	return func(ctx context.Context, in json.RawMessage) (json.RawMessage, ToolEffect, error) {
 		w, ok := windowFrom(ctx)
 		if !ok || svc.State == nil {
@@ -757,6 +759,16 @@ func withReport(svc Services, h ToolHandler) ToolHandler {
 			return out, eff, err
 		}
 		r := buildReport(reportInput{beforeSt: beforeSt, afterSt: afterSt, before: beforeEv, after: afterEv})
+		if undo {
+			// An undo restores the plan exactly as it was before the undone
+			// change: every warning open now existed then, so none is new or
+			// worse; they are all earlier ones.
+			r.NewWarnings, r.Worse, r.EarlierWarnings = nil, nil, len(afterEv.Issues)
+			r.Note = "Undone: the plan is exactly as it was before that change, and the warnings open now were open then. Say what is back; list no warning."
+			for i := range r.Days {
+				r.Days[i].Status = ""
+			}
+		}
 		if len(r.Changed) > 0 || len(r.Cooking) > 0 {
 			obj["report"] = mustJSON(r)
 			out = mustJSON(obj)
