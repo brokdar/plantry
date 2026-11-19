@@ -497,7 +497,7 @@ func TestLLMChooser_StageAndReady(t *testing.T) {
 	// The empty first plan is H1-only: its repair is extra, then two repairs.
 	assert.Equal(t, 3, p.RepairAttempts)
 	assert.Equal(t, []planning.Stage{planning.StageRepairing, planning.StageRepairing, planning.StageRepairing}, stages)
-	assert.Equal(t, "p24", c.PromptVersion())
+	assert.Equal(t, "p25", c.PromptVersion())
 
 	require.NoError(t, c.Ready(context.Background()))
 	assert.ErrorIs(t, planning.NewLLMChooser(llm.StaticResolver(nil, "")).Ready(context.Background()), domain.ErrAIProviderMissing)
@@ -569,7 +569,7 @@ func TestRenderPrompt_NamesAndSideBudget(t *testing.T) {
 	s.History = []planning.HistoryPlate{{Date: day("2026-11-01"), SlotID: dinner, FoodIDs: []int64{chili}}}
 	prompt := planning.RenderPrompt(planning.ChooseInput{State: s, Target: windowTarget(s)})
 	assert.NotContains(t, prompt, "Chili |")
-	assert.Contains(t, prompt, "2026-11-01 | slot 2 | Chili / extra hot\n")
+	assert.NotContains(t, prompt, "Eaten in the last 4 weeks", "variety is last_eaten per candidate, not a history section")
 
 	s, tgt, _ := benchState()
 	eaten := day("2026-11-01")
