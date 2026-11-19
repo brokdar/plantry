@@ -193,3 +193,21 @@ func TestColdPlateIsNamedInTheChatSummary(t *testing.T) {
 	summary := planning.RenderPlanSummary(s, nil)
 	assert.Contains(t, summary, "plate_id 500, pending, cold plate (nothing to cook), 1 person: ")
 }
+
+// E042: a cold plate that leaves the day short before the balancing pass is
+// judged on the balanced plan: the dinner and its sides lift the day.
+func TestGuardDayMains_ColdPlateIsJudgedAfterBalancing(t *testing.T) {
+	s, tgt, p := sameDishDay()
+	coldFoods(&s)
+	s.Profile.KcalTarget = f64(1500)
+	got, notes := planning.GuardDayMains(s, tgt, p, nil)
+	require.Len(t, notes, 1)
+	assert.Contains(t, notes[0], "cold plate")
+	var lunchPlate planning.ProposedPlate
+	for _, pl := range got.Plates {
+		if pl.SlotID == lunch {
+			lunchPlate = pl
+		}
+	}
+	assert.Positive(t, lunchPlate.Components[0].Grams)
+}
