@@ -75,7 +75,7 @@ func TestAddDerived(t *testing.T) {
 		Ways []map[string]any `json:"ways"`
 	}
 	require.NoError(t, json.Unmarshal(agent.AddDerived("find_ways", ways), &res))
-	assert.Equal(t, "662 kcal over the most a light meal holds", res.Ways[0]["meal_vs_limit"])
+	assert.Equal(t, "662 kcal more than a light meal should hold", res.Ways[0]["meal_vs_limit"])
 	assert.Equal(t, "118 kcal below its range", res.Ways[0]["day_vs_range"])
 
 	apply := json.RawMessage(`{"request":{"min_kcal":900,"after":{"meal_kcal":850,"day_kcal":2000}}}`)
@@ -83,7 +83,7 @@ func TestAddDerived(t *testing.T) {
 		Request map[string]any `json:"request"`
 	}
 	require.NoError(t, json.Unmarshal(agent.AddDerived("apply_changes", apply), &ap))
-	assert.Equal(t, "50 kcal under the least a filling meal holds", ap.Request["meal_vs_limit"])
+	assert.Equal(t, "50 kcal less than a filling meal needs", ap.Request["meal_vs_limit"])
 	assert.NotContains(t, ap.Request, "day_vs_range", "no range, no claim")
 
 	alts := json.RawMessage(`{"range_low":1815,"range_high":2218,"alternatives":[{"plate_kcal":500,"day_kcal":1900}],"current":{"max_kcal":550}}`)
@@ -92,7 +92,7 @@ func TestAddDerived(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(agent.AddDerived("find_alternatives", alts), &al))
 	assert.Equal(t, "inside its range", al.Alternatives[0]["day_vs_range"])
-	assert.Equal(t, "within the most a light meal holds", al.Alternatives[0]["meal_vs_limit"])
+	assert.Equal(t, "within what a light meal should hold", al.Alternatives[0]["meal_vs_limit"])
 }
 
 // E024 with E025: the guard and the report read the same warning set, so a
@@ -171,7 +171,7 @@ func TestAddDerived_CookingMovedIsTold(t *testing.T) {
 	assert.Equal(t, []string{
 		"Sun 22 Nov is away: the day is not counted.",
 		`Everything that moved is now cooked together on Mon 23 Nov at lunch, one cooking time: "A" for Mon 23 Nov lunch, Tue 24 Nov lunch; "B" for Mon 23 Nov dinner.`,
-		"Nothing else in the week changed.",
+		"No other meal changed.",
 		"Weekly energy: 1935 kcal a day.",
 	}, res.Report.Tell)
 }

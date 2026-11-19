@@ -241,7 +241,7 @@ func checkMarks(st planning.State, light []planning.LightIntent, ev planning.Eva
 			if is.Code == planning.CodeMealNotLight {
 				limit, _ := is.Params["max_kcal"].(float64)
 				return markRefusal{
-					err: fmt.Errorf("%w: the %s on %s would still hold %.0f kcal, more than a light meal holds at most (%.0f kcal): make it smaller first (find_ways with goal lighter shows how) or leave the light mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, limit),
+					err: fmt.Errorf("%w: the %s on %s would still hold %.0f kcal, more than a light meal should stay under (%.0f kcal): make it smaller first (find_ways with goal lighter shows how) or leave the light mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, limit),
 					tell: []string{
 						fmt.Sprintf("I did not mark %s %s as light and saved nothing: it would still hold %.0f kcal, more than a light meal (at most %.0f kcal).", dayLabelStr(l.Date), l.Slot, kcal, limit),
 						"I can make it smaller first, or leave the light mark off: say so if you want one of them.",
@@ -250,7 +250,7 @@ func checkMarks(st planning.State, light []planning.LightIntent, ev planning.Eva
 			}
 			least, _ := is.Params["min_kcal"].(float64)
 			return markRefusal{
-				err: fmt.Errorf("%w: the %s on %s would hold only %.0f kcal, less than a filling meal holds at least (%.0f kcal): make it bigger first (find_ways with goal heartier shows how) or leave the filling mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, least),
+				err: fmt.Errorf("%w: the %s on %s would hold only %.0f kcal, less than a filling meal needs at least (%.0f kcal): make it bigger first (find_ways with goal heartier shows how) or leave the filling mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, least),
 				tell: []string{
 					fmt.Sprintf("I did not mark %s %s as filling and saved nothing: it would hold only %.0f kcal, less than a filling meal (at least %.0f kcal).", dayLabelStr(l.Date), l.Slot, kcal, least),
 					"I can make it bigger first, or leave the filling mark off: say so if you want one of them.",
@@ -371,9 +371,9 @@ func nextStepText(ways, offers []planning.Way, res planning.WayResult) string {
 	case (res.Goal == planning.GoalLighter || res.Goal == planning.GoalHeartier) && len(ways) > 0 && !ways[0].Reaches:
 		// Out of reach of the limit, a real step is still what was asked: apply it
 		// now, say how far it got, and offer the rest.
-		limit := fmt.Sprintf("a filling meal holds at least %.0f kcal", res.MinKcal)
+		limit := fmt.Sprintf("a filling meal needs at least %.0f kcal", res.MinKcal)
 		if res.Goal == planning.GoalLighter {
-			limit = fmt.Sprintf("a light meal holds at most %.0f kcal and going lower would take the day under its minimum of %.0f kcal unless another meal grows", res.MaxKcal, res.FloorKcal)
+			limit = fmt.Sprintf("a light meal should stay under %.0f kcal and going lower would take the day under its minimum of %.0f kcal unless another meal grows", res.MaxKcal, res.FloorKcal)
 		}
 		text := fmt.Sprintf("apply ways[0] now and do not ask first: it takes the meal from %.0f to %.0f kcal, a real step and as far as the day allows (%s). Tell the user plainly how far it got and why it stops there", ways[0].Before.MealKcal, ways[0].After.MealKcal, limit)
 		if len(offers) > 0 {

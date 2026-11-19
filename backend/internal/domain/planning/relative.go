@@ -604,7 +604,7 @@ func JudgeRelative(goal string, meal bool, maxKcal, minKcal float64, before, aft
 		case !changed:
 			why = fmt.Sprintf("the meal holds %.0f kcal after, %.0f before: not lighter by a meaningful amount (at least %.0f kcal)", after.MealKcal, before.MealKcal, RelMinShare*before.MealKcal)
 		case !reached:
-			why = fmt.Sprintf("lighter, but not a light meal yet: it now holds %.0f kcal (was %.0f), a light meal holds at most %.0f kcal", after.MealKcal, before.MealKcal, maxKcal)
+			why = fmt.Sprintf("lighter, but not a light meal yet: it now holds %.0f kcal (was %.0f), a light meal should stay under %.0f kcal", after.MealKcal, before.MealKcal, maxKcal)
 		}
 		return changed, reached, why
 	case GoalHeartier:
@@ -614,7 +614,7 @@ func JudgeRelative(goal string, meal bool, maxKcal, minKcal float64, before, aft
 		case !changed:
 			why = fmt.Sprintf("the meal holds %.0f kcal after, %.0f before: not heartier by a meaningful amount (at least %.0f kcal)", after.MealKcal, before.MealKcal, RelMinShare*before.MealKcal)
 		case !reached:
-			why = fmt.Sprintf("heartier, but not a filling meal yet: it now holds %.0f kcal (was %.0f), a filling meal holds at least %.0f kcal", after.MealKcal, before.MealKcal, minKcal)
+			why = fmt.Sprintf("heartier, but not a filling meal yet: it now holds %.0f kcal (was %.0f), a filling meal needs at least %.0f kcal", after.MealKcal, before.MealKcal, minKcal)
 		}
 		return changed, reached, why
 	}

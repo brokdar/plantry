@@ -324,6 +324,9 @@ func defaultTools(svc Services) []Tool {
 		if tools[i].Name == applyChangesName || tools[i].Name == "undo_last_change" || tools[i].Name == "regenerate" {
 			tools[i].Description += reportNote
 		}
+		if tools[i].Name == "find_ways" || tools[i].Name == "find_alternatives" {
+			tools[i].Handler = withIssueSentences(svc, tools[i].Handler)
+		}
 		if effectTools[tools[i].Name] {
 			tools[i].Handler = withIssueBaseline(svc, tools[i].Handler)
 		}
@@ -332,7 +335,7 @@ func defaultTools(svc Services) []Tool {
 }
 
 // reportNote documents the report a plan-changing tool returns.
-const reportNote = " Also returns report, the computed facts of the change in plain words: changed (per meal: foods and kcal before and after), days (kcal before and after, healthy_range, status), cooking (per day: what is cooked at which meal for which meals, cooking_times), leftovers (portions left over or missing, batch resized or not), also_changed (every change outside the asked meals), week (only what this change moved), new_warnings, earlier_warnings_unaffected (a count: do not list them), not_covered. Your reply states these facts and nothing else about the plan."
+const reportNote = " Also returns report, the computed facts of the change in plain words: tell (the ordered sentences your reply says: meals changed, protein, days, cooking and what moved, portions left over, the week, new and worse warnings, one offer), and for follow-up questions changed, days, cooking, earlier_warnings_unaffected (a count: do not list them), not_covered. Your reply states the tell items and nothing else about the plan."
 
 // --- read tools ---
 
@@ -588,4 +591,49 @@ func sessionIDOf(pc *plate.PlateComponent) []int64 {
 // the window's issues snapshotted before they run.
 var effectTools = map[string]bool{
 	"confirm": true, "unlock": true, "regenerate": true, "apply_preset": true,
+}
+
+// withIssueSentences gives every new_issues entry of a find_ways or
+// find_alternatives result a ready sentence ("said") that names the dish and
+// the meals, so the reply need not work out which days a warning is about.
+func withIssueSentences(svc Services, h ToolHandler) ToolHandler {
+	return func(ctx context.Context, in json.RawMessage) (json.RawMessage, ToolEffect, error) {
+		out, eff, err := h(ctx, in)
+		w, ok := windowFrom(ctx)
+		if err != nil || !ok || svc.State == nil {
+			return out, eff, err
+		}
+		var obj map[string]any
+		if json.Unmarshal(out, &obj) != nil {
+			return out, eff, err
+		}
+		st, serr := svc.State(ctx, w, todayFrom(ctx))
+		if serr != nil {
+			return out, eff, err
+		}
+		changed := false
+		for _, key := range []string{"ways", "offer", "alternatives"} {
+			list, _ := obj[key].([]any)
+			for _, e := range list {
+				m, _ := e.(map[string]any)
+				issues, _ := m["new_issues"].([]any)
+				for _, x := range issues {
+					im, _ := x.(map[string]any)
+					raw, merr := json.Marshal(im)
+					var is planning.Issue
+					if merr != nil || json.Unmarshal(raw, &is) != nil || is.Code == "" {
+						continue
+					}
+					im["said"], changed = issueSentence(is, st), true
+				}
+			}
+		}
+		if !changed {
+			return out, eff, err
+		}
+		if b, merr := json.Marshal(obj); merr == nil {
+			return b, eff, err
+		}
+		return out, eff, err
+	}
 }

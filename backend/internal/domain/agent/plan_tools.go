@@ -526,7 +526,7 @@ func toolRegenerate(svc Services) Tool {
 	return Tool{
 		Name: "regenerate",
 		Description: "Let the planner choose again for part of the draft plan and wait for it, only when the user asks to plan a whole day or week again (for one dish or side use find_alternatives). Confirmed rows are kept. " +
-			"Returns JSON {run_id, status (ok|partial|error|...), error_key?, counts:{plates, sessions, cook_days, kept_confirmed}, issues:[issue], notes?, changed:[{date, slot_id, plate}], week?:{meat_g:{before, after, limit}, repeats:[string]}} (week: the meat of the whole window per person against its weekly limit, before and after the run, and the repeated dishes or dish families the week now holds) where plate has the shape of a get_plan cell plate.",
+			"Returns JSON {run_id, status (ok|partial|error|...), error_key?, counts:{plates, sessions, cook_days, kept_confirmed}, issues:[issue], notes?, changed:[{date, slot_id, plate}], week?:{meat_g:{before, after, limit}, same_dish_twice:[string]}} (week: the meat of the whole window per person against its weekly limit, before and after the run, and the repeated dishes or dish families the week now holds) where plate has the shape of a get_plan cell plate.",
 		Schema: schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -714,7 +714,7 @@ type regenerateOut struct {
 // against its limit, and the repeats the plan holds (E019).
 type weekOut struct {
 	MeatG   meatOut  `json:"meat_g"`
-	Repeats []string `json:"repeats"`
+	Repeats []string `json:"same_dish_twice"`
 }
 
 type meatOut struct {

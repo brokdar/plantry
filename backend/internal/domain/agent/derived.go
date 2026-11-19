@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"slices"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -29,13 +29,13 @@ func vsRange(kcal, low, high float64) string {
 func vsLimit(kcal, max, min float64) string {
 	switch {
 	case max > 0 && kcal > max+0.5:
-		return fmt.Sprintf("%.0f kcal over the most a light meal holds", math.Round(kcal-max))
+		return fmt.Sprintf("%.0f kcal more than a light meal should hold", math.Round(kcal-max))
 	case max > 0:
-		return "within the most a light meal holds"
+		return "within what a light meal should hold"
 	case min > 0 && kcal < min-0.5:
-		return fmt.Sprintf("%.0f kcal under the least a filling meal holds", math.Round(min-kcal))
+		return fmt.Sprintf("%.0f kcal less than a filling meal needs", math.Round(min-kcal))
 	case min > 0:
-		return "reaches the least a filling meal holds"
+		return "enough for a filling meal"
 	}
 	return ""
 }
@@ -337,35 +337,55 @@ func cookingMovedTell(obj map[string]any) bool {
 	if len(items) == 0 {
 		return false
 	}
-	if cm["nothing_else_changed"] == true {
-		items = append(items, "Nothing else in the week changed.")
-	}
-	var kept []any
-	insertAt := -1
+	// Order: the away lines, where everything is cooked now, what else changed
+	// (or that nothing did), the rest.
+	var awayItems, rest, resizes []string
 	tell, _ := rep["tell"].([]any)
+	otherMeal := false
 	for _, it := range tell {
-		s, _ := it.(string)
-		drop := strings.Contains(s, "is now cooked") || strings.Contains(s, "no longer cooked") ||
-			strings.HasPrefix(s, "To keep one cooking time")
+		t, _ := it.(string)
+		drop := strings.Contains(t, "is now cooked") && !strings.Contains(t, "is now cooked for") || strings.Contains(t, "no longer cooked") ||
+			strings.HasPrefix(t, "To keep one cooking time")
 		for _, d := range days {
-			drop = drop || strings.HasPrefix(s, d+" you cook")
+			drop = drop || strings.HasPrefix(t, d+" you cook") || strings.HasPrefix(t, d+" cooking changes")
 		}
-		if drop {
-			if insertAt < 0 {
-				insertAt = len(kept)
+		switch {
+		case drop:
+		case strings.Contains(t, " is away: "):
+			awayItems = append(awayItems, t)
+		case strings.Contains(t, "is now cooked for") && strings.Contains(t, "nothing is left over"):
+			resizes = append(resizes, t)
+		default:
+			if mealLine.MatchString(t) {
+				otherMeal = true
 			}
-			continue
+			rest = append(rest, t)
 		}
-		kept = append(kept, it)
 	}
-	if insertAt < 0 {
-		insertAt = len(kept)
+	var out []any
+	for _, t := range awayItems {
+		out = append(out, t)
 	}
-	add := make([]any, len(items))
-	for i, s := range items {
-		add[i] = s
+	for _, t := range items {
+		out = append(out, t)
 	}
-	out := append(append(slices.Clone(kept[:insertAt]), add...), kept[insertAt:]...)
+	switch {
+	case len(resizes) > 0:
+		short := make([]string, len(resizes))
+		for i, t := range resizes {
+			short[i] = strings.TrimSuffix(strings.Replace(t, "; nothing is left over.", "", 1), ".")
+			short[i] = strings.Replace(short[i], "The ", "the ", 1)
+		}
+		out = append(out, "Apart from that only this changed: "+strings.Join(short, "; ")+".")
+	case !otherMeal && cm["nothing_else_changed"] == true:
+		out = append(out, "No other meal changed.")
+	}
+	for _, t := range rest {
+		out = append(out, t)
+	}
 	rep["tell"] = out
 	return true
 }
+
+// mealLine matches a tell item about a changed meal ("Tue 24 Nov dinner: ...").
+var mealLine = regexp.MustCompile(`^\w{3} \d+ \w{3} (breakfast|lunch|dinner)[^:]*:`)

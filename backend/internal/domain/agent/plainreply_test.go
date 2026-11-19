@@ -14,6 +14,8 @@ func TestPlainReply(t *testing.T) {
 	for _, c := range []struct{ name, in, want string }{
 		{"percent band", "Average energy is 102% of target (was 100%), within the 95–105% band.", "Average energy is 102% of target (was 100%), within the 95–105% range."},
 		{"band of the week", "average energy is 99% of target, within the 95–105% band.", "average energy is 99% of target, within the 95–105% range."},
+		{"allowed band", "The allowed band is 95-105% for the week.", "The allowed range is 95-105% for the week."},
+		{"kept: allowed band of a choir", "The allowed band size is five.", "The allowed band size is five."},
 		{"its band", "That puts Tuesday over its band.", "That puts Tuesday over its range."},
 		{"energy band", "Thursday is outside the energy band.", "Thursday is outside the energy range."},
 		{"number floor", "The minimum (1650) is met, but the day is 79 kcal short of the 1815 floor.", "The minimum (1650) is met, but the day is 79 kcal short of the 1815 limit."},

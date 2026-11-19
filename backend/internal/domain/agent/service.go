@@ -33,7 +33,7 @@ const chatProgrammatic = false
 
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v36"
+const PromptVersion = "v37"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {

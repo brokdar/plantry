@@ -166,7 +166,7 @@ func TestApplyChanges_MarkOnAMealThatMissesItsLimitIsRefused(t *testing.T) {
 		}
 	}
 	require.NotZero(t, p.ID)
-	for level, want := range map[string]string{"light": "a light meal holds at most", "hearty": "a filling meal holds at least"} {
+	for level, want := range map[string]string{"light": "a light meal should stay under", "hearty": "a filling meal needs at least"} {
 		in := fmt.Sprintf(`{"dry_run":true,"light":[{"date":%q,"scope":"meal","slot":"dinner","level":%q}],"ops":[{"op":"set_eaters","plate_id":%d,"eaters":1}]}`, p.DateString(), level, p.ID)
 		_, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(in))
 		if level == "hearty" {
@@ -183,7 +183,7 @@ func TestApplyChanges_MarkOnAMealThatMissesItsLimitIsRefused(t *testing.T) {
 	in := fmt.Sprintf(`{"dry_run":true,"light":[{"date":%q,"scope":"meal","slot":"dinner","level":"hearty"}],"ops":[{"op":"set_eaters","plate_id":%d,"eaters":1}]}`, p.DateString(), p.ID)
 	_, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(in))
 	require.ErrorIs(t, err, domain.ErrInvalidInput)
-	assert.Contains(t, err.Error(), "a filling meal holds at least")
+	assert.Contains(t, err.Error(), "a filling meal needs at least")
 }
 
 // A call that only sets a mark needs no no-op op when the meal meets its cap;

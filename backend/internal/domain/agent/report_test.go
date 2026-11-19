@@ -102,7 +102,7 @@ func TestBuildReport_Items(t *testing.T) {
 			after: reportState(1.5, 0.5, 1),
 			check: func(t *testing.T, r changeReport) {
 				require.Len(t, r.Leftovers, 1)
-				assert.Contains(t, r.Leftovers[0], "resized from 2 portions to 1.5 portions; nothing is left over")
+				assert.Contains(t, r.Leftovers[0], "is now cooked for 1.5 portions instead of 2 portions; nothing is left over")
 			},
 		},
 		{
@@ -130,7 +130,7 @@ func TestBuildReport_Items(t *testing.T) {
 			after: reportState(2, 1, 1),
 			aev:   planning.Evaluation{Week: &planning.WeekEval{Days: 7, MeatG: 546, Pct: 100}},
 			check: func(t *testing.T, r changeReport) {
-				assert.Contains(t, r.Week, "Meat this week: 546 g, was 321 g (limit 300 g), over the limit.")
+				assert.Contains(t, r.Week, "meat is 546 g (was 321 g, limit 300 g)")
 			},
 		},
 		{
@@ -143,7 +143,7 @@ func TestBuildReport_Items(t *testing.T) {
 			}},
 			check: func(t *testing.T, r changeReport) {
 				assert.Equal(t, []string{
-					"Sat 21 Nov holds 1600 kcal, under its range of 1800-2200 kcal.",
+					"Sat 21 Nov holds 1600 kcal, below a good amount for the day (1800–2200 kcal).",
 					"Sun 22 Nov holds only 1100 kcal, under the day's minimum of 1500 kcal.",
 				}, r.NewWarnings)
 				assert.Equal(t, 1, r.EarlierWarnings)

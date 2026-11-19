@@ -297,7 +297,7 @@ var plainKeys = map[string]string{
 
 // plainReasons are the reason values of an extras issue, as words.
 var plainReasons = map[string]string{
-	"light_meal": "a side on a light meal", "duplicates_main": "already in the main", "over_cap": "over the usual serving",
+	"light_meal": "added to a light meal", "duplicates_main": "already in the main", "over_cap": "over the usual serving",
 	"day_limit": "too many sides that day", "repeated": "the same side on too many meals",
 }
 

@@ -25,7 +25,7 @@ func TestMealChange_SaysWhatHappenedInPlainWords(t *testing.T) {
 		{
 			"resized and added",
 			reportMeal{Day: "Tue 24 Nov", Meal: "lunch", Before: []string{"Curry 1 portion"}, After: []string{"Curry 1.5 portions", "Bread 80 g"}},
-			"Tue 24 Nov lunch: added Bread; Curry from 1 portion to 1.5 portions.",
+			"Tue 24 Nov lunch: added Bread; Curry from 1 portion to 1.5 portions (half a portion more).",
 		},
 		{
 			"moved",
@@ -53,7 +53,7 @@ func TestBuildTell_ProteinBeforeAndAfterInGrams(t *testing.T) {
 		after:  planning.Evaluation{Days: []planning.DayEval{{Date: "2026-11-22", ProteinG: 104, ProteinTargetG: 75}}},
 	}
 	r := changeReport{Days: []reportDay{{Day: "Sun 22 Nov", KcalBefore: 2000, KcalAfter: 2100}}}
-	assert.Contains(t, buildTell(in, r), "Sun 22 Nov: protein 91 g → 104 g (wanted 75 g).")
+	assert.Contains(t, buildTell(in, r), "Sun 22 Nov already held 91 g of protein, above the 75 g it needs; now 104 g.")
 	in.after.Days[0].ProteinG = 93
 	assert.NotContains(t, strings.Join(buildTell(in, r), "\n"), "protein")
 }
@@ -74,4 +74,17 @@ func TestWarnings_AwayDoesNotCallUnchangedFoodWorse(t *testing.T) {
 	assert.Equal(t, "With a day away the week is counted over 6 days; the meat limit for those days is 257 g and the plan holds 321 g, as before.", neutral)
 	_, worse, _, _ = warnings(in, planning.State{}, false)
 	assert.Len(t, worse, 1, "without an away it is told")
+}
+
+// E041: week figures are told only past a real step or across a line; the
+// whole list is one "for the week" item.
+func TestWeekFacts_OnlyWhatMovedPastAStep(t *testing.T) {
+	in := reportInput{
+		before: planning.Evaluation{Week: &planning.WeekEval{Days: 7, MeatG: 321, Pct: 100, AvgProteinG: 93, TargetProteinG: 71, LegumeMeals: 9}},
+		after:  planning.Evaluation{Week: &planning.WeekEval{Days: 7, MeatG: 325, Pct: 101, AvgProteinG: 92, TargetProteinG: 71, LegumeMeals: 8}},
+	}
+	assert.Empty(t, weekFacts(in, planning.State{}, planning.State{}), "a little is no news")
+	in.after.Week.LegumeMeals = 0
+	got := weekFacts(in, planning.State{}, planning.State{})
+	assert.Equal(t, []string{"beans or lentils are on the plan not at all (was 9 times)"}, got)
 }

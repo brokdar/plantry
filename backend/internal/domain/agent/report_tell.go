@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 )
 
 const (
@@ -49,7 +51,7 @@ func mealChange(m reportMeal) string {
 		if _, ok := before[n]; !ok {
 			added = append(added, n)
 		} else if before[n] != after[n] && before[n] != "" && after[n] != "" {
-			resized = append(resized, fmt.Sprintf("%s from %s to %s", n, before[n], after[n]))
+			resized = append(resized, fmt.Sprintf("%s from %s to %s%s", n, before[n], after[n], qtyDelta(before[n], after[n])))
 		}
 	}
 	var parts []string
@@ -118,6 +120,24 @@ func buildTell(in reportInput, r changeReport) []string {
 	for _, day := range goneOrder {
 		add(fmt.Sprintf("%s is away: %s have no meal and the day is not counted.", day, strings.Join(gone[day], " and ")))
 	}
+	// Where the day's protein stands, in grams, when this change moved it by
+	// 5 g or more.
+	for _, a := range in.after.Days {
+		for _, b := range in.before.Days {
+			if b.Date != a.Date || a.Away || absf(a.ProteinG-b.ProteinG) < 5 || !touchedDate(r, a.Date) {
+				continue
+			}
+			day := dayLabelStr(a.Date)
+			switch {
+			case a.ProteinTargetG > 0 && b.ProteinG >= a.ProteinTargetG && a.ProteinG >= b.ProteinG:
+				add(fmt.Sprintf("%s already held %.0f g of protein, above the %.0f g it needs; now %.0f g.", day, b.ProteinG, a.ProteinTargetG, a.ProteinG))
+			case a.ProteinTargetG > 0:
+				add(fmt.Sprintf("%s: protein %.0f g → %.0f g (it needs %.0f g).", day, b.ProteinG, a.ProteinG, a.ProteinTargetG))
+			default:
+				add(fmt.Sprintf("%s: protein %.0f g → %.0f g.", day, b.ProteinG, a.ProteinG))
+			}
+		}
+	}
 	// Why a dish was swapped: the meat that left the day with it.
 	bd, ad := map[string]struct{ meat []string }{}, map[string]struct{ meat []string }{}
 	for _, d := range in.before.Days {
@@ -163,11 +183,17 @@ func buildTell(in reportInput, r changeReport) []string {
 			}
 		}
 		if before != nil && !d.Away && absf(*d.TargetKcal-*before) >= 5 {
-			why := "a light or filling meal is marked"
-			if len(d.LightMeals) > 0 {
-				why = "the " + plainWords(strings.Join(d.LightMeals, " and the ")) + " is marked"
+			why := "a meal is light or filling"
+			var parts []string
+			for _, lm := range d.LightMeals {
+				if adj, slot, ok := strings.Cut(plainWords(lm), " "); ok {
+					parts = append(parts, fmt.Sprintf("the %s is %s", slot, adj))
+				}
 			}
-			add(fmt.Sprintf("%s: the day's goal moved from %.0f to %.0f kcal because %s.", dayLabelStr(d.Date), *before, *d.TargetKcal, why))
+			if len(parts) > 0 {
+				why = strings.Join(parts, " and ")
+			}
+			add(fmt.Sprintf("%s: the amount that suits the day is now %.0f kcal (was %.0f) because %s.", dayLabelStr(d.Date), *d.TargetKcal, *before, why))
 		}
 	}
 	for _, d := range r.Days {
@@ -179,24 +205,9 @@ func buildTell(in reportInput, r changeReport) []string {
 		default:
 			s := fmt.Sprintf("%s holds %d kcal (was %d)", d.Day, d.KcalAfter, d.KcalBefore)
 			if d.Range != "" && d.Status != "" {
-				s += fmt.Sprintf(", %s (%s)", d.Status, d.Range)
+				s += fmt.Sprintf(", %s (%s)", suitsPhrase(d.Status), d.Range)
 			}
 			add(s + ".")
-			// Protein before and after, in grams, when the day's protein moved.
-			for _, a := range in.after.Days {
-				if dayLabelStr(a.Date) != d.Day {
-					continue
-				}
-				for _, b := range in.before.Days {
-					if b.Date == a.Date && absf(a.ProteinG-b.ProteinG) >= 5 {
-						p := fmt.Sprintf("%s: protein %.0f g → %.0f g", d.Day, b.ProteinG, a.ProteinG)
-						if a.ProteinTargetG > 0 {
-							p += fmt.Sprintf(" (wanted %.0f g)", a.ProteinTargetG)
-						}
-						add(p + ".")
-					}
-				}
-			}
 		}
 	}
 	// Cooking: a day with a changed meal says everything cooked that day (what
@@ -224,35 +235,27 @@ func buildTell(in reportInput, r changeReport) []string {
 			add(fmt.Sprintf("%s you cook (%d cooking time%s): %s.", c.Day, c.CookingTimes, plural(c.CookingTimes), strings.Join(parts, "; ")))
 			continue
 		}
-		for iso, now := range afterCook {
-			if dayLabelStr(iso) != c.Day {
-				continue
-			}
-			for _, d := range now {
-				for _, was := range beforeCook[iso] {
-					if was.Dish == d.Dish && was.At == d.At && len(was.Eaten) != len(d.Eaten) {
-						add(fmt.Sprintf("The %s cooked on %s is now for %s instead of %s.", food.Quote(d.Dish), c.Day, mealsWord(len(d.Eaten)), mealsWord(len(was.Eaten))))
-					}
-				}
-			}
-		}
+		add(otherDayCooking(c.Day, beforeCook, afterCook, strings.Join(r.Leftovers, "\n")))
+	}
+	// A cooking time that got longer, or one more dish in it, with the dishes
+	// and the total time.
+	for _, line := range longerCooking(in) {
+		add(line)
 	}
 	moved := strings.Join(r.Leftovers, "\n")
 	for _, s := range r.AlsoChanged {
 		// A cooking that moved is said once, by the leftovers line; a resize
-		// that fits is no news.
-		if strings.Contains(s, "was resized") || (strings.Contains(s, " is now cooked at ") && strings.Contains(moved, quotedDish(s)+" is now cooked on")) {
+		// is said there too.
+		if strings.Contains(s, "cooking was resized") || (strings.Contains(s, " is now cooked at ") && strings.Contains(moved, quotedDish(s)+" is now cooked on")) {
 			continue
 		}
 		add(s)
 	}
 	for _, s := range r.Leftovers {
-		if !strings.Contains(s, "nothing is left over") { // a resize that fits is no news
-			add(s)
-		}
-	}
-	for _, s := range r.Week {
 		add(s)
+	}
+	if len(r.Week) > 0 {
+		add("For the week this means: " + strings.Join(r.Week, "; ") + ".")
 	}
 	add(r.Neutral)
 	for _, s := range r.NewWarnings {
@@ -294,9 +297,174 @@ func quotedDish(s string) string {
 	return s[i : i+j+2]
 }
 
-func mealsWord(n int) string {
-	if n == 1 {
-		return "1 meal"
+// touchedDate reports a date the change itself touched (a changed meal sits on it).
+func touchedDate(r changeReport, iso string) bool {
+	day := dayLabelStr(iso)
+	for _, m := range r.Changed {
+		if m.Day == day {
+			return true
+		}
 	}
-	return fmt.Sprintf("%d meals", n)
+	for _, d := range r.Days {
+		if d.Day == day {
+			return true
+		}
+	}
+	return false
+}
+
+// suitsPhrase says a day status the way a cook does.
+func suitsPhrase(status string) string {
+	status = strings.Replace(status, "inside its range", "a good amount for the day", 1)
+	status = strings.Replace(status, "under its range", "below a good amount for the day", 1)
+	status = strings.Replace(status, "over its range", "above a good amount for the day", 1)
+	return status
+}
+
+// qtyDelta says how much a quantity changed: " (half a portion more)".
+func qtyDelta(from, to string) string {
+	var a, b float64
+	var ua, ub string
+	if _, err := fmt.Sscanf(from, "%f %s", &a, &ua); err != nil {
+		return ""
+	}
+	if _, err := fmt.Sscanf(to, "%f %s", &b, &ub); err != nil || strings.TrimSuffix(ua, "s") != strings.TrimSuffix(ub, "s") {
+		return ""
+	}
+	d := b - a
+	if d == 0 {
+		return ""
+	}
+	dir := "more"
+	if d < 0 {
+		dir, d = "less", -d
+	}
+	amount := fmtNum(d) + " g"
+	if strings.HasPrefix(ua, "portion") {
+		switch d {
+		case 0.25:
+			amount = "a quarter portion"
+		case 0.5:
+			amount = "half a portion"
+		case 0.75:
+			amount = "three quarters of a portion"
+		case 1:
+			amount = "one portion"
+		default:
+			amount = fmtNum(d) + " portions"
+		}
+	}
+	return " (" + amount + " " + dir + ")"
+}
+
+// otherDayCooking says the cooking that changed on a day no changed meal sits
+// on: what it now cooks and what it no longer cooks.
+func otherDayCooking(day string, before, after map[string][]reportDish, moved string) string {
+	var now, gone []string
+	for iso, dishes := range after {
+		if dayLabelStr(iso) != day {
+			continue
+		}
+		for _, d := range dishes {
+			found := false
+			for _, w := range before[iso] {
+				found = found || (w.Dish == d.Dish && w.At == d.At)
+			}
+			if !found && !strings.Contains(moved, food.Quote(d.Dish)+" is now cooked on") {
+				now = append(now, fmt.Sprintf("now cooks %s at %s for %s", food.Quote(d.Dish), d.At, strings.Join(d.Eaten, ", ")))
+			}
+		}
+	}
+	for iso, dishes := range before {
+		if dayLabelStr(iso) != day {
+			continue
+		}
+		for _, w := range dishes {
+			found := false
+			for _, d := range after[iso] {
+				found = found || (w.Dish == d.Dish && w.At == d.At)
+			}
+			if !found && !strings.Contains(moved, food.Quote(w.Dish)+" is now cooked on") {
+				gone = append(gone, "no longer cooks "+food.Quote(w.Dish))
+			}
+		}
+	}
+	slices.Sort(now)
+	slices.Sort(gone)
+	all := append(slices.Clone(now), gone...)
+	if len(all) == 0 {
+		return ""
+	}
+	return day + " cooking changes: " + strings.Join(all, "; ") + "."
+}
+
+type cookCell struct {
+	dishes  []string
+	minutes int
+}
+
+// cookCells is, per cook cell (iso date + slot), the dishes cooked there for a
+// meal and their minutes (prep and cook) in all; a breakfast batch is no cooking.
+func cookCells(st planning.State) map[string]cookCell {
+	eaten := map[int64]bool{}
+	for _, p := range st.Plates {
+		for _, c := range p.Components {
+			if c.SessionID != 0 {
+				eaten[c.SessionID] = true
+			}
+		}
+	}
+	out := map[string]cookCell{}
+	for _, s := range st.Sessions {
+		if !eaten[s.ID] || st.SlotKind[s.CookSlotID] == slot.KindLight {
+			continue
+		}
+		k := fmt.Sprintf("%s|%d", s.CookDate.Format("2006-01-02"), s.CookSlotID)
+		c := out[k]
+		c.dishes = append(c.dishes, food.Quote(foodName(st, s.FoodID)))
+		c.minutes += st.Foods[s.FoodID].Minutes
+		out[k] = c
+	}
+	return out
+}
+
+func duration(min int) string {
+	switch {
+	case min <= 0:
+		return "no time"
+	case min < 60:
+		return fmt.Sprintf("%d min", min)
+	case min%60 == 0:
+		return fmt.Sprintf("%d h", min/60)
+	}
+	return fmt.Sprintf("%d h %d min", min/60, min%60)
+}
+
+// longerCooking lists the cook cells whose total time grew by 30 minutes or
+// more, or that got another dish, with the dishes and the time.
+func longerCooking(in reportInput) []string {
+	before, after := cookCells(in.beforeSt), cookCells(in.afterSt)
+	keys := make([]string, 0, len(after))
+	for k := range after {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	var out []string
+	for _, k := range keys {
+		a, b := after[k], before[k]
+		if (a.minutes-b.minutes < 30 && len(a.dishes) <= len(b.dishes)) || a.minutes == 0 {
+			continue
+		}
+		date, slotID := "", int64(0)
+		if i := strings.IndexByte(k, '|'); i > 0 {
+			date = k[:i]
+			_, _ = fmt.Sscan(k[i+1:], &slotID)
+		}
+		was := "nothing"
+		if b.minutes > 0 {
+			was = duration(b.minutes)
+		}
+		out = append(out, fmt.Sprintf("%s at %s you now cook %s: about %s in all (was %s).", dayLabelStr(date), slotWord(in.afterSt, slotID), strings.Join(a.dishes, ", "), duration(a.minutes), was))
+	}
+	return out
 }

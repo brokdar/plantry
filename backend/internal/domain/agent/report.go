@@ -223,6 +223,7 @@ func buildReport(in reportInput) changeReport {
 	for _, c := range changed {
 		r.Changed = append(r.Changed, c.meal)
 	}
+	r.Changed = pairByCell(r.Changed)
 
 	bd, ad := map[string]planning.DayEval{}, map[string]planning.DayEval{}
 	for _, d := range in.before.Days {
@@ -452,9 +453,9 @@ func leftovers(bs, as planning.State) []string {
 			day := now.cooked.Format("Mon 2 Jan")
 			switch {
 			case math.Abs(free) <= 0.005 && math.Abs(was.portions-now.portions) >= 0.005:
-				out = append(out, fmt.Sprintf("The %s cooked on %s was resized from %s to %s; nothing is left over.", food.Quote(now.dish), day, portionWord(was.portions), portionWord(now.portions)))
+				out = append(out, fmt.Sprintf("The %s cooked on %s is now cooked for %s instead of %s; nothing is left over.", food.Quote(now.dish), day, portionWord(now.portions), portionWord(was.portions)))
 			case free > 0.005:
-				out = append(out, fmt.Sprintf("%s of the %s cooked on %s (%s%s) is left over: the meals now eat %s. %s", portionWord(free), food.Quote(now.dish), day, portionWord(now.portions), frozen, fmtNum(now.eaten), resized))
+				out = append(out, fmt.Sprintf("%s of the %s cooked on %s is now left over (it is cooked for %s%s, the meals eat %s). %s", portionWord(free), food.Quote(now.dish), day, portionWord(now.portions), frozen, fmtNum(now.eaten), resized))
 			case free < -0.005:
 				out = append(out, fmt.Sprintf("The meals need %s more of the %s cooked on %s than it holds (%s). %s", portionWord(-free), food.Quote(now.dish), day, portionWord(now.portions), resized))
 			}
@@ -577,33 +578,32 @@ func weekFacts(in reportInput, bs, as planning.State) []string {
 	bw, aw := in.before.Week, in.after.Week
 	if bw != nil && aw != nil {
 		limit := 300 * float64(aw.Days) / 7
-		if math.Abs(aw.MeatG-bw.MeatG) >= 5 {
-			s := fmt.Sprintf("Meat this week: %.0f g, was %.0f g (limit %.0f g)", aw.MeatG, bw.MeatG, limit)
+		// A figure is told only when this change moved it past a real step
+		// (25 g meat, 3 points of energy, 5 g protein) or across a line.
+		if math.Abs(aw.MeatG-bw.MeatG) >= 25 || (aw.MeatG > limit) != (bw.MeatG > 300*float64(bw.Days)/7) {
+			s := fmt.Sprintf("meat is %.0f g (was %.0f g, limit %.0f g)", aw.MeatG, bw.MeatG, limit)
 			if aw.Days < 7 {
-				s = fmt.Sprintf("Meat this week: %.0f g, was %.0f g (limit for the %d days you are home: %.0f g, 300 g a week)", aw.MeatG, bw.MeatG, aw.Days, limit)
+				s = fmt.Sprintf("meat is %.0f g (was %.0f g, limit for the %d days you are home: %.0f g)", aw.MeatG, bw.MeatG, aw.Days, limit)
 			}
-			if aw.MeatG > limit {
-				s += ", over the limit"
-			}
-			out = append(out, s+".")
+			out = append(out, s)
 		}
-		if math.Abs(aw.Pct-bw.Pct) >= 0.5 {
-			pol := planning.PolicyOf(as.Profile)
-			s := fmt.Sprintf("Weekly energy: %.0f kcal a day on average, %.0f%% of the target (was %.0f%%); the range is %.0f-%.0f%%", aw.AvgKcal, aw.Pct, bw.Pct, pol.WeekLow*100, pol.WeekHigh*100)
-			out = append(out, s+".")
+		pol := planning.PolicyOf(as.Profile)
+		inWeek := func(p float64) bool { return p >= pol.WeekLow*100-0.5 && p <= pol.WeekHigh*100+0.5 }
+		if math.Abs(aw.Pct-bw.Pct) >= 3 || inWeek(aw.Pct) != inWeek(bw.Pct) {
+			out = append(out, fmt.Sprintf("average energy is %.0f%% of the target (was %.0f%%); the week's range is %.0f–%.0f%%", aw.Pct, bw.Pct, pol.WeekLow*100, pol.WeekHigh*100))
 		}
-		if aw.TargetProteinG > 0 && math.Abs(aw.ProteinPct-bw.ProteinPct) >= 1 {
-			out = append(out, fmt.Sprintf("Weekly protein: %.0f g a day on average against %.0f g wanted (was %.0f g).", aw.AvgProteinG, aw.TargetProteinG, bw.AvgProteinG))
+		if aw.TargetProteinG > 0 && math.Abs(aw.AvgProteinG-bw.AvgProteinG) >= 5 {
+			out = append(out, fmt.Sprintf("protein averages %.0f g a day against %.0f g wanted (was %.0f g)", aw.AvgProteinG, aw.TargetProteinG, bw.AvgProteinG))
 		}
-		if aw.FishMeals != bw.FishMeals {
-			out = append(out, fmt.Sprintf("Fish meals this week: %d, was %d.", aw.FishMeals, bw.FishMeals))
+		if (aw.FishMeals == 0) != (bw.FishMeals == 0) {
+			out = append(out, fmt.Sprintf("fish is on the plan %s (was %s)", timesWord(aw.FishMeals), timesWord(bw.FishMeals)))
 		}
-		if aw.LegumeMeals != bw.LegumeMeals {
-			out = append(out, fmt.Sprintf("Legume meals this week: %d, was %d.", aw.LegumeMeals, bw.LegumeMeals))
+		if (aw.LegumeMeals == 0) != (bw.LegumeMeals == 0) {
+			out = append(out, fmt.Sprintf("beans or lentils are on the plan %s (was %s)", timesWord(aw.LegumeMeals), timesWord(bw.LegumeMeals)))
 		}
 	}
-	if in.before.MeatDays != in.after.MeatDays && in.after.MeatDaysMax != nil {
-		out = append(out, fmt.Sprintf("Days with meat: %d, was %d (limit %d).", in.after.MeatDays, in.before.MeatDays, *in.after.MeatDaysMax))
+	if in.after.MeatDaysMax != nil && (in.after.MeatDays > *in.after.MeatDaysMax) != (in.before.MeatDays > *in.after.MeatDaysMax) {
+		out = append(out, fmt.Sprintf("meat is on %d days (was %d, at most %d)", in.after.MeatDays, in.before.MeatDays, *in.after.MeatDaysMax))
 	}
 	bm, am := mainDishes(bs), mainDishes(as)
 	dishes := make([]string, 0, len(am))
@@ -613,10 +613,20 @@ func weekFacts(in reportInput, bs, as planning.State) []string {
 	slices.Sort(dishes)
 	for _, d := range dishes {
 		if len(am[d]) >= 2 && !slices.Equal(am[d], bm[d]) {
-			out = append(out, fmt.Sprintf("%s is now the main of %d meals: %s.", food.Quote(d), len(am[d]), strings.Join(am[d], ", ")))
+			out = append(out, fmt.Sprintf("%s is eaten as the main dish at %d meals: %s", food.Quote(d), len(am[d]), strings.Join(am[d], ", ")))
 		}
 	}
 	return out
+}
+
+func timesWord(n int) string {
+	switch n {
+	case 0:
+		return "not at all"
+	case 1:
+		return "once"
+	}
+	return fmt.Sprintf("%d times", n)
 }
 
 // warnings are the issues that did not exist before the change, the earlier
@@ -748,7 +758,12 @@ func issueSentence(is planning.Issue, st planning.State) string {
 		if is.Code == planning.CodeKcalAboveBand {
 			side = "over"
 		}
-		return fmt.Sprintf("%s holds %.0f kcal, %s its range of %.0f-%.0f kcal.", where, n("kcal"), side, n("band_low_kcal"), n("band_high_kcal"))
+		if side == "under" {
+			side = "below"
+		} else {
+			side = "above"
+		}
+		return fmt.Sprintf("%s holds %.0f kcal, %s a good amount for the day (%.0f–%.0f kcal).", where, n("kcal"), side, n("band_low_kcal"), n("band_high_kcal"))
 	case planning.CodeProteinLow:
 		return fmt.Sprintf("%s has %.0f g protein; the minimum is %.0f g.", where, n("protein_g"), n("min_g"))
 	case planning.CodeMealNotLight:
@@ -761,7 +776,7 @@ func issueSentence(is planning.Issue, st planning.State) string {
 		}
 		return fmt.Sprintf("The week's meat is %.0f g; the limit is %.0f g.", n("meat_g"), n("max_g"))
 	case planning.CodeWeekKcalBelowBand, planning.CodeWeekKcalAboveBand:
-		return fmt.Sprintf("The week's average is %.0f kcal a day, %.0f%% of the target; the range is %.0f-%.0f%%.", n("avg_kcal"), n("pct"), n("band_low_pct"), n("band_high_pct"))
+		return fmt.Sprintf("The week's average is %.0f kcal a day, %.0f%% of the target; the week's range is %.0f-%.0f%%.", n("avg_kcal"), n("pct"), n("band_low_pct"), n("band_high_pct"))
 	case planning.CodeWeekProteinLow:
 		return fmt.Sprintf("The week's average protein is %.0f g a day; the target is %.0f g.", n("avg_protein_g"), n("target_protein_g"))
 	case planning.CodeWeekCarbsRange, planning.CodeWeekFatRange:
@@ -772,7 +787,7 @@ func issueSentence(is planning.Issue, st planning.State) string {
 		return fmt.Sprintf("%.0f days of the week have meat; the limit is %.0f.", n("days"), n("max"))
 	case planning.CodeAddOnExcess:
 		why := map[string]string{
-			"light_meal": "a side on a light meal", "duplicates_main": "already in the main", "over_cap": fmt.Sprintf("over the usual serving of %.0f g", n("max_grams")),
+			"light_meal": "added to a light meal", "duplicates_main": "already in the main", "over_cap": fmt.Sprintf("over the usual serving of %.0f g", n("max_grams")),
 			"day_limit": "more sides that day than usual", "repeated": "the same side on too many meals",
 		}[fmt.Sprint(is.Params["reason"])]
 		return fmt.Sprintf("%s: %s %.0f g is %s.", where, food.Quote(fmt.Sprint(is.Params["name"])), n("grams"), why)
@@ -781,9 +796,12 @@ func issueSentence(is planning.Issue, st planning.State) string {
 	case planning.CodeVarietyRepeat, planning.CodeVarietyRelaxed, planning.CodeVarietyRepeatWeek:
 		if dish := issueDish(is, st); dish != "" {
 			if is.Code == planning.CodeVarietyRepeatWeek {
-				return fmt.Sprintf("%s: %s is cooked more than once this week.", where, food.Quote(dish))
+				if meals := sessionMealLabels(st, is); len(meals) > 1 {
+					return fmt.Sprintf("%s is cooked more than once this week: it is eaten at %s.", dish, strings.Join(meals, ", "))
+				}
+				return fmt.Sprintf("%s: %s is cooked more than once this week.", where, dish)
 			}
-			return fmt.Sprintf("%s: %s was cooked or eaten too recently before.", where, food.Quote(dish))
+			return fmt.Sprintf("%s: %s was cooked or eaten too recently before.", where, dish)
 		}
 	}
 	return where + ": " + planning.PlainText(is.Code).Message
@@ -799,7 +817,7 @@ func issueDish(is planning.Issue, st planning.State) string {
 			if p.ID == *is.PlateID {
 				for _, c := range p.Components {
 					if c.Position == plate.PositionMain {
-						return foodName(st, c.FoodID)
+						return food.Quote(foodName(st, c.FoodID))
 					}
 				}
 			}
@@ -870,4 +888,69 @@ func withReport(svc Services, h ToolHandler, undo bool) ToolHandler {
 		}
 		return out, eff, nil
 	}
+}
+
+// pairByCell merges a removed plate and an added plate on the same cell into
+// one change: a regenerated meal has a new plate id, but it is one meal that
+// became another.
+func pairByCell(in []reportMeal) []reportMeal {
+	var out []reportMeal
+	for _, m := range in {
+		if len(m.Before) == 0 && len(m.After) > 0 && m.MovedFrom == "" {
+			merged := false
+			for i := range out {
+				o := &out[i]
+				if len(o.After) == 0 && len(o.Before) > 0 && o.Day == m.Day && o.Meal == m.Meal && o.MovedFrom == "" {
+					o.After, o.KcalTo = m.After, m.KcalTo
+					merged = true
+					break
+				}
+			}
+			if merged {
+				continue
+			}
+		} else if len(m.After) == 0 && len(m.Before) > 0 {
+			merged := false
+			for i := range out {
+				o := &out[i]
+				if len(o.Before) == 0 && len(o.After) > 0 && o.Day == m.Day && o.Meal == m.Meal && o.MovedFrom == "" {
+					o.Before, o.KcalFrom = m.Before, m.KcalFrom
+					merged = true
+					break
+				}
+			}
+			if merged {
+				continue
+			}
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// sessionMealLabels are the meals that eat the batch an issue sits on.
+func sessionMealLabels(st planning.State, is planning.Issue) []string {
+	if is.SessionID == nil {
+		return nil
+	}
+	var cells []plate.CellKey
+	for _, p := range st.Plates {
+		for _, c := range p.Components {
+			if c.SessionID == *is.SessionID {
+				cells = append(cells, p.Cell())
+			}
+		}
+	}
+	slices.SortFunc(cells, func(a, b plate.CellKey) int {
+		if c := a.Date.Compare(b.Date); c != 0 {
+			return c
+		}
+		return int(st.SlotOrder[a.SlotID]) - int(st.SlotOrder[b.SlotID])
+	})
+	cells = slices.Compact(cells)
+	out := make([]string, len(cells))
+	for i, c := range cells {
+		out[i] = cellLabel(st, c.Date, c.SlotID)
+	}
+	return out
 }

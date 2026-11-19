@@ -38,6 +38,7 @@ var replyRules = []replyRule{
 	{regexp.MustCompile(`\b(?:food|plate|component|plate_component|session)_id[ :=]*\d+\b`), "it", false},
 	{regexp.MustCompile(`(?i)\b(energy|kcal|calorie|calories|weekly|healthy|target) band\b`), "$1 range", false},
 	{regexp.MustCompile(`(?i)(\d\s*(?:%|kcal)?)\s+band\b`), "$1 range", false},
+	{regexp.MustCompile(`(?i)\b(allowed|allowable|acceptable|usual|normal|weekly|week's|day's|target|energy|healthy|kcal|calorie|calories|protein) band\b`), "$1 range", true},
 	{regexp.MustCompile(`(?i)\b(within|inside|outside|above|below|over|under|out of) (its|the|that|this) band\b`), "$1 $2 range", true},
 	{regexp.MustCompile(`(?i)\b(energy|kcal|calorie|calories) floor\b`), "minimum", false},
 	{regexp.MustCompile(`(?i)(\d[\d.,]*\s*(?:kcal)?)\s+floor\b`), "$1 limit", true},
