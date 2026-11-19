@@ -464,3 +464,13 @@ func TestFindAlternatives_ListedWarningsAreTheWritesWarnings(t *testing.T) {
 	require.NotZero(t, shown)
 	require.NotZero(t, repeats, "the week has a candidate that repeats a dish")
 }
+
+// A replace that names its component needs no plate_id (the component knows
+// its plate): models send plate_component_id alone.
+func TestApplyChanges_ReplaceByComponentAlone(t *testing.T) {
+	e := relEnv(t)
+	p, _ := e.twoDinners()
+	food := e.unusedFood("main")
+	res := e.mustExec("apply_changes", fmt.Sprintf(`{"dry_run":true,"ops":[{"op":"replace","plate_component_id":%d,"food_id":%d}]}`, mainComponentID(t, p), food))
+	assert.EqualValues(t, food, applied0(t, res)["food_id"])
+}

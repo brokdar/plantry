@@ -499,7 +499,7 @@ var opFields = map[string]string{
 	"set_eaters":       "plate_id, eaters",
 	"set_availability": "date, slot_id, mode, optional preset_id, note",
 	"move":             "plate_id, to {date, slot_id}, optional occupant (\"swap\" | \"drop\" | {date, slot_id})",
-	"replace":          "plate_id, position (main|side) or plate_component_id, food_id, optional session_id, cook_at {date, slot_id}, portions or amount + unit",
+	"replace":          "plate_id (optional with plate_component_id), position (main|side) or plate_component_id, food_id, optional session_id, cook_at {date, slot_id}, portions or amount + unit",
 	"away":             "cells [{date, slot_id}] or date (the whole day) or date + slot_id (that one cell), optional note",
 	"move_cook":        "session_id, cook_at {date, slot_id}",
 	"copy":             "plate_id, to [{date, slot_id}], as (leftover|fresh)",

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -131,6 +132,7 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 			offers = append(offers, map[string]any{
 				"what": fmt.Sprintf("replace %s on %s with %s", food.Quote(res.Current.Name), dayLabelStr(is.Date), food.Quote(a.Name)), "ops": a.Ops,
 				"recommended": len(offers) == 0, "recommended_because": "removes the repeat, no new warning",
+				"effect": map[string]any{"day": dayLabelStr(is.Date), "day_kcal_after": a.DayKcal},
 			})
 		}
 	}
@@ -146,7 +148,7 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 		}
 		meat = fmt.Sprintf("the week's meat goes from %.0f to %.0f g, over the %.0f g limit", before.Week.MeatG, after.Week.MeatG, limit)
 		if !dry && len(offers) == 0 {
-			if o := meatBalanceOffer(ctx, svc, w, touchedPlates(applied), after.Week.MeatG); o != nil {
+			if o := meatBalanceOffer(ctx, svc, w, touchedPlates(applied), after.Week.MeatG, limit); o != nil {
 				offers = append(offers, o)
 			}
 		}
@@ -229,7 +231,7 @@ func touchedPlates(applied []map[string]any) map[int64]bool {
 // meatBalanceOffer is the verified swap of a meat main on another draft plate
 // for a vegetarian one that takes the most meat off the week, with no new
 // problem or warning; nil when none helps by a real step.
-func meatBalanceOffer(ctx context.Context, svc Services, w window.Window, touched map[int64]bool, now float64) map[string]any {
+func meatBalanceOffer(ctx context.Context, svc Services, w window.Window, touched map[int64]bool, now, limit float64) map[string]any {
 	if svc.State == nil {
 		return nil
 	}
@@ -254,6 +256,7 @@ func meatBalanceOffer(ctx context.Context, svc Services, w window.Window, touche
 				best = map[string]any{
 					"what": fmt.Sprintf("replace %s on %s with %s: the week's meat falls from %.0f to %.0f g", food.Quote(res.Current.Name), dayLabel(p.Date), food.Quote(a.Name), now, a.WeekMeatG),
 					"ops":  a.Ops, "recommended": true, "recommended_because": "takes the most meat off the week, no new warning",
+					"effect": map[string]any{"week_meat_g_now": math.Round(now), "week_meat_g_after": math.Round(a.WeekMeatG), "week_meat_limit_g": limit},
 				}
 			}
 		}

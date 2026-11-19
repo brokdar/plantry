@@ -47,7 +47,7 @@ var applyChangesSchema = `{
           "session_id":{"type":"integer","minimum":1},
           "cook_at":{"type":"object","required":["date","slot_id"],"properties":{"date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"slot_id":{"type":"integer","minimum":1}},"additionalProperties":false},
           "frozen_portions":{"type":"number","minimum":0,"maximum":100},
-          "eaters":{"type":"number","exclusiveMinimum":0,"maximum":100},
+          "eaters":{"type":"number","exclusiveMinimum":0,"maximum":100,"description":"the total number of people eating the plate, guests included"},
           "mode":{"type":"string","enum":["plan","none","routine","default"]},
           "preset_id":{"type":"integer","minimum":1},
           "note":{"type":"string","maxLength":200},
@@ -73,10 +73,10 @@ Ops (fields):
 - create_plate: date, slot_id, optional eaters, note.
 - delete_plate: plate_id.
 - set_portions: session_id, portions (total the batch cooks), optional frozen_portions. Refused below what the plates eat.
-- set_eaters: plate_id, eaters (the batches it eats from are resized).
+- set_eaters: plate_id, eaters = how many people eat that plate in total, guests included (a friend joins a plate of 1: eaters 2, do it at once). Each person's portion stays the same; the batches it eats from are resized to cover them, and nothing else changes.
 - set_availability: date, slot_id, mode plan|none|routine|default, preset_id (routine), note (none). none removes the cell's plate and moves a cook off it.
 - move: plate_id, to {date, slot_id}. A taken target needs occupant: "swap" (the other plate takes this plate's cell), "drop" (the other plate is removed) or {date, slot_id} (it moves on to that empty cell); without one the op fails naming the plate there. Batches follow (the cook moves with its meal or to the earliest meal still eating it).
-- replace: plate_id, position main|side OR plate_component_id, food_id (the new food); optional session_id (eat from that batch), cook_at {date, slot_id} (cook it there), portions | amount+unit (else the current quantity is kept). Keeps the position.
+- replace: plate_component_id (the plate is known from it), or plate_id + position main|side, and food_id (the new food); optional session_id (eat from that batch), cook_at {date, slot_id} (cook it there), portions | amount+unit (else the current quantity is kept). Keeps the position.
 - away: cells [{date, slot_id}] OR date (every planned meal of that day) OR date + slot_id (that one cell), optional note. Marks the cells "no plate", removes their plates and moves cooks off them. A day away is not judged for calories.
 - move_cook: session_id, cook_at {date, slot_id}: the batch cooks there instead (on or before every meal eating it, within keep days).
 - copy: plate_id, to [{date, slot_id}], as leftover (eat from the same batches) | fresh (cook again on each cell).
@@ -223,6 +223,14 @@ func toolApplyChanges(svc Services) Tool {
 			w, ok := windowFrom(ctx)
 			if !ok {
 				return nil, ToolEffectNone, fmt.Errorf("%w: no plan window in this conversation turn", domain.ErrInvalidInput)
+			}
+			// A replace that names its component needs no plate_id: the component knows it.
+			for i, op := range in.Ops {
+				if op.Op == "replace" && op.PlateID == 0 && op.PlateComponentID != 0 {
+					if pc, err := svc.Plates.GetComponent(ctx, op.PlateComponentID); err == nil {
+						in.Ops[i].PlateID = pc.PlateID
+					}
+				}
 			}
 			run, err := runGuarded(ctx, svc, w, applyInput{Ops: in.Ops, DryRun: in.DryRun, Light: light, Goal: in.Goal}, ignoredFields(input))
 			if err != nil {
