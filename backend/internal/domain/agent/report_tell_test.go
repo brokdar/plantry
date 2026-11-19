@@ -2,7 +2,10 @@ package agent
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -41,4 +44,16 @@ func TestChangeReport_JSONHoldsTellNotTheSentenceLists(t *testing.T) {
 	r := changeReport{Leftovers: []string{"a"}, Week: []string{"b"}, NewWarnings: []string{"c"}, Worse: []string{"d"}, AlsoChanged: []string{"e"}, Tell: []string{"x"}}
 	raw, _ := json.Marshal(r)
 	assert.JSONEq(t, `{"tell":["x"],"earlier_warnings_unaffected":0}`, string(raw))
+}
+
+// E036: a day whose protein moved by 5 g or more says it in grams.
+func TestBuildTell_ProteinBeforeAndAfterInGrams(t *testing.T) {
+	in := reportInput{
+		before: planning.Evaluation{Days: []planning.DayEval{{Date: "2026-11-22", ProteinG: 91}}},
+		after:  planning.Evaluation{Days: []planning.DayEval{{Date: "2026-11-22", ProteinG: 104, ProteinTargetG: 75}}},
+	}
+	r := changeReport{Days: []reportDay{{Day: "Sun 22 Nov", KcalBefore: 2000, KcalAfter: 2100}}}
+	assert.Contains(t, buildTell(in, r), "Sun 22 Nov: protein 91 g → 104 g (wanted 75 g).")
+	in.after.Days[0].ProteinG = 93
+	assert.NotContains(t, strings.Join(buildTell(in, r), "\n"), "protein")
 }

@@ -62,3 +62,6 @@ var NewWarnings = newWarnings
 
 // PlainReply exposes the final-reply rewriter.
 var PlainReply = plainReply
+
+// DropAfterWeek exposes the trimming of the after block.
+var DropAfterWeek = dropAfterWeek

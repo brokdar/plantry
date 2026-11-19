@@ -120,3 +120,39 @@ func TestModelView_FillingLevel(t *testing.T) {
 	assert.Contains(t, out, `"reached_filling":true`)
 	assert.Contains(t, out, `"light":[{"date":"2026-11-25","level":"filling"}]`, "a light entry the model passes back says filling")
 }
+
+// E036: the offer is the last item of tell, as a ready statement, or nothing.
+func TestAddDerived_OfferIsTheLastTellItem(t *testing.T) {
+	run := func(in string) []any {
+		var res struct {
+			Report struct {
+				Tell []any `json:"tell"`
+			} `json:"report"`
+		}
+		require.NoError(t, json.Unmarshal(agent.AddDerived("apply_changes", json.RawMessage(in)), &res))
+		return res.Report.Tell
+	}
+	t.Run("an offer of the result", func(t *testing.T) {
+		tell := run(`{"dry_run":false,"report":{"tell":["Thu 26 Nov dinner: A replaced by B."]},"offers":[{"what":"swap Mon dinner's Salmon for Tofu","effect":{"day":"Mon 23 Nov","day_kcal_after":1958}}]}`)
+		assert.Equal(t, "I can also swap Mon dinner's Salmon for Tofu (Mon 23 Nov would then hold 1958 kcal): say so if you want it.", tell[len(tell)-1])
+	})
+	t.Run("the first option of a new issue", func(t *testing.T) {
+		tell := run(`{"dry_run":false,"report":{"tell":["x"]},"after":{"issues":{"new":[{"options":[{"action":"add","name":"Ciabatta","grams":120,"date":"2026-11-26","day_kcal":2047}]}]}}}`)
+		assert.Equal(t, "I can also add 120 g of Ciabatta on Thu 26 Nov (the day would then hold 2047 kcal): say so if you want it.", tell[len(tell)-1])
+	})
+	t.Run("none, none", func(t *testing.T) {
+		assert.Equal(t, []any{"x"}, run(`{"dry_run":false,"report":{"tell":["x"]},"after":{"issues":{"new":[]}}}`))
+	})
+	t.Run("a check offers nothing", func(t *testing.T) {
+		assert.Equal(t, []any{"x"}, run(`{"dry_run":true,"report":{"tell":["x"]},"offers":[{"what":"y"}]}`))
+	})
+}
+
+// E036: the meat-day count of the window is dropped unless the report says it
+// moved; so is the week ledger.
+func TestDropAfterWeek_DropsMeatDays(t *testing.T) {
+	out := string(agent.DropAfterWeek(json.RawMessage(`{"report":{"tell":[]},"after":{"days":[],"week":{"days":7},"meat_days":3,"meat_days_max":3}}`)))
+	assert.NotContains(t, out, "meat_days")
+	assert.NotContains(t, out, `"week"`)
+	assert.Contains(t, out, `"days":[]`)
+}

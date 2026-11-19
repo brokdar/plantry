@@ -54,7 +54,7 @@ func TestPrompt_ToolRules(t *testing.T) {
 func TestPrompt_MealEditRules(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
-		"change only what the user asked", "offer the fix", "only to clear a problem",
+		"change only what the user asked", "the fix is your closing offer", "only to clear a problem",
 		`occupant "swap"`, "every item of report",
 		"one away op", "A day away is not counted",
 		"find_alternatives with what main", "cite the total_minutes",
@@ -93,7 +93,7 @@ func TestPrompt_SoftIssuesAreOffered(t *testing.T) {
 	for _, want := range []string{
 		"A request is not done while a problem it caused is open",
 		"Fix a new problem with another apply_changes call",
-		"A warning is not fixed on your own: report it and offer the fix",
+		"A warning is not fixed on your own: report it and state the fix",
 		"Close protein gaps by offering",
 	} {
 		if !strings.Contains(prompt, want) {

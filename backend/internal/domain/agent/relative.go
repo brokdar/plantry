@@ -373,7 +373,7 @@ func nextStepText(ways, offers []planning.Way, res planning.WayResult) string {
 	case len(ways) > 0:
 		return "apply ways[0] now with apply_changes (its ops, light and goal as returned), then tell the user what changed with before and after"
 	case len(offers) > 0:
-		return "nothing can be applied on its own here: explain why with the numbers. If the user already asked for the other meal to make up the difference (a bigger lunch) or has said yes to it, apply offer[0] now; otherwise present it as a question and apply it only on a yes"
+		return "nothing can be applied on its own here: explain why with the numbers and present the offer marked recommended in the same sentence as the explanation ('I would ...'). If the user already asked for the other meal to make up the difference (a bigger lunch) or has said yes to it, apply offer[0] now; otherwise apply it only when the user says yes"
 	}
 	return "nothing to apply: explain why with the numbers and what the user could change"
 }
