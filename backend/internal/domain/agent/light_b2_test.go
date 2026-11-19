@@ -33,6 +33,6 @@ func TestApplyChanges_LightCallOnAMealOverItsCapIsRefused(t *testing.T) {
 	input := fmt.Sprintf(`{"dry_run":true,"light":[{"date":%q,"scope":"meal","slot":"dinner"}],"ops":[{"op":"set_eaters","plate_id":%d,"eaters":1}]}`, p.DateString(), p.ID)
 	_, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(input))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "limit")
+	assert.Contains(t, err.Error(), "a light meal holds at most")
 	assert.Contains(t, err.Error(), "find_ways")
 }

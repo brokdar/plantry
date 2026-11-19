@@ -334,44 +334,18 @@ func onlyOwnCell(x *index, ss Session) bool {
 	return true
 }
 
-// plainSeverity is a severity as the chat reads it.
-func plainSeverity(s Severity) string {
-	if s == SeverityViolation {
-		return "problem"
-	}
-	return "warning"
-}
-
 func writeIssues(b *strings.Builder, issues []Issue) {
 	if len(issues) == 0 {
-		b.WriteString("\nIssues: none.\n")
+		b.WriteString("\nOpen now: nothing.\n")
 		return
 	}
-	b.WriteString("\nIssues:\n")
+	problems := 0
 	for _, is := range issues {
-		fmt.Fprintf(b, "- %s (%s)", PlainText(is.Code).Label, plainSeverity(is.Severity))
-		if is.Date != "" {
-			fmt.Fprintf(b, " %s", is.Date)
+		if is.Severity == SeverityViolation {
+			problems++
 		}
-		if is.SlotID != nil {
-			fmt.Fprintf(b, " slot_id %d", *is.SlotID)
-		}
-		if is.PlateID != nil {
-			fmt.Fprintf(b, " plate_id %d", *is.PlateID)
-		}
-		if is.SessionID != nil {
-			fmt.Fprintf(b, " session_id %d", *is.SessionID)
-		}
-		keys := make([]string, 0, len(is.Params))
-		for k := range is.Params {
-			keys = append(keys, k)
-		}
-		slices.Sort(keys)
-		for _, k := range keys {
-			fmt.Fprintf(b, " %s=%v", k, is.Params[k])
-		}
-		b.WriteByte('\n')
 	}
+	fmt.Fprintf(b, "\nOpen now: %d problems, %d warnings. They are not listed here: call get_plan when the user asks what is open, and never recite them after a change (the report names what the change affected).\n", problems, len(issues)-problems)
 }
 
 func writeRules(b *strings.Builder, s State) {
