@@ -356,3 +356,27 @@ func TestAlternatives_FirstIsRecommendedOnce(t *testing.T) {
 		assert.False(t, a.Recommended)
 	}
 }
+
+// A more-protein way adds or enlarges only protein foods (at least 20 % of
+// their energy from protein): bread, nuts and the like are never the answer.
+func TestWays_MoreProteinOnlyAddsProteinFoods(t *testing.T) {
+	const relTofu int64 = 63
+	s := relState(false)
+	s.Foods[relTofu] = planning.FoodFacts{
+		ID: relTofu, Name: "Tofu", Kind: food.KindLeaf, LeafRole: food.RoleSideProtein, DietClass: "vegan", NoCook: true, ServingG: 100,
+		Macros: nutrition.Macros{Kcal: 140, Protein: 16}, NutritionComplete: true,
+	}
+	s.NoCook = append(s.NoCook, relTofu)
+	res := ways(t, s, planning.WayRequest{PlateID: 3, Goal: planning.GoalMoreProtein})
+	added := false
+	for _, w := range res.Ways {
+		for _, op := range w.Ops {
+			if op.Op == "add" {
+				added = true
+				assert.Equal(t, relTofu, op.FoodID, "%s: only a protein food is added", w.What)
+			}
+		}
+		assert.False(t, w.After.DayKcal-w.Before.DayKcal > planning.RelProteinWasteKcal && w.After.DayProteinG-w.Before.DayProteinG < planning.RelProteinWasteG, w.What)
+	}
+	assert.True(t, added, "the protein food is among the ways")
+}

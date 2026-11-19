@@ -41,6 +41,15 @@ const (
 	RelMinDayShare = 0.05
 	// RelMinProteinG is a meaningful change of protein, meal or day.
 	RelMinProteinG = 10.0
+	// RelProteinFoodShare is the share of a food's energy that protein must
+	// supply for the food to count as a protein food (4 kcal per gram): a
+	// "more protein" way adds or enlarges only those, never bread or nuts.
+	RelProteinFoodShare = 0.20
+	// RelProteinWasteKcal and RelProteinWasteG: a more-protein way that adds
+	// more energy than this to the day for less protein than this is never
+	// recommended.
+	RelProteinWasteKcal = 250.0
+	RelProteinWasteG    = 15.0
 
 	// maxWays is the most ways Ways returns (a caller that checks them again
 	// asks for more than it shows); defaultWays is what it returns by default.
@@ -410,7 +419,7 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 			if way.Reaches {
 				offer(e, r.ev)
 			}
-		case way.Meaningful && (way.Reaches || !w.dayGoal()):
+		case way.Meaningful && (way.Reaches || !w.dayGoal()) && !w.wastesKcal(way):
 			found = append(found, way)
 		}
 	}
@@ -951,7 +960,7 @@ func (w *waySearch) quantityEdits(s State, pi, dir int) []wayEdit {
 	var out []wayEdit
 	for ci, c := range p.Components {
 		f, ok := s.Foods[c.FoodID]
-		if !ok || !f.NutritionComplete || f.Macros.Kcal <= 0 {
+		if !ok || !f.NutritionComplete || f.Macros.Kcal <= 0 || (w.goal == GoalMoreProtein && dir > 0 && !proteinFood(f)) {
 			continue
 		}
 		for _, n := range s.wayLevels(p, c, dir) {
@@ -1112,6 +1121,18 @@ func (w *waySearch) swapEdits(s State, p Plate, what string, minProtein float64)
 	return out
 }
 
+// proteinFood reports whether protein supplies at least RelProteinFoodShare of
+// the food's own energy.
+func proteinFood(f FoodFacts) bool {
+	return f.Macros.Kcal > 0 && f.Macros.Protein*4 >= RelProteinFoodShare*f.Macros.Kcal-1e-9
+}
+
+// wastesKcal: a more-protein way that adds RelProteinWasteKcal or more to the
+// day for under RelProteinWasteG of protein.
+func (w *waySearch) wastesKcal(a Way) bool {
+	return w.goal == GoalMoreProtein && a.After.DayKcal-a.Before.DayKcal > RelProteinWasteKcal && a.After.DayProteinG-a.Before.DayProteinG < RelProteinWasteG
+}
+
 // addCand is a sized add-on of a no-cook food.
 type addCand struct {
 	f     FoodFacts
@@ -1133,12 +1154,15 @@ func (w *waySearch) addCands(s State, p Plate, want float64, protein bool) []add
 	var out []addCand
 	for _, id := range s.NoCook {
 		f, ok := s.Foods[id]
-		if !ok || onPlate[id] || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet || !fitsDiet(f.DietClass, w.household) || (f.Composed() && f.Role == food.RoleStandalone) || (!f.Composed() && !s.addOnFits(p, f, slotName(s, p.SlotID))) {
+		if !ok || onPlate[id] || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet || (protein && !proteinFood(f)) || !fitsDiet(f.DietClass, w.household) || (f.Composed() && f.Role == food.RoleStandalone) || (!f.Composed() && !s.addOnFits(p, f, slotName(s, p.SlotID))) {
 			continue
 		}
 		var best *addCand
 		consider := func(c Component, kcal, prot, grams float64) {
 			ac := addCand{f: f, comp: c, kcal: kcal, prot: prot, grams: grams}
+			if protein && kcal > RelProteinWasteKcal && prot < RelProteinWasteG {
+				return
+			}
 			switch {
 			case best == nil:
 				best = &ac
