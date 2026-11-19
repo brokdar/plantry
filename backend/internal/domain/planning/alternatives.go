@@ -625,6 +625,10 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 				continue
 			}
 		}
+		// Breakfast food is no main for lunch or dinner either.
+		if s.PairAddOns && !s.MealFits(f, slotName(s, p.SlotID)) {
+			continue
+		}
 		comp := Component{FoodID: id, Proposed: true}
 		switch {
 		case f.Composed():
