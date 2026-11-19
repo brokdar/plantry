@@ -2,27 +2,27 @@ Report 0123456789ab llm/p1-b/fake
 scenario                    runs  ok  violations  coverage  macro_daily_pct  distinct  repeats  waste  tokens_in  cost_usd  latency_ms
 addon_caps                  1     1   0           1         3.879            5         9        0      4082       -         0
 away_thu_fri                1     1   0           1         -                0         0        0      0          -         0
-confirmed_cook_empty_cell   1     1   0           1         33.182           1         0        0      4062       -         0
+confirmed_cook_empty_cell   1     1   0           1         33.409           1         0        0      4062       -         0
 confirmed_cook_no_surplus   1     1   1           0.5       70.795           1         0        0      16076      -         0
 explore_quota               1     1   0           1         -                3         2        0      2739       -         0
 family_daily                1     1   0           1         27.944           9         0        0      4408       -         0
 hearty_meal                 1     1   0           1         4.345            14        0        0      4547       -         0
-light_day                   1     1   0           1         4.966            14        0        0      4534       -         0
+light_day                   1     1   0           1         5.041            14        0        0      4534       -         0
 light_dinners_no_addons     1     1   0           1         7.77             14        0        0      4602       -         0
 light_meal_weekday_dinners  1     1   0           1         7.77             14        0        0      4602       -         0
 light_two_meals_floor       1     1   2           1         11.865           14        0        0      13761      -         0
 many_none_cells             1     1   0           1         -                2         0        0      3066       -         0
-nutrition_lose              1     1   0           1         3.233            14        0        0      4488       -         0
-nutrition_maintain          1     1   0           1         0.449            14        0        0      4489       -         0
+nutrition_lose              1     1   0           1         4.794            14        0        0      4488       -         0
+nutrition_maintain          1     1   0           1         0.524            14        0        0      4489       -         0
 nutrition_maintain_1800     1     1   0           1         3.213            14        0        0      4489       -         0
-nutrition_maintain_2500     1     1   0           1         3.202            14        0        0      4491       -         0
+nutrition_maintain_2500     1     1   0           1         3.958            14        0        0      4491       -         0
 protein_gap_week            1     1   0           1         2.149            8         6        0      3973       -         0
 replan_one_day              1     1   0           1         0.176            1         0        0      4366       -         0
-single_batch_cooker         1     1   0           1         24.224           9         0        0      4417       -         0
+single_batch_cooker         1     1   0           1         23.978           9         0        0      4417       -         0
 small_library_h8            1     1   0           1         -                7         14       0      2797       -         0
 unreachable_floor           1     1   7           1         82.916           14        0        0      13500      -         0
-vegetarian_variety          1     1   0           1         2.273            7         0        0      3904       -         0
-walkthrough_batch_cooker    1     1   0           1         26.926           5         0        0      4467       -         0
+vegetarian_variety          1     1   0           1         1.984            7         0        0      3904       -         0
+walkthrough_batch_cooker    1     1   0           1         27.375           5         0        0      4467       -         0
 Wrote 23 records to b.jsonl
 
 Compare 0123456789ab llm/p1-a/fake -> 0123456789ab llm/p1-b/fake
@@ -74,8 +74,8 @@ confirmed_cook_empty_cell
   repair_attempts     0         0        0
   plates              1         1        0
   coverage            1         1        0
-  macro_daily_pct     33.182    33.182   0
-  macro_weekly_pct    33.182    33.182   0
+  macro_daily_pct     33.409    33.409   0
+  macro_weekly_pct    33.409    33.409   0
   cook_occasions      1         1        0
   days_with_prepared  1         1        0
   variety_distinct    1         1        0
@@ -177,8 +177,8 @@ light_day
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     4.966     4.966    0
-  macro_weekly_pct    4.008     4.008    0
+  macro_daily_pct     5.041     5.041    0
+  macro_weekly_pct    4.085     4.085    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -280,8 +280,8 @@ nutrition_lose
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     3.233     3.233    0
-  macro_weekly_pct    2.959     2.959    0
+  macro_daily_pct     4.794     4.794    0
+  macro_weekly_pct    1.539     1.539    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -301,8 +301,8 @@ nutrition_maintain
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     0.449     0.449    0
-  macro_weekly_pct    0.065     0.065    0
+  macro_daily_pct     0.524     0.524    0
+  macro_weekly_pct    0.012     0.012    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -343,8 +343,8 @@ nutrition_maintain_2500
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     3.202     3.202    0
-  macro_weekly_pct    3.035     3.035    0
+  macro_daily_pct     3.958     3.958    0
+  macro_weekly_pct    3.369     3.369    0
   cook_occasions      14        14       0
   days_with_prepared  0         0        0
   variety_distinct    14        14       0
@@ -406,8 +406,8 @@ single_batch_cooker
   repair_attempts     0         0        0
   plates              21        21       0
   coverage            1         1        0
-  macro_daily_pct     24.224    24.224   0
-  macro_weekly_pct    21.838    21.838   0
+  macro_daily_pct     23.978    23.978   0
+  macro_weekly_pct    21.376    21.376   0
   cook_occasions      5         5        0
   days_with_prepared  7         7        0
   variety_distinct    9         9        0
@@ -467,8 +467,8 @@ vegetarian_variety
   repair_attempts     0         0        0
   plates              14        14       0
   coverage            1         1        0
-  macro_daily_pct     2.273     2.273    0
-  macro_weekly_pct    1.539     1.539    0
+  macro_daily_pct     1.984     1.984    0
+  macro_weekly_pct    1.68      1.68     0
   cook_occasions      7         7        0
   days_with_prepared  7         7        0
   variety_distinct    7         7        0
@@ -488,8 +488,8 @@ walkthrough_batch_cooker
   repair_attempts     0         0        0
   plates              19        19       0
   coverage            1         1        0
-  macro_daily_pct     26.926    26.926   0
-  macro_weekly_pct    16.095    16.095   0
+  macro_daily_pct     27.375    27.375   0
+  macro_weekly_pct    16.545    16.545   0
   cook_occasions      5         5        0
   days_with_prepared  6         6        0
   variety_distinct    5         5        0

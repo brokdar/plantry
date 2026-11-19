@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
 // Pairing rules for a no-cook add-on (a gap filler, a protein add, a side
@@ -24,13 +25,24 @@ import (
 //     already holds meat or fish.
 //   - Nuts go with breakfast, with salads and with dairy; not on a curry or a
 //     ragù.
+//   - Sides fit the main: no second starch (bread or potatoes beside a pasta,
+//     rice or potato dish, or a starch side already on the plate), no nuts
+//     beside a pasta, and no sweet fruit dish (a dessert-role recipe such as a
+//     fruit salad) beside a lunch or dinner main. Bread goes with soups and
+//     salads, and a vegetable or salad is the side to reach for first
+//     (sideFitRank orders the candidates).
+//   - Breakfast foods (muesli, oats, cereal) are for breakfast cells only.
 //   - A food the user removed earlier in the conversation (State.Avoid) is
 //     never added again.
 var (
-	cheeseWords = []string{"cheese", "kase", "parmesan", "mozzarella", "feta", "cheddar", "gouda", "emmental", "ricotta", "halloumi", "mascarpone", "pecorino", "gruyere"}
-	nutWords    = []string{"nut", "nuss", "mandel", "almond", "peanut", "erdnuss", "cashew", "walnuss", "pistazie", "pistachio", "haselnuss"}
-	dairyWords  = []string{"yogurt", "joghurt", "skyr", "quark", "milk", "milch", "kefir"}
-	saladWords  = []string{"salad", "salat"}
+	cheeseWords    = []string{"cheese", "kase", "parmesan", "mozzarella", "feta", "cheddar", "gouda", "emmental", "ricotta", "halloumi", "mascarpone", "pecorino", "gruyere"}
+	nutWords       = []string{"nut", "nuss", "mandel", "almond", "peanut", "erdnuss", "cashew", "walnuss", "pistazie", "pistachio", "haselnuss"}
+	dairyWords     = []string{"yogurt", "joghurt", "skyr", "quark", "milk", "milch", "kefir"}
+	pastaWords     = []string{"pasta", "nudel", "spaghetti", "penne", "lasagn", "tagliatelle", "gnocchi", "fusilli", "macaroni", "makkaroni", "risotto"}
+	starchWords    = []string{"rice", "reis", "kartoffel", "potato", "couscous", "polenta", "bulgur", "brot", "bread", "sandwich", "wrap"}
+	breakfastWords = []string{"muesli", "mueslli", "musli", "oat", "hafer", "cereal", "granola", "cornflakes"}
+	fruitWords     = []string{"fruit salad", "obstsalat", "fruchtsalat", "kompott", "compote"}
+	saladWords     = []string{"salad", "salat"}
 )
 
 // addOnFits reports whether leaf f may be added to plate p (slot is the
@@ -44,8 +56,11 @@ func (s State) addOnFits(p Plate, f FoodFacts, slot string) bool {
 	}
 	name := diet.Fold(f.Name)
 	if f.Composed() {
-		// A recipe added or swapped in as a side: only the protein pairing
-		// applies (cheese and nuts are leaf rules).
+		// A recipe added or swapped in as a side: the protein pairing, no second
+		// starch and no sweet fruit dish beside a main (cheese and nuts are leaf rules).
+		if s.secondStarch(p, f, name) || (slot != "breakfast" && s.sweetFruitDish(f, name) && s.mainOf(p) != 0) {
+			return false
+		}
 		return s.pairsWithPlate(p, f, name, slot)
 	}
 	has := func(words []string) bool {
@@ -54,7 +69,16 @@ func (s State) addOnFits(p Plate, f FoodFacts, slot string) bool {
 	if has(cheeseWords) {
 		return false
 	}
+	if s.secondStarch(p, f, name) {
+		return false
+	}
+	if slot != "breakfast" && has(breakfastWords) {
+		return false
+	}
 	if has(nutWords) && !strings.Contains(name, "coconut") && !strings.Contains(name, "kokos") {
+		if slot != "breakfast" && s.mainHas(p, pastaWords) {
+			return false
+		}
 		dairyOnPlate, saladMain := false, false
 		for _, c := range p.Components {
 			g, ok := s.Foods[c.FoodID]
@@ -96,4 +120,55 @@ func (s State) pairsWithPlate(p Plate, f FoodFacts, name, slot string) bool {
 		return false
 	}
 	return true
+}
+
+// sideRole is the role of a food as a side: a recipe's role, a leaf's role.
+func sideRoleOf(f FoodFacts) food.Role {
+	if f.Composed() {
+		return f.Role
+	}
+	return f.LeafRole
+}
+
+// mainHas reports whether the plate's main has one of words in its name.
+func (s State) mainHas(p Plate, words []string) bool {
+	m, ok := s.Foods[s.mainOf(p)]
+	if !ok {
+		return false
+	}
+	n := diet.Fold(m.Name)
+	return slices.ContainsFunc(words, func(w string) bool { return strings.Contains(n, w) })
+}
+
+// secondStarch reports whether f is a starch side that would be a second
+// starch: the plate already holds one, or its main is a pasta, rice or potato
+// dish.
+func (s State) secondStarch(p Plate, f FoodFacts, name string) bool {
+	if sideRoleOf(f) != food.RoleSideStarch {
+		return false
+	}
+	if s.mainHas(p, pastaWords) || s.mainHas(p, starchWords) {
+		return true
+	}
+	return slices.ContainsFunc(p.Components, func(c Component) bool {
+		g, ok := s.Foods[c.FoodID]
+		return ok && c.FoodID != s.mainOf(p) && sideRoleOf(g) == food.RoleSideStarch
+	})
+}
+
+// sweetFruitDish reports whether f is a dessert-role recipe or a fruit salad.
+func (s State) sweetFruitDish(f FoodFacts, name string) bool {
+	return f.Composed() && (f.Role == food.RoleDessert || slices.ContainsFunc(fruitWords, func(w string) bool { return strings.Contains(name, w) }))
+}
+
+// sideFitRank orders the sides that fit: a vegetable or salad first, then
+// bread, then the rest (lower first).
+func sideFitRank(f FoodFacts) int {
+	switch sideRoleOf(f) {
+	case food.RoleSideVeg:
+		return 0
+	case food.RoleSideStarch:
+		return 1
+	}
+	return 2
 }

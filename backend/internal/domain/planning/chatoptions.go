@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
@@ -356,7 +357,8 @@ func (x *index) cookOptions(ev Evaluation, t Target, is Issue) []Option {
 		}
 		cells := slices.Clone(x.s.Cells)
 		slices.SortStableFunc(cells, func(a, b Cell) int {
-			return cmp.Compare(math.Abs(float64(dayOf(a.Date)-dayOf(day))), math.Abs(float64(dayOf(b.Date)-dayOf(day))))
+			return cmp.Or(cmp.Compare(math.Abs(float64(dayOf(a.Date)-dayOf(day))), math.Abs(float64(dayOf(b.Date)-dayOf(day)))),
+				boolCmp(!x.s.slotIs(a.SlotID, "dinner"), !x.s.slotIs(b.SlotID, "dinner")))
 		})
 		tries := 0
 		for _, c := range cells {
@@ -377,7 +379,7 @@ func (x *index) cookOptions(ev Evaluation, t Target, is Issue) []Option {
 					next.Sessions[i].CookDate, next.Sessions[i].CookSlotID = c.Date, c.SlotID
 				}
 			}
-			if !resolves(next) {
+			if !resolves(next) || tooManyDishes(x.s, next, k) {
 				continue
 			}
 			sid := ss.ID
@@ -391,6 +393,9 @@ func (x *index) cookOptions(ev Evaluation, t Target, is Issue) []Option {
 	}
 	if len(opts) == 0 {
 		opts = append(opts, x.groupedCookMove(t, day, resolves)...)
+	}
+	if len(opts) == 0 {
+		opts = append(opts, x.partialCookMove(t, day, resolves)...)
 	}
 	swaps := 0
 	for _, p := range x.s.Plates {
@@ -450,7 +455,7 @@ func (x *index) groupedCookMove(t Target, day time.Time, resolves func(State) bo
 			names = append(names, x.s.Foods[ss.FoodID].Name)
 			ops = append(ops, OptionOp{Op: "move_cook", SessionID: &sid, CookAt: &OptionCell{Date: date, SlotID: c.SlotID}})
 		}
-		if len(ops) < 2 || !resolves(next) {
+		if len(ops) < 2 || !resolves(next) || tooManyDishes(x.s, next, k) {
 			continue
 		}
 		return []Option{{
@@ -459,4 +464,137 @@ func (x *index) groupedCookMove(t Target, day time.Time, resolves func(State) bo
 		}}
 	}
 	return nil
+}
+
+// maxDishesAtOnce is how many dishes one cooking time may hold when a move
+// brings cooks onto it: nobody cooks three dishes at a Monday lunch.
+const maxDishesAtOnce = 2
+
+// tooManyDishes reports whether the move from s to next piles more than
+// maxDishesAtOnce dishes onto cell k (unless k already held more).
+func tooManyDishes(s, next State, k plate.CellKey) bool {
+	return cooksAtCell(next, k) > max(maxDishesAtOnce, cooksAtCell(s, k))
+}
+
+// partialCookMove is the option for a day whose cooks do not all fit one
+// cooking time (maxDishesAtOnce): the dishes that fit move onto a cook cell of
+// the day, and what is left, a side that cooks on its own, is swapped for a
+// verified side that needs no cooking. One option whose ops are the moves and
+// the swaps; only when the day then holds one cooking time and nothing new
+// breaks.
+func (x *index) partialCookMove(t Target, day time.Time, resolves func(State) bool) []Option {
+	var group []Session
+	for _, ss := range x.s.Sessions {
+		if ss.ID > 0 && !ss.Confirmed && !ss.Proposed() && dayOf(ss.CookDate) == dayOf(day) && !x.routine(ss.CookCell()) {
+			group = append(group, ss)
+		}
+	}
+	if len(group) < 3 {
+		return nil
+	}
+	// Mains first: the sides are what a swap can drop.
+	slices.SortStableFunc(group, func(a, b Session) int {
+		return boolCmp(roleOf(x.s.Foods[a.FoodID]) != food.RoleMain, roleOf(x.s.Foods[b.FoodID]) != food.RoleMain)
+	})
+	for _, c := range x.s.Cells {
+		k := c.Key()
+		if dayOf(c.Date) != dayOf(day) || !x.occasions[dayOf(day)][idOf(k)] || c.Date.Before(x.s.Today) || !x.s.Window.Contains(c.Date) || c.Mode == availability.ModeNone || x.routine(k) || !x.inTarget(k) {
+			continue
+		}
+		next := x.s
+		next.Sessions = slices.Clone(x.s.Sessions)
+		date := c.Date.Format(time.DateOnly)
+		var ops []OptionOp
+		var names, left []string
+		var rest []Session
+		room := max(maxDishesAtOnce, cooksAtCell(x.s, k)) - cooksAtCell(x.s, k)
+		for _, ss := range group {
+			if ss.CookDate.Equal(c.Date) && ss.CookSlotID == c.SlotID {
+				continue
+			}
+			if room <= 0 {
+				rest = append(rest, ss)
+				continue
+			}
+			room--
+			for i := range next.Sessions {
+				if next.Sessions[i].ID == ss.ID {
+					next.Sessions[i].CookDate, next.Sessions[i].CookSlotID = c.Date, c.SlotID
+				}
+			}
+			sid := ss.ID
+			names = append(names, x.s.Foods[ss.FoodID].Name)
+			ops = append(ops, OptionOp{Op: "move_cook", SessionID: &sid, CookAt: &OptionCell{Date: date, SlotID: c.SlotID}})
+		}
+		if len(ops) == 0 || len(rest) == 0 {
+			continue
+		}
+		nMoves := len(ops)
+		ok := true
+		for _, ss := range rest {
+			swapped := false
+			for _, p := range next.Plates {
+				for _, comp := range p.Components {
+					if comp.SessionID != ss.ID || comp.ID <= 0 || p.Confirmed || isMainComp(next, p, slices.IndexFunc(p.Components, func(o Component) bool { return o.ID == comp.ID })) {
+						continue
+					}
+					res, err := Alternatives(next, t, AltRequest{PlateID: p.ID, What: AltSide, ComponentID: comp.ID, Limit: maxAltLimit})
+					if err != nil {
+						continue
+					}
+					for _, a := range res.Alternatives {
+						if len(a.NewIssues) == 0 && len(a.Ops) > 0 && a.Source != SourceFresh && a.Source != SourceCookAt {
+							next, ops = dropIdleSession(a.next, ss.ID), append(ops, a.Ops...)
+							left = append(left, "swap "+x.s.Foods[ss.FoodID].Name+" for "+a.Name)
+							swapped = true
+							break
+						}
+					}
+					if swapped {
+						break
+					}
+				}
+				if swapped {
+					break
+				}
+			}
+			ok = ok && swapped
+		}
+		if !ok || !resolves(next) {
+			continue
+		}
+		// The swap changes a dish, so it is offered, never applied on its own:
+		// its first op is the swap (an away call only applies a move_cook).
+		swaps, moves := ops[nMoves:], ops[:nMoves]
+		ops = append(slices.Clone(swaps), moves...)
+		return []Option{{
+			Action: "swap", FoodID: group[0].FoodID, Name: strings.Join(left, ", ") + ", and cook " + strings.Join(names, ", ") + " with the other dish of that day", Date: date, SlotID: c.SlotID,
+			CookOccasions: len(newIndex(next, t).occasions[dayOf(day)]), Op: ops[0], Ops: ops,
+		}}
+	}
+	return nil
+}
+
+func cooksAtCell(s State, k plate.CellKey) int {
+	n := 0
+	for _, ss := range s.Sessions {
+		if ss.CookDate.Equal(k.Date) && ss.CookSlotID == k.SlotID {
+			n++
+		}
+	}
+	return n
+}
+
+// dropIdleSession removes batch id from s when no plate eats it any more (the
+// swap that took its last eater also takes its cooking away).
+func dropIdleSession(s State, id int64) State {
+	for _, p := range s.Plates {
+		for _, c := range p.Components {
+			if c.SessionID == id {
+				return s
+			}
+		}
+	}
+	s.Sessions = slices.DeleteFunc(slices.Clone(s.Sessions), func(ss Session) bool { return ss.ID == id })
+	return s
 }

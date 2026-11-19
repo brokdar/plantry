@@ -66,6 +66,19 @@ func TestE022_RealData(t *testing.T) {
 		svc.Wait()
 		require.NotEmpty(t, in.Target.Cells)
 
+		if os.Getenv("PLANTRY_PROOF_SIDES") != "" {
+			raw, _ := lastSubmit(t, filepath.Join(round, "runs", "replan-thu-r1", "run.db"))
+			old := planning.SetPairInPlanner(false)
+			_, b, _ := planning.PlannerView(in, raw[len(raw)-1], true)
+			planning.SetPairInPlanner(true)
+			_, a, _ := planning.PlannerView(in, raw[len(raw)-1], true)
+			planning.SetPairInPlanner(old)
+			for i := range a.Plates {
+				if a.Plates[i].Date.Equal(thu) {
+					fmt.Printf("THU slot %d\n   before: %s\n   after:  %s\n", a.Plates[i].SlotID, sidesOf(in, b.Plates[i]), sidesOf(in, a.Plates[i]))
+				}
+			}
+		}
 		if os.Getenv("PLANTRY_PROOF_NOCOOK") != "" {
 			for _, id := range in.State.NoCook {
 				f := in.State.Foods[id]

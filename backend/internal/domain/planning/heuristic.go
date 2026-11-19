@@ -715,6 +715,10 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 	return best(cands)
 }
 
+// pairInPlanner turns the add-on pairing rules on in the planner's own top-ups (tests switch it off
+// to measure what it changes).
+var pairInPlanner = true
+
 // dgeFitBucket is the kcal width within which the kcal fit counts as equal,
 // so the DGE keys decide only between recipes that fit the meal equally
 // well: they never trade kcal fit for a food group. It is deliberately

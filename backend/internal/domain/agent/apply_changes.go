@@ -123,6 +123,9 @@ type batch struct {
 	aff affected
 	// removed are the foods the ops took off a plate.
 	removed []int64
+	// made are the plate components the ops added or replaced in: an offer
+	// never takes back what the user just asked for.
+	made []int64
 	// ops is one entry per op for the change line's params (the frontend
 	// writes the sentence): op, food, to, date, slot_id, slot_key, mode,
 	// portions, amount, unit, eaters.
@@ -283,6 +286,9 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 			res, err := applyOp(ctx, svc, op, &b)
 			if err != nil {
 				return fmt.Errorf("op %d of %d (%s): %w", i+1, len(in.Ops), op.Op, err)
+			}
+			if id, ok := res["plate_component_id"].(int64); ok && (op.Op == "add" || op.Op == "replace") {
+				b.made = append(b.made, id)
 			}
 			if ign := ignored[i]; len(ign) > 0 {
 				res["ignored_fields"] = ign
@@ -892,6 +898,8 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 	if err != nil {
 		return nil, planning.Evaluation{}, fmt.Errorf("read the plan after the change: %w", err)
 	}
+	now.Issues = withoutUndoOptions(now.Issues, b.made)
+	now.Issues = lowerInstead(ctx, svc, ws[0], now.Issues, b.made)
 	reader := svc
 	reader.PlanView = nil // the evaluation, not the plan read model, supplies the issues
 	out := changeEffect(ctx, reader, b.aff)
@@ -1031,4 +1039,78 @@ func issueMap(issues []planning.Issue) map[string]planning.Issue {
 		m[issueKey(is)] = is
 	}
 	return m
+}
+
+// withoutUndoOptions drops the options that would change a component the call
+// just made (remove the bread that was asked for): the day over its range
+// after an explicit add is brought back by something else that fits. The first
+// option left is the recommended one.
+func withoutUndoOptions(issues []planning.Issue, made []int64) []planning.Issue {
+	if len(made) == 0 {
+		return issues
+	}
+	out := slices.Clone(issues)
+	for i, is := range out {
+		if len(is.Options) == 0 {
+			continue
+		}
+		var keep []planning.Option
+		for _, o := range is.Options {
+			ops := o.Ops
+			if len(ops) == 0 {
+				ops = []planning.OptionOp{o.Op}
+			}
+			if !slices.ContainsFunc(ops, func(op planning.OptionOp) bool {
+				return op.PlateComponentID != nil && slices.Contains(made, *op.PlateComponentID)
+			}) {
+				keep = append(keep, o)
+			}
+		}
+		if len(keep) == len(is.Options) {
+			continue
+		}
+		recommended := slices.ContainsFunc(keep, func(o planning.Option) bool { return o.Recommended })
+		if len(keep) > 0 && !recommended {
+			keep[0].Recommended, keep[0].Because = true, "the best-ranked option that was checked: no new problem"
+		}
+		out[i].Options = keep
+	}
+	return out
+}
+
+// lowerInstead gives a day pushed over its range by an explicit add the one
+// option that remains once undoing the add is off the table: a verified way to
+// lower the day inside its range by changing something else.
+func lowerInstead(ctx context.Context, svc Services, w window.Window, issues []planning.Issue, made []int64) []planning.Issue {
+	if len(made) == 0 || svc.State == nil {
+		return issues
+	}
+	out := slices.Clone(issues)
+	for i, is := range out {
+		if is.Code != planning.CodeKcalAboveBand || len(is.Options) > 0 {
+			continue
+		}
+		st, err := svc.State(ctx, w, todayFrom(ctx))
+		if err != nil {
+			return out
+		}
+		st.Avoid = svc.Removed.avoid(ctx)
+		res, err := planning.Ways(st, planning.WindowTarget(st), planning.WayRequest{Date: is.Date, Goal: planning.GoalLowerDay, Limit: 8})
+		if err != nil {
+			continue
+		}
+		for _, way := range res.Ways {
+			if len(way.Ops) == 0 || slices.ContainsFunc(way.Ops, func(op planning.OptionOp) bool {
+				return op.PlateComponentID != nil && slices.Contains(made, *op.PlateComponentID)
+			}) {
+				continue
+			}
+			out[i].Options = []planning.Option{{
+				Action: "lower", Name: way.What, Date: is.Date, Op: way.Ops[0], Ops: way.Ops, DayKcal: way.After.DayKcal,
+				Recommended: true, Because: "brings the day back into its range by changing something else, the added food stays",
+			}}
+			break
+		}
+	}
+	return out
 }

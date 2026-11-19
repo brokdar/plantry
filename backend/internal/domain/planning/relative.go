@@ -74,6 +74,10 @@ type WayRequest struct {
 	// TargetKcal is the number the user named for a day (lower_day,
 	// raise_day); 0 when none.
 	TargetKcal float64
+	// Marked lets a day goal store a light (hearty) day mark. Without it, and
+	// without a number named, Ways first changes food inside the day's own
+	// range and offers the mark only when that cannot meet the wish.
+	Marked bool
 }
 
 // WayFigures are per eater: the energy and protein of the meal and of its
@@ -183,6 +187,8 @@ type wayEdit struct {
 	clear []LightIntent
 	cost  int
 	kind  string
+	// note says which bound the way kept (shown as the way's why).
+	note string
 	// group is what the compensation budget counts the edit under (kind
 	// when empty).
 	group string
@@ -204,6 +210,8 @@ type waySearch struct {
 	baseFig    WayFigures // the target plate's figures; day request: unused
 	household  diet.Class
 	tried      int
+	// noMark: a day goal searched without a day mark (the range stays).
+	noMark bool
 }
 
 // Ways returns up to maxWays ways to reach req.Goal, best first, each applied
@@ -213,8 +221,36 @@ type waySearch struct {
 // way reaches the goal, the closest verified one comes alone, with the reason.
 // Pure: nothing writes.
 func Ways(s State, t Target, req WayRequest) (WayResult, error) {
+	if (req.Goal == GoalLowerDay || req.Goal == GoalRaiseDay) && req.TargetKcal <= 0 && !req.Marked {
+		return waysDay(s, t, req)
+	}
+	return ways(s, t, req)
+}
+
+// waysDay answers "less (more) on this day" without a number: ways that change
+// food inside the day's own range come first and carry no mark. Only when none
+// does, the marked ways (the day's goal moves) come back as offers, with the
+// number the mark would move the goal to; the user decides.
+func waysDay(s State, t Target, req WayRequest) (WayResult, error) {
+	plain, err := ways(s, t, req)
+	if err != nil || len(plain.Ways) > 0 {
+		return plain, err
+	}
+	req.Marked = true
+	marked, err := ways(s, t, req)
+	if err != nil {
+		return plain, err
+	}
+	marked.Offers = append(marked.Ways, marked.Offers...)
+	marked.Ways = nil
+	marked.EmptyWhy = fmt.Sprintf("inside the day's range of %.0f to %.0f kcal nothing changes by a real step; marking the day as %s would move its range to %.0f to %.0f kcal",
+		plain.BandLow, plain.BandHigh, map[string]string{GoalLowerDay: "a light day", GoalRaiseDay: "a filling day"}[req.Goal], marked.BandLow, marked.BandHigh)
+	return marked, nil
+}
+
+func ways(s State, t Target, req WayRequest) (WayResult, error) {
 	s.PairAddOns = true
-	w := &waySearch{t: t, goal: req.Goal, pi: -1}
+	w := &waySearch{t: t, goal: req.Goal, pi: -1, noMark: !req.Marked && (req.Goal == GoalLowerDay || req.Goal == GoalRaiseDay) && req.TargetKcal <= 0}
 	switch req.Goal {
 	case GoalLighter, GoalHeartier, GoalMoreProtein, GoalLowerDay, GoalRaiseDay:
 	default:
@@ -246,7 +282,7 @@ func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 	}
 	res := WayResult{Goal: req.Goal, Date: w.date}
 	var intent *LightIntent
-	if dayGoal {
+	if dayGoal && !w.noMark {
 		in := LightIntent{Date: w.date, Scope: LightScopeDay}
 		if req.Goal == GoalRaiseDay {
 			in.Level = LevelHearty
@@ -323,6 +359,9 @@ func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 				if d, ok := w.dayEval(rc.ev); ok && w.outOfBand(rc.ev) {
 					a.BelowBand = true
 					a.Why = fmt.Sprintf("the day then holds %.0f kcal, %.0f under its band (%.0f to %.0f kcal): the closest the other meal can get it", d.Kcal, d.BandLow-d.Kcal, d.BandLow, d.BandHigh)
+					if c.note != "" {
+						a.Why += "; " + c.note
+					}
 				}
 				offers = append(offers, a)
 			}
@@ -333,7 +372,7 @@ func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 			return
 		}
 		r := w.check(e.s)
-		if r.other {
+		if r.other || w.leavesRange(r.ev) {
 			return
 		}
 		way := w.way(e, r, intent)
@@ -341,7 +380,9 @@ func Ways(s State, t Target, req WayRequest) (WayResult, error) {
 		case r.floor:
 			// The meal alone would break the floor: only a way that makes
 			// the other meal grow gets it to its cap.
-			if way.Reaches && w.goal == GoalLighter {
+			// A light meal that does not fit the day is still a lighter one: the
+			// other meal grows within its bound and the offer says how far it got.
+			if way.Meaningful && w.goal == GoalLighter {
 				offer(e, r.ev)
 			}
 		case w.goal == GoalHeartier && w.outOfBand(r.ev):
@@ -478,6 +519,21 @@ func (w *waySearch) check(next State) wayCheck {
 		r.worse = append(r.worse, PlainText(CodeWeekMeatAboveDGE).Label)
 	}
 	return r
+}
+
+// leavesRange: without a day mark a way keeps the day inside its own range.
+func (w *waySearch) leavesRange(ev Evaluation) bool {
+	if !w.noMark {
+		return false
+	}
+	d, ok := w.dayEval(ev)
+	if !ok || d.BandHigh <= 0 {
+		return false
+	}
+	if w.goal == GoalLowerDay {
+		return d.Kcal < d.BandLow-1e-9
+	}
+	return d.Kcal > d.BandHigh+1e-9
 }
 
 func (w *waySearch) dayGoal() bool { return w.goal == GoalLowerDay || w.goal == GoalRaiseDay }
@@ -625,6 +681,9 @@ func (w *waySearch) way(e wayEdit, r wayCheck, intent *LightIntent) Way {
 		reached = false
 	}
 	a.Meaningful, a.Reaches = changed, changed && reached
+	if e.note != "" && a.Why == "" {
+		a.Why = e.note
+	}
 	if a.Reaches && intent != nil {
 		a.Light = append(a.Light, *intent)
 	}
@@ -798,6 +857,49 @@ func levels(c Component, dir int) []float64 {
 	return out
 }
 
+// wayLevels are the quantities a way may give component c of plate p: never a
+// fraction under one portion per eater of a dish cooked fresh for this plate
+// alone (nobody cooks half a portion); a smaller serving of a leftover or of a
+// batch other plates eat from is fine.
+func (s State) wayLevels(p Plate, c Component, dir int) []float64 {
+	all := levels(c, dir)
+	if c.Portions == nil || !s.cookedFreshFor(p, c) {
+		return all
+	}
+	return slices.DeleteFunc(all, func(n float64) bool { return n < 1-1e-9 })
+}
+
+// cookedFreshFor reports whether c's batch cooks at p's own cell and no other
+// plate eats from it.
+func (s State) cookedFreshFor(p Plate, c Component) bool {
+	same := func(o Component) bool {
+		return (c.SessionID != 0 && o.SessionID == c.SessionID) || (c.SessionKey != "" && o.SessionKey == c.SessionKey)
+	}
+	if c.SessionID == 0 && c.SessionKey == "" {
+		return true // a fresh session of its own
+	}
+	cooksHere := false
+	for _, ss := range s.Sessions {
+		if (c.SessionID != 0 && ss.ID == c.SessionID) || (c.SessionKey != "" && ss.Key == c.SessionKey) {
+			cooksHere = ss.CookDate.Equal(p.Date) && ss.CookSlotID == p.SlotID
+		}
+	}
+	if !cooksHere {
+		return false
+	}
+	for _, q := range s.Plates {
+		if q.ID == p.ID {
+			continue
+		}
+		for _, o := range q.Components {
+			if same(o) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func quantityOp(p Plate, c Component, n float64) OptionOp {
 	cid := c.ID
 	op := OptionOp{Op: "set_quantity", PlateComponentID: &cid}
@@ -828,7 +930,7 @@ func (w *waySearch) quantityEdits(s State, pi, dir int) []wayEdit {
 		if !ok || !f.NutritionComplete || f.Macros.Kcal <= 0 {
 			continue
 		}
-		for _, n := range levels(c, dir) {
+		for _, n := range s.wayLevels(p, c, dir) {
 			out = append(out, wayEdit{
 				s: setQuantity(s, pi, ci, n), ops: []OptionOp{quantityOp(p, c, n)}, what: []string{quantityWords(f, c, n)},
 				cost: 1, kind: "portion", plate: p.ID,
@@ -888,7 +990,7 @@ func (w *waySearch) leanEdits(s State, pi int) []wayEdit {
 		return nil
 	}
 	var out []wayEdit
-	for _, n := range append([]float64{-1}, levels(mc, -1)...) {
+	for _, n := range append([]float64{-1}, s.wayLevels(p, mc, -1)...) {
 		ns, nops, what := removeComponents(s, pi, drop...), slices.Clone(ops), []string{"leave out " + strings.Join(names, " and ")}
 		if n > 0 {
 			mci := mi - countBelow(drop, mi)
@@ -930,8 +1032,8 @@ func (w *waySearch) keepOneSideEdits(s State, pi, mi int) []wayEdit {
 				names = append(names, food.Quote(s.Foods[c.FoodID].Name))
 			}
 		}
-		for _, mn := range append([]float64{-1}, levels(mc, -1)...) {
-			for _, kn := range append([]float64{-1}, levels(kc, -1)...) {
+		for _, mn := range append([]float64{-1}, s.wayLevels(p, mc, -1)...) {
+			for _, kn := range append([]float64{-1}, s.wayLevels(p, kc, -1)...) {
 				if mn < 0 && kn < 0 && len(drop) == 0 {
 					continue
 				}
@@ -1107,6 +1209,11 @@ func (w *waySearch) otherPlates(s State, target Plate, up bool) []int {
 		if !up && s.heartyMeal(p.Date, p.SlotID) {
 			continue
 		}
+		// Only a lunch or dinner takes over energy: nobody has potatoes for
+		// breakfast.
+		if !slices.ContainsFunc(lightSlots, func(n string) bool { return s.slotIs(p.SlotID, n) }) {
+			continue
+		}
 		out = append(out, i)
 	}
 	slices.SortStableFunc(out, func(a, b int) int {
@@ -1218,14 +1325,22 @@ func (w *waySearch) compUp(e wayEdit, ev Evaluation, qi int) (wayEdit, Evaluatio
 		e.cost += c.cost
 		ev = Evaluate(e.s, w.t)
 	}
+	// The other meal never grows past the biggest meal of its kind the plan
+	// already has (else a filling meal of this household): no lunch of 1,100 kcal
+	// for a household whose lunches hold 330 to 740.
+	bound, boundWhy := w.mealBound(e.s, q)
 	pick := func(cands []wayEdit) (wayEdit, bool) {
 		best, bestScore, ok := wayEdit{}, math.Inf(1), false
 		for _, c := range cands {
-			if sc, good := w.score(w.check(c.s)); good && sc < bestScore {
+			r := w.check(c.s)
+			if sc, good := w.score(r); good && sc < bestScore && w.plateKcal(r.ev, q.ID) <= bound+1e-9 {
 				best, bestScore, ok = c, sc, true
 			}
 		}
 		return best, ok
+	}
+	if boundWhy != "" {
+		e.note = "the " + who + " stays within " + boundWhy
 	}
 	var raise []wayEdit
 	for qi2, c := range q.Components {
@@ -1248,7 +1363,7 @@ func (w *waySearch) compUp(e wayEdit, ev Evaluation, qi int) (wayEdit, Evaluatio
 		if err == nil {
 			var cands []wayEdit
 			for _, a := range res.Alternatives {
-				if len(a.Ops) > 0 && a.Source != SourceLeaf {
+				if len(a.Ops) > 0 && a.Source != SourceLeaf && (roleOf(e.s.Foods[a.FoodID]) != food.RoleSideStarch || !hasStarch(e.s, e.s.Plates[qi])) {
 					cands = append(cands, wayEdit{s: a.next, ops: a.Ops, what: []string{"add " + a.Name}, cost: 2})
 				}
 			}
@@ -1257,7 +1372,7 @@ func (w *waySearch) compUp(e wayEdit, ev Evaluation, qi int) (wayEdit, Evaluatio
 			}
 		}
 	}
-	if need := w.lift(ev); need > 0 {
+	if need := w.lift(ev); need > 0 && !hasStarch(e.s, e.s.Plates[qi]) {
 		var cands []wayEdit
 		for _, ac := range w.breadCands(e.s, e.s.Plates[qi], need+1, ev) {
 			cands = append(cands, w.addEdit(e.s, qi, ac, ""))
@@ -1267,6 +1382,48 @@ func (w *waySearch) compUp(e wayEdit, ev Evaluation, qi int) (wayEdit, Evaluatio
 		}
 	}
 	return e, ev
+}
+
+// hasStarch reports whether plate p already holds a starch side (a second one
+// is never added: potatoes and bread on one plate).
+func hasStarch(s State, p Plate) bool {
+	for _, c := range p.Components {
+		if f, ok := s.Foods[c.FoodID]; ok && roleOf(f) == food.RoleSideStarch {
+			return true
+		}
+	}
+	return false
+}
+
+// plateKcal is plate id's kcal per eater in ev.
+func (w *waySearch) plateKcal(ev Evaluation, id int64) float64 {
+	for _, pe := range ev.Plates {
+		if pe.PlateID == id {
+			return pe.Kcal
+		}
+	}
+	return 0
+}
+
+// mealBound is the most kcal a compensating meal q may hold: the biggest meal
+// of its slot the plan has on other days (never below what q holds now), or,
+// with none, a filling meal's minimum. The text says which.
+func (w *waySearch) mealBound(s State, q Plate) (float64, string) {
+	cur := w.plateKcal(w.base, q.ID)
+	best := 0.0
+	for _, pe := range w.base.Plates {
+		if pe.SlotID == q.SlotID && pe.Date != w.date && pe.PlateID > 0 {
+			best = math.Max(best, pe.Kcal)
+		}
+	}
+	slot := slotName(s, q.SlotID)
+	if best > 0 {
+		return math.Max(best, cur), fmt.Sprintf("the biggest %s of your plan (%.0f kcal)", slot, best)
+	}
+	if _, min, err := MealLimit(s, w.t, q.ID, GoalHeartier); err == nil && min > 0 {
+		return math.Max(min, cur), fmt.Sprintf("a filling %s (%.0f kcal)", slot, min)
+	}
+	return math.Inf(1), ""
 }
 
 // breadCands are the bread leaves that fit a plate, sized closest to want kcal
@@ -1397,7 +1554,7 @@ func (w *waySearch) dayGreedy(s State, intent *LightIntent, aimOf func(DayEval) 
 				continue
 			}
 			r := w.check(e.s)
-			if r.other || r.floor {
+			if r.other || r.floor || w.leavesRange(r.ev) {
 				continue
 			}
 			d, ok := w.dayEval(r.ev)
@@ -1519,7 +1676,7 @@ func (w *waySearch) sideSwapEdits(s State, pi int) []wayEdit {
 	mc := p.Components[mi]
 	mf := s.Foods[mc.FoodID]
 	var out []wayEdit
-	for _, mn := range append([]float64{-1}, levels(mc, -1)...) {
+	for _, mn := range append([]float64{-1}, s.wayLevels(p, mc, -1)...) {
 		for _, dropAdd := range []bool{false, true} {
 			s1 := s
 			var pre []OptionOp
