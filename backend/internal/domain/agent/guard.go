@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -315,4 +316,58 @@ func offerIsClean(ctx context.Context, svc Services, w window.Window, in []plann
 		}
 	}
 	return true
+}
+
+// newWarnings are the issues a write of ops makes new, or worse by the same
+// measure the report uses: what report.new_warnings would say.
+func newWarnings(before, after planning.Evaluation) []planning.Issue {
+	was := issueMap(before.Issues)
+	var out []planning.Issue
+	for _, is := range after.Issues {
+		b, old := was[issueKey(is)]
+		if !old || worsened(b, is) {
+			is.Options = nil
+			out = append(out, is)
+		}
+	}
+	return out
+}
+
+// verifiedAlternatives passes the pool of find_alternatives through the check
+// of a write of each candidate's own ops, so what the model is shown carries
+// the warnings the write would produce (a dish repeated this week is only
+// seen there). Clean candidates come first, in rank; a candidate that makes a
+// problem is dropped; one that only makes a warning is listed after them with
+// that warning, up to n, and is never recommended: only the first clean one is.
+func verifiedAlternatives(ctx context.Context, svc Services, w window.Window, pool []planning.Alternative, n int) []planning.Alternative {
+	var clean, warned []planning.Alternative
+	for _, a := range pool {
+		ops, err := changeOpsOf(a.Ops)
+		if err != nil || len(ops) == 0 {
+			continue
+		}
+		r, err := runApply(ctx, svc, w, applyInput{Ops: ops, DryRun: true, quiet: true}, nil)
+		if err != nil {
+			continue
+		}
+		if len(newHard(r.before, r.after)) > 0 {
+			continue
+		}
+		a.NewIssues = newWarnings(r.before, r.after)
+		a.Recommended, a.Because = false, ""
+		if len(a.NewIssues) == 0 {
+			clean = append(clean, a)
+		} else {
+			warned = append(warned, a)
+		}
+	}
+	out := slices.Concat(clean, warned)
+	if len(out) > n {
+		out = out[:n]
+	}
+	if len(clean) > 0 {
+		out[0].Recommended = true
+		out[0].Because = "the best-ranked candidate: no new problem, no new warning, no extra cooking where possible"
+	}
+	return out
 }

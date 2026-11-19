@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -433,4 +434,33 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 		assert.Nil(t, got["skipped"])
 		assert.Nil(t, got["saved"])
 	})
+}
+
+// What find_alternatives shows is what a write of the alternative's ops would
+// produce: a candidate that repeats a dish (seen only by the real check) lists
+// that warning and is never the recommended one.
+func TestFindAlternatives_ListedWarningsAreTheWritesWarnings(t *testing.T) {
+	e := relEnv(t)
+	shown, repeats := 0, 0
+	for _, p := range e.draftMeals() {
+		res := e.mustExec("find_alternatives", fmt.Sprintf(`{"plate_id":%d,"what":"main","limit":10}`, p.ID))
+		for _, a := range relMaps(res["alternatives"]) {
+			ops, err := json.Marshal(a["ops"])
+			require.NoError(t, err)
+			got := e.mustExec("apply_changes", `{"dry_run":true,"ops":`+string(ops)+`}`)
+			fresh := relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"])
+			listed, _ := a["new_issues"].([]any)
+			assert.Len(t, listed, len(fresh), "plate %d %v: listed %v, the write says %v", p.ID, a["name"], listed, fresh)
+			if len(listed) > 0 {
+				assert.NotEqual(t, true, a["recommended"], "%v creates a warning", a["name"])
+			}
+			if strings.Contains(fmt.Sprint(fresh), "dish repeated") {
+				repeats++
+				assert.Contains(t, fmt.Sprint(listed), "dish repeated", "%v repeats a dish", a["name"])
+			}
+			shown++
+		}
+	}
+	require.NotZero(t, shown)
+	require.NotZero(t, repeats, "the week has a candidate that repeats a dish")
 }

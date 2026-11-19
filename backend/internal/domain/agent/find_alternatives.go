@@ -110,10 +110,13 @@ func toolFindAlternatives(svc Services) Tool {
 			}
 			st.Light = planning.MergeLight(st.Light, lightFrom(ctx))
 			st.Avoid, st.PairAddOns = svc.Removed.avoid(ctx), true
+			wanted := min(max(req.Limit, 5), 10)
+			req.Limit = min(wanted+3, 10) // the pool the real check sorts through
 			res, err := planning.Alternatives(st, planning.WindowTarget(st), req)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
+			res.Alternatives = verifiedAlternatives(ctx, svc, w, res.Alternatives, wanted)
 			alts := res.Alternatives
 			if alts == nil {
 				alts = []planning.Alternative{}
