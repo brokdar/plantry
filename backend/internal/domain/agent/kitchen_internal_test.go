@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
@@ -117,4 +118,21 @@ func TestFirstClean_SkipsWhatItsCheckDirties(t *testing.T) {
 	assert.Equal(t, "Lentil curry", got.Name)
 	_, ok = firstClean([]planning.Alternative{listed, dirty}, func([]planning.OptionOp) bool { return false })
 	assert.False(t, ok)
+}
+
+// An offer never takes back what the user just asked for: the options that
+// change a component the call made are dropped, and the next one is the
+// recommended one.
+func TestWithoutUndoOptions(t *testing.T) {
+	id := func(n int64) *int64 { return &n }
+	issue := planning.Issue{Code: planning.CodeKcalAboveBand, Options: []planning.Option{
+		{Name: "remove the bread", Recommended: true, Op: planning.OptionOp{Op: "remove", PlateComponentID: id(7)}},
+		{Name: "smaller salmon", Op: planning.OptionOp{Op: "set_quantity", PlateComponentID: id(3)}},
+	}}
+	got := withoutUndoOptions([]planning.Issue{issue}, []int64{7})
+	require.Len(t, got[0].Options, 1)
+	assert.Equal(t, "smaller salmon", got[0].Options[0].Name)
+	assert.True(t, got[0].Options[0].Recommended)
+	assert.Len(t, issue.Options, 2, "the input is not changed")
+	assert.Equal(t, []planning.Issue{issue}, withoutUndoOptions([]planning.Issue{issue}, nil))
 }

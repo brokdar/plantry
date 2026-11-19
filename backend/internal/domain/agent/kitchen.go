@@ -96,10 +96,11 @@ func recommend(ways, offers []planning.Way) {
 func adviceFor(ctx context.Context, svc Services, w window.Window, before, after planning.Evaluation, dry bool, applied []map[string]any) (string, []map[string]any) {
 	was := issueMap(before.Issues)
 	var fresh []planning.Issue
-	options, hard := false, false
+	options, hard, other := false, false, false
 	for _, is := range after.Issues {
 		if _, old := was[issueKey(is)]; !old {
-			hard = hard || is.Severity == planning.SeverityViolation
+			hard = hard || (is.Severity == planning.SeverityViolation && is.Code == planning.CodeKcalBelowFloor)
+			other = other || (is.Severity == planning.SeverityViolation && is.Code != planning.CodeKcalBelowFloor)
 			fresh = append(fresh, is)
 		}
 	}
@@ -130,7 +131,7 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 		// The cleanest replacement (the list is ranked by new warnings).
 		if a, ok := firstClean(res.Alternatives, func(ops []planning.OptionOp) bool { return offerIsClean(ctx, svc, w, ops) }); ok {
 			offers = append(offers, map[string]any{
-				"what": fmt.Sprintf("replace %s on %s with %s", food.Quote(res.Current.Name), dayLabelStr(is.Date), food.Quote(a.Name)), "ops": a.Ops,
+				"what": fmt.Sprintf("swap %s's %s for %s", mealName(*st, st.Plates[indexPlate(*st, plateID)]), food.Quote(res.Current.Name), food.Quote(a.Name)), "ops": a.Ops,
 				"recommended": len(offers) == 0, "recommended_because": "removes the repeat, no new warning",
 				"effect": map[string]any{"day": dayLabelStr(is.Date), "day_kcal_after": a.DayKcal},
 			})
@@ -162,6 +163,8 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 		what = "repeat a dish"
 	case hard:
 		what = "leave a day under its minimum"
+	case other:
+		what = "leave a problem open"
 	case options, len(fresh) > 0:
 		what = "make new issues"
 	case meat != "":
@@ -187,6 +190,8 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 		return lead + " now repeats a dish: tell the user, present offers[0] as your recommended way out" + tail, offers
 	case hard:
 		return lead + " left a day under its minimum: tell the user plainly and offer the fix marked recommended as a question" + tail, nil
+	case other:
+		return lead + " left a problem open (see issues.new): tell the user plainly and offer the option marked recommended as a question" + tail, nil
 	case options:
 		return lead + " made new issues: report them and offer the option marked recommended as a question" + tail, nil
 	}
@@ -254,7 +259,7 @@ func meatBalanceOffer(ctx context.Context, svc Services, w window.Window, touche
 			if len(a.NewIssues) == 0 && len(a.Ops) > 0 && a.WeekMeatG < bestMeat && offerIsClean(ctx, svc, w, a.Ops) {
 				bestMeat = a.WeekMeatG
 				best = map[string]any{
-					"what": fmt.Sprintf("replace %s on %s with %s: the week's meat falls from %.0f to %.0f g", food.Quote(res.Current.Name), dayLabel(p.Date), food.Quote(a.Name), now, a.WeekMeatG),
+					"what": fmt.Sprintf("swap %s's %s for %s: the week's meat falls from %.0f to %.0f g", mealName(st, p), food.Quote(res.Current.Name), food.Quote(a.Name), now, a.WeekMeatG),
 					"ops":  a.Ops, "recommended": true, "recommended_because": "takes the most meat off the week, no new warning",
 					"effect": map[string]any{"week_meat_g_now": math.Round(now), "week_meat_g_after": math.Round(a.WeekMeatG), "week_meat_limit_g": limit},
 				}
