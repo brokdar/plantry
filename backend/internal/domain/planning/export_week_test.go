@@ -122,3 +122,10 @@ func CandidateColumns(in ChooseInput) map[string]int {
 	}
 	return out
 }
+
+// SetPairInPlanner switches the planner's add-on pairing rules and returns the old setting.
+func SetPairInPlanner(on bool) bool {
+	old := pairInPlanner
+	pairInPlanner = on
+	return old
+}

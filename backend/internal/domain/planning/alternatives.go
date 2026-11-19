@@ -615,8 +615,15 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 			!req.Constraints.matches(f, words) {
 			continue
 		}
-		if (req.What == AltAdd || req.What == AltSide) && !s.addOnFits(p, f, slotName(s, p.SlotID)) {
-			continue
+		if req.What == AltAdd || req.What == AltSide {
+			// A side that replaces another is judged beside the rest of the plate.
+			beside := p
+			if req.What == AltSide && old >= 0 {
+				beside.Components = slices.Delete(slices.Clone(p.Components), old, old+1)
+			}
+			if !s.addOnFits(beside, f, slotName(s, p.SlotID)) {
+				continue
+			}
 		}
 		// Breakfast food is no main for lunch or dinner either.
 		if s.PairAddOns && !s.MealFits(f, slotName(s, p.SlotID)) {
