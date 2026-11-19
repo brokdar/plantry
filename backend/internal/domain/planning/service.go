@@ -873,7 +873,10 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	if j.side == nil {
 		var finishNotes []string
 		if _, heuristic := j.chooser.(Heuristic); heuristic {
-			prop, finishNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
+			prop, finishNotes = guardDayMains(base, j.target, prop, idSet(j.exclude))
+			var weekNotes []string
+			prop, weekNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
+			finishNotes = append(finishNotes, weekNotes...)
 		} else {
 			prop, finishNotes = finishProposal(cin, prop)
 		}

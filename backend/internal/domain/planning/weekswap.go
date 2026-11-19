@@ -143,8 +143,9 @@ func (x *index) weekPlates(counted map[string]bool) []map[string]any {
 type swapMode int
 
 const (
-	swapMeat swapMode = iota // less meat on the plate's main
-	swapFish                 // a fish main
+	swapMeat     swapMode = iota // less meat on the plate's main
+	swapFish                     // a fish main
+	swapDistinct                 // any other main (a day's lunch and dinner must differ)
 )
 
 // weekSwap is one verified replacement of the main of the plate at index pi.
@@ -221,7 +222,9 @@ func (x *index) swapsFor(t Target, base Evaluation, pis []int, mode swapMode, sk
 		oldKcal := of.Macros.Kcal * oc.Multiplier()
 		var found []weekSwap
 		for _, c := range x.s.altCandidates(x, p, old, AltRequest{What: AltMain}) {
-			if skip[c.food.ID] || (c.session != nil && c.grow > 0) {
+			// Cooking the other dish on another cell is a second dish for one cook: not a way
+			// out of a repeated main.
+			if skip[c.food.ID] || (c.session != nil && c.grow > 0) || (mode == swapDistinct && c.cookAt != nil) {
 				continue
 			}
 			for _, comp := range portionVariants(c.comp, c.food, oldKcal) {
@@ -235,7 +238,7 @@ func (x *index) swapsFor(t Target, base Evaluation, pis []int, mode swapMode, sk
 					continue
 				}
 				a, why, _ := x.s.tryAlt(t, pi, old, nil, c, base, hard, soft, len(x.occasions[dayOf(p.Date)]), cookedInWindow, false)
-				if why != "" || len(a.NewIssues) > 0 || a.rank.addsCook || !x.dayHolds(a, dayPct[p.Date.Format(time.DateOnly)]) {
+				if why != "" || len(a.NewIssues) > 0 || (a.rank.addsCook && mode != swapDistinct) || !x.dayHolds(a, dayPct[p.Date.Format(time.DateOnly)]) {
 					continue
 				}
 				found = append(found, weekSwap{pi: pi, old: old, c: c, a: a, oldMeatG: oldMeat, newMeatG: newMeat, plateMeat: plateMeat})

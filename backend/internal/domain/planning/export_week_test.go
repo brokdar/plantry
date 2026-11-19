@@ -39,3 +39,16 @@ var FinishProposal = finishProposal
 
 // PlannerViewOf exposes the evaluate_plan result of a proposal.
 var PlannerViewOf = plannerView
+
+// GuardDayMains exposes the day's distinct-mains guard.
+var GuardDayMains = guardDayMains
+
+// ParseForProof exposes the parsed model proposal.
+func ParseForProof(raw []byte, in ChooseInput) (Proposal, error) {
+	p, err := parseProposal(raw, in)
+	if err != nil {
+		return Proposal{}, err
+	}
+	p, _ = autofix(in, p)
+	return p, nil
+}
