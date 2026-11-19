@@ -69,7 +69,7 @@ func TestE022_RealData(t *testing.T) {
 		raw := calls[len(calls)-1]
 		before, err := planning.LegacyView(in, raw)
 		require.NoError(t, err)
-		view, done, err := planning.PlannerView(in, raw)
+		view, done, err := planning.PlannerView(in, raw, false)
 		require.NoError(t, err)
 		prop, err := planning.ParseForProof(raw, in)
 		require.NoError(t, err)

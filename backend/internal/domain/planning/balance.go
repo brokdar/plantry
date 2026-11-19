@@ -359,7 +359,8 @@ func (h *planner) growAddOns(date time.Time, limit float64) {
 				if !ok || c.Grams <= 0 || f.Macros.Kcal <= 0 || !f.NutritionComplete {
 					continue
 				}
-				capG := addCapG(f, dk.Adjusted)
+				// Never past the usual serving (or where the add already was).
+				capG := math.Max(c.Grams, math.Min(addCapG(f, dk.Adjusted), ServingGrams(f)))
 				g := math.Min(capG, math.Floor((c.Grams+(limit-dk.Kcal)*100/f.Macros.Kcal)/roundGrams)*roundGrams)
 				if g > c.Grams+epsilon {
 					opts = append(opts, grow{pi, ci, g, f.Macros.Kcal})

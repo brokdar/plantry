@@ -19,7 +19,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p23"
+const PromptVersion = "p24"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -365,7 +365,7 @@ How a plan works:
 - When a code execution tool is offered: for fan-out or comparing variants, write code that calls evaluate_plan on several drafts and prints only what you need (the cheapest plan that clears the hard rules); call submit_plan yourself, directly, with the plan you chose.
 - Evaluate before you submit: write the draft, call evaluate_plan with it, read days (kcal, protein, cook occasions, meat) and issues, change the plan, evaluate again. Do not simulate the checker in your head. Do not add up kcal, protein, meat days or keep windows in your reasoning: write a draft and call evaluate_plan, which computes them, then fix what it reports.
 - No-cook table: eat-as-is foods (serving = the amount to offer) that close a kcal or protein gap without a cooking occasion; add one as a component of an existing plate (leaf: grams, no session), never a sweet, never on a light meal, at most 2 servings. First raise the main of a non-light meal (up to 1.5 portions); add-ons come after that.
-- evaluate_plan shows your plan as it will be saved: Go has already balanced its quantities (portions up to 1.5, a side recipe, add-ons within their caps) and applied the weekly meat and fish swaps; code_changes lists what it changed and open_levers what only you can still change (a higher-energy dish on a named day, a cooking day). What it shows is what submit_plan saves. Choose dishes, days, batches and the instruction; call evaluate_plan until no hard rule is broken and nothing is open, then submit.
+- evaluate_plan shows your plan as it will be saved: Go has already balanced its quantities (portions up to 1.5, a side recipe, add-ons within their caps) and applied the weekly meat and fish swaps; code_changes lists what it changed and open_levers what only you can still change (a richer main on a named day, offered once; a further cooking day only when you gave no cooking-day limit). With a cooking-day limit, gaps no richer main closes come back as accepted_shortfall: they are accepted, the plan note tells the user which days are light, and you spend no more checks on them. What it shows is what submit_plan saves. Choose dishes, days, batches and the instruction; call evaluate_plan until no hard rule is broken and nothing is open, then submit.
 - The day budget table gives each day's target, band, floor, fixed kcal and what each open meal needs; plan the meals to those sizes in your first draft.
 - notes must match the plan evaluate_plan reports: never call a meal light while it has S6, nor a day within its band while it has S2.
 - Mix several different mains over the week rather than one recipe for most meals.

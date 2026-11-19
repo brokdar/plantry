@@ -604,7 +604,7 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 		return fail("error: " + err.Error() + "\nCall evaluate_plan again with the complete plan as valid JSON matching its schema.")
 	}
 	prop, fixes := autofix(in, prop)
-	view, ev, _ := plannerView(in, prop)
+	view, ev, _ := plannerView(in, prop, n > 1)
 	RecordDryRun(ctx, n, func() Evaluation { return ev })
 	if len(fixes) > 0 {
 		view["autofix"] = fixes
@@ -621,7 +621,7 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 // goes after the repair text so the model sees every rule, soft ones
 // included.
 func evaluationFeedback(in ChooseInput, prop Proposal) string {
-	view, _, _ := plannerView(in, prop)
+	view, _, _ := plannerView(in, prop, true)
 	out, err := json.Marshal(view)
 	if err != nil {
 		return ""
