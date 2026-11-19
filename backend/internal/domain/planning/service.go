@@ -873,7 +873,14 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	if j.side == nil {
 		var finishNotes []string
 		if _, heuristic := j.chooser.(Heuristic); heuristic {
-			prop, finishNotes = guardDayMains(base, j.target, prop, idSet(j.exclude))
+			dayProp, dayNotes := guardDayMains(base, j.target, prop, idSet(j.exclude))
+			prop, finishNotes = dayProp, dayNotes
+			if len(dayNotes) > 0 {
+				// A dish changed under the heuristic's quantities: set them again.
+				var balNotes []string
+				prop, balNotes = balancePlan(cin, prop)
+				finishNotes = append(finishNotes, balNotes...)
+			}
 			var weekNotes []string
 			prop, weekNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
 			finishNotes = append(finishNotes, weekNotes...)
@@ -883,7 +890,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		// The saved note says what the plan is, computed from it; the lines
 		// of the passes stay in the run log.
 		own := prop.Own
-		if own == "" {
+		if !prop.OwnSet {
 			own = orig.Notes
 		}
 		prop.Notes = joinNotes(append([]string{own}, savedPlanNotes(cin, orig, prop)...)...)

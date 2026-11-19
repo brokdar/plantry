@@ -14,6 +14,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
 
@@ -139,6 +140,13 @@ func TestE022_RealData(t *testing.T) {
 		var meat float64
 		_ = db.QueryRow(`SELECT 0`).Scan(&meat)
 		notes := runs.end(id).Notes
+		st, err := testsvc.PlanState(db)(context.Background(), window.Window{Start: time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC), End: time.Date(2026, 11, 27, 0, 0, 0, 0, time.UTC)}, time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC))
+		require.NoError(t, err)
+		for _, l := range strings.Split(planning.RenderPlanSummary(st, nil), "\n") {
+			if strings.HasPrefix(l, "Thursday 2026-11-26") {
+				fmt.Println("  SUMMARY:", l)
+			}
+		}
 		fmt.Printf("E022 heuristic regenerate (run %d)\n  mains: %s\n  notes: %q\n", id, strings.Join(got, " | "), notes)
 		_ = json.Marshal
 	})

@@ -187,3 +187,25 @@ func TestBuildReport_AlsoChangedSaysMovedCooksAndAutomaticFixes(t *testing.T) {
 	assert.Equal(t, `The "Salmon" batch is now cooked at Sun 22 Nov dinner (it was Sat 21 Nov dinner).`, r.AlsoChanged[0])
 	assert.Equal(t, `Automatically moved the "Salmon" batch to be cooked at Sun 22 Nov dinner (it was Sat 21 Nov dinner), so that no day gets a second cooking time.`, r.AlsoChanged[1])
 }
+
+// E022c: a meal of no-cook foods is named a cold plate in the report, so the
+// reply can say what lunch is.
+func TestBuildReport_NamesAColdPlate(t *testing.T) {
+	before := reportState(2, 1, 1)
+	after := before
+	after.Foods = map[int64]planning.FoodFacts{
+		1: {ID: 1, Name: "Salmon"},
+		3: {ID: 3, Name: "Bread", Kind: "leaf", NoCook: true},
+		4: {ID: 4, Name: "Hummus", Kind: "leaf", NoCook: true},
+	}
+	after.Plates = []planning.Plate{
+		{ID: 10, Date: rd(1), SlotID: 1, Eaters: 1, Components: []planning.Component{{ID: 5, FoodID: 3, Grams: f64(80)}, {ID: 6, FoodID: 4, Grams: f64(60)}}},
+		before.Plates[1],
+	}
+	r := buildReport(reportInput{beforeSt: before, afterSt: after})
+	var kinds []string
+	for _, m := range r.Changed {
+		kinds = append(kinds, m.Kind)
+	}
+	assert.Contains(t, kinds, "cold plate, nothing to cook")
+}

@@ -97,7 +97,7 @@ func dishChangeLines(s State, orig, final Proposal) []string {
 	var out []string
 	var parts []string
 	for _, k := range order {
-		parts = append(parts, fmt.Sprintf("instead of %s: %s (%s)", foodName(s, k.from), foodName(s, k.to), strings.Join(cells[k], ", ")))
+		parts = append(parts, fmt.Sprintf("instead of %s: %s (%s)", plainName(s, k.from), plainName(s, k.to), strings.Join(cells[k], ", ")))
 	}
 	if len(parts) > 0 {
 		out = append(out, "Dishes changed: "+strings.Join(parts, "; ")+".")
@@ -117,7 +117,7 @@ func sidesLine(s State, orig, final Proposal) string {
 			if c.FoodID == mainID(s, fp) || slices.ContainsFunc(orig.Plates[i].Components, func(o ProposedComponent) bool { return o.FoodID == c.FoodID }) {
 				continue
 			}
-			names = append(names, strings.ToLower(foodName(s, c.FoodID)))
+			names = append(names, strings.ToLower(plainName(s, c.FoodID)))
 		}
 		if len(names) > 0 {
 			groups = append(groups, cellShort(s, fp.Date, fp.SlotID)+" "+strings.Join(names, ", "))
@@ -194,7 +194,7 @@ func sameDishLines(x *index, merged State) []string {
 			for _, b := range cells[i+1:] {
 				ma, mb := a.Components[x.mainIndex(a)].FoodID, b.Components[x.mainIndex(b)].FoodID
 				if ma == mb {
-					out = append(out, fmt.Sprintf("%s: %s and %s are both %s. No other dish fits: %s.", d.Weekday(), slotName(merged, a.SlotID), slotName(merged, b.SlotID), foodName(merged, ma), x.kitchenSameDishReason()))
+					out = append(out, fmt.Sprintf("%s: %s and %s are both %s. No other dish fits: %s.", d.Weekday(), slotName(merged, a.SlotID), slotName(merged, b.SlotID), plainName(merged, ma), x.kitchenSameDishReason()))
 				}
 			}
 		}
@@ -212,4 +212,12 @@ func (x *index) kitchenSameDishReason() string {
 		why = append(why, "there are no suitable no-cook foods for a cold plate")
 	}
 	return strings.Join(why, ", ")
+}
+
+// plainName is a food's name for the user: as stored, not marked as data.
+func plainName(s State, id int64) string {
+	if f, ok := s.Foods[id]; ok {
+		return f.Name
+	}
+	return fmt.Sprintf("food %d", id)
 }

@@ -17,6 +17,6 @@
   "expect": {
     "min_plates": 14,
     "allow_violations": ["kcal_below_floor"],
-    "evaluation": {"issues_present": ["kcal_below_floor"], "notes_contain": ["Below target", "Below the daily minimum"]}
+    "evaluation": {"issues_present": ["kcal_below_floor"], "notes_contain": ["Light days", "Below the daily minimum"]}
   }
 }

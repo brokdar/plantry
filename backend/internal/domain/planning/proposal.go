@@ -20,6 +20,8 @@ type Proposal struct {
 	// words (the model's note, the heuristic's explore and no-main lines).
 	// The saved note is Own plus lines computed from the plan as saved.
 	Own string
+	// OwnSet says the chooser filled Own (it may be empty).
+	OwnSet bool
 	// MaxCookDays is the days of cooking the instruction allows (0: no limit stated).
 	MaxCookDays int
 	// RepairAttempts is how many repair turns the chooser took (LLM, D12).
