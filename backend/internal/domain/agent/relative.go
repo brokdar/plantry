@@ -363,7 +363,7 @@ func nextStepText(ways, offers []planning.Way, res planning.WayResult) string {
 	case len(ways) > 0:
 		return "apply ways[0] now with apply_changes (its ops, light and goal as returned), then tell the user what changed with before and after"
 	case len(offers) > 0:
-		return "nothing safe to apply on its own: explain why with the numbers and present the offer marked recommended as a question; apply it only when the user says yes"
+		return "nothing safe to apply on its own: explain why with the numbers and present the offer marked recommended in the same sentence as the explanation ('I would ...'), apply it only when the user says yes"
 	}
 	return "nothing to apply: explain why with the numbers and what the user could change"
 }

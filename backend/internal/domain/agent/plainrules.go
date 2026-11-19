@@ -342,10 +342,14 @@ func dropAfterWeek(raw json.RawMessage) json.RawMessage {
 		return raw
 	}
 	var after map[string]json.RawMessage
-	if json.Unmarshal(obj["after"], &after) != nil || after["week"] == nil {
+	if json.Unmarshal(obj["after"], &after) != nil {
 		return raw
 	}
 	delete(after, "week")
+	// The window's meat-day count stays the model's own business unless the
+	// change moved it: report.tell says so then ("Days with meat: ...").
+	delete(after, "meat_days")
+	delete(after, "meat_days_max")
 	b, err := json.Marshal(after)
 	if err != nil {
 		return raw

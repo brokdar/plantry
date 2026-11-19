@@ -189,11 +189,11 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 	case len(offers) > 0:
 		return lead + " now repeats a dish: tell the user, present offers[0] as your recommended way out" + tail, offers
 	case hard:
-		return lead + " left a day under its minimum: tell the user plainly and offer the fix marked recommended as a question" + tail, nil
+		return lead + " left a day under its minimum: tell the user plainly and state the fix marked recommended as your closing offer ('I can also ...: say so if you want it')" + tail, nil
 	case other:
-		return lead + " left a problem open (see issues.new): tell the user plainly and offer the option marked recommended as a question" + tail, nil
+		return lead + " left a problem open (see issues.new): tell the user plainly and state the option marked recommended as your closing offer ('I can also ...: say so if you want it')" + tail, nil
 	case options:
-		return lead + " made new issues: report them and offer the option marked recommended as a question" + tail, nil
+		return lead + " made new issues: report them and state the option marked recommended as your closing offer ('I can also ...: say so if you want it')" + tail, nil
 	}
 	return lead + " made new issues: report them plainly", nil
 }
