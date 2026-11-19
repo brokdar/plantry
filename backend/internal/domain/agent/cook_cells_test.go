@@ -228,15 +228,11 @@ func TestApplyChanges_AwayRehomesCooks(t *testing.T) {
 		moves = append(moves, m)
 		assert.NotNil(t, m["cook_date"], "the result says where the cook went")
 	}
-	// A move never piles more than two dishes onto one cooking time unless the
-	// plan already did; what cannot be placed stays a reported problem with a
-	// recommended option, not a pile.
-	busiest := func() int {
-		var n int
-		require.NoError(t, e.db.QueryRow(`SELECT COALESCE(MAX(c), 0) FROM (SELECT COUNT(*) AS c FROM cook_sessions GROUP BY cook_date, cook_slot_id)`).Scan(&n))
-		return n
+	if len(moves) > 0 {
+		facts, _ := res["cooking_moved"].(map[string]any)
+		require.NotNil(t, facts, "the result says where the cooks went")
+		assert.Equal(t, true, facts["nothing_else_changed"])
 	}
-	was := busiest()
 	for _, is := range issues["new"].([]any) {
 		m := is.(map[string]any)
 		if m["label"] == "cooking times per day" {
@@ -256,5 +252,10 @@ func TestApplyChanges_AwayRehomesCooks(t *testing.T) {
 		assert.Equal(t, m["cook_date"], v.CookDate.Format(time.DateOnly))
 		assert.EqualValues(t, m["cook_slot_id"], v.CookSlotID)
 	}
-	assert.LessOrEqual(t, busiest(), max(2, was), "no cooking time holds more than two dishes")
+	// The household's cook-once day wins on the away path: the dishes move onto
+	// one cooking time, the result says which and that nothing else changed.
+	fresh := e.mustExec("get_plan", `{}`)
+	for _, is := range fresh["issues"].([]any) {
+		assert.NotEqual(t, "cooking times per day", is.(map[string]any)["label"], "no cooking problem is left open")
+	}
 }

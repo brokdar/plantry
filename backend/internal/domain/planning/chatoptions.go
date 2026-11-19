@@ -472,8 +472,9 @@ const maxDishesAtOnce = 2
 
 // CookingPolicy is what an away call does with a day whose cooks no longer fit
 // one cooking time, one switch for the household's choice:
-//   - CookTogether: every dish of the day cooks at one cooking time, however
-//     many (the old behaviour);
+//   - CookTogether (default): every dish of the day cooks at one cooking time,
+//     however many, on the away guard's path only; ways, offers and the other
+//     options keep the two-dish rule;
 //   - CookTwoTimes: the day keeps two cooking times and the call says so (no
 //     automatic fix; the day's cooking problem stays reported);
 //   - CookColdPlate: one cooking time with at most two dishes; the dish that
@@ -487,12 +488,15 @@ const (
 )
 
 // CookPolicy is the policy in force.
-var CookPolicy = CookColdPlate
+var CookPolicy = CookTogether
 
 // tooManyDishes reports whether the move from s to next piles more than
 // maxDishesAtOnce dishes onto cell k (unless k already held more).
 func tooManyDishes(s, next State, k plate.CellKey) bool {
-	return CookPolicy != CookTogether && cooksAtCell(next, k) > max(maxDishesAtOnce, cooksAtCell(s, k))
+	if s.CookPile && CookPolicy == CookTogether {
+		return false // the household's cook-once day beats the two-dish rule on this path
+	}
+	return cooksAtCell(next, k) > max(maxDishesAtOnce, cooksAtCell(s, k))
 }
 
 // partialCookMove is the option for a day whose cooks do not all fit one

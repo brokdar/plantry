@@ -352,7 +352,7 @@ func TestIssueOptions_H2NeverPilesThreeDishes(t *testing.T) {
 	}
 }
 
-// The household's switch: with CookTogether the dish and its side move onto the
+// The household's switch: with CookTogether, on the away guard's path, the dish and its side move onto the
 // lunch that cooks the curry (three dishes at one cooking time), as before.
 func TestIssueOptions_CookTogetherPolicyPilesThem(t *testing.T) {
 	old := planning.CookPolicy
@@ -366,6 +366,7 @@ func TestIssueOptions_CookTogetherPolicyPilesThem(t *testing.T) {
 		[]planning.Plate{persisted(13, sun, breakfast, false, oats, 3), persisted(10, sun, lunch, false, curry, 1), persisted(11, sun, dinner, false, soup, 2)})
 	s.Plates[2].Components = append(s.Plates[2].Components, planning.Component{ID: 120, FoodID: rice, Portions: f64(1), SessionID: 4})
 	setMode(&s, cell(sun, breakfast), availability.ModeRoutine)
+	s.CookPile = true // the away guard's path
 	opts := optionsOf(t, s, "H2")
 	require.NotEmpty(t, opts)
 	assert.Len(t, opts[0].Ops, 2, "both dinner dishes move to the lunch")

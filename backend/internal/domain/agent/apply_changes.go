@@ -286,6 +286,8 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 		request map[string]any
 		b       batch
 		rep     *changeReport
+		// cookFacts says where the away call put the day's cooks.
+		cookFacts map[string]any
 	)
 	run := func(ctx context.Context) error {
 		for i, op := range in.Ops {
@@ -306,6 +308,7 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 			return err
 		}
 		applied = append(applied, fixed...)
+		cookFacts = cookingMoved(ctx, svc, w, fixed, in.Ops)
 		b.aff.Dates = append(b.aff.Dates, planning.LightDates(light)...)
 		after, afterEv, err = batchAfter(withExtraAvoid(ctx, b.removed), svc, ws, b, before)
 		if err != nil {
@@ -364,6 +367,9 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 			}
 		}
 	}
+	if cookFacts != nil {
+		result["cooking_moved"] = cookFacts
+	}
 	if rep != nil {
 		result["report"] = rep
 	}
@@ -385,6 +391,9 @@ const maxSettleRounds = 3
 // of the day's cooks into one cell) and reports each move as an applied
 // entry with auto_fix, so the model tells the user. An issue without a
 // verified option stays, marked no_fix_found.
+// cookPileKey marks the context of the away guard's re-anchoring.
+type cookPileKey struct{}
+
 func settleCooks(ctx context.Context, svc Services, ws []window.Window, ops []changeOp, b *batch, before planning.Evaluation) ([]map[string]any, error) {
 	if !slices.ContainsFunc(ops, func(op changeOp) bool { return op.Op == "away" }) || planning.CookPolicy == planning.CookTwoTimes {
 		return nil, nil
@@ -396,7 +405,7 @@ func settleCooks(ctx context.Context, svc Services, ws []window.Window, ops []ch
 	}
 	var out []map[string]any
 	for range maxSettleRounds {
-		ev, err := evalWindows(ctx, svc, ws, true, isNew)
+		ev, err := evalWindows(context.WithValue(ctx, cookPileKey{}, true), svc, ws, true, isNew)
 		if err != nil {
 			return nil, fmt.Errorf("read the plan after the away: %w", err)
 		}
@@ -886,6 +895,7 @@ func evalWindow(ctx context.Context, svc Services, w window.Window, withOptions 
 	}
 	st.Light = planning.MergeLight(st.Light, lightFrom(ctx))
 	st.Avoid, st.PairAddOns = svc.Removed.avoid(ctx), true
+	st.CookPile, _ = ctx.Value(cookPileKey{}).(bool)
 	ev := chatView(st)
 	if withOptions {
 		ev.Issues = planning.IssueOptions(st, planning.WindowTarget(st), ev, ev.Issues, keep)
@@ -1122,4 +1132,80 @@ func lowerInstead(ctx context.Context, svc Services, w window.Window, issues []p
 		}
 	}
 	return out
+}
+
+// cookingMoved are the facts of the cooks an away call re-anchored, for the
+// reply: per day and cooking time the dishes cooked there and the meals each
+// feeds, and whether nothing else changed. nil when no cook was moved.
+func cookingMoved(ctx context.Context, svc Services, w window.Window, fixed []map[string]any, ops []changeOp) map[string]any {
+	var moved []int64
+	cell := map[int64][2]any{}
+	onlyMoves := true
+	for _, f := range fixed {
+		if f["op"] != "move_cook" {
+			onlyMoves = false
+			continue
+		}
+		if id, ok := f["session_id"].(int64); ok {
+			moved = append(moved, id)
+			cell[id] = [2]any{f["cook_date"], f["cook_slot_id"]}
+		}
+	}
+	if len(moved) == 0 || svc.State == nil {
+		return nil
+	}
+	st, err := svc.State(ctx, w, todayFrom(ctx))
+	if err != nil {
+		return nil
+	}
+	type at struct {
+		date string
+		slot int64
+	}
+	var order []at
+	seen := map[at]bool{}
+	for _, id := range moved {
+		k := at{fmt.Sprint(cell[id][0]), 0}
+		switch v := cell[id][1].(type) {
+		case int64:
+			k.slot = v
+		case int:
+			k.slot = int64(v)
+		}
+		if !seen[k] {
+			seen[k] = true
+			order = append(order, k)
+		}
+	}
+	// Every dish cooked there now, the ones the away handed over included.
+	groups := map[at][]map[string]any{}
+	for _, k := range order {
+		for _, ss := range st.Sessions {
+			if ss.CookDate.Format(time.DateOnly) != k.date || ss.CookSlotID != k.slot {
+				continue
+			}
+			var feeds []string
+			for _, p := range st.Plates {
+				for _, c := range p.Components {
+					if c.SessionID == ss.ID {
+						feeds = append(feeds, mealName(st, p))
+					}
+				}
+			}
+			if len(feeds) > 0 {
+				groups[k] = append(groups[k], map[string]any{"dish": food.Quote(st.Foods[ss.FoodID].Name), "feeds": feeds})
+			}
+		}
+	}
+	onlyAway := !slices.ContainsFunc(ops, func(o changeOp) bool { return o.Op != "away" })
+	var out []map[string]any
+	for _, k := range order {
+		day := dayLabelStr(k.date)
+		out = append(out, map[string]any{"day": day, "cooking_time": strings.TrimPrefix(st.SlotNames[k.slot], "slot."), "dishes": groups[k]})
+	}
+	facts := map[string]any{"cooked_now": out}
+	if onlyMoves && onlyAway {
+		facts["nothing_else_changed"] = true
+	}
+	return facts
 }
