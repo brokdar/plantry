@@ -57,6 +57,18 @@ func relState(confirmedOthers bool) planning.State {
 	return s
 }
 
+// relLeftover is relState with the dinner's chili eaten from a batch cooked at
+// lunch: a smaller serving of it is a smaller serving of a leftover.
+func relLeftover() planning.State {
+	s := relState(false)
+	for i := range s.Sessions {
+		if s.Sessions[i].ID == 30 {
+			s.Sessions[i].CookSlotID = lunch
+		}
+	}
+	return s
+}
+
 func ways(t *testing.T, s planning.State, req planning.WayRequest) planning.WayResult {
 	t.Helper()
 	res, err := planning.Ways(s, windowTarget(s), req)
@@ -65,7 +77,7 @@ func ways(t *testing.T, s planning.State, req planning.WayRequest) planning.WayR
 }
 
 func TestWays_LighterChangesOnlyThisMealAndOffersTheRest(t *testing.T) {
-	res := ways(t, relState(false), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter})
+	res := ways(t, relLeftover(), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter})
 	assert.InDelta(t, 500, res.MaxKcal, 0.5)
 	assert.InDelta(t, 850, res.Before.MealKcal, 0.5)
 	require.NotEmpty(t, res.Ways)
@@ -97,17 +109,23 @@ func TestWays_LighterChangesOnlyThisMealAndOffersTheRest(t *testing.T) {
 	for _, o := range res.Offers {
 		assert.True(t, o.ChangesOther)
 		assert.NotEmpty(t, o.Moved)
-		assert.True(t, o.Reaches)
-		assert.LessOrEqual(t, o.After.MealKcal, res.MaxKcal+0.5)
+		// An offer that cannot reach the cap inside the other meal's bound is
+		// still a lighter dinner; it says so and stores no mark.
+		if o.Reaches {
+			assert.LessOrEqual(t, o.After.MealKcal, res.MaxKcal+0.5)
+			assert.Contains(t, o.Light, planning.LightIntent{Date: sat, Scope: "meal", Slot: "dinner"})
+		} else {
+			assert.True(t, planning.MeaningfulMealKcal(res.Before.MealKcal, res.Before.MealKcal-o.After.MealKcal), o.What)
+			assert.NotContains(t, o.Light, planning.LightIntent{Date: sat, Scope: "meal", Slot: "dinner"})
+		}
 		assert.GreaterOrEqual(t, o.After.DayKcal, res.FloorKcal, o.What)
 		if o.BelowBand {
 			assert.NotEmpty(t, o.Why, "an offer under the band says by how much")
 			assert.Contains(t, o.Why, "under its band")
 		} else {
 			assert.GreaterOrEqual(t, o.After.DayKcal, res.BandLow-1, "%s lands the day in its band", o.What)
-			assert.Empty(t, o.Why)
+			assert.Equal(t, "the lunch stays within a filling lunch (833 kcal)", o.Why, "the offer says which bound it kept")
 		}
-		assert.Contains(t, o.Light, planning.LightIntent{Date: sat, Scope: "meal", Slot: "dinner"})
 		for _, op := range o.Ops {
 			assert.NotEqual(t, relNuts, op.FoodID, "no filler on a dish it does not belong to: %v", o.Moved)
 		}
@@ -222,39 +240,63 @@ func TestJudgeRelative(t *testing.T) {
 }
 
 func TestWays_DayGoals(t *testing.T) {
-	// Saturday holds 1700 kcal of 2000: lower_day aims at 85 % (band 1530 to
-	// 1870, floor 1500); raise_day at 115 % (band 2070 to 2530).
-	for goal, in := range map[string]func(planning.WayResult, planning.Way){
-		planning.GoalLowerDay: func(res planning.WayResult, w planning.Way) {
-			assert.LessOrEqual(t, w.After.DayKcal, res.BandHigh+0.5, w.What)
-			assert.GreaterOrEqual(t, w.After.DayKcal, res.FloorKcal, w.What)
-			assert.Contains(t, w.Light, planning.LightIntent{Date: sat, Scope: "day"})
-		},
-		planning.GoalRaiseDay: func(res planning.WayResult, w planning.Way) {
-			assert.GreaterOrEqual(t, w.After.DayKcal, res.BandLow-0.5, w.What)
-			assert.LessOrEqual(t, w.After.DayKcal, res.BandHigh+0.5, w.What)
-			assert.Contains(t, w.Light, planning.LightIntent{Date: sat, Scope: "day", Level: "hearty"})
-		},
-	} {
-		t.Run(goal, func(t *testing.T) {
-			res := ways(t, relState(false), planning.WayRequest{Date: sat, Goal: goal})
-			require.NotEmpty(t, res.Ways, res.EmptyWhy)
-			for _, w := range res.Ways {
-				assert.True(t, w.Reaches, w.What)
-				assert.NotEmpty(t, w.Ops)
-				in(res, w)
-			}
-			assert.Empty(t, res.Offers)
-		})
+	// Saturday holds 1700 kcal of 2000 (range 1800 to 2200, floor 1500).
+	// raise_day changes food inside that range and stores no mark.
+	raise := ways(t, relState(false), planning.WayRequest{Date: sat, Goal: planning.GoalRaiseDay})
+	require.NotEmpty(t, raise.Ways, raise.EmptyWhy)
+	for _, w := range raise.Ways {
+		assert.True(t, w.Reaches, w.What)
+		assert.GreaterOrEqual(t, w.After.DayKcal, raise.BandLow-0.5, w.What)
+		assert.LessOrEqual(t, w.After.DayKcal, raise.BandHigh+0.5, w.What)
+		assert.Empty(t, w.Light, "a mark is not stored unasked")
+	}
+	// lower_day: the day is already at the bottom of its range, so nothing
+	// changes inside it; the light-day mark comes back as an offer, not a way.
+	lower := ways(t, relState(false), planning.WayRequest{Date: sat, Goal: planning.GoalLowerDay})
+	assert.Empty(t, lower.Ways)
+	require.NotEmpty(t, lower.Offers)
+	assert.Contains(t, lower.EmptyWhy, "light day")
+	assert.Contains(t, lower.EmptyWhy, "1800 to 2200")
+	for _, o := range lower.Offers {
+		assert.LessOrEqual(t, o.After.DayKcal, lower.BandHigh+0.5, o.What)
+		assert.GreaterOrEqual(t, o.After.DayKcal, lower.FloorKcal, o.What)
+		assert.Contains(t, o.Light, planning.LightIntent{Date: sat, Scope: "day"})
 	}
 	_, err := planning.Ways(relState(false), windowTarget(relState(false)), planning.WayRequest{Goal: planning.GoalLowerDay})
 	assert.Error(t, err, "a day goal needs a date")
 }
 
+// A day inside its range with room to spare gets lower by changing food, with
+// no mark: "fewer kcal on Monday" does not make Monday a light day.
+func TestWays_LowerDayInsideItsRangeStoresNoMark(t *testing.T) {
+	s := relState(false)
+	s.Profile.KcalTarget = f64(1700) // range 1530 to 1870 around the 1700 kcal day
+	res := ways(t, s, planning.WayRequest{Date: sat, Goal: planning.GoalLowerDay})
+	require.NotEmpty(t, res.Ways, res.EmptyWhy)
+	for _, w := range res.Ways {
+		assert.Empty(t, w.Light, w.What)
+		assert.GreaterOrEqual(t, w.After.DayKcal, res.BandLow-0.5, "inside the day's own range: %s", w.What)
+		assert.Less(t, w.After.DayKcal, res.Before.DayKcal, w.What)
+	}
+}
+
+// A dish cooked fresh for one plate is never scaled below one portion per
+// eater: no ordinary cook makes half a portion.
+func TestWays_NoFractionOfAFreshDish(t *testing.T) {
+	res := ways(t, relState(false), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter})
+	for _, w := range append(append([]planning.Way{}, res.Ways...), res.Offers...) {
+		for _, op := range w.Ops {
+			if op.Portions != nil {
+				assert.GreaterOrEqual(t, *op.Portions, 1.0, "%s", w.What)
+			}
+		}
+	}
+}
+
 // E018 rule 2: a lighter meal is still a meal: the main keeps at least half a
 // portion and a plate that had a side keeps one (a lighter side before none).
 func TestWays_LighterMealKeepsMainAndSide(t *testing.T) {
-	res := ways(t, relState(false), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter})
+	res := ways(t, relLeftover(), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter})
 	all := append(append([]planning.Way{}, res.Ways...), res.Offers...)
 	require.NotEmpty(t, all)
 	for _, w := range all {

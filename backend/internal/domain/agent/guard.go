@@ -147,6 +147,9 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 		}
 	}
 	res.result["skipped"] = skippedList
+	if !in.DryRun && res.result["saved"] != false {
+		offers = withBackToRange(ctx, svc, w, res, offers)
+	}
 	if len(offers) > 0 {
 		res.result["offers"] = offers
 	}
@@ -251,7 +254,7 @@ func replacementOffer(ctx context.Context, svc Services, w window.Window, op cha
 			}
 			if a, ok := firstClean(res.Alternatives, func(ops []planning.OptionOp) bool { return offerIsClean(ctx, svc, w, ops) }); ok {
 				return map[string]any{
-					"what": fmt.Sprintf("replace %s on %s with %s so the day stays above its minimum", food.Quote(res.Current.Name), dayLabel(p.Date), food.Quote(a.Name)),
+					"what": fmt.Sprintf("swap %s's %s for %s so the day stays above its minimum", mealName(st, p), food.Quote(res.Current.Name), food.Quote(a.Name)),
 					"ops":  a.Ops, "recommended": first, "recommended_because": "keeps the day above its minimum, no new warning",
 					"effect": map[string]any{"day": dayLabel(p.Date), "day_kcal_after": a.DayKcal},
 				}
@@ -362,4 +365,55 @@ func verifiedAlternatives(ctx context.Context, svc Services, w window.Window, po
 		out[0].Because = "the best-ranked candidate: no new problem, no new warning, no extra cooking where possible"
 	}
 	return out
+}
+
+// mealName says which meal a plate is, "Wed 25 Nov dinner".
+func mealName(st planning.State, p planning.Plate) string {
+	return dayLabel(p.Date) + " " + strings.TrimPrefix(st.SlotNames[p.SlotID], "slot.")
+}
+
+// withBackToRange adds, for the days the saved part left under their range
+// (the household allows it, and the reply says so), one recommended offer that
+// brings them back: the recommended option of each such day's issue, verified
+// together. With an offer for the skipped part already there, the two become
+// one offer when they check out together.
+func withBackToRange(ctx context.Context, svc Services, w window.Window, res applyRun, offers []map[string]any) []map[string]any {
+	was := issueMap(res.before.Issues)
+	var ops []planning.OptionOp
+	var texts []string
+	var effect []map[string]any
+	for _, is := range res.after.Issues {
+		if _, old := was[issueKey(is)]; old || is.Code != planning.CodeKcalBelowBand || len(is.Options) == 0 {
+			continue
+		}
+		o := is.Options[0]
+		oops := o.Ops
+		if len(oops) == 0 {
+			oops = []planning.OptionOp{o.Op}
+		}
+		ops = append(ops, oops...)
+		texts = append(texts, fmt.Sprintf("%s on %s", food.Quote(o.Name), dayLabelStr(is.Date)))
+		effect = append(effect, map[string]any{"day": dayLabelStr(is.Date), "day_kcal_after": o.DayKcal})
+	}
+	if len(ops) == 0 {
+		return offers
+	}
+	what := "add " + strings.Join(texts, " and ") + " so those days are back in their range"
+	if len(offers) > 0 {
+		first := offers[0]
+		firstOps, _ := first["ops"].([]planning.OptionOp)
+		merged := slices.Concat(firstOps, ops)
+		if offerIsClean(ctx, svc, w, merged) {
+			first["ops"] = merged
+			first["what"] = fmt.Sprint(first["what"]) + "; and " + what
+			first["effect"] = []any{first["effect"], effect}
+			first["recommended_because"] = "brings every day back above its minimum and into its range, no new warning"
+			return offers
+		}
+		return append(offers, map[string]any{"what": what, "ops": ops, "recommended": false, "effect": effect})
+	}
+	if !offerIsClean(ctx, svc, w, ops) {
+		return offers
+	}
+	return []map[string]any{{"what": what, "ops": ops, "recommended": true, "recommended_because": "brings those days back into their range, no new warning", "effect": effect}}
 }

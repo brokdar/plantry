@@ -94,6 +94,8 @@ func toolFindWays(svc Services) Tool {
 			}
 			ways, offers = planning.DemoteUnclean(verify(res.Ways, limit)), planning.DemoteUnclean(verify(res.Offers, 2))
 			recommend(ways, offers)
+			nameWays(st, ways)
+			nameWays(st, offers)
 			out := map[string]any{"next": nextStep(ways, offers, res), "goal": goal, "before": res.Before, "ways": nonNil(ways)}
 			if len(offers) > 0 {
 				out["offer"] = offers
@@ -117,6 +119,29 @@ func toolFindWays(svc Services) Tool {
 			}
 			return mustJSON(out), ToolEffectNone, nil
 		},
+	}
+}
+
+// nameWays says which meal and day a way is about ("Tue 24 Nov dinner: ...")
+// and names the day on the other meals it moves, so the model never has to
+// guess which meal a figure belongs to.
+func nameWays(st planning.State, ways []planning.Way) {
+	for i := range ways {
+		p := slices.IndexFunc(st.Plates, func(q planning.Plate) bool { return q.ID == ways[i].PlateID })
+		if p < 0 {
+			continue
+		}
+		pl := st.Plates[p]
+		slot := strings.TrimPrefix(st.SlotNames[pl.SlotID], "slot.")
+		day := dayLabel(pl.Date)
+		ways[i].What = day + " " + slot + ": " + ways[i].What
+		moved := slices.Clone(ways[i].Moved)
+		for j, m := range moved {
+			if k := strings.Index(m, ": "); k > 0 {
+				moved[j] = day + " " + m
+			}
+		}
+		ways[i].Moved = moved
 	}
 }
 
@@ -320,11 +345,21 @@ func indexPlate(st planning.State, id int64) int {
 // nextStep tells the model what to do with the result, computed here so it
 // reads it at the moment of choice.
 func nextStep(ways, offers []planning.Way, res planning.WayResult) string {
+	text := nextStepText(ways, offers, res)
+	if len(ways) > 1 && strings.HasPrefix(text, "apply ways[0]") {
+		text += ". The ways are alternatives, each from the same starting plan: apply one, never add their effects together"
+	}
+	return text
+}
+
+func nextStepText(ways, offers []planning.Way, res planning.WayResult) string {
 	switch {
 	case res.Impossible:
 		return fmt.Sprintf("change nothing: say why with the numbers (%s); offer offer[0] as the nearest safe option and ask whether to do it", res.EmptyWhy)
 	case len(ways) > 0 && len(offers) > 0:
 		return "apply ways[0] now with apply_changes (its ops, light and goal as returned), tell the user what changed with before and after, say if it is not yet a light (hearty) meal, and present the recommended one as your recommendation: apply an offer only when the user says yes"
+	case len(ways) > 0 && res.Goal == planning.GoalLighter && !ways[0].Reaches && res.FloorKcal > 0:
+		return fmt.Sprintf("apply ways[0] now with apply_changes (its ops, light and goal as returned), then tell the user what changed with before and after, and that it stays above a light meal because lighter would take the day under its minimum of %.0f kcal unless the other meals grew past their usual size", res.FloorKcal)
 	case len(ways) > 0:
 		return "apply ways[0] now with apply_changes (its ops, light and goal as returned), then tell the user what changed with before and after"
 	case len(offers) > 0:
