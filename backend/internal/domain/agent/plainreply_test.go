@@ -28,6 +28,14 @@ func TestPlainReply(t *testing.T) {
 		{"id in text", "Plate plate_id 34 is lighter.", "Plate it is lighter."},
 		{"iso date", "Moved to 2026-11-26 dinner.", "Moved to Thu 26 Nov dinner."},
 		{"german", "Ciabatta überschreitet die Zusatzgrenze von 120 g.", "Ciabatta überschreitet die Grenze für Beilagen von 120 g."},
+		{"required rule", "This is a warning, not a required rule, and the day stays above its minimum of 1650.", "This is a warning, not a must, and the day stays above its minimum of 1650."},
+		{"required-rule problem", "It is a warning, not a required-rule breach, for Tue.", "It is a warning, not a must, for Tue."},
+		{"kept: tool in the kitchen", "Use the tool for peeling.", "Use the tool for peeling."},
+		{"kept: a band", "She plays in the band.", "She plays in the band."},
+		{"kept: an occasion", "A special cooking occasion.", "A special cooking occasion."},
+		{"kept: baking rules", "The hard rules of baking.", "The hard rules of baking."},
+		{"kept: a soft item", "Add a soft item such as butter.", "Add a soft item such as butter."},
+		{"kept: a quoted soft cheese", "Dinner on Tue has \"Soft add-on cheese\" and 800 kcal; the add-on is over its limit.", "Dinner on Tue has \"Soft add-on cheese\" and 800 kcal; the side is over its limit."},
 		{"kept: a food called floor lamp cake", "A band of onions, floor plan, hard cheese and soft pretzel stay.", "A band of onions, floor plan, hard cheese and soft pretzel stay."},
 	} {
 		assert.Equal(t, c.want, agent.PlainReply(c.in), c.name)

@@ -19,7 +19,7 @@ var (
 	plannerWord = regexp.MustCompile(`(?i)\b(bands?|floors?|caps?|soft|hard|violations?|drafts?|sessions?)\b`)
 	// E017b: the words of the last paid round, also inside identifiers
 	// (band_low_pct, floor_kcal, cook_occasions: "_" separates words here).
-	cookWord = regexp.MustCompile(`(?i)(^|[^a-z])(bands?|floors?|caps?|occasions?|add-ons?|hearty minimum)([^a-z]|$)`)
+	cookWord = regexp.MustCompile(`(?i)(^|[^a-z])(bands?|floors?|caps?|occasions?|add-ons?|hearty minimum|required[ -]rules?)([^a-z]|$)`)
 	isoDate  = regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}\b`)
 )
 
