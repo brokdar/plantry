@@ -123,8 +123,8 @@ type Alternative struct {
 	// weekly ledger's pct (0 without a target).
 	DayPct  float64 `json:"day_pct"`
 	WeekPct float64 `json:"week_pct"`
-	// WeekMeatG is the week's meat after the change (not shown to the model).
-	WeekMeatG        float64 `json:"-"`
+	// WeekMeatG is the week's meat after the change, per eater (g).
+	WeekMeatG        float64 `json:"week_meat_g,omitempty"`
 	CookOccasionsDay int     `json:"cook_occasions_day"`
 	// Recommended marks the first alternative (one per result); Because
 	// says why in one phrase.

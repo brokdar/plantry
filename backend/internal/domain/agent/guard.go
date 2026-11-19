@@ -253,6 +253,7 @@ func replacementOffer(ctx context.Context, svc Services, w window.Window, op cha
 				return map[string]any{
 					"what": fmt.Sprintf("replace %s on %s with %s so the day stays above its minimum", food.Quote(res.Current.Name), dayLabel(p.Date), food.Quote(a.Name)),
 					"ops":  a.Ops, "recommended": first, "recommended_because": "keeps the day above its minimum, no new warning",
+					"effect": map[string]any{"day": dayLabel(p.Date), "day_kcal_after": a.DayKcal},
 				}
 			}
 		}
