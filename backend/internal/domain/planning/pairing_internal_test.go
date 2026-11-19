@@ -27,6 +27,9 @@ func TestAddOnFits(t *testing.T) {
 		}
 		return p
 	}
+	recipe := func(id int64, name string, g FoodGroups) FoodFacts {
+		return FoodFacts{ID: id, Name: name, Kind: food.KindComposed, Role: food.RoleSideVeg, Groups: g}
+	}
 	tests := []struct {
 		name  string
 		food  FoodFacts
@@ -50,6 +53,11 @@ func TestAddOnFits(t *testing.T) {
 		{"egg on a ragù", leaf(18, "Egg"), plate(1), "dinner", false},
 		{"smoked salmon on a ragù", fish, plate(1), "dinner", false},
 		{"smoked salmon on a curry", fish, plate(2), "dinner", true},
+		{"a tofu recipe as a side of a ragù", recipe(20, "Marinated tofu", FoodGroups{}), plate(1, 3), "dinner", false},
+		{"a tofu recipe as a side of a curry", recipe(20, "Marinated tofu", FoodGroups{}), plate(2), "dinner", true},
+		{"an egg recipe on a ragù", recipe(21, "Egg fried rice", FoodGroups{}), plate(1), "dinner", false},
+		{"a meat recipe as a side of a ragù", recipe(22, "Chicken salad", FoodGroups{MeatG: 60}), plate(1), "lunch", false},
+		{"a vegetable recipe on a ragù", recipe(23, "Roasted carrots", FoodGroups{}), plate(1), "dinner", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

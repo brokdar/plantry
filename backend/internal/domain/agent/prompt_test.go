@@ -75,8 +75,8 @@ func TestPrompt_MealEditRules(t *testing.T) {
 func TestPrompt_V17Rules(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
-		"never infer what happens to other meals", "Check every write (apply_changes", "already verified: apply them without a check",
-		"write exactly the ops you checked", "dish repeated this week", "carry out the request and name the warning",
+		"never infer what happens to other meals", "without a check first", "without asking \"should I save?\"",
+		"dry_run true only for a what-if question", "dish repeated this week", "carry out the request and name the warning",
 		"moves the day's target by that meal's share", "with the numbers",
 	} {
 		if !strings.Contains(prompt, want) {

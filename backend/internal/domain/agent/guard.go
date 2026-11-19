@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
@@ -32,9 +33,9 @@ func hardWhy(is planning.Issue) string {
 	if is.Code == planning.CodeKcalBelowFloor {
 		kcal, _ := is.Params["kcal"].(float64)
 		floor, _ := is.Params["floor_kcal"].(float64)
-		return fmt.Sprintf("%s would fall to %.0f kcal, under its minimum of %.0f kcal", is.Date, kcal, floor)
+		return fmt.Sprintf("%s would fall to %.0f kcal, under its minimum of %.0f kcal", plainDay(is.Date), kcal, floor)
 	}
-	return fmt.Sprintf("it would create a problem on %s: %s", is.Date, planning.PlainText(is.Code).Label)
+	return fmt.Sprintf("it would create a problem on %s: %s", plainDay(is.Date), planning.PlainText(is.Code).Label)
 }
 
 // runGuarded is apply_changes' write path: a call whose ops would leave a day
@@ -211,16 +212,26 @@ func containsInt(l []int, v int) bool {
 	return false
 }
 
+// plainDay writes an ISO date as the user reads it ("Wed 25 Nov"); text that
+// is not a date stays as it is.
+func plainDay(iso string) string {
+	d, err := time.Parse(time.DateOnly, iso)
+	if err != nil {
+		return iso
+	}
+	return dayLabel(d)
+}
+
 // describeOp names an op in words for the skipped list: a removal by food and
 // date (from the check that ran it), else the op and its date.
 func describeOp(op changeOp, r applyRun) string {
 	if applied, ok := r.result["applied"].([]map[string]any); ok && len(applied) > 0 {
 		if food, ok := applied[0]["food"].(string); ok {
-			return fmt.Sprintf("%s %s on %v", op.Op, food, applied[0]["date"])
+			return fmt.Sprintf("%s %s on %v", op.Op, food, plainDay(fmt.Sprint(applied[0]["date"])))
 		}
 	}
 	if op.Date != "" {
-		return fmt.Sprintf("%s on %s", op.Op, op.Date)
+		return fmt.Sprintf("%s on %s", op.Op, plainDay(op.Date))
 	}
 	return op.Op
 }
@@ -246,15 +257,62 @@ func replacementOffer(ctx context.Context, svc Services, w window.Window, op cha
 			if err != nil || res.Current == nil {
 				return nil
 			}
-			for _, a := range res.Alternatives {
-				if len(a.NewIssues) == 0 && len(a.Ops) > 0 {
-					return map[string]any{
-						"what": fmt.Sprintf("replace %s on %s with %s so the day stays above its minimum", res.Current.Name, p.Date.Format("2006-01-02"), a.Name),
-						"ops":  a.Ops, "recommended": first, "recommended_because": "keeps the day above its minimum, no new warning",
-					}
+			if a, ok := firstClean(res.Alternatives, func(ops []planning.OptionOp) bool { return offerIsClean(ctx, svc, w, ops) }); ok {
+				return map[string]any{
+					"what": fmt.Sprintf("replace %s on %s with %s so the day stays above its minimum", res.Current.Name, dayLabel(p.Date), a.Name),
+					"ops":  a.Ops, "recommended": first, "recommended_because": "keeps the day above its minimum, no new warning",
 				}
 			}
 		}
 	}
 	return nil
+}
+
+// changeOpsOf reads the ops of a planner way or alternative as apply_changes ops.
+func changeOpsOf(in []planning.OptionOp) ([]changeOp, error) {
+	ops := make([]changeOp, 0, len(in))
+	for _, o := range in {
+		raw, err := json.Marshal(o)
+		if err != nil {
+			return nil, err
+		}
+		var op changeOp
+		if err := json.Unmarshal(raw, &op); err != nil {
+			return nil, err
+		}
+		ops = append(ops, op)
+	}
+	return ops, nil
+}
+
+// firstClean is the best-ranked alternative that lists no new issue and passes
+// the check of its own ops: a recommended offer never creates a warning.
+func firstClean(alts []planning.Alternative, clean func([]planning.OptionOp) bool) (planning.Alternative, bool) {
+	for _, a := range alts {
+		if len(a.NewIssues) == 0 && len(a.Ops) > 0 && clean(a.Ops) {
+			return a, true
+		}
+	}
+	return planning.Alternative{}, false
+}
+
+// offerIsClean runs an offer's ops through the check apply_changes uses
+// (rolled back) and says whether it adds no problem and no warning, by the same
+// issue keys as report.new_warnings: guard, offers and report share one set.
+func offerIsClean(ctx context.Context, svc Services, w window.Window, in []planning.OptionOp) bool {
+	ops, err := changeOpsOf(in)
+	if err != nil || len(ops) == 0 {
+		return false
+	}
+	r, err := runApply(ctx, svc, w, applyInput{Ops: ops, DryRun: true, quiet: true}, nil)
+	if err != nil {
+		return false
+	}
+	was := issueMap(r.before.Issues)
+	for _, is := range r.after.Issues {
+		if _, old := was[issueKey(is)]; !old {
+			return false
+		}
+	}
+	return true
 }
