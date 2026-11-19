@@ -40,13 +40,10 @@ var (
 	dairyWords     = []string{"yogurt", "joghurt", "skyr", "quark", "milk", "milch", "kefir"}
 	pastaWords     = []string{"pasta", "nudel", "spaghetti", "penne", "lasagn", "tagliatelle", "gnocchi", "fusilli", "macaroni", "makkaroni", "risotto"}
 	starchWords    = []string{"rice", "reis", "kartoffel", "potato", "couscous", "polenta", "bulgur", "brot", "bread", "sandwich", "wrap"}
-	breakfastWords = []string{"muesli", "mueslli", "musli", "oat", "hafer", "cereal", "granola", "cornflakes"}
+	breakfastWords = []string{"muesli", "mueslli", "musli", "oat", "hafer", "porridge", "cereal", "granola", "cornflake"}
 	fruitWords     = []string{"fruit salad", "obstsalat", "fruchtsalat", "kompott", "compote"}
 	saladWords     = []string{"salad", "salat"}
 )
-
-// breakfastWords are the names of leaves that are breakfast food.
-var breakfastWords = []string{"muesli", "musli", "oat", "hafer", "porridge", "cereal", "cornflake", "granola"}
 
 // MealFits reports whether food f belongs at a meal of slot (the plate's slot
 // short name) at all, whatever else is on the plate: a breakfast dish
