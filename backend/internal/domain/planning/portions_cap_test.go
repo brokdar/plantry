@@ -58,16 +58,15 @@ func (overChooser) Choose(ctx context.Context, in planning.ChooseInput) (plannin
 }
 
 // Whatever the chooser returns, the saved plan holds no dish above the cap,
-// and the run notes say what was lowered.
+// (the lowering is in the run log, not in the saved note).
 func TestService_SavedPlanNeverHoldsPortionsOverTheCap(t *testing.T) {
 	e := newSvcEnv(t)
 	e.deps.Choosers = map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: overChooser{}}
 	e.svc = planning.NewService(e.deps)
 
 	id := e.generate(e.req())
-	end := e.ok(id)
+	e.ok(id)
 
-	assert.Contains(t, end.Notes, "portions lowered from 2.5 to 1.5")
 	seen := 0
 	for _, p := range e.window() {
 		for _, c := range p.Components {

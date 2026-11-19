@@ -19,7 +19,8 @@ import (
 const maxBalancedNotes = 8
 
 // finishProposal is what a generated plan goes through after the chooser, in
-// one place for the service and the evaluation: the portion cap, the day's
+// one place for the service and the evaluation: the portion cap, the cooking
+// limit, the day's
 // distinct mains (a day regenerate), the meat and fish guard, the balancing pass, and the guard again for the portions the pass
 // raised. It returns the finished proposal and one note per change. A side
 // swap is left alone.
@@ -31,7 +32,9 @@ func finishProposal(in ChooseInput, prop Proposal) (Proposal, []string) {
 	var notes []string
 	prop, capNotes := capPortions(in.State, prop)
 	notes = append(notes, capNotes...)
-	prop, n := guardDayMains(in.State, in.Target, prop, skip)
+	prop, n := fixCookLimit(in, prop)
+	notes = append(notes, n...)
+	prop, n = guardDayMains(in.State, in.Target, prop, skip)
 	notes = append(notes, n...)
 	prop, n = guardWeek(in.State, in.Target, prop, skip, in.Instruction)
 	notes = append(notes, n...)

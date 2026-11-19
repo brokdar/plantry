@@ -25,7 +25,10 @@ func TestLLMChooser_CutInputReplaysAsObjectAndIsLogged(t *testing.T) {
 
 	row := e.run(id)
 	assert.Equal(t, "ok", row.Status)
-	assert.Equal(t, 1, strings.Count(row.Notes, "cut off at the output limit"))
+	assert.NotContains(t, row.Notes, "cut off at the output limit", "process notes stay in the run log")
+	var after string
+	require.NoError(t, e.db.QueryRow(`SELECT args_json FROM ai_run_steps WHERE run_id = ? AND name = 'plan.evaluation' AND args_json LIKE '%"phase":"after"%'`, id).Scan(&after))
+	assert.Equal(t, 1, strings.Count(after, "cut off at the output limit"), after)
 
 	reqs := e.client.Requests()
 	require.Len(t, reqs, 3)

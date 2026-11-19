@@ -215,3 +215,77 @@ func proofOne(t *testing.T, round, dir, label string) {
 	}
 	_ = reflect.TypeOf
 }
+
+// replayChooser answers a run with a proposal taken from a stored run.
+type replayChooser struct {
+	raw json.RawMessage
+	in  *planning.ChooseInput
+}
+
+func (r replayChooser) Choose(_ context.Context, in planning.ChooseInput) (planning.Proposal, error) {
+	*r.in = in
+	return planning.ParseForProof(r.raw, in)
+}
+
+// savedNotes runs the service with the model's last stored plan and returns the saved note.
+func savedNotes(t *testing.T, round, dir, label string) string {
+	start := filepath.Join(round, "start-gen.db")
+	if _, err := os.Stat(filepath.Join(dir, "setup.db")); err == nil {
+		start = filepath.Join(dir, "setup.db")
+	}
+	db := copyDB(t, start)
+	calls, _ := firstEvaluate(t, dir)
+	var in planning.ChooseInput
+	deps := testsvc.PlanningDeps(db)
+	runs := newFakeRuns(t, db)
+	deps.RunLog, deps.Runs = runs, runs
+	deps.Go = func(f func()) { f() }
+	deps.Choosers = map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: planning.Heuristic{}, airun.ChooserLLM: replayChooser{calls[len(calls)-1], &in}}
+	svc := planning.NewService(deps)
+	req := planning.Request{
+		Start: time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC), Today: time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC),
+		Instruction: proofInstruction[label], Chooser: airun.ChooserLLM,
+	}
+	if label == "guests" {
+		req.EatersByDate = map[string]float64{"2026-11-22": 3}
+	}
+	id, err := svc.Generate(context.Background(), req)
+	require.NoError(t, err)
+	svc.Wait()
+	return runs.end(id).Notes
+}
+
+func TestE028_SavedNotes(t *testing.T) {
+	round := os.Getenv("PLANTRY_PROOF_ROUND")
+	if round == "" {
+		t.Skip("PLANTRY_PROOF_ROUND not set")
+	}
+	for _, label := range strings.Split(os.Getenv("PLANTRY_PROOF_ONLY"), ",") {
+		if label == "" {
+			continue
+		}
+		dir := filepath.Join(round, "runs", "gen-"+label+"-r1")
+		fmt.Printf("NOTE %s:\n%s\n", label, savedNotes(t, round, dir, label))
+	}
+}
+
+func TestPromptCost(t *testing.T) {
+	round := os.Getenv("PLANTRY_PROOF_ROUND")
+	if round == "" {
+		t.Skip("PLANTRY_PROOF_ROUND not set")
+	}
+	dir := filepath.Join(round, "runs", "gen-plain-r1")
+	in := proofInput(t, round, dir, "plain")
+	for _, r := range planning.PromptSections(in) {
+		fmt.Printf("PROMPT %-40v %v\n", r[0], r[1])
+	}
+	cols := planning.CandidateColumns(in)
+	keys := make([]string, 0, len(cols))
+	for k := range cols {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool { return cols[keys[i]] > cols[keys[j]] })
+	for _, k := range keys {
+		fmt.Printf("COLUMN %-20s %d\n", k, cols[k])
+	}
+}

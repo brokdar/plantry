@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"runtime/debug"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -863,9 +864,8 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	// No saved plate holds a dish above the portion cap, whatever the chooser
 	// left (the checker flagged it and the repairs had their turns).
 	prop, capNotes := capPortions(base, last)
-	if len(capNotes) > 0 {
-		prop.Notes = joinNotes(append([]string{prop.Notes}, capNotes...)...)
-	}
+	chooserNotes, orig := prop.Notes, prop
+	var runLog map[string]any
 	// The week's meat stays within its budget and holds a fish meal whenever a
 	// verified swap exists, whatever the chooser left. A model's plan also gets
 	// its quantities finished in Go (portions, a side, add-ons), the way the
@@ -880,9 +880,26 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		} else {
 			prop, finishNotes = finishProposal(cin, prop)
 		}
-		if len(finishNotes) > 0 {
-			prop.Notes = joinNotes(append([]string{prop.Notes}, finishNotes...)...)
+		// The saved note says what the plan is, computed from it; the lines
+		// of the passes stay in the run log.
+		own := prop.Own
+		if own == "" {
+			own = orig.Notes
 		}
+		prop.Notes = joinNotes(append([]string{own}, savedPlanNotes(cin, orig, prop)...)...)
+		runLog = map[string]any{"chooser_notes": chooserNotes, "changes": append(slices.Clone(capNotes), finishNotes...)}
+		// A plan that still breaks a hard rule keeps the chooser's warnings: they are true of it.
+		if len(violationsOf(Check(Merge(base, j.target, prop), j.target))) > 0 {
+			var warn []string
+			for _, l := range strings.Split(chooserNotes, "\n") {
+				if strings.HasPrefix(l, "Warning, not resolved") {
+					warn = append(warn, l)
+				}
+			}
+			prop.Notes = joinNotes(append([]string{prop.Notes}, warn...)...)
+		}
+	} else if len(capNotes) > 0 {
+		prop.Notes = joinNotes(append([]string{prop.Notes}, capNotes...)...)
 	}
 	merged := Merge(base, j.target, prop)
 	issues := Check(merged, j.target)
@@ -931,7 +948,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 
 	// The closing evaluation reads the saved plan back, as the board will.
 	closed = true
-	s.recordAfter(ctx, j)
+	s.recordAfter(ctx, j, runLog)
 	score := ComputeScore(merged, j.target, issues, j.exploreQuota)
 	violations := violationsOf(issues)
 	end := RunEnd{Status: airun.StatusOK, Notes: joinNotes(prop.Notes, movedNotes(base, moved)), RepairAttempts: prop.RepairAttempts}
@@ -968,7 +985,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 
 // recordAfter stores the `after` evaluation of the plan as saved: the window
 // built again from the database, not the merged proposal.
-func (s *Service) recordAfter(ctx context.Context, j job) {
+func (s *Service) recordAfter(ctx context.Context, j job, extra map[string]any) {
 	dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), saveTimeout)
 	defer cancel()
 	st, err := s.d.Builder.Build(dctx, j.w, j.today, j.from, j.to)
@@ -976,7 +993,7 @@ func (s *Service) recordAfter(ctx context.Context, j job) {
 		RecordEvaluationError(ctx, PhaseAfter, err)
 		return
 	}
-	RecordEvaluation(ctx, PhaseAfter, func() Evaluation { return Evaluate(st, j.target) })
+	RecordEvaluationWith(ctx, PhaseAfter, extra, func() Evaluation { return Evaluate(st, j.target) })
 }
 
 // changedDuringRun marks a save that failed because the plan changed while

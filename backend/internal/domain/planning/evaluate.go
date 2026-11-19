@@ -327,6 +327,16 @@ func RecordEvaluation(ctx context.Context, phase string, build func() Evaluation
 	recordEvaluation(ctx, map[string]any{"phase": phase}, build)
 }
 
+// RecordEvaluationWith is RecordEvaluation with more fields in the step's args
+// (the closing evaluation also carries what the code changed after the chooser).
+func RecordEvaluationWith(ctx context.Context, phase string, extra map[string]any, build func() Evaluation) {
+	a := map[string]any{"phase": phase}
+	for k, v := range extra {
+		a[k] = v
+	}
+	recordEvaluation(ctx, a, build)
+}
+
 // RecordAttemptEvaluation stores the merged proposal of chooser attempt n.
 func RecordAttemptEvaluation(ctx context.Context, n int, build func() Evaluation) {
 	recordEvaluation(ctx, map[string]any{"phase": PhaseAttempt, "attempt": n}, build)

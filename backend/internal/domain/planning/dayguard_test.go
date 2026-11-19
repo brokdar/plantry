@@ -88,6 +88,8 @@ func TestGuardDayMains(t *testing.T) {
 		require.Len(t, got.Sessions, 1)
 		assert.EqualValues(t, dinner, got.Sessions[0].CookSlotID, "the dish cooks at dinner now")
 		assert.InDelta(t, 1, got.Sessions[0].Portions, 1e-9)
+		saved := strings.Join(planning.SavedPlanNotes(planning.ChooseInput{State: s, Target: tgt}, p, got), "\n")
+		assert.Contains(t, saved, "slot 1 is a cold plate, nothing to cook: bread 50 g")
 		merged := planning.Merge(s, tgt, got)
 		ev := planning.Evaluate(merged, tgt)
 		var kinds []string

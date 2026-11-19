@@ -460,7 +460,7 @@ func parseProposal(input json.RawMessage, in ChooseInput) (Proposal, error) {
 	if err != nil {
 		return Proposal{}, err
 	}
-	p := Proposal{Notes: strings.TrimSpace(sp.Notes), Light: light, MaxCookDays: max(sp.MaxCookDays, 0)}
+	p := Proposal{Notes: strings.TrimSpace(sp.Notes), Own: strings.TrimSpace(sp.Notes), Light: light, MaxCookDays: max(sp.MaxCookDays, 0)}
 	for i, s := range sp.Sessions {
 		if strings.TrimSpace(s.Key) == "" {
 			return Proposal{}, fmt.Errorf("sessions[%d].key is required", i)

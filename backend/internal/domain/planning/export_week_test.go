@@ -1,5 +1,13 @@
 package planning
 
+import (
+	"fmt"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+)
+
 // GuardWeek exposes the last guard to the external tests.
 var GuardWeek = guardWeek
 
@@ -58,4 +66,61 @@ func ParseForProof(raw []byte, in ChooseInput) (Proposal, error) {
 	}
 	p, _ = autofix(in, p)
 	return p, nil
+}
+
+// SavedPlanNotes exposes the code-written lines of a saved plan's note.
+var SavedPlanNotes = savedPlanNotes
+
+// FixCookLimit exposes the cooking-limit move of the finishing step.
+var FixCookLimit = fixCookLimit
+
+// PromptSections measures the planner prompt by section, in characters.
+func PromptSections(in ChooseInput) [][2]any {
+	s := in.State
+	x := newIndex(s, in.Target)
+	var out [][2]any
+	measure := func(name string, f func(b *strings.Builder)) {
+		var b strings.Builder
+		f(&b)
+		out = append(out, [2]any{name, utf8.RuneCountInString(b.String())})
+	}
+	measure("rules", func(b *strings.Builder) { writeRules(b, s) })
+	measure("dates", func(b *strings.Builder) { writeDates(b, s) })
+	measure("settings", func(b *strings.Builder) { writeSettings(b, in) })
+	measure("profile", func(b *strings.Builder) { writeProfile(b, s.Profile) })
+	measure("day budgets", func(b *strings.Builder) { writeDayBudgets(b, x) })
+	measure("meat budget", func(b *strings.Builder) { writeMeatBudget(b, in) })
+	measure("cells", func(b *strings.Builder) { writeCells(b, x) })
+	measure("sessions", func(b *strings.Builder) { writeSessions(b, x) })
+	measure("fixed cooks", func(b *strings.Builder) { writeFixedCooks(b, x) })
+	measure("keep table", func(b *strings.Builder) { writeKeepTable(b, in) })
+	measure("history", func(b *strings.Builder) { writeHistory(b, s) })
+	measure("corrections", func(b *strings.Builder) { writeCorrections(b, s) })
+	measure("task", func(b *strings.Builder) { writeTask(b, in) })
+	measure("no-cook table", func(b *strings.Builder) { writeNoCook(b, in) })
+	cands := candidates(in)
+	n := 0
+	for _, f := range cands {
+		n += utf8.RuneCountInString(candidateRow(f, s.Settings.DefaultKeepDays)) + 1
+	}
+	out = append(out, [2]any{fmt.Sprintf("candidate table (%d rows)", len(cands)), n})
+	for _, tl := range []llm.Tool{evaluatePlanTool(), submitPlanTool()} {
+		out = append(out, [2]any{"tool " + tl.Name + " (description+schema)", utf8.RuneCountInString(tl.Description) + len(tl.Schema)})
+	}
+	out = append(out, [2]any{"TOTAL rendered prompt", utf8.RuneCountInString(RenderPrompt(in))})
+	return out
+}
+
+// CandidateColumns is the characters per column of the candidate table.
+func CandidateColumns(in ChooseInput) map[string]int {
+	names := strings.Split("id|name|role|suits|diet|meat|meat_g|fish_g|kcal|protein_g|fat_g|carbs_g|nutrition_complete|minutes|reference_portions|keep_days|freezable|last_eaten|eaten_8_weeks|favorite|like_score|explore", "|")
+	out := map[string]int{}
+	for _, f := range candidates(in) {
+		for i, v := range strings.Split(candidateRow(f, in.State.Settings.DefaultKeepDays), "|") {
+			if i < len(names) {
+				out[names[i]] += utf8.RuneCountInString(v) + 1
+			}
+		}
+	}
+	return out
 }

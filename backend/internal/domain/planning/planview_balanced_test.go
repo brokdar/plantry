@@ -2,6 +2,7 @@ package planning_test
 
 import (
 	"encoding/json"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -112,5 +113,40 @@ func TestPlannerView(t *testing.T) {
 		assert.True(t, found)
 		raw, _ := json.Marshal(view["code_changes"])
 		assert.False(t, strings.Contains(string(raw), "Tuesday dinner"), "no change line names the confirmed cell: %s", raw)
+	})
+}
+
+var plannerWord = regexp.MustCompile(`(?i)(^|[^a-z])(bands?|floors?|caps?|soft|hard|targets?|occasions?|add-ons?|sessions?|drafts?|violations?)([^a-z]|$)|\d{4}-\d{2}-\d{2}`)
+
+// E028: the saved note is computed from the saved plan, in kitchen words.
+func TestSavedPlanNotes(t *testing.T) {
+	t.Run("sides and dishes the code changed, one line each, in kitchen words", func(t *testing.T) {
+		s := balanceState()
+		in := planning.ChooseInput{State: s, Target: windowTarget(s)}
+		prop := freshPlan(s)
+		final, _ := planning.FinishProposal(in, prop)
+		notes := planning.SavedPlanNotes(in, prop, final)
+		joined := strings.Join(notes, "\n")
+		assert.Contains(t, joined, "Sides added: ")
+		assert.Equal(t, 1, strings.Count(joined, "Sides added"), "one line, not one per change")
+		assert.NotContains(t, joined, "Balanced:")
+		assert.NotRegexp(t, plannerWord, joined)
+	})
+	t.Run("only days outside their range are named, with the cooking limit when it binds", func(t *testing.T) {
+		s := balanceState()
+		s.Profile.KcalTarget = f64(6000)
+		in := planning.ChooseInput{State: s, Target: windowTarget(s)}
+		prop := freshPlan(s)
+		prop.MaxCookDays = 7
+		final, _ := planning.FinishProposal(in, prop)
+		joined := strings.Join(planning.SavedPlanNotes(in, prop, final), "\n")
+		assert.Regexp(t, `Light days \(less food than planned for\): Monday about \d+ kcal`, joined)
+		assert.Contains(t, joined, "Seven cooking days cannot carry more.")
+		assert.NotRegexp(t, plannerWord, joined)
+		balanced := balanceState()
+		in2 := planning.ChooseInput{State: balanced, Target: windowTarget(balanced)}
+		p2 := freshPlan(balanced)
+		f2, _ := planning.FinishProposal(in2, p2)
+		assert.NotContains(t, strings.Join(planning.SavedPlanNotes(in2, p2, f2), "\n"), "Light days", "a plan in range names no light day")
 	})
 }

@@ -229,6 +229,7 @@ func (h *planner) plan() (Proposal, error) {
 		}
 	}
 	h.topUpFloors()
+	h.prop.Own = strings.TrimSpace(strings.Join(append([]string{h.exploreNote()}, h.notes...), "\n"))
 	if note := lightNote(h.s.Light, h.in.Locale); note != "" {
 		h.notes = append(h.notes, note)
 	}
