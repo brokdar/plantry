@@ -48,3 +48,11 @@ var PlainRules = plainRules
 func WithTurn(ctx context.Context, conversationID int64) context.Context {
 	return withTurn(ctx, chatTurn{conversationID: conversationID})
 }
+
+// Worsened, ModelView and AddDerived expose the report's "worse" rule and the
+// model-facing views of a tool result.
+var (
+	Worsened   = worsened
+	ModelView  = modelView
+	AddDerived = addDerived
+)

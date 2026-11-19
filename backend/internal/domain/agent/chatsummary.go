@@ -62,7 +62,7 @@ func chatFacts(st planning.State) string {
 	}
 	slices.Sort(foods)
 	var b strings.Builder
-	b.WriteString("\nFoods on the plan (role, diet class, a recipe's total minutes, kcal and protein per portion, a leaf per 100 g; other foods: find_foods):\n")
+	b.WriteString("\nFoods on the plan (name | id to pass as food_id, never to say | role, diet class, a recipe's total minutes, kcal and protein per portion, a leaf per 100 g; other foods: find_foods):\n")
 	for _, id := range foods {
 		f := st.Foods[id]
 		role := string(f.Role)
@@ -81,7 +81,7 @@ func chatFacts(st planning.State) string {
 		if f.DietClass != "" {
 			class = " | " + string(f.DietClass)
 		}
-		fmt.Fprintf(&b, "food_id %d %s | %s%s%s | %.0f kcal, %.0f g protein %s\n", f.ID, food.Data(f.Name), role, class, minutes, f.Macros.Kcal, f.Macros.Protein, per)
+		fmt.Fprintf(&b, "%s | id %d | %s%s%s | %.0f kcal, %.0f g protein %s\n", food.Data(f.Name), f.ID, role, class, minutes, f.Macros.Kcal, f.Macros.Protein, per)
 	}
 	// Day figures come from the evaluation; the day's target is scaled to its
 	// planned meals (a "No plate" meal asks less) and moved by light meals.

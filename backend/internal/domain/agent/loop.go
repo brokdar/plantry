@@ -316,7 +316,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			resultBlocks = append(resultBlocks, llm.ContentBlock{
 				Type:              llm.ContentTypeToolResult,
 				ToolResultID:      call.ToolUseID,
-				ToolResultContent: output,
+				ToolResultContent: modelView(output),
 			})
 			send(ctx, out, llm.Event{Type: llm.EventToolExecEnd, Payload: llm.ToolExecEndPayload{
 				ID: call.ToolUseID, Name: call.ToolUseName,

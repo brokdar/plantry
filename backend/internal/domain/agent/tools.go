@@ -261,7 +261,7 @@ func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessag
 	if err != nil {
 		err = plainError{err}
 	}
-	return plainRules(out), effect, err
+	return dropAfterWeek(addDerived(name, plainRules(out))), effect, err
 }
 
 // unwrapParams returns the object inside a sole {"params": {...}} input: a
