@@ -215,10 +215,10 @@ func checkMarks(st planning.State, light []planning.LightIntent, ev planning.Eva
 			kcal, _ := is.Params["kcal"].(float64)
 			if is.Code == planning.CodeMealNotLight {
 				limit, _ := is.Params["max_kcal"].(float64)
-				return fmt.Errorf("%w: %s on %s would hold %.0f kcal, over the %.0f kcal a light meal holds at most: a light mark is stored only on a meal that stays within it. Use find_ways with goal lighter to get verified ways, and pass the mark with them", domain.ErrInvalidInput, l.Slot, l.Date, kcal, limit)
+				return fmt.Errorf("%w: the %s on %s would still hold %.0f kcal, more than a light meal holds at most (%.0f kcal): make it smaller first (find_ways with goal lighter shows how) or leave the light mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, limit)
 			}
 			least, _ := is.Params["min_kcal"].(float64)
-			return fmt.Errorf("%w: %s on %s would hold %.0f kcal, under the %.0f kcal a filling meal holds at least: a hearty mark is stored only on a meal that reaches it. Use find_ways with goal heartier to get verified ways, and pass the mark with them", domain.ErrInvalidInput, l.Slot, l.Date, kcal, least)
+			return fmt.Errorf("%w: the %s on %s would hold only %.0f kcal, less than a filling meal holds at least (%.0f kcal): make it bigger first (find_ways with goal heartier shows how) or leave the filling mark off", domain.ErrInvalidInput, l.Slot, l.Date, kcal, least)
 		}
 	}
 	return nil

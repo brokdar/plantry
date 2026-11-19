@@ -150,13 +150,19 @@ func issueKey(is planning.Issue) string {
 		}
 		return *p
 	}
-	// An add-on warning names the food: a second one on the same plate is a new
-	// warning, not the old one.
-	food := ""
-	if is.Rule == "S9" {
-		food = fmt.Sprint(is.Params["food_id"])
+	// A warning is the same warning wherever its plate went: an extra is
+	// identified by its food and reason, a repeated dish by its food, a light
+	// or filling meal by its cell. Plate and batch ids are not part of it, so
+	// a move or an undo (new ids) does not make an old warning new.
+	switch is.Rule {
+	case "S9":
+		return fmt.Sprintf("S9|%s|%v|%v", is.Code, is.Params["food_id"], is.Params["reason"])
+	case "S8":
+		return fmt.Sprintf("S8|%s|%v", is.Code, is.Params["food_id"])
+	case "S6", "S6b":
+		return fmt.Sprintf("%s|%s|%s|%d", is.Rule, is.Code, is.Date, n(is.SlotID))
 	}
-	return fmt.Sprintf("%s|%s|%s|%d|%d|%d|%s", is.Rule, is.Code, is.Date, n(is.SlotID), n(is.PlateID), n(is.SessionID), food)
+	return fmt.Sprintf("%s|%s|%s|%d|%d|%d", is.Rule, is.Code, is.Date, n(is.SlotID), n(is.PlateID), n(is.SessionID))
 }
 
 type issueBaselineKey struct{}
@@ -230,6 +236,11 @@ func issueDelta(ctx context.Context, svc Services, out map[string]any) {
 // when there are any), each list capped at maxEffectIssues, with the open
 // total.
 func deltaOf(base, now map[string]planning.Issue) map[string]any {
+	noOptions := func(is planning.Issue) effectIssue {
+		e := toEffectIssue(is)
+		e.Options = nil // a resolved issue offers nothing: its options were checked against the old plan
+		return e
+	}
 	newIs, resolved := []effectIssue{}, []effectIssue{}
 	var worse []effectWorsened
 	for k, is := range now {
@@ -246,7 +257,7 @@ func deltaOf(base, now map[string]planning.Issue) map[string]any {
 	}
 	for k, is := range base {
 		if _, still := now[k]; !still {
-			resolved = append(resolved, toEffectIssue(is))
+			resolved = append(resolved, noOptions(is))
 		}
 	}
 	res := map[string]any{"total_open": len(now)}
@@ -366,4 +377,14 @@ func withEffect(ctx context.Context, svc Services, result any, a affected) json.
 	}
 	obj["after"] = mustJSON(changeEffect(ctx, svc, a))
 	return mustJSON(obj)
+}
+
+// awayDay is a day as the model reads it: a day away is not counted, so it
+// carries no target, range or minimum next to that.
+func awayDay(d planning.DayEval) planning.DayEval {
+	if d.Away {
+		d.TargetKcal, d.NormalTargetKcal = nil, 0
+		d.BandLow, d.BandHigh, d.FloorKcal, d.RoomKcal = 0, 0, 0, 0
+	}
+	return d
 }

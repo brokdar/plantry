@@ -93,8 +93,8 @@ func TestBuildReport_Items(t *testing.T) {
 			after: reportState(2, 0.5, 1),
 			check: func(t *testing.T, r changeReport) {
 				require.Len(t, r.Leftovers, 1)
-				assert.Contains(t, r.Leftovers[0], `0.5 portions of "Salmon" cooked Sat 21 Nov`)
-				assert.Contains(t, r.Leftovers[0], "The batch was not resized.")
+				assert.Contains(t, r.Leftovers[0], `0.5 portions of the "Salmon" cooked on Sat 21 Nov`)
+				assert.Contains(t, r.Leftovers[0], "It was not resized.")
 			},
 		},
 		{
@@ -110,7 +110,7 @@ func TestBuildReport_Items(t *testing.T) {
 			after: reportState(2, 1.5, 1),
 			check: func(t *testing.T, r changeReport) {
 				require.Len(t, r.Leftovers, 1)
-				assert.Contains(t, r.Leftovers[0], `need 0.5 portions more of "Salmon"`)
+				assert.Contains(t, r.Leftovers[0], `need 0.5 portions more of the "Salmon"`)
 			},
 		},
 		{
@@ -122,7 +122,7 @@ func TestBuildReport_Items(t *testing.T) {
 			}(),
 			check: func(t *testing.T, r changeReport) {
 				require.Len(t, r.Leftovers, 1)
-				assert.Contains(t, r.Leftovers[0], "is no longer needed")
+				assert.Contains(t, r.Leftovers[0], "is no longer cooked")
 			},
 		},
 		{
@@ -184,8 +184,8 @@ func TestBuildReport_AlsoChangedSaysMovedCooksAndAutomaticFixes(t *testing.T) {
 	}
 	r := buildReport(reportInput{beforeSt: st, afterSt: st, applied: applied})
 	require.Len(t, r.AlsoChanged, 2)
-	assert.Equal(t, `The "Salmon" batch is now cooked at Sun 22 Nov dinner (it was Sat 21 Nov dinner).`, r.AlsoChanged[0])
-	assert.Equal(t, `Automatically moved the "Salmon" batch to be cooked at Sun 22 Nov dinner (it was Sat 21 Nov dinner), so that no day gets a second cooking time.`, r.AlsoChanged[1])
+	assert.Equal(t, `The "Salmon" is now cooked at Sun 22 Nov dinner instead of Sat 21 Nov dinner.`, r.AlsoChanged[0])
+	assert.Equal(t, `To keep one cooking time a day, "Salmon" is now cooked at Sun 22 Nov dinner instead of Sat 21 Nov dinner.`, r.AlsoChanged[1])
 }
 
 // E022c: a meal of no-cook foods is named a cold plate in the report, so the

@@ -265,9 +265,9 @@ func summaryPlate(x *index, p Plate) string {
 		}
 		parts[i] += ")"
 	}
-	eaters := num(p.Eaters) + " eaters"
+	eaters := num(p.Eaters) + " people"
 	if p.Eaters == 1 {
-		eaters = "1 eater"
+		eaters = "1 person"
 	}
 	if s.isColdPlate(p) {
 		state += ", cold plate (nothing to cook)"

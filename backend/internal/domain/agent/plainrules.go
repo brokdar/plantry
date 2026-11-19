@@ -140,10 +140,10 @@ var kitchenWords = []struct {
 	{regexp.MustCompile(`\bcook_occasions`), "cooking_times"},
 	{regexp.MustCompile(`\b(?i:cooking occasions)\b`), "cooking times"},
 	{regexp.MustCompile(`\b(?i:cooking occasion)\b`), "cooking time"},
-	{regexp.MustCompile(`\bAdd-ons\b`), "Extras"},
-	{regexp.MustCompile(`\badd-ons\b`), "extras"},
-	{regexp.MustCompile(`\bAdd-on\b`), "Extra"},
-	{regexp.MustCompile(`\badd-on\b`), "extra"},
+	{regexp.MustCompile(`\bAdd-ons\b`), "Sides"},
+	{regexp.MustCompile(`\badd-ons\b`), "sides"},
+	{regexp.MustCompile(`\bAdd-on\b`), "Side"},
+	{regexp.MustCompile(`\badd-on\b`), "side"},
 	{regexp.MustCompile(`\b(?i:hearty minimum)\b`), "least a filling meal holds"},
 	{regexp.MustCompile(`\breached_hearty\b`), "reached_filling"},
 	{regexp.MustCompile(`\bHearty\b`), "Filling"},
@@ -296,8 +296,8 @@ var plainKeys = map[string]string{
 
 // plainReasons are the reason values of an extras issue, as words.
 var plainReasons = map[string]string{
-	"light_meal": "an extra on a light meal", "duplicates_main": "already in the main", "over_cap": "over the usual serving",
-	"day_limit": "too many extras that day", "repeated": "the same extra on too many meals",
+	"light_meal": "a side on a light meal", "duplicates_main": "already in the main", "over_cap": "over the usual serving",
+	"day_limit": "too many sides that day", "repeated": "the same side on too many meals",
 }
 
 var identParts = []struct {

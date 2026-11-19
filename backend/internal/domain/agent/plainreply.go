@@ -26,17 +26,17 @@ var replyWords = []struct {
 	{regexp.MustCompile(`(?i)\blight caps?\b`), "limit for a light meal"},
 	{regexp.MustCompile(`(?i)\bcooking occasions\b`), "cooking times"},
 	{regexp.MustCompile(`(?i)\bcooking occasion\b`), "cooking time"},
-	{regexp.MustCompile(`(?i)\badd-on limit\b`), "limit for extras"},
-	{regexp.MustCompile(`(?i)\badd-ons\b`), "extras"},
-	{regexp.MustCompile(`(?i)\badd-on\b`), "extra"},
+	{regexp.MustCompile(`(?i)\badd-on limit\b`), "limit for sides"},
+	{regexp.MustCompile(`(?i)\badd-ons\b`), "sides"},
+	{regexp.MustCompile(`(?i)\badd-on\b`), "side"},
 	{regexp.MustCompile(`(?i)\bsoft (issues|items|warnings)\b`), "warnings"},
 	{regexp.MustCompile(`(?i)\bsoft (issue|item|warning)\b`), "warning"},
 	{regexp.MustCompile(`(?i)\bhard (issues|rules)\b`), "problems"},
 	{regexp.MustCompile(`(?i)\bhard (issue|rule)\b`), "problem"},
 	{regexp.MustCompile(`\bthe tool (only |also |still |does not |doesn't |can only |says |shows )`), "it $1"},
 	{regexp.MustCompile(`\bthe tool\b`), "the planner"},
-	{regexp.MustCompile(`\bZusatzgrenze\b`), "Grenze für Extras"},
-	{regexp.MustCompile(`\bZusatz-Warnungen\b`), "Warnungen zu Extras"},
+	{regexp.MustCompile(`\bZusatzgrenze\b`), "Grenze für Beilagen"},
+	{regexp.MustCompile(`\bZusatz-Warnungen\b`), "Warnungen zu Beilagen"},
 }
 
 // plainReply rewrites a reply text; ISO dates become "Wed 25 Nov".
