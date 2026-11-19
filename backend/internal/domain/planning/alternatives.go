@@ -411,7 +411,7 @@ func mealHint(s State, base Evaluation, p Plate, drop []int) string {
 		}
 		for _, j := range drop {
 			if j < len(pe.Components) {
-				names = append(names, pe.Components[j].Name)
+				names = append(names, food.Quote(pe.Components[j].Name))
 				kcal += pe.Components[j].Kcal
 			}
 		}

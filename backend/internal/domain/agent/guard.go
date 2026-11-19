@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
@@ -34,9 +35,9 @@ func hardWhy(is planning.Issue) string {
 	if is.Code == planning.CodeKcalBelowFloor {
 		kcal, _ := is.Params["kcal"].(float64)
 		floor, _ := is.Params["floor_kcal"].(float64)
-		return fmt.Sprintf("%s would fall to %.0f kcal, under its minimum of %.0f kcal", plainDay(is.Date), kcal, floor)
+		return fmt.Sprintf("%s would fall to %.0f kcal, under its minimum of %.0f kcal", dayLabelStr(is.Date), kcal, floor)
 	}
-	return fmt.Sprintf("it would create a problem on %s: %s", plainDay(is.Date), planning.PlainText(is.Code).Label)
+	return fmt.Sprintf("it would create a problem on %s: %s", dayLabelStr(is.Date), planning.PlainText(is.Code).Label)
 }
 
 // runGuarded is apply_changes' write path: a call whose ops would leave a day
@@ -213,26 +214,16 @@ func containsInt(l []int, v int) bool {
 	return false
 }
 
-// plainDay writes an ISO date as the user reads it ("Wed 25 Nov"); text that
-// is not a date stays as it is.
-func plainDay(iso string) string {
-	d, err := time.Parse(time.DateOnly, iso)
-	if err != nil {
-		return iso
-	}
-	return dayLabel(d)
-}
-
 // describeOp names an op in words for the skipped list: a removal by food and
 // date (from the check that ran it), else the op and its date.
 func describeOp(op changeOp, r applyRun) string {
 	if applied, ok := r.result["applied"].([]map[string]any); ok && len(applied) > 0 {
-		if food, ok := applied[0]["food"].(string); ok {
-			return fmt.Sprintf("%s %s on %v", op.Op, food, plainDay(fmt.Sprint(applied[0]["date"])))
+		if name, ok := applied[0]["food"].(string); ok {
+			return fmt.Sprintf("%s %s on %v", op.Op, food.Quote(name), dayLabelStr(fmt.Sprint(applied[0]["date"])))
 		}
 	}
 	if op.Date != "" {
-		return fmt.Sprintf("%s on %s", op.Op, plainDay(op.Date))
+		return fmt.Sprintf("%s on %s", op.Op, dayLabelStr(op.Date))
 	}
 	return op.Op
 }
@@ -260,7 +251,7 @@ func replacementOffer(ctx context.Context, svc Services, w window.Window, op cha
 			}
 			if a, ok := firstClean(res.Alternatives, func(ops []planning.OptionOp) bool { return offerIsClean(ctx, svc, w, ops) }); ok {
 				return map[string]any{
-					"what": fmt.Sprintf("replace %s on %s with %s so the day stays above its minimum", res.Current.Name, dayLabel(p.Date), a.Name),
+					"what": fmt.Sprintf("replace %s on %s with %s so the day stays above its minimum", food.Quote(res.Current.Name), dayLabel(p.Date), food.Quote(a.Name)),
 					"ops":  a.Ops, "recommended": first, "recommended_because": "keeps the day above its minimum, no new warning",
 				}
 			}

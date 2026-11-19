@@ -811,9 +811,9 @@ func quantityOp(p Plate, c Component, n float64) OptionOp {
 
 func quantityWords(f FoodFacts, c Component, n float64) string {
 	if c.Portions != nil {
-		return fmt.Sprintf("%s: %s portions (was %s)", f.Name, trimNum(n), trimNum(*c.Portions))
+		return fmt.Sprintf("%s: %s portions (was %s)", food.Quote(f.Name), trimNum(n), trimNum(*c.Portions))
 	}
-	return fmt.Sprintf("%s: %.0f g (was %.0f g)", f.Name, n, *c.Grams)
+	return fmt.Sprintf("%s: %.0f g (was %.0f g)", food.Quote(f.Name), n, *c.Grams)
 }
 
 func trimNum(n float64) string {
@@ -879,7 +879,7 @@ func (w *waySearch) leanEdits(s State, pi int) []wayEdit {
 			drop = append(drop, ci)
 			cid := c.ID
 			ops = append(ops, OptionOp{Op: "remove", PlateComponentID: &cid})
-			names = append(names, s.Foods[c.FoodID].Name)
+			names = append(names, food.Quote(s.Foods[c.FoodID].Name))
 		}
 	}
 	mc := p.Components[mi]
@@ -927,7 +927,7 @@ func (w *waySearch) keepOneSideEdits(s State, pi, mi int) []wayEdit {
 				drop = append(drop, ci)
 				cid := c.ID
 				rm = append(rm, OptionOp{Op: "remove", PlateComponentID: &cid})
-				names = append(names, s.Foods[c.FoodID].Name)
+				names = append(names, food.Quote(s.Foods[c.FoodID].Name))
 			}
 		}
 		for _, mn := range append([]float64{-1}, levels(mc, -1)...) {
@@ -1080,10 +1080,10 @@ func (w *waySearch) addEdit(s State, pi int, c addCand, who string) wayEdit {
 	var words string
 	if c.comp.Portions != nil {
 		op.Portions = c.comp.Portions
-		words = fmt.Sprintf("add %s portions of %s (+%.0f kcal)", trimNum(*c.comp.Portions), c.f.Name, c.kcal)
+		words = fmt.Sprintf("add %s portions of %s (+%.0f kcal)", trimNum(*c.comp.Portions), food.Quote(c.f.Name), c.kcal)
 	} else {
 		op.Amount, op.Unit = c.comp.Grams, "g"
-		words = fmt.Sprintf("add %.0f g %s (+%.0f kcal)", c.grams, c.f.Name, c.kcal)
+		words = fmt.Sprintf("add %.0f g %s (+%.0f kcal)", c.grams, food.Quote(c.f.Name), c.kcal)
 	}
 	if who != "" {
 		words = who + ": " + words
@@ -1559,7 +1559,7 @@ func (w *waySearch) sideSwapEdits(s State, pi int) []wayEdit {
 					continue
 				}
 				ops := append(slices.Clone(pre), a.Ops...)
-				out = append(out, wayEdit{s: a.next, ops: ops, what: append(slices.Clone(what), "swap "+s.Foods[p.Components[side].FoodID].Name+" for "+a.Name), cost: 4 + len(pre), kind: "swap", group: "sideswap", plate: p.ID})
+				out = append(out, wayEdit{s: a.next, ops: ops, what: append(slices.Clone(what), "swap "+food.Quote(s.Foods[p.Components[side].FoodID].Name)+" for "+food.Quote(a.Name)), cost: 4 + len(pre), kind: "swap", group: "sideswap", plate: p.ID})
 			}
 		}
 	}

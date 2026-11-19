@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
 // A regenerated day has different mains at lunch and dinner (E022). A model
@@ -89,7 +91,7 @@ func (x *index) sameMainPair(d time.Time) (late, early int, shared int64, ok boo
 // verified replacement exists; the note says what was done or why not.
 func (x *index) distinctMain(base State, t Target, in Proposal, merged State, pi int, other int64, skip map[int64]bool) (Proposal, string, bool) {
 	p := merged.Plates[pi]
-	label := fmt.Sprintf("%s: lunch and dinner both hold %s", p.Date.Weekday(), foodName(merged, other))
+	label := fmt.Sprintf("%s: lunch and dinner both hold %s", p.Date.Weekday(), food.Quote(foodName(merged, other)))
 	ev := Evaluate(merged, t)
 	hard, soft := hardKeys(ev.Issues), softKeys(ev.Issues)
 	skipped := map[int64]bool{other: true}
@@ -127,7 +129,7 @@ func (x *index) distinctMain(base State, t Target, in Proposal, merged State, pi
 			continue
 		}
 		how := map[int]string{0: "leftovers of a batch the week already has", 1: "a no-cook dish", 2: "a fresh main within the day's cooking limit"}[pref(sw)]
-		return next, fmt.Sprintf("Day variety: %s: %s replaced the repeated %s (%s).", x.cellLabel(p), sw.c.food.Name, foodName(merged, other), how), true
+		return next, fmt.Sprintf("Day variety: %s: %s replaced the repeated %s (%s).", x.cellLabel(p), food.Quote(sw.c.food.Name), food.Quote(foodName(merged, other)), how), true
 	}
 	return in, fmt.Sprintf("Day variety: %s: kept, no other main fits (%s).", label, x.noDistinctReason(len(sws))), false
 }
@@ -255,12 +257,12 @@ func (x *index) coldFirstMeal(base State, t Target, in Proposal, merged State, e
 	kcal := 0.0
 	for _, c := range comps {
 		f := merged.Foods[c.FoodID]
-		parts = append(parts, fmt.Sprintf("%s %s g", strings.ToLower(f.Name), num(c.Grams)))
+		parts = append(parts, fmt.Sprintf("%s %s g", food.Quote(strings.ToLower(f.Name)), num(c.Grams)))
 		kcal += f.Macros.Kcal * c.Grams / 100
 	}
-	dinner := "dinner is " + foodName(merged, other)
+	dinner := "dinner is " + food.Quote(foodName(merged, other))
 	if x.cooksAt(out, ep.Date, lp.SlotID) {
-		dinner = "dinner is cooked fresh: " + foodName(merged, other)
+		dinner = "dinner is cooked fresh: " + food.Quote(foodName(merged, other))
 	}
 	return out, fmt.Sprintf("Day variety: %s: %s is a cold plate (about %.0f kcal, nothing to cook): %s; %s.", ep.Date.Weekday(), slotName(merged, ep.SlotID), kcal, strings.Join(parts, ", "), dinner), true
 }

@@ -72,7 +72,7 @@ func TestGuardDayMains(t *testing.T) {
 		require.Len(t, notes, 1)
 		assert.Contains(t, notes[0], "slot 1 is a cold plate")
 		assert.Contains(t, notes[0], "is a cold plate")
-		assert.Contains(t, notes[0], "dinner is cooked fresh: Main 4")
+		assert.Contains(t, notes[0], `dinner is cooked fresh: "Main 4"`)
 		var lunchPlate planning.ProposedPlate
 		for _, pl := range got.Plates {
 			if pl.SlotID == lunch {
@@ -126,7 +126,7 @@ func TestGuardDayMains(t *testing.T) {
 		s.Sessions = []planning.Session{persistedSession(7, 105, mon, dinner, 4, false)}
 		view, _, done := planning.PlannerViewOf(planning.ChooseInput{State: s, Target: tgt}, p)
 		assert.EqualValues(t, 105, mainAt(done, tue, dinner).FoodID)
-		assert.Contains(t, view["code_changes"], "Day variety: "+"Tuesday slot 2: Main 5 replaced the repeated Main 4 (leftovers of a batch the week already has).")
+		assert.Contains(t, view["code_changes"], "Day variety: "+`Tuesday slot 2: "Main 5" replaced the repeated "Main 4" (leftovers of a batch the week already has).`)
 	})
 	t.Run("without another main the dish stays and the note says why", func(t *testing.T) {
 		s, tgt, p := sameDishDay()

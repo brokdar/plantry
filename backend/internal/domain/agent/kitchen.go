@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
@@ -127,7 +129,7 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 		// The cleanest replacement (the list is ranked by new warnings).
 		if a, ok := firstClean(res.Alternatives, func(ops []planning.OptionOp) bool { return offerIsClean(ctx, svc, w, ops) }); ok {
 			offers = append(offers, map[string]any{
-				"what": fmt.Sprintf("replace %s on %s with %s", res.Current.Name, plainDay(is.Date), a.Name), "ops": a.Ops,
+				"what": fmt.Sprintf("replace %s on %s with %s", food.Quote(res.Current.Name), dayLabelStr(is.Date), food.Quote(a.Name)), "ops": a.Ops,
 				"recommended": len(offers) == 0, "recommended_because": "removes the repeat, no new warning",
 			})
 		}
@@ -250,7 +252,7 @@ func meatBalanceOffer(ctx context.Context, svc Services, w window.Window, touche
 			if len(a.NewIssues) == 0 && len(a.Ops) > 0 && a.WeekMeatG < bestMeat && offerIsClean(ctx, svc, w, a.Ops) {
 				bestMeat = a.WeekMeatG
 				best = map[string]any{
-					"what": fmt.Sprintf("replace %s on %s with %s: the week's meat falls from %.0f to %.0f g", res.Current.Name, dayLabel(p.Date), a.Name, now, a.WeekMeatG),
+					"what": fmt.Sprintf("replace %s on %s with %s: the week's meat falls from %.0f to %.0f g", food.Quote(res.Current.Name), dayLabel(p.Date), food.Quote(a.Name), now, a.WeekMeatG),
 					"ops":  a.Ops, "recommended": true, "recommended_because": "takes the most meat off the week, no new warning",
 				}
 			}

@@ -102,7 +102,7 @@ func changeEffect(ctx context.Context, svc Services, a affected) map[string]any 
 		dates[p.DateString()] = true
 		names := make([]string, len(p.Components))
 		for i, c := range p.Components {
-			names[i] = food.Data(c.FoodName)
+			names[i] = food.Quote(c.FoodName)
 			if c.FoodRole != nil && *c.FoodRole != "" {
 				names[i] += " (" + *c.FoodRole + ")"
 			}
@@ -319,14 +319,33 @@ func badness(is planning.Issue) (float64, bool) {
 	return 0, false
 }
 
-// worsened reports whether an issue open before and after got worse.
+// worseStep is the smallest step in badness's unit that counts as "got
+// worse" for an issue that was already open: a share moving 0.2 points or the
+// week's meat 4 g further out is the same warning, not a new one. Day and meal
+// kcal: 50 kcal; protein grams: 5 g; week meat: 25 g; shares (weekly energy,
+// carbs, fat): 1 percentage point; counts (meat days, cooking times, dish
+// repeats): 1.
+func worseStep(code string) float64 {
+	switch code {
+	case planning.CodeKcalBelowBand, planning.CodeKcalAboveBand, planning.CodeKcalBelowFloor, planning.CodeMealNotLight, planning.CodeMealNotHearty:
+		return 50
+	case planning.CodeProteinLow, planning.CodeWeekProteinLow:
+		return 5
+	case planning.CodeWeekMeatAboveDGE:
+		return 25
+	}
+	return 1
+}
+
+// worsened reports whether an issue open before and after got worse by at
+// least its worseStep.
 func worsened(before, after planning.Issue) bool {
 	b, ok := badness(before)
 	if !ok {
 		return false
 	}
 	a, ok := badness(after)
-	return ok && a > b+1e-9
+	return ok && a >= b+worseStep(after.Code)-1e-9
 }
 
 func toEffectIssue(is planning.Issue) effectIssue {

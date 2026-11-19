@@ -397,8 +397,8 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 		assert.Contains(t, got["next"], "safe part is applied (1 of 2")
 		assert.Empty(t, plannerWord.FindAllString(string(res), -1), "kitchen words only")
 		assert.NotRegexp(t, isoDate, fmt.Sprint(got["next"], got["skipped"]), "dates the way the user reads them")
-		assert.Contains(t, got["_result"], "SAVED")
-		assert.NotContains(t, got["_result"], "NOT SAVED")
+		assert.Contains(t, got["status"], "Saved")
+		assert.Equal(t, true, got["saved"])
 		assert.InDelta(t, was, portions(a, ma), 1e-9, "the unsafe cut was not saved")
 		assert.InDelta(t, 1.5, portions(b, mb), 1e-9, "the safe raise was")
 		for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
@@ -413,7 +413,7 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 		assert.Equal(t, false, got["saved"])
 		assert.Contains(t, got["refused"], "under its minimum")
 		assert.Contains(t, got["next"], "nothing was saved")
-		assert.Contains(t, got["_result"], "NOT SAVED")
+		assert.Equal(t, false, got["saved"])
 		assert.NotRegexp(t, isoDate, fmt.Sprint(got["refused"], got["next"]))
 		assert.Empty(t, plannerWord.FindAllString(string(res), -1), "kitchen words only")
 		assert.InDelta(t, was, portions(a, ma), 1e-9)
@@ -424,7 +424,7 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 		var got map[string]any
 		require.NoError(t, json.Unmarshal(res, &got))
 		assert.Nil(t, got["skipped"])
-		assert.Contains(t, got["_result"], "NOT SAVED: this was only a check")
+		assert.Contains(t, got["status"], "Nothing changed: this was only a check")
 	})
 	t.Run("away is explicit and not judged", func(t *testing.T) {
 		res, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(fmt.Sprintf(`{"ops":[{"op":"away","date":%q}]}`, a.DateString())))
@@ -432,7 +432,7 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 		var got map[string]any
 		require.NoError(t, json.Unmarshal(res, &got))
 		assert.Nil(t, got["skipped"])
-		assert.Nil(t, got["saved"])
+		assert.Equal(t, true, got["saved"])
 	})
 }
 

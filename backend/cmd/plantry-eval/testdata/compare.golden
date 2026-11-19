@@ -167,7 +167,7 @@ hearty_meal
   waste_portions      0         0        0
   unknown_data_share  0         0        0
   input_tokens        5036      5036     0
-  output_tokens       1737      1737     0
+  output_tokens       1741      1741     0
   latency_ms          0         0        0
 
 light_day
@@ -188,7 +188,7 @@ light_day
   waste_portions      0         0        0
   unknown_data_share  0         0        0
   input_tokens        5023      5023     0
-  output_tokens       1700      1700     0
+  output_tokens       1706      1706     0
   latency_ms          0         0        0
 
 light_dinners_no_addons
@@ -209,7 +209,7 @@ light_dinners_no_addons
   waste_portions      0         0        0
   unknown_data_share  0         0        0
   input_tokens        5091      5091     0
-  output_tokens       1584      1584     0
+  output_tokens       1590      1590     0
   latency_ms          0         0        0
 
 light_meal_weekday_dinners
@@ -230,7 +230,7 @@ light_meal_weekday_dinners
   waste_portions      0         0        0
   unknown_data_share  0         0        0
   input_tokens        5091      5091     0
-  output_tokens       1584      1584     0
+  output_tokens       1590      1590     0
   latency_ms          0         0        0
 
 light_two_meals_floor
@@ -251,7 +251,7 @@ light_two_meals_floor
   waste_portions      0         0        0
   unknown_data_share  0         0        0
   input_tokens        15228     15228    0
-  output_tokens       4800      4800     0
+  output_tokens       4818      4818     0
   latency_ms          0         0        0
 
 many_none_cells
@@ -291,7 +291,7 @@ nutrition_lose
   waste_portions      0         0        0
   unknown_data_share  0         0        0
   input_tokens        4977      4977     0
-  output_tokens       1684      1684     0
+  output_tokens       1692      1692     0
   latency_ms          0         0        0
 
 nutrition_maintain
@@ -312,7 +312,7 @@ nutrition_maintain
   waste_portions      0         0        0
   unknown_data_share  0         0        0
   input_tokens        4978      4978     0
-  output_tokens       1689      1689     0
+  output_tokens       1695      1695     0
   latency_ms          0         0        0
 
 nutrition_maintain_1800
@@ -333,7 +333,7 @@ nutrition_maintain_1800
   waste_portions      0         0        0
   unknown_data_share  0         0        0
   input_tokens        4978      4978     0
-  output_tokens       1642      1642     0
+  output_tokens       1648      1648     0
   latency_ms          0         0        0
 
 nutrition_maintain_2500
@@ -354,7 +354,7 @@ nutrition_maintain_2500
   waste_portions      0         0        0
   unknown_data_share  0         0        0
   input_tokens        4980      4980     0
-  output_tokens       1702      1702     0
+  output_tokens       1706      1706     0
   latency_ms          0         0        0
 
 protein_gap_week
@@ -417,7 +417,7 @@ single_batch_cooker
   waste_portions      0         0        0
   unknown_data_share  0         0        0
   input_tokens        4946      4946     0
-  output_tokens       1406      1406     0
+  output_tokens       1412      1412     0
   latency_ms          0         0        0
 
 small_library_h8

@@ -801,12 +801,12 @@ func writeCorrections(b *strings.Builder, s State) {
 		var removed, added []string
 		for _, id := range c.Removed {
 			if _, ok := s.Foods[id]; ok {
-				removed = append(removed, foodName(s, id))
+				removed = append(removed, food.Quote(foodName(s, id)))
 			}
 		}
 		for _, id := range c.Added {
 			if _, ok := s.Foods[id]; ok {
-				added = append(added, foodName(s, id))
+				added = append(added, food.Quote(foodName(s, id)))
 			}
 		}
 		if len(removed) == 0 {

@@ -269,7 +269,7 @@ func TestWays_LighterMealKeepsMainAndSide(t *testing.T) {
 	}
 	// The offer reaches the cap by swapping the side for a lighter one.
 	require.NotEmpty(t, res.Offers)
-	assert.Contains(t, res.Offers[0].What, "swap Potatoes for")
+	assert.Contains(t, res.Offers[0].What, `swap "Potatoes" for`)
 }
 
 // E018 rule 5: a number that cannot be met (under the day's minimum) gets no

@@ -8,6 +8,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 )
@@ -352,7 +354,7 @@ func (x *index) swapOption(sw weekSwap) Option {
 		what = fmt.Sprintf("%.0f g fish, %s", g, what)
 	}
 	o.Why = fmt.Sprintf("%s: replace %s (%.0f g meat) by %s (%s, %s portions; %s); day %.0f kcal (%.0f%% of its target), no hard rule broken",
-		x.cellLabel(p), of.Name, sw.oldMeatG, sw.c.food.Name, what, num(*sw.c.comp.Portions), how, sw.a.DayKcal, sw.a.DayPct)
+		x.cellLabel(p), food.Quote(of.Name), sw.oldMeatG, food.Quote(sw.c.food.Name), what, num(*sw.c.comp.Portions), how, sw.a.DayKcal, sw.a.DayPct)
 	return o
 }
 
@@ -630,8 +632,8 @@ func (x *index) swapNote(sw weekSwap, before, after Evaluation, mode swapMode) s
 	p := x.s.Plates[sw.pi]
 	old := x.s.Foods[p.Components[sw.old].FoodID].Name
 	if mode == swapFish {
-		return fmt.Sprintf("Weekly fish: %s: %s replaced by %s so the week holds a fish meal (the weekly food rules ask for one).", x.cellLabel(p), old, sw.c.food.Name)
+		return fmt.Sprintf("Weekly fish: %s: %s replaced by %s so the week holds a fish meal (the weekly food rules ask for one).", x.cellLabel(p), food.Quote(old), food.Quote(sw.c.food.Name))
 	}
 	return fmt.Sprintf("Weekly meat: %s: %s replaced by %s to bring the week's meat from %.0f g toward its limit of %.0f g (now %.0f g).",
-		x.cellLabel(p), old, sw.c.food.Name, before.Week.MeatG, DGEMeatMaxG*float64(before.Week.Days)/weekDays, after.Week.MeatG)
+		x.cellLabel(p), food.Quote(old), food.Quote(sw.c.food.Name), before.Week.MeatG, DGEMeatMaxG*float64(before.Week.Days)/weekDays, after.Week.MeatG)
 }
