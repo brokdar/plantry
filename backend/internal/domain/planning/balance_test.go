@@ -132,3 +132,44 @@ func TestBalancePlan(t *testing.T) {
 		assert.Equal(t, prop, got)
 	})
 }
+
+// A day whose add-on count is used up with small adds still gets its energy:
+// the adds it holds grow up to their caps (growShort).
+func TestBalancePlan_GrowsTheAddsADayHolds(t *testing.T) {
+	s := balanceState()
+	s.Profile.KcalTarget = f64(2600)
+	for i := range 8 {
+		addOnFood(&s, int64(900+i), "Nuts "+string(rune('A'+i)), 400)
+	}
+	prop := freshPlan(s)
+	n := 0
+	for i := range prop.Plates {
+		adds := 2
+		if i%2 == 0 {
+			adds = 1
+		}
+		for range adds {
+			prop.Plates[i].Components = append(prop.Plates[i].Components, planning.ProposedComponent{FoodID: int64(900 + n%8), Grams: 30})
+			n++
+		}
+	}
+	grams := func(p planning.Proposal) (sum float64) {
+		for _, pl := range p.Plates {
+			for _, c := range pl.Components {
+				sum += c.Grams
+			}
+		}
+		return sum
+	}
+	before := balanceWeek(s, prop)
+	got, _ := planning.BalancePlan(planning.ChooseInput{State: s, Target: windowTarget(s)}, prop)
+	after := balanceWeek(s, got)
+	assert.Greater(t, grams(got), grams(prop), "the day's adds were raised")
+	assert.Greater(t, after.Pct, before.Pct)
+	assert.Empty(t, s9Of(planning.Merge(s, windowTarget(s), got)), "no add passed its cap or the day's count")
+	for _, pl := range got.Plates {
+		for _, c := range pl.Components {
+			assert.LessOrEqual(t, c.Grams, 200.0, "within the add-on cap")
+		}
+	}
+}
