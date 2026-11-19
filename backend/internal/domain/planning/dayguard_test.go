@@ -34,7 +34,8 @@ func coldFoods(s *planning.State) {
 		s.NoCook = append(s.NoCook, id)
 	}
 	add(950, "Bread", food.RoleSideStarch, 216, 7, 50)
-	add(951, "Tofu", "", 144, 17, 100)
+	add(951, "Hummus", "", 250, 8, 50)
+	add(953, "Tofu", "", 144, 17, 100)
 	add(952, "Cucumber", food.RoleSideVeg, 15, 0.7, 100)
 }
 
@@ -80,6 +81,9 @@ func TestGuardDayMains(t *testing.T) {
 			}
 		}
 		require.GreaterOrEqual(t, len(lunchPlate.Components), 3)
+		for _, c := range lunchPlate.Components {
+			assert.NotEqual(t, int64(953), c.FoodID, "tofu is not a cold lunch")
+		}
 		for _, c := range lunchPlate.Components {
 			assert.Zero(t, c.Portions, "no recipe on a cold plate")
 			assert.Positive(t, c.Grams)
@@ -160,4 +164,13 @@ func TestGuardDayMains(t *testing.T) {
 		assert.Equal(t, p, got)
 		assert.Empty(t, notes)
 	})
+}
+
+func TestColdPlateIsNamedInTheChatSummary(t *testing.T) {
+	s := batchCooker()
+	coldFoods(&s)
+	one := 80.0
+	s.Plates = append(s.Plates, planning.Plate{ID: 500, Date: day(tue), SlotID: lunch, Eaters: 1, Components: []planning.Component{{ID: 1, FoodID: 950, Grams: &one}, {ID: 2, FoodID: 951, Grams: &one}}})
+	summary := planning.RenderPlanSummary(s, nil)
+	assert.Contains(t, summary, "plate_id 500, pending, cold plate (nothing to cook), 1 eater: ")
 }

@@ -52,8 +52,10 @@ type reportMeal struct {
 	MovedFrom string   `json:"moved_from,omitempty"`
 	Before    []string `json:"before,omitempty"`
 	After     []string `json:"after,omitempty"`
-	KcalFrom  *int     `json:"kcal_before,omitempty"`
-	KcalTo    *int     `json:"kcal_after,omitempty"`
+	// Kind is "cold plate, nothing to cook" for a meal of no-cook foods.
+	Kind     string `json:"kind,omitempty"`
+	KcalFrom *int   `json:"kcal_before,omitempty"`
+	KcalTo   *int   `json:"kcal_after,omitempty"`
 }
 
 type reportDay struct {
@@ -192,6 +194,9 @@ func buildReport(in reportInput) changeReport {
 		}
 		if hasA {
 			m.After = componentWords(as, a)
+			if as.IsColdPlate(a) {
+				m.Kind = "cold plate, nothing to cook"
+			}
 			if e, ok := ae[id]; ok {
 				k := int(math.Round(e.Kcal))
 				m.KcalTo = &k

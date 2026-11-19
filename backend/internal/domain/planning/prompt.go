@@ -269,6 +269,9 @@ func summaryPlate(x *index, p Plate) string {
 	if p.Eaters == 1 {
 		eaters = "1 eater"
 	}
+	if s.isColdPlate(p) {
+		state += ", cold plate (nothing to cook)"
+	}
 	return fmt.Sprintf("plate_id %d, %s, %s: %s", p.ID, state, eaters, strings.Join(parts, " + "))
 }
 
