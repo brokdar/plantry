@@ -725,7 +725,7 @@ func weekEffect(before, after *planning.WeekEffect) *weekOut {
 	if before == nil || after == nil {
 		return nil
 	}
-	r := func(v float64) float64 { return math.Round(v) }
+	r := math.Round
 	out := &weekOut{MeatG: meatOut{Before: r(before.MeatG), After: r(after.MeatG), Limit: r(after.LimitG)}, Repeats: after.Repeats}
 	if out.Repeats == nil {
 		out.Repeats = []string{}

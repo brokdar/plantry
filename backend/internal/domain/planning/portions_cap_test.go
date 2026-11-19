@@ -45,12 +45,12 @@ func (overChooser) Choose(ctx context.Context, in planning.ChooseInput) (plannin
 	c := &pl.Components[0]
 	for i := range p.Sessions {
 		if p.Sessions[i].Key == c.SessionKey {
-			p.Sessions[i].Portions += 1.5 * (func() float64 {
+			p.Sessions[i].Portions += 1.5 * func() float64 {
 				if pl.Eaters > 0 {
 					return pl.Eaters
 				}
 				return in.State.Profile.HouseholdPortions
-			})()
+			}()
 		}
 	}
 	c.Portions = 2.5
