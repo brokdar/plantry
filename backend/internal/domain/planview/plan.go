@@ -379,7 +379,7 @@ const (
 )
 
 // targets returns the profile's targets, nil without a kcal target. A missing
-// percentage gives 0 g.
+// percentage gives 0 g; protein follows the policy when a weight is known.
 func targets(p *profile.Profile) *Targets {
 	if p.KcalTarget == nil {
 		return nil
@@ -391,9 +391,15 @@ func targets(p *profile.Profile) *Targets {
 		}
 		return kcal * *pct / 100 / perGram
 	}
+	// The protein target is the nutrition policy's (g per kg of body weight) when a
+	// weight is known, so the board, the planner and the chat show one number.
+	protein := grams(p.ProteinPct, kcalPerGramProtein)
+	if g := planning.PolicyOf(planning.StateProfile(p)).ProteinTargetG(1); g > 0 {
+		protein = g
+	}
 	return &Targets{
 		Kcal:     kcal,
-		ProteinG: grams(p.ProteinPct, kcalPerGramProtein),
+		ProteinG: protein,
 		FatG:     grams(p.FatPct, kcalPerGramFat),
 		CarbsG:   grams(p.CarbsPct, kcalPerGramCarbs),
 	}
