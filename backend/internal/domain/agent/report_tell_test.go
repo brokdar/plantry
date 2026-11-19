@@ -57,3 +57,21 @@ func TestBuildTell_ProteinBeforeAndAfterInGrams(t *testing.T) {
 	in.after.Days[0].ProteinG = 93
 	assert.NotContains(t, strings.Join(buildTell(in, r), "\n"), "protein")
 }
+
+// E036c: with a day away, a week figure that only moved because the week is
+// counted over fewer days is one neutral line, never "worse".
+func TestWarnings_AwayDoesNotCallUnchangedFoodWorse(t *testing.T) {
+	meat := func(g, max float64, days int) planning.Issue {
+		return planning.Issue{Rule: "S7", Code: planning.CodeWeekMeatAboveDGE, Severity: planning.SeveritySoft, Params: map[string]any{"meat_g": g, "max_g": max, "days": float64(days)}}
+	}
+	in := reportInput{
+		before: planning.Evaluation{Issues: []planning.Issue{meat(321, 300, 7)}},
+		after:  planning.Evaluation{Issues: []planning.Issue{meat(321, 257, 6)}, Week: &planning.WeekEval{Days: 6}},
+	}
+	out, worse, _, neutral := warnings(in, planning.State{}, true)
+	assert.Empty(t, out)
+	assert.Empty(t, worse, "the remaining days eat what they ate")
+	assert.Equal(t, "With a day away the week is counted over 6 days; the meat limit for those days is 257 g and the plan holds 321 g, as before.", neutral)
+	_, worse, _, _ = warnings(in, planning.State{}, false)
+	assert.Len(t, worse, 1, "without an away it is told")
+}

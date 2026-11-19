@@ -43,6 +43,9 @@ type changeReport struct {
 	// Tell is the ordered list of plain sentences the reply must convey,
 	// computed from the saved plan (see buildTell).
 	Tell []string `json:"tell,omitempty"`
+	// Neutral is the one line for a week figure that only moved because a day
+	// went away (the week is counted over fewer days).
+	Neutral string `json:"-"`
 	// Note is set by an undo: the plan is back as it was before the change.
 	Note string `json:"note,omitempty"`
 	// NotCovered says what the report could not compute.
@@ -289,7 +292,7 @@ func buildReport(in reportInput) changeReport {
 	r.Leftovers = leftovers(bs, as)
 	r.AlsoChanged = alsoChanged(as, in.applied)
 	r.Week = weekFacts(in, bs, as)
-	r.NewWarnings, r.Worse, r.EarlierWarnings = warnings(in, as)
+	r.NewWarnings, r.Worse, r.EarlierWarnings, r.Neutral = warnings(in, as, awayOnly(r.Changed))
 	r.Tell = buildTell(in, r)
 	return r
 }
@@ -619,7 +622,7 @@ func weekFacts(in reportInput, bs, as planning.State) []string {
 // warnings are the issues that did not exist before the change, the earlier
 // ones that got worse by a real step, each as one plain sentence, and the
 // number of earlier ones left as they were (or moved by less than a step).
-func warnings(in reportInput, as planning.State) (out, worse []string, unaffected int) {
+func warnings(in reportInput, as planning.State, away bool) (out, worse []string, unaffected int, neutral string) {
 	was := issueMap(in.before.Issues)
 	issues := slices.Clone(in.after.Issues)
 	slices.SortFunc(issues, func(a, b planning.Issue) int { return strings.Compare(a.Date+a.Code, b.Date+b.Code) })
@@ -628,6 +631,12 @@ func warnings(in reportInput, as planning.State) (out, worse []string, unaffecte
 		switch {
 		case !ok:
 			out = append(out, issueSentence(is, as))
+		case worsened(b, is) && away && is.Date == "":
+			// Only the day count changed: the remaining days eat what they ate.
+			unaffected++
+			if neutral == "" || is.Code == planning.CodeWeekMeatAboveDGE {
+				neutral = awayNeutral(in, as, is)
+			}
 		case worsened(b, is):
 			bb, _ := badness(b)
 			ab, _ := badness(is)
@@ -636,7 +645,50 @@ func warnings(in reportInput, as planning.State) (out, worse []string, unaffecte
 			unaffected++
 		}
 	}
-	return out, worse, unaffected
+	return out, worse, unaffected, neutral
+}
+
+// awayOnly reports a change that only removed meals (a day away): the food of
+// the remaining days is as it was.
+func awayOnly(changed []reportMeal) bool {
+	if len(changed) == 0 {
+		return false
+	}
+	for _, m := range changed {
+		if len(m.After) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// awayNeutral is the one neutral line for a week figure that was already open
+// and only changed because the week is counted over fewer days.
+func awayNeutral(in reportInput, as planning.State, is planning.Issue) string {
+	days := 0
+	if in.after.Week != nil {
+		days = in.after.Week.Days
+	}
+	var away []string
+	for _, m := range in.beforeSt.Plates {
+		found := false
+		for _, a := range in.afterSt.Plates {
+			if a.ID == m.ID {
+				found = true
+			}
+		}
+		if !found && !slices.Contains(away, dayLabel(m.Date)) {
+			away = append(away, dayLabel(m.Date))
+		}
+	}
+	who := "a day"
+	if len(away) > 0 {
+		who = strings.Join(away, " and ")
+	}
+	if is.Code == planning.CodeWeekMeatAboveDGE {
+		return fmt.Sprintf("With %s away the week is counted over %d days; the meat limit for those days is %.0f g and the plan holds %.0f g, as before.", who, days, paramNum(is, "max_g"), paramNum(is, "meat_g"))
+	}
+	return fmt.Sprintf("With %s away the week is counted over %d days: %s It was already open, as before.", who, days, issueSentence(is, as))
 }
 
 // badnessWords says a badness value with its unit.

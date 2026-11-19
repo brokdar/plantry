@@ -96,8 +96,27 @@ func buildTell(in reportInput, r changeReport) []string {
 			out = append(out, s)
 		}
 	}
+	// A day away: its removed meals and the away line are one item.
+	awayDays := map[string]bool{}
+	for _, d := range r.Days {
+		if strings.HasPrefix(d.Status, "away") {
+			awayDays[d.Day] = true
+		}
+	}
+	gone := map[string][]string{}
+	var goneOrder []string
 	for _, m := range r.Changed {
+		if len(m.After) == 0 && awayDays[m.Day] {
+			if _, ok := gone[m.Day]; !ok {
+				goneOrder = append(goneOrder, m.Day)
+			}
+			gone[m.Day] = append(gone[m.Day], m.Meal)
+			continue
+		}
 		add(mealChange(m))
+	}
+	for _, day := range goneOrder {
+		add(fmt.Sprintf("%s is away: %s have no meal and the day is not counted.", day, strings.Join(gone[day], " and ")))
 	}
 	// Why a dish was swapped: the meat that left the day with it.
 	bd, ad := map[string]struct{ meat []string }{}, map[string]struct{ meat []string }{}
@@ -154,7 +173,9 @@ func buildTell(in reportInput, r changeReport) []string {
 	for _, d := range r.Days {
 		switch {
 		case strings.HasPrefix(d.Status, "away"):
-			add(d.Day + " is away: the day is not counted.")
+			if _, said := gone[d.Day]; !said {
+				add(d.Day + " is away: the day is not counted.")
+			}
 		default:
 			s := fmt.Sprintf("%s holds %d kcal (was %d)", d.Day, d.KcalAfter, d.KcalBefore)
 			if d.Range != "" && d.Status != "" {
@@ -178,16 +199,43 @@ func buildTell(in reportInput, r changeReport) []string {
 			}
 		}
 	}
+	// Cooking: a day with a changed meal says everything cooked that day (what
+	// stays too); any other day only a cooking whose amount changed.
+	touched := map[string]bool{}
+	for _, d := range r.Days {
+		touched[d.Day] = true
+	}
+	for _, m := range r.Changed {
+		touched[m.Day] = true
+	}
+	beforeCook, afterCook := cookingByDay(in.beforeSt), cookingByDay(in.afterSt)
 	for _, c := range r.Cooking {
 		if len(c.Cooked) == 0 {
-			add(c.Day + ": nothing is cooked.")
+			if !awayDays[c.Day] {
+				add(c.Day + ": nothing is cooked.")
+			}
 			continue
 		}
-		var parts []string
-		for _, d := range c.Cooked {
-			parts = append(parts, fmt.Sprintf("%s at %s for %s", food.Quote(d.Dish), d.At, strings.Join(d.Eaten, ", ")))
+		if touched[c.Day] {
+			var parts []string
+			for _, d := range c.Cooked {
+				parts = append(parts, fmt.Sprintf("%s at %s for %s", food.Quote(d.Dish), d.At, strings.Join(d.Eaten, ", ")))
+			}
+			add(fmt.Sprintf("%s you cook (%d cooking time%s): %s.", c.Day, c.CookingTimes, plural(c.CookingTimes), strings.Join(parts, "; ")))
+			continue
 		}
-		add(fmt.Sprintf("%s you cook (%d cooking time%s): %s.", c.Day, c.CookingTimes, plural(c.CookingTimes), strings.Join(parts, "; ")))
+		for iso, now := range afterCook {
+			if dayLabelStr(iso) != c.Day {
+				continue
+			}
+			for _, d := range now {
+				for _, was := range beforeCook[iso] {
+					if was.Dish == d.Dish && was.At == d.At && len(was.Eaten) != len(d.Eaten) {
+						add(fmt.Sprintf("The %s cooked on %s is now for %s instead of %s.", food.Quote(d.Dish), c.Day, mealsWord(len(d.Eaten)), mealsWord(len(was.Eaten))))
+					}
+				}
+			}
+		}
 	}
 	moved := strings.Join(r.Leftovers, "\n")
 	for _, s := range r.AlsoChanged {
@@ -206,6 +254,7 @@ func buildTell(in reportInput, r changeReport) []string {
 	for _, s := range r.Week {
 		add(s)
 	}
+	add(r.Neutral)
 	for _, s := range r.NewWarnings {
 		add("New warning: " + s)
 	}
@@ -243,4 +292,11 @@ func quotedDish(s string) string {
 		return "\x00"
 	}
 	return s[i : i+j+2]
+}
+
+func mealsWord(n int) string {
+	if n == 1 {
+		return "1 meal"
+	}
+	return fmt.Sprintf("%d meals", n)
 }
