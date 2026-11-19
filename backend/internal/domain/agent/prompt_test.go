@@ -56,7 +56,7 @@ func TestPrompt_MealEditRules(t *testing.T) {
 	for _, want := range []string{
 		"change only what the user asked", "offer the fix", "only to clear a problem",
 		`occupant "swap"`, "every item of report",
-		"one away op", "A day away is not judged for calories",
+		"one away op", "A day away is not counted",
 		"find_alternatives with what main", "cite the total_minutes",
 		"only do what your tools do", "logging food eaten out", "say so plainly",
 		"one change the user can undo", "all ops of a request in one call",
@@ -194,7 +194,7 @@ func TestPrompt_OversizedProfileCutsOnRuneBoundary(t *testing.T) {
 func TestPrompt_V18(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
-		"Playbook, light, hearty, more protein, lower or raise a day", "Playbook, replace a dish", "Playbook, away",
+		"Playbook, light, filling, more protein, lower or raise a day", "Playbook, replace a dish", "Playbook, away",
 		"call find_ways (goal, plate_id or date)", "what main", "check a fix from the issue's options",
 		"Cooking times per day", "a routine cell add none",
 		"worsened", "Report a worsened issue like a new one",
@@ -209,7 +209,7 @@ func TestPrompt_V18(t *testing.T) {
 		}
 	}
 	// E006: the relative-request playbook names no rule code and no dry run.
-	a := strings.Index(prompt, "Playbook, light, hearty, more protein, lower or raise a day")
+	a := strings.Index(prompt, "Playbook, light, filling, more protein, lower or raise a day")
 	block := prompt[a : a+strings.Index(prompt[a:], "Playbook, replace a dish")]
 	for _, bad := range []string{"S6", "H9", "dry run", "dry_run"} {
 		if strings.Contains(block, bad) {

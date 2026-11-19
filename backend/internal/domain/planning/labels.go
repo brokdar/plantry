@@ -44,7 +44,7 @@ var issueTexts = map[string]IssueText{
 	CodeMealNotLight:          {"light meal", "A meal marked light holds more than the most a light meal may hold."},
 	CodeMealNotHearty:         {"filling meal", "A meal marked filling holds less than the least a filling meal needs."},
 	CodeDishRepeats:           {"dish as main too often", "One dish is the main of more meals than the user's limit."},
-	CodeAddOnExcess:           {"extras", "An extra is over its usual serving or repeated too often."},
+	CodeAddOnExcess:           {"sides", "A side is over its usual serving or repeated too often."},
 	CodeWeekMeatAboveDGE:      {"weekly meat", "The week holds more meat than the recommended maximum."},
 	CodeWeekFishBelowDGE:      {"weekly fish", "The week holds no fish meal."},
 	CodeWeekLegumesBelow:      {"weekly legumes", "The week holds no legume meal."},

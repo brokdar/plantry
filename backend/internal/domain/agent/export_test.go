@@ -59,3 +59,6 @@ var (
 
 // NewWarnings exposes the guard's set of warnings a write makes.
 var NewWarnings = newWarnings
+
+// PlainReply exposes the final-reply rewriter.
+var PlainReply = plainReply

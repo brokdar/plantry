@@ -67,9 +67,9 @@ func TestRenderPlanSummary(t *testing.T) {
 		"the shopping day is Saturday",
 		"- Saturday 2026-11-07\n",
 		"- Friday 2026-11-13\n",
-		"plate_id 11, confirmed, 2 eaters: Chili (component_id 21, food_id ",
+		"plate_id 11, confirmed, 2 people: Chili (component_id 21, food_id ",
 		", session_id 4 cook)",
-		"plate_id 12, pending, 1 eater: Oats (component_id 22",
+		"plate_id 12, pending, 1 person: Oats (component_id 22",
 		"60 g/eater",
 		"| none | no plate, leave empty",
 		"session_id 4 | food_id ",
@@ -80,7 +80,7 @@ func TestRenderPlanSummary(t *testing.T) {
 	}
 	assert.NotContains(t, got, "Candidate")
 	assert.NotContains(t, got, ", )")
-	assert.NotContains(t, got, "1 eaters")
+	assert.NotContains(t, got, "1 people")
 	assert.LessOrEqual(t, len(got), 24_000)
 }
 

@@ -140,11 +140,14 @@ var kitchenWords = []struct {
 	{regexp.MustCompile(`\bcook_occasions`), "cooking_times"},
 	{regexp.MustCompile(`\b(?i:cooking occasions)\b`), "cooking times"},
 	{regexp.MustCompile(`\b(?i:cooking occasion)\b`), "cooking time"},
-	{regexp.MustCompile(`\bAdd-ons\b`), "Extras"},
-	{regexp.MustCompile(`\badd-ons\b`), "extras"},
-	{regexp.MustCompile(`\bAdd-on\b`), "Extra"},
-	{regexp.MustCompile(`\badd-on\b`), "extra"},
+	{regexp.MustCompile(`\bAdd-ons\b`), "Sides"},
+	{regexp.MustCompile(`\badd-ons\b`), "sides"},
+	{regexp.MustCompile(`\bAdd-on\b`), "Side"},
+	{regexp.MustCompile(`\badd-on\b`), "side"},
 	{regexp.MustCompile(`\b(?i:hearty minimum)\b`), "least a filling meal holds"},
+	{regexp.MustCompile(`\breached_hearty\b`), "reached_filling"},
+	{regexp.MustCompile(`\bHearty\b`), "Filling"},
+	{regexp.MustCompile(`\bhearty\b`), "filling"},
 	{regexp.MustCompile(`\breached_band\b`), "reached_range"},
 	{regexp.MustCompile(`\breaches_cap\b`), "reaches_limit"},
 	{regexp.MustCompile(`\bbands\b`), "ranges"},
@@ -182,29 +185,83 @@ func modelDates(raw json.RawMessage) json.RawMessage {
 	if dec.Decode(&v) != nil {
 		return raw
 	}
-	out, err := json.Marshal(datesWalk(v))
+	out, err := json.Marshal(datesWalk(v, "", false))
 	if err != nil {
 		return raw
 	}
 	return out
 }
 
-func datesWalk(v any) any {
+// datesWalk is the walk of modelDates: days become labels outside passBack
+// fields, and the hearty level reads as "filling" everywhere (the model sends
+// "filling" back; Execute maps it to the stored "hearty").
+func datesWalk(v any, key string, pass bool) any {
 	switch x := v.(type) {
 	case string:
+		if key == "level" || key == "light_level" || key == "intent" {
+			if x == "hearty" {
+				return "filling"
+			}
+		}
+		if key == "light_meals" {
+			x = strings.ReplaceAll(x, "hearty", "filling")
+		}
+		if pass {
+			return x
+		}
 		return plainDates(x)
 	case []any:
 		for i := range x {
-			x[i] = datesWalk(x[i])
+			x[i] = datesWalk(x[i], key, pass)
 		}
 	case map[string]any:
 		for k, e := range x {
-			if !passBack[k] {
-				x[k] = datesWalk(e)
+			name := k
+			if k == "reached_hearty" {
+				name = "reached_filling"
+				delete(x, k)
 			}
+			x[name] = datesWalk(e, name, pass || passBack[k])
 		}
 	}
 	return v
+}
+
+// fillingToHearty maps the model's level "filling" back to the stored
+// "hearty" in a tool input.
+func fillingToHearty(raw json.RawMessage) json.RawMessage {
+	if !bytes.Contains(raw, []byte(`"filling"`)) {
+		return raw
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if dec.Decode(&v) != nil {
+		return raw
+	}
+	var walk func(any)
+	walk = func(v any) {
+		switch x := v.(type) {
+		case []any:
+			for _, e := range x {
+				walk(e)
+			}
+		case map[string]any:
+			for k, e := range x {
+				if s, ok := e.(string); ok && k == "level" && s == "filling" {
+					x[k] = "hearty"
+					continue
+				}
+				walk(e)
+			}
+		}
+	}
+	walk(v)
+	out, err := json.Marshal(v)
+	if err != nil {
+		return raw
+	}
+	return out
 }
 
 var isoDay = regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}\b`)
@@ -239,8 +296,8 @@ var plainKeys = map[string]string{
 
 // plainReasons are the reason values of an extras issue, as words.
 var plainReasons = map[string]string{
-	"light_meal": "an extra on a light meal", "duplicates_main": "already in the main", "over_cap": "over the usual serving",
-	"day_limit": "too many extras that day", "repeated": "the same extra on too many meals",
+	"light_meal": "a side on a light meal", "duplicates_main": "already in the main", "over_cap": "over the usual serving",
+	"day_limit": "too many sides that day", "repeated": "the same side on too many meals",
 }
 
 var identParts = []struct {

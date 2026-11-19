@@ -921,7 +921,7 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 	days := []planning.DayEval{}
 	for _, d := range now.Days {
 		if dates[d.Date] {
-			days = append(days, d)
+			days = append(days, awayDay(d))
 		}
 	}
 	out["days"] = planning.Compact(days)

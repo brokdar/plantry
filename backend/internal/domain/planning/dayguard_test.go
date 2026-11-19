@@ -172,5 +172,5 @@ func TestColdPlateIsNamedInTheChatSummary(t *testing.T) {
 	one := 80.0
 	s.Plates = append(s.Plates, planning.Plate{ID: 500, Date: day(tue), SlotID: lunch, Eaters: 1, Components: []planning.Component{{ID: 1, FoodID: 950, Grams: &one}, {ID: 2, FoodID: 951, Grams: &one}}})
 	summary := planning.RenderPlanSummary(s, nil)
-	assert.Contains(t, summary, "plate_id 500, pending, cold plate (nothing to cook), 1 eater: ")
+	assert.Contains(t, summary, "plate_id 500, pending, cold plate (nothing to cook), 1 person: ")
 }

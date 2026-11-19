@@ -190,6 +190,10 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 
 		// Persist the assistant message (text + any tool_use blocks).
 		// A cut tool input is replayed as `{}`; the run steps keep the raw text.
+		// The words a household reads: stored (and so shown after the stream
+		// ends: the UI refetches the conversation) in kitchen terms; the run log
+		// keeps what the model wrote.
+		plainReplyMessage(&res.resp.Message)
 		replay := llm.ReplayMessage(res.resp.Message)
 		if err := store(RoleAssistant, replay); err != nil {
 			return fail("error.server", err)

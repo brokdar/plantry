@@ -3,17 +3,16 @@ package planning
 import (
 	"fmt"
 	"slices"
-	"time"
+	"strings"
 )
 
 // fixCookLimit closes a break of the cooking limit by the move the household
 // accepts: a side recipe cooked fresh on its own plate (no batch) is dropped
 // from a day that cooks on more cells than the limit allows, when that frees
 // the cell's cooking occasion; the balancing pass lifts the day's energy again
-// with sides and foods that need no cooking. A day still over the limit because
-// an earlier meal cooks its own fresh main gets a cold plate there (the household's
-// choice over a second cook, see coldFirstMeal). A cooking cell that holds a
-// batch stays: that is a choice of dishes, and the model's.
+// with sides and foods that need no cooking. A cooking cell that holds a main or
+// a batch stays, and so does which meals are leftovers: that is a choice of
+// dishes and days, and the model's (cookingHints tell it which days cook twice).
 func fixCookLimit(in ChooseInput, prop Proposal) (Proposal, []string) {
 	limit := in.State.Settings.MaxCookOccasionsPerDay
 	if limit <= 0 {
@@ -56,64 +55,53 @@ func fixCookLimit(in ChooseInput, prop Proposal) (Proposal, []string) {
 			}
 		}
 		if !moved {
-			prop, moved = coldForLimit(in, prop, notes2(&notes))
-		}
-		if !moved {
 			break
 		}
 	}
 	return prop, notes
 }
 
-func notes2(n *[]string) func(string) { return func(s string) { *n = append(*n, s) } }
-
-// coldForLimit turns the earliest meal of a day over the cooking limit, one that
-// cooks a fresh main for itself alone, into a cold plate, when the day then
-// breaks no further rule.
-func coldForLimit(in ChooseInput, prop Proposal, note func(string)) (Proposal, bool) {
+// cookingHints name, for each day still over the cooking limit, where it cooks
+// and a batch whose leftovers the model can put on one of those meals instead.
+func cookingHints(in ChooseInput, merged State) []string {
 	limit := in.State.Settings.MaxCookOccasionsPerDay
-	merged := Merge(in.State, in.Target, prop)
+	if limit <= 0 {
+		return nil
+	}
 	x := newIndex(merged, in.Target)
-	hard := hardKeys(Evaluate(merged, in.Target).Issues)
-	skip := idSet(in.Exclude)
+	var out []string
 	for _, d := range x.days {
-		occ := len(x.occasions[dayOf(d)])
-		if occ <= limit {
+		cells := x.occasions[dayOf(d)]
+		if len(cells) <= limit {
 			continue
 		}
-		var dk *DayKcal
-		for _, a := range x.dayAccounts([]time.Time{d}) {
-			dk = &a
-		}
-		for pi, pl := range prop.Plates {
-			if dayOf(pl.Date) != dayOf(d) || pl.PlateID != 0 || mainID(merged, pl) == 0 || x.mealOf(pl.SlotID) != mealFull {
-				continue
-			}
-			if !slices.ContainsFunc(pl.Components, func(c ProposedComponent) bool {
-				return c.SessionKey == "" && c.SessionID == 0 && c.Portions > 0 && c.FoodID == mainID(merged, pl)
-			}) {
-				continue
-			}
-			aim, dayTarget := 0.0, 0.0
-			if dk != nil && dk.Adjusted > 0 {
-				aim, dayTarget = dk.Adjusted/float64(max(dk.Planned, 1)), dk.Adjusted
-				if merged.lightMeal(pl.Date, pl.SlotID) {
-					aim *= LightMealShare
+		var names []string
+		for c := range cells {
+			for _, p := range merged.Plates {
+				if dayOf(p.Date) == c.day && p.SlotID == c.slot {
+					names = append(names, slotName(merged, p.SlotID))
+					break
 				}
 			}
-			comps, ok := merged.composeColdPlate(skip, aim, dayTarget)
-			if !ok {
-				continue
-			}
-			next := cloneProposal(prop)
-			next.Plates[pi].Components = comps
-			nm := Merge(in.State, in.Target, next)
-			if len(newIndex(nm, in.Target).occasions[dayOf(d)]) >= occ || newHard(hard, Evaluate(nm, in.Target)) != "" {
-				continue
-			}
-			note(fmt.Sprintf("Cooking limit: %s: %s made a cold plate instead of %s (a second cooking on the day).", d.Weekday(), cellShort(merged, pl.Date, pl.SlotID), foodName(merged, mainID(merged, pl))))
-			return next, true
 		}
+		slices.Sort(names)
+		hint := fmt.Sprintf("%s cooks %d times (%s); the limit is %d.", d.Weekday(), len(cells), strings.Join(names, ", "), limit)
+		var best *Session
+		for i := range merged.Sessions {
+			ss := &merged.Sessions[i]
+			if !ss.Proposed() || dayOf(ss.CookDate) >= dayOf(d) || ss.CookDate.AddDate(0, 0, x.keepDays(ss.FoodID)).Before(d) {
+				continue
+			}
+			if best == nil || ss.CookDate.After(best.CookDate) {
+				best = ss
+			}
+		}
+		if best != nil {
+			hint += fmt.Sprintf(" Eat leftovers of %s (cooked %s) at one of those meals so only one of them cooks.", plainName(merged, best.FoodID), cellShort(merged, best.CookDate, best.CookSlotID))
+		} else {
+			hint += " Let one of those meals eat leftovers of a batch cooked on an earlier day so only one of them cooks."
+		}
+		out = append(out, hint)
 	}
-	return prop, false
+	return out
 }

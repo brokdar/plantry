@@ -20,7 +20,7 @@ const maxBalancedNotes = 8
 
 // finishProposal is what a generated plan goes through after the chooser, in
 // one place for the service and the evaluation: the portion cap, the cooking
-// limit, the day's
+// limit (side recipes only), the day's
 // distinct mains (a day regenerate), the meat and fish guard, the balancing pass, and the guard again for the portions the pass
 // raised. It returns the finished proposal and one note per change. A side
 // swap is left alone.
@@ -91,6 +91,9 @@ func plannerView(in ChooseInput, prop Proposal, offered bool) (map[string]any, E
 	}
 	if accepted != "" {
 		view["accepted_shortfall"] = accepted
+	}
+	if hints := cookingHints(in, merged); len(hints) > 0 {
+		view["cooking_hints"] = hints
 	}
 	if distinctDays(in.Target) < minDGEDays {
 		// A day or plate regenerate sits in a week: name the repeats it holds

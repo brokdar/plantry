@@ -94,10 +94,8 @@ func PromptSections(in ChooseInput) [][2]any {
 	measure("sessions", func(b *strings.Builder) { writeSessions(b, x) })
 	measure("fixed cooks", func(b *strings.Builder) { writeFixedCooks(b, x) })
 	measure("keep table", func(b *strings.Builder) { writeKeepTable(b, in) })
-	measure("history", func(b *strings.Builder) { writeHistory(b, s) })
 	measure("corrections", func(b *strings.Builder) { writeCorrections(b, s) })
 	measure("task", func(b *strings.Builder) { writeTask(b, in) })
-	measure("no-cook table", func(b *strings.Builder) { writeNoCook(b, in) })
 	cands := candidates(in)
 	n := 0
 	for _, f := range cands {
