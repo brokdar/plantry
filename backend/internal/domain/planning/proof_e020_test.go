@@ -194,6 +194,9 @@ func proofOne(t *testing.T, round, dir, label string) {
 		_ = json.Unmarshal(ab2, &v2)
 		fmt.Printf("  second evaluation: issues=%d levers=%d accepted=%q\n", len(v2.Issues), len(v2.Levers), v2.Accept)
 	}
+	if h, ok := after["cooking_hints"]; ok {
+		fmt.Printf("  HINTS: %v\n", h)
+	}
 	if os.Getenv("PLANTRY_PROOF_DUMP") != "" {
 		var v struct {
 			Days []map[string]any `json:"days"`
