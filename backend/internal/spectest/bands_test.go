@@ -77,6 +77,51 @@ func unplanned(s planning.State, date string) float64 {
 	return sum
 }
 
+// slotExpected is SB5 for one day: the expected kcal of each planned non-routine
+// slot, and the shift of its band in kcal. A routine meal counts with its real
+// kcal; away, default-none and unplated routine slots stay at their share.
+func slotExpected(s planning.State, ev planning.Evaluation, date string) (exp map[int64]float64, shift map[int64]float64) {
+	sh := shares(s)
+	T := fullTarget(s)
+	plateKcal := map[int64]float64{}
+	for _, p := range ev.Plates {
+		if p.Date == date && p.PlateID > 0 {
+			plateKcal[p.SlotID] = p.Kcal
+		}
+	}
+	var unpl, routineKcal, shP float64
+	var planned []int64
+	for _, c := range s.Cells {
+		if c.Date.Format("2006-01-02") != date {
+			continue
+		}
+		_, plated := plateKcal[c.SlotID]
+		switch string(c.Mode) {
+		case "none":
+			unpl += sh[c.SlotID]
+		case "routine":
+			if plated {
+				routineKcal += plateKcal[c.SlotID]
+			} else {
+				unpl += sh[c.SlotID]
+			}
+		default:
+			planned = append(planned, c.SlotID)
+			shP += sh[c.SlotID]
+		}
+	}
+	exp, shift = map[int64]float64{}, map[int64]float64{}
+	if shP == 0 {
+		return
+	}
+	E := T*(1-unpl) - routineKcal
+	for _, id := range planned {
+		exp[id] = E * sh[id] / shP
+		shift[id] = exp[id] - T*sh[id]
+	}
+	return
+}
+
 func fullTarget(s planning.State) float64 {
 	if s.Profile.KcalTarget == nil {
 		return 0
@@ -114,13 +159,14 @@ func TestRL4_FillingMinimumIsFiveFourthsOfSlotShare(t *testing.T) {
 		}
 		t.Run(wc.name(), func(t *testing.T) {
 			var slotID int64
+			var date string
 			for _, p := range wc.Base.Plates {
 				if p.ID == wc.PlateID {
-					slotID = p.SlotID
+					slotID, date = p.SlotID, p.Date.Format("2006-01-02")
 				}
 			}
-			want := 1.25 * fullTarget(wc.Base) * shares(wc.Base)[slotID]
-			assert.InDelta(t, want, wc.Out.MinKcal, 1.0, "min_kcal must be 125 %% of the slot's expected share x day target")
+			exp, _ := slotExpected(wc.Base, planning.Evaluate(wc.Base, planning.WindowTarget(wc.Base)), date)
+			assert.InDelta(t, 1.25*exp[slotID], wc.Out.MinKcal, 1.0, "min_kcal must be 125 %% of the slot's expected kcal (SB5, shifted by a routine meal)")
 		})
 	}
 }
@@ -171,6 +217,41 @@ func TestSF1c_AwayDeficitSavedReportedWithOffer(t *testing.T) {
 		}
 		assert.True(t, r.Saved, "the away is a fact and must be saved: %.200s", r.Raw)
 		assert.Regexp(t, `(?i)minimum|mindest`, r.Raw, "the reply must report the day under its minimum")
+		// a fix needs a planned meal of that day that is not marked light and is not a routine
+		// slot (RL6: a light mark is not broken by a top-up). Where none exists, v1.1 says
+		// nothing about the offer (OQ-v1.1-6, proposals.md): the case is not decided.
+		date := r.Op["date"].(string)
+		fixable := false
+		marked := map[string]bool{}
+		for _, l := range r.After.Light {
+			if l.Date == date {
+				marked[l.Slot] = true
+				if l.Scope == planning.LightScopeDay {
+					marked["lunch"], marked["dinner"] = true, true
+				}
+			}
+		}
+		for _, c := range r.After.Cells {
+			if c.Date.Format("2006-01-02") == date && string(c.Mode) == "plan" && !marked[slotWord(r.After, c.SlotID)] {
+				for _, p := range r.After.Plates {
+					if p.Date.Equal(c.Date) && p.SlotID == c.SlotID {
+						fixable = true
+					}
+				}
+			}
+		}
+		if !fixable {
+			// v1.2 RL9 (P-1): the one offer removes the light mark of the marked meal that would
+			// close or reduce the gap, applied only on a yes; no marked meal: plainly, no offer
+			lever := len(marked) > 0
+			if lever {
+				assert.Regexp(t, `(?i)"scope":"none"|light mark|no longer light|leicht`, r.Raw, "the offer must remove a light mark")
+				assert.Equal(t, r.LightBefore, r.LightAfter, "the mark is removed only on a yes")
+			} else {
+				assert.NotRegexp(t, `"offers?":\[\{`, r.Raw, "no lever exists: no offer")
+			}
+			return
+		}
 		assert.Regexp(t, `(?i)"offers?"|closing|I can also|day_fix`, r.Raw, "one offer to fix it")
 	})
 }
@@ -202,7 +283,8 @@ func TestNU11_SlotBandIssueMatchesOracle(t *testing.T) {
 					continue
 				}
 				b := bandOfSlot(s, p.SlotID)
-				if p.Kcal < b.Min/100*T || p.Kcal > b.Max/100*T {
+				_, shift := slotExpected(s, ev, p.Date)
+				if p.Kcal < b.Min/100*T+shift[p.SlotID] || p.Kcal > b.Max/100*T+shift[p.SlotID] {
 					want[p.Date+"/"+w] = true
 				}
 			}
@@ -301,5 +383,43 @@ func TestSB1_PresetsShareCapAndAwayProration(t *testing.T) {
 	}
 	t.Run("product", func(t *testing.T) {
 		t.Skip("runs with -tags spectest,cc22 once the band API exists (CC22): TestSB1cc22_PresetDrivesLightCapAndAwayProration")
+	})
+}
+
+// RP9 (P-4): an issue listed as resolved carries the figures it had before the write.
+func TestRP9_ResolvedIssuesCarryBeforeFigures(t *testing.T) {
+	forOps(t, nil, func(t *testing.T, r opRun) {
+		var res struct {
+			After struct {
+				Issues struct {
+					Resolved []struct {
+						Date   string         `json:"date"`
+						Label  string         `json:"label"`
+						Params map[string]any `json:"params"`
+					} `json:"resolved"`
+				} `json:"issues"`
+			} `json:"after"`
+		}
+		_ = json.Unmarshal([]byte(r.Raw), &res)
+		before := planning.Evaluate(r.Before, planning.WindowTarget(r.Before))
+		n := 0
+		for _, is := range res.After.Issues.Resolved {
+			tk, ok := is.Params["target_kcal"]
+			if !ok || is.Date == "" {
+				continue
+			}
+			for _, d := range before.Days {
+				if d.Date == is.Date && d.TargetKcal != nil {
+					n++
+					assert.InDelta(t, *d.TargetKcal, num(tk), 1.0, "resolved %q on %s must show the before-write target", is.Label, is.Date)
+					if lo, ok := is.Params["range_low_kcal"]; ok {
+						assert.InDelta(t, d.BandLow, num(lo), 1.0, "and the before-write range")
+					}
+				}
+			}
+		}
+		if n == 0 {
+			t.Skip("no resolved day issue")
+		}
 	})
 }

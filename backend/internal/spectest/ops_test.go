@@ -76,6 +76,20 @@ func genOps(t *testing.T, hh string) []opCase {
 			add("away_meal", fmt.Sprintf("plate %d", p.ID), map[string]any{"op": "away", "date": p.Date.Format("2006-01-02"), "slot_id": p.SlotID}, true)
 		}
 	}
+	// away of the dinner on a day that already has a day-energy issue: the resolved
+	// issue must keep its before-write figures (RP9)
+	for _, is := range planning.Evaluate(s, planning.WindowTarget(s)).Issues {
+		if is.Rule != "S2" || is.Date == "" {
+			continue
+		}
+		for _, p := range dinner {
+			if p.Date.Format("2006-01-02") == is.Date {
+				add("away_meal", fmt.Sprintf("plate %d (day issue)", p.ID), map[string]any{"op": "away", "date": is.Date, "slot_id": p.SlotID}, true)
+				break
+			}
+		}
+		break
+	}
 	// guests, remove a side, add a leaf, replace the main, set_quantity.
 	var leaf int64
 	for id, f := range s.Foods {

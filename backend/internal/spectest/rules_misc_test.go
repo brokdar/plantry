@@ -3,13 +3,18 @@
 package spectest
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
@@ -138,4 +143,128 @@ func TestRP4_NoUnbackedNumbers(t *testing.T) {
 	require.NotEmpty(t, e.text)
 	assert.NotContains(t, e.text, "9123")
 	assert.NotContains(t, e.text, "777")
+}
+
+// B-1 (v1.2, P-3): a number the user names for a day becomes that day's target and
+// counts as reached inside the normal policy day band around it; the reply states
+// the real figure.
+func TestB1_NamedNumberBecomesDayTarget(t *testing.T) {
+	for _, h := range households {
+		t.Run(h, func(t *testing.T) {
+			t.Parallel()
+			e := newEnv(t, "chat-"+h, chatWeek)
+			s := e.st()
+			_, dinner := mealPlates(s)
+			pl, ok := pick(dinner, 3)
+			if !ok {
+				t.Skip("no dinner")
+			}
+			date := pl.Date.Format("2006-01-02")
+			ev := planning.Evaluate(s, planning.WindowTarget(s))
+			var day planning.DayEval
+			for _, d := range ev.Days {
+				if d.Date == date {
+					day = d
+				}
+			}
+			pol := planning.PolicyOf(s.Profile)
+			N := float64(int(0.85*day.Kcal/50) * 50)
+			if N < 1.1*day.FloorKcal || day.Kcal == 0 {
+				t.Skip("the named number would be near the minimum")
+			}
+			rs, _ := e.turn("about "+fmt.Sprint(N)+" kcal on that day", tc{"find_ways", map[string]any{"goal": "lower_day", "date": date, "target_kcal": N}})
+			require.Len(t, rs, 1)
+			var out waysOut
+			require.NoError(t, json.Unmarshal([]byte(rs[0].Raw), &out))
+			if !assert.NotEmpty(t, out.Ways, "no way for a reachable number: %.200s", rs[0].Raw) {
+				return
+			}
+			w := out.Ways[0]
+			assert.GreaterOrEqual(t, w.After.DayKcal, N*pol.DayLow-1, "the day must sit inside the policy band around the named number")
+			assert.LessOrEqual(t, w.After.DayKcal, N*pol.DayHigh+1, "the day must sit inside the policy band around the named number")
+			in := map[string]any{"ops": w.Ops, "goal": map[string]any{"kind": "lower_day", "date": date, "target_kcal": N}}
+			if len(w.Light) > 0 {
+				in["light"] = w.Light
+			}
+			rs2, chs := e.turn("do it", tc{"apply_changes", in})
+			require.Len(t, rs2, 1)
+			assert.NotEmpty(t, chs, "not saved: %.200s", rs2[0].Raw)
+			s2 := e.st()
+			for _, d := range planning.Evaluate(s2, planning.WindowTarget(s2)).Days {
+				if d.Date == date && d.TargetKcal != nil {
+					assert.InDelta(t, N, *d.TargetKcal, 1.0, "the named number is now the day's target")
+				}
+			}
+		})
+	}
+}
+
+// repeatStub is the heuristic with the replanned day made to show one recently
+// eaten main at both meals, from one cooking.
+type repeatStub struct {
+	date time.Time
+	dish int64
+}
+
+func (r repeatStub) Choose(ctx context.Context, in planning.ChooseInput) (planning.Proposal, error) {
+	p, err := planning.Heuristic{}.Choose(ctx, in)
+	if err != nil {
+		return p, err
+	}
+	var first *planning.ProposedComponent
+	var key string
+	for i := range p.Plates {
+		pl := &p.Plates[i]
+		if !pl.Date.Equal(r.date) {
+			continue
+		}
+		for j := range pl.Components {
+			c := &pl.Components[j]
+			if f := in.State.Foods[c.FoodID]; f.Kind != food.KindComposed || f.Role != food.RoleMain {
+				continue
+			}
+			if first == nil {
+				first, key = c, c.SessionKey
+				c.FoodID = r.dish
+				for k := range p.Sessions {
+					if p.Sessions[k].Key == key {
+						p.Sessions[k].FoodID = r.dish
+						p.Sessions[k].Portions *= 2
+					}
+				}
+			} else {
+				c.FoodID, c.SessionKey = r.dish, key
+			}
+		}
+	}
+	return p, nil
+}
+
+// KR7 (v1 OQ6, signed; v1.2 clarification): a day replan whose result would show
+// the same main at both meals while the variety rule triggers saves nothing, and
+// the reply says so.
+func TestKR7_ReplanWithRepeatedMainSavesNothingAndSaysSo(t *testing.T) {
+	e := newEnv(t, "chat-dev", chatWeek)
+	s := e.st()
+	span := s.Window.Start.AddDate(0, 0, -7*s.Settings.VarietyWeeks)
+	var dish int64
+	for id, f := range s.Foods {
+		if f.Kind == food.KindComposed && f.Role == food.RoleMain && f.NutritionComplete && f.LastEaten != nil && !f.LastEaten.Before(span) && (dish == 0 || id < dish) {
+			dish = id
+		}
+	}
+	require.NotZero(t, dish, "a recently eaten main")
+	date := chatWeek.AddDate(0, 0, 2)
+	e.deps.Choosers[airun.ChooserHeuristic] = repeatStub{date: date, dish: dish}
+	e.planner = planning.NewService(e.deps)
+	before := snapshot(s)
+	id, err := e.planner.Regenerate(context.Background(), planning.Request{
+		Start: chatWeek, Today: today,
+		Scope: planning.Scope{Kind: planning.ScopeDay, Date: date}, Chooser: airun.ChooserHeuristic,
+	})
+	require.NoError(t, err)
+	v, err := e.planner.Run(context.Background(), id)
+	require.NoError(t, err)
+	assert.Equal(t, before, snapshot(e.st()), "the replan must save nothing (status %s, notes %q)", v.Status, v.Notes)
+	assert.True(t, v.Notes != "" || v.ErrorKey != "", "the reply must say nothing was replanned")
 }
