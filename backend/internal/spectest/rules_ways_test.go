@@ -255,20 +255,34 @@ func TestKR5_HeartierRoleWhitelist(t *testing.T) {
 	})
 }
 
-// RL4: light/filling to the limit. A way or offer that is applied meets the
-// limit; no "closest way" that does not (reaches_cap false) is offered, and
-// when none reaches, no change is applied.
-func TestRL4_LightToLimitHasNoClosestWay(t *testing.T) {
+// RL4 and C-8: light/filling to the limit. Everything in ways[] (what the
+// model applies in the same turn) reaches the limit and the limit is met; when
+// no way reaches it, nothing is applied (ways[] is empty) and exactly one offer
+// is made. An offer itself may miss the limit (it is the nearest comparative
+// change or the RL6 fix); it is never applied unasked.
+func TestRL4_LightToLimitAppliesOnlyWhatReachesElseOneOffer(t *testing.T) {
 	for _, wc := range allWays(t) {
 		if !wc.ToLimit {
 			continue
 		}
 		t.Run(wc.name(), func(t *testing.T) {
-			for _, w := range append(append([]planning.Way{}, wc.Out.Ways...), wc.Out.Offers...) {
-				assert.True(t, w.Reaches, "a way that does not reach the limit is offered: %s (%s)", w.What, w.Why)
-				if w.Reaches && wc.Out.MaxKcal > 0 {
-					assert.LessOrEqual(t, w.After.MealKcal, wc.Out.MaxKcal+0.5)
+			if len(wc.Reach.Ways) != len(wc.Out.Ways) || len(wc.Reach.Offers) != len(wc.Out.Offers) {
+				assert.Fail(t, "tool output not aligned", "raw: %.200s", wc.Raw)
+				return
+			}
+			reaching := 0
+			for i, w := range wc.Out.Ways {
+				assert.True(t, wc.Reach.Ways[i].ReachesLimit, "ways[%d] is applied but does not reach the limit: %s (%s)", i, w.What, w.Why)
+				if wc.Reach.Ways[i].ReachesLimit {
+					reaching++
+					if wc.Out.MaxKcal > 0 {
+						assert.LessOrEqual(t, w.After.MealKcal, wc.Out.MaxKcal+0.5, "ways[%d] ends over the limit", i)
+					}
 				}
+			}
+			if reaching == 0 {
+				assert.Empty(t, wc.Out.Ways, "no way reaches the limit: nothing is applied")
+				assert.Len(t, wc.Out.Offers, 1, "case (b) needs exactly one offer")
 			}
 		})
 	}

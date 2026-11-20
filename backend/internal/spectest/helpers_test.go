@@ -124,6 +124,17 @@ type waysOut struct {
 	MinimumKcal float64 `json:"minimum_kcal"`
 }
 
+// reachOut reads the tool's reaches_limit flags (planning.Way's own tag is
+// reaches_cap, which the tool output does not use).
+type reachOut struct {
+	Ways []struct {
+		ReachesLimit bool `json:"reaches_limit"`
+	} `json:"ways"`
+	Offers []struct {
+		ReachesLimit bool `json:"reaches_limit"`
+	} `json:"offer"`
+}
+
 // wayCase is one find_ways call on a household's plate, with the plan it ran on.
 type wayCase struct {
 	HH      string
@@ -131,6 +142,7 @@ type wayCase struct {
 	Goal    string
 	ToLimit bool
 	Out     waysOut
+	Reach   reachOut // the tool's own reaches_limit flags, index-aligned with Out.Ways / Out.Offers
 	Raw     string
 	Base    planning.State
 }
@@ -181,6 +193,7 @@ func allWays(t *testing.T) []wayCase {
 				if len(rs) == 1 {
 					wc.Raw = rs[0].Raw
 					_ = json.Unmarshal([]byte(rs[0].Raw), &wc.Out)
+					_ = json.Unmarshal([]byte(rs[0].Raw), &wc.Reach)
 				}
 				out[i] = wc
 			}()
