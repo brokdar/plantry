@@ -641,7 +641,7 @@ func warnings(in reportInput, as planning.State, away bool) (out, worse []string
 		switch {
 		case !ok:
 			out = append(out, issueSentence(is, as))
-		case worsened(b, is) && away && is.Date == "":
+		case worsened(b, is) && away && is.Date == "" && is.Code != planning.CodeWeekFatRange && is.Code != planning.CodeWeekCarbsRange:
 			// Only the day count changed: the remaining days eat what they ate.
 			unaffected++
 			if neutral == "" || is.Code == planning.CodeWeekMeatAboveDGE {
@@ -696,9 +696,17 @@ func awayNeutral(in reportInput, as planning.State, is planning.Issue) string {
 		who = strings.Join(away, " and ")
 	}
 	if is.Code == planning.CodeWeekMeatAboveDGE {
-		return fmt.Sprintf("With %s away the week is counted over %d days; the meat limit for those days is %.0f g and the plan holds %.0f g, as before.", who, days, paramNum(is, "max_g"), paramNum(is, "meat_g"))
+		return fmt.Sprintf("With %s away the week is counted over %d days; the meat limit for those days is %.0f g and the plan holds %.0f g, as before%s.", who, days, paramNum(is, "max_g"), paramNum(is, "meat_g"), overBy(paramNum(is, "meat_g")-paramNum(is, "max_g")))
 	}
 	return fmt.Sprintf("With %s away the week is counted over %d days: %s It was already open, as before.", who, days, issueSentence(is, as))
+}
+
+// overBy says how far over a limit, "; that is 64 g over", or nothing.
+func overBy(g float64) string {
+	if g < 0.5 {
+		return ""
+	}
+	return fmt.Sprintf("; that is %.0f g over", g)
 }
 
 // badnessWords says a badness value with its unit.

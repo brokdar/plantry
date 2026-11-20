@@ -18,7 +18,7 @@ var resizeItems = []string{
 
 func restored(text string) string {
 	m := llm.Message{Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: text}}}
-	restoreResizes(&m, resizeItems)
+	restoreMust(&m, resizeItems)
 	return m.Content[0].Text
 }
 
@@ -44,7 +44,7 @@ func TestRestoreResizesGerman(t *testing.T) {
 	one := []string{resizeItems[0]}
 	run := func(text string) string {
 		m := llm.Message{Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: text}}}
-		restoreResizes(&m, one)
+		restoreMust(&m, one)
 		return m.Content[0].Text
 	}
 	failing := "Das Abendessen am Mittwoch ist jetzt leicht und die Portionen sind angepasst.\n\n- Dienstag: Das Gericht wird mit 2 Portionen gekocht.\n- Mittwoch: 1713 kcal."
@@ -62,13 +62,13 @@ func TestRestoreResizesGerman(t *testing.T) {
 	assert.NotEqual(t, wrong, run(wrong), "other portions do not count")
 }
 
-func TestResizeTold(t *testing.T) {
+func TestMustTold(t *testing.T) {
 	tell := append([]string{"Tue 24 Nov dinner: x."}, resizeItems...)
 	b, _ := json.Marshal(map[string]any{"report": map[string]any{"tell": tell}})
-	items, saved := resizeTold(b)
+	items, saved := mustTold(b)
 	assert.True(t, saved)
 	assert.Equal(t, resizeItems, items)
 
-	_, saved = resizeTold([]byte(`{"report_if_applied":{"tell":["x"]}}`))
+	_, saved = mustTold([]byte(`{"report_if_applied":{"tell":["x"]}}`))
 	assert.False(t, saved, "a dry run is not a saved change")
 }

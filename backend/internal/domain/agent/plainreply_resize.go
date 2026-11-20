@@ -9,10 +9,11 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
 
-// resizeTold returns the resized-batch items of a result's report.tell
-// ("Sun 22 Nov: cook 3.5 portions of the ... (was 3)."), in order, and whether
-// the result is a saved change's report (a dry run's is renamed away).
-func resizeTold(view json.RawMessage) (items []string, saved bool) {
+// mustTold returns the items of a result's report.tell the reply must carry
+// (see mustItems; e.g. "Sun 22 Nov: cook 3.5 portions of the ... (was 3)."),
+// in order, and whether the result is a saved change's report (a dry run's is
+// renamed away).
+func mustTold(view json.RawMessage) (items []string, saved bool) {
 	var v struct {
 		Report *struct {
 			Tell []string `json:"tell"`
@@ -23,7 +24,7 @@ func resizeTold(view json.RawMessage) (items []string, saved bool) {
 	}
 	var out []string
 	for _, t := range v.Report.Tell {
-		if resizeLine.MatchString(t) {
+		if len(mustItems(t)) > 0 {
 			out = append(out, t)
 		}
 	}
@@ -52,12 +53,17 @@ var deMonth = map[string]struct {
 	"Sep": {9, "Sept."}, "Oct": {10, "Okt."}, "Nov": {11, "Nov."}, "Dec": {12, "Dez."},
 }
 
-// restoreResizes keeps a batch cooked on another day from dropping out of the
-// final reply: the cook must know the day and the new portions. A resize the
-// reply names with neither its day nor its portions in one line is added as
-// a line in the reply's language, before the closing offer. English and
+// restoreMust keeps the facts a household must hear from dropping out of the
+// final reply: a batch cooked on another day (day and portions), a day outside
+// its range, a week figure that got worse, a cooking that is gone or moved.
+// A fact the reply does not carry (its day and number on one line) is added
+// as a line in the reply's language, before the closing offer. English and
 // German replies only; any other language is left as the model wrote it.
-func restoreResizes(m *llm.Message, items []string) {
+func restoreMust(m *llm.Message, tell []string) {
+	var items []mustItem
+	for _, t := range tell {
+		items = append(items, mustItems(t)...)
+	}
 	if len(items) == 0 {
 		return
 	}
@@ -76,10 +82,10 @@ func restoreResizes(m *llm.Message, items []string) {
 		}
 		var missing []string
 		for _, it := range items {
-			if !resizeSaid(b.Text, it, german) {
-				line := it
+			if !it.said(b.Text, german) {
+				line := it.en
 				if german {
-					line = germanResize(it)
+					line = it.de
 				}
 				missing = append(missing, "- "+line)
 			}

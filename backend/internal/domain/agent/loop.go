@@ -107,7 +107,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 	}
 
 	requests, turns, conts, continuation, wrapUp := 0, 0, 0, false, false
-	var resizes []string // the other-day batch resizes of the newest saved change
+	var resizes []string // the must-say tell items of the newest saved change
 	for {
 		if requests++; requests > MaxRequests {
 			break
@@ -195,7 +195,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		// ends: the UI refetches the conversation) in kitchen terms; the run log
 		// keeps what the model wrote.
 		if len(extractToolUses(res.resp.Message)) == 0 {
-			restoreResizes(&res.resp.Message, resizes)
+			restoreMust(&res.resp.Message, resizes)
 		}
 		plainReplyMessage(&res.resp.Message)
 		replay := llm.ReplayMessage(res.resp.Message)
@@ -327,7 +327,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			}
 
 			view := modelView(output)
-			if r, saved := resizeTold(view); saved {
+			if r, saved := mustTold(view); saved {
 				resizes = r
 			}
 			resultBlocks = append(resultBlocks, llm.ContentBlock{

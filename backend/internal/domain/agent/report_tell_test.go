@@ -71,7 +71,7 @@ func TestWarnings_AwayDoesNotCallUnchangedFoodWorse(t *testing.T) {
 	out, worse, _, neutral := warnings(in, planning.State{}, true)
 	assert.Empty(t, out)
 	assert.Empty(t, worse, "the remaining days eat what they ate")
-	assert.Equal(t, "With a day away the week is counted over 6 days; the meat limit for those days is 257 g and the plan holds 321 g, as before.", neutral)
+	assert.Equal(t, "With a day away the week is counted over 6 days; the meat limit for those days is 257 g and the plan holds 321 g, as before; that is 64 g over.", neutral)
 	_, worse, _, _ = warnings(in, planning.State{}, false)
 	assert.Len(t, worse, 1, "without an away it is told")
 }
