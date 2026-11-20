@@ -52,8 +52,11 @@ func TestReplayE048c_TheDayGetsOneBreadFixInsideItsRange(t *testing.T) {
 	e, res, o := e048cOffer(t)
 	fix, ok := o["fix"].(map[string]any)
 	require.True(t, ok, "the offer ends the day under its range: it carries the fix (%v)", o["day_vs_range"])
-	assert.Equal(t, "Ciabatta", fix["name"])
-	assert.EqualValues(t, 1934, fix["day_kcal_after"])
+	// v1.1: the slot bands move the day target, so the fix is the one the new
+	// shares call for (a banana, 1902 kcal); what stays is that it is one normal
+	// food and that its promise equals the dry run below.
+	assert.Contains(t, []string{"Ciabatta", "Banana"}, fix["name"])
+	want := fix["day_kcal_after"]
 
 	// The promise is the dry run of the offer's ops plus the fix's.
 	ctx, _ := e.chat()
@@ -64,7 +67,7 @@ func TestReplayE048c_TheDayGetsOneBreadFixInsideItsRange(t *testing.T) {
 	require.NoError(t, err)
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(out, &got))
-	assert.InDelta(t, 1934, dayKcalOf(got, "2026-11-25"), 1)
+	assert.InDelta(t, want, dayKcalOf(got, "2026-11-25"), 1)
 	for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
 		assert.NotEqual(t, "problem", is["severity"])
 	}

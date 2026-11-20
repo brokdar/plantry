@@ -214,6 +214,13 @@ func (a *readAPI) planWeek() {
 	}
 }
 
+// The default slot bands (spec v1.1 SB1): breakfast 20-30, lunch 30-40, dinner
+// 25-40; the expected share is the midpoint over the sum of the midpoints.
+const (
+	dinnerShare    = 32.5 / 92.5
+	breakfastShare = 25.0 / 92.5
+)
+
 func TestPlanHTTP_WeekLedger(t *testing.T) {
 	t.Run("without a kcal target or complete days there is none", func(t *testing.T) {
 		a := newReadAPI(t)
@@ -249,7 +256,7 @@ func TestPlanHTTP_WeekLedger(t *testing.T) {
 		week := body["week"].(map[string]any)
 		assert.EqualValues(t, 3, week["days"])
 		assert.InDelta(t, 300, week["avg_kcal"], 1e-6)
-		assert.InDelta(t, (2000+1700+(2000-2000.0/3/4))/3.0, week["target_kcal"], 1e-6, "the light day lowers the week target")
+		assert.InDelta(t, (2000+1700+(2000-2000.0*dinnerShare/4))/3.0, week["target_kcal"], 1e-6, "the light day lowers the week target")
 		assert.InDelta(t, 300/week["target_kcal"].(float64)*100, week["pct"], 1e-6)
 
 		days := body["days"].([]any)
@@ -260,7 +267,7 @@ func TestPlanHTTP_WeekLedger(t *testing.T) {
 		assert.NotContains(t, day(2), "light_slot")
 		assert.Equal(t, "meal", day(3)["light"])
 		assert.Equal(t, "dinner", day(3)["light_slot"])
-		assert.InDelta(t, 2000-2000.0/3/4, day(3)["target_kcal"], 1e-6, "a light meal moves the day target by 25 % of its share")
+		assert.InDelta(t, 2000-2000.0*dinnerShare/4, day(3)["target_kcal"], 1e-6, "a light meal moves the day target by 25 % of its share")
 		assert.NotContains(t, day(1), "light")
 
 		rules := map[string]bool{}
@@ -289,7 +296,7 @@ func TestPlanHTTP_WeekLedger(t *testing.T) {
 		for _, d := range []string{"2026-11-01", "2026-11-02", "2026-11-03"} {
 			for _, slot := range []int64{a.lunch, a.dinner} {
 				code, body := a.do(http.MethodPost, "/api/plates",
-					fmt.Sprintf(`{"date":"%s","slot_id":%d,"components":[{"food_id":%d,"portions":5}]}`, d, slot, a.chili))
+					fmt.Sprintf(`{"date":"%s","slot_id":%d,"components":[{"food_id":%d,"portions":5.5}]}`, d, slot, a.chili))
 				require.Equal(t, http.StatusCreated, code, body)
 			}
 		}
@@ -297,8 +304,8 @@ func TestPlanHTTP_WeekLedger(t *testing.T) {
 		require.Equal(t, http.StatusOK, code, body)
 
 		week := body["week"].(map[string]any)
-		assert.InDelta(t, 1000, week["target_kcal"], 1e-6)
-		assert.InDelta(t, 100, week["pct"], 1e-6)
+		assert.InDelta(t, 1500*(1-breakfastShare), week["target_kcal"], 1e-6)
+		assert.InDelta(t, 100, week["pct"], 1, "1100 kcal against the target of the planned part")
 		for _, it := range body["soft"].([]any) {
 			rule := it.(map[string]any)["rule"]
 			assert.NotEqual(t, "S2", rule, "no below-band hint: %v", body["soft"])

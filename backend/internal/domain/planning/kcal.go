@@ -60,8 +60,9 @@ type DayKcal struct {
 	// planned part of the day: 1 minus the shares of the slots not planned (away,
 	// default no plate, or routine without a plate). Zero share means an even
 	// split over the day's cells (a state without slot bands).
-	shares map[int64]float64
-	share  float64
+	shares     map[int64]float64
+	shareTotal float64
+	share      float64
 	// AwayShare is the sum of the expected shares of the slots not planned.
 	AwayShare float64
 }
@@ -92,8 +93,8 @@ func (d DayKcal) Share() float64 {
 // are measured from, ignoring marks and aways. Without slot bands it is the
 // even share of the planned meals.
 func (d DayKcal) mealShare(slotID int64) float64 {
-	if sh, ok := d.shares[slotID]; ok {
-		return d.Target * sh
+	if sh, ok := d.shares[slotID]; ok && d.shareTotal > 0 {
+		return d.Target * sh / d.shareTotal
 	}
 	if d.Active() == 0 {
 		return 0
@@ -131,7 +132,7 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 				cells = append(cells, c)
 			}
 		}
-		dk.shares = daySlotShares(s, cells)
+		dk.shares, dk.shareTotal = daySlotShares(s, cells)
 		totalShare, unplanned := 0.0, 0.0
 		for _, c := range cells {
 			dk.Meals++
@@ -149,9 +150,9 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 			dk.Planned++
 			switch {
 			case s.lightMeal(c.Date, c.SlotID):
-				lightBase += dk.Target * dk.shares[c.SlotID]
+				lightBase += dk.mealShare(c.SlotID)
 			case s.heartyMeal(c.Date, c.SlotID):
-				heartyBase += dk.Target * dk.shares[c.SlotID]
+				heartyBase += dk.mealShare(c.SlotID)
 			}
 			if len(x.byCell[idOf(c.Key())]) == 0 {
 				if c.Mode == availability.ModeRoutine {
@@ -293,26 +294,21 @@ func floorNote(s State, t Target) string {
 	return "Below the daily minimum (the plan could not reach it, please add food to these days): " + strings.Join(parts, ", ")
 }
 
-// daySlotShares are the expected shares of the slots of one day's cells,
-// normalised over them (SB2): the state's band shares, or an even split when
-// the state has none.
-func daySlotShares(s State, cells []Cell) map[int64]float64 {
-	out := make(map[int64]float64, len(cells))
-	total := 0.0
+// daySlotShares are the expected shares of the slots of one day's cells as the
+// state has them (an even weight of 1 when it has none) and their sum: a slot's
+// part of the day is its weight over the sum (SB2, normalised over the day's
+// cells).
+func daySlotShares(s State, cells []Cell) (weights map[int64]float64, total float64) {
+	weights = make(map[int64]float64, len(cells))
 	for _, c := range cells {
 		v, ok := s.SlotShare[c.SlotID]
 		if !ok {
 			v = 1
 		}
-		out[c.SlotID] = v
+		weights[c.SlotID] = v
 		total += v
 	}
-	for id := range out {
-		if total > 0 {
-			out[id] /= total
-		}
-	}
-	return out
+	return weights, total
 }
 
 // slotByName is the id of the slot named name (lunch, dinner); 0 if none.

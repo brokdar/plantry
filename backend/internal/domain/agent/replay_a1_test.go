@@ -10,9 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	dbmigrations "github.com/jaltszeimer/plantry/backend/db"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
@@ -33,6 +35,11 @@ func replayEnv(t *testing.T, src string) *planToolEnv {
 	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	require.NoError(t, err)
 	db.SetMaxOpenConns(1)
+	// The fixture may predate the newest migrations: bring the copy up.
+	goose.SetLogger(goose.NopLogger())
+	goose.SetBaseFS(dbmigrations.Migrations)
+	require.NoError(t, goose.SetDialect("sqlite3"))
+	require.NoError(t, goose.Up(db, "migrations"))
 	t.Cleanup(func() { _ = db.Close() })
 	today := time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)
 	start := time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC)
