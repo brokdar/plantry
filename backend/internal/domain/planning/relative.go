@@ -1279,7 +1279,14 @@ func (w *waySearch) compensate(e wayEdit, ev Evaluation) []wayEdit {
 			} else {
 				cur, curEv = w.compDown(cur, curEv, qi)
 			}
-			_ = curEv
+			// A light meal grown past its light cap keeps no mark: only the way
+			// that clears it is a way (the mark would be a warning).
+			if !clear && len(cur.moved) > 0 && e.s.lightMeal(q.Date, q.SlotID) {
+				limit, _, err := MealLimit(cur.s, w.t, q.ID, GoalLighter)
+				if err == nil && w.plateKcal(curEv, q.ID) > limit+1e-9 {
+					continue
+				}
+			}
 			if len(cur.moved) > 0 {
 				if clear {
 					cur.moved = append([]string{slotName(e.s, q.SlotID) + " is no longer a light meal"}, cur.moved...)

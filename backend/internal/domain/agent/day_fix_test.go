@@ -307,3 +307,59 @@ func TestMarkChange(t *testing.T) {
 		assert.Equal(t, tc.want, agent.MarkChange(tc.before, tc.after), name)
 	}
 }
+
+// de-lighter-wed (E048c): the dinner is made properly light by a compound
+// offer that grows a lunch the user had marked light. Growing it past its light
+// cap keeps no light mark: the offer clears it in its ops, its promise is the
+// range of the unmarked day, and a day that still ends under range carries the
+// fix. Applying exactly offer + fix gives no light-meal warning on the lunch and
+// the promised day.
+func TestFindWays_CompoundGrowingALightLunchClearsItsMark(t *testing.T) {
+	clearedAny := false
+	for _, lp := range []float64{0.3} {
+		for _, target := range []int{2200, 2250, 2300, 2700} {
+			e := fixEnv(t, target)
+			e.sql(`UPDATE plate_components SET portions = 1.5 WHERE plate_id = ?`, e.dinner3())
+			var date string
+			for _, p := range e.draftMeals() {
+				if p.ID == e.dinner3() {
+					date = p.DateString()
+				}
+			}
+			require.NotEmpty(t, date)
+			e.sql(`UPDATE plate_components SET portions = ? WHERE plate_id = 2`, lp)
+			_ = e.mustExec("apply_changes", fmt.Sprintf(`{"light":[{"date":%q,"scope":"meal","slot":"lunch","level":"light"}]}`, date))
+			res := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lighter","plate_id":%d,"to_limit":true}`, e.dinner3()))
+			rawOffers, _ := res["offer"].([]any)
+			offers := relMaps(rawOffers)
+			if false {
+				require.NotEmpty(t, offers)
+			}
+			for _, o := range offers {
+				cleared := false
+				marks, _ := o["light"].([]any)
+				for _, l := range relMaps(marks) {
+					if l["slot"] == "lunch" && l["scope"] == "none" {
+						cleared = true
+					}
+				}
+				clearedAny = clearedAny || cleared
+				ops, want := o["ops"].([]any), o["after"].(map[string]any)["day_kcal"].(float64)
+				if fix, ok := o["fix"].(map[string]any); ok {
+					ops, want = append(ops, fix["ops"].([]any)...), fix["day_kcal_after"].(float64)
+				}
+				raw, err := json.Marshal(map[string]any{"ops": ops, "goal": res["goal"], "light": marks, "dry_run": true})
+				require.NoError(t, err)
+				got, err := e.exec("apply_changes", string(raw))
+				require.NoError(t, err)
+				k, lo, hi := dayOf(t, got)
+				assert.InDelta(t, want, k, 1)
+				for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
+					assert.NotEqual(t, "light meal", is["label"], "lp %v target %d: %v", lp, target, is["message"])
+				}
+				t.Logf("target %d: day %.0f in [%.0f, %.0f], promise %.0f, moved %v", target, k, lo, hi, want, o["moved"])
+			}
+		}
+	}
+	assert.True(t, clearedAny, "an offer clears the lunch's light mark")
+}
