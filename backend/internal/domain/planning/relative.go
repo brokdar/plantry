@@ -1267,31 +1267,43 @@ func (w *waySearch) compensate(e wayEdit, ev Evaluation) []wayEdit {
 			clears = append(clears, true)
 		}
 		for _, clear := range clears {
-			cur, curEv := e, ev
-			cur.kind = "compound"
+			start, startEv := e, ev
+			start.kind = "compound"
 			if clear {
-				cur.s, cur.clear = w.clearMark(cur.s, q), append(slices.Clone(cur.clear), w.markOf(cur.s, q, false))
-				cur.cost += 3
-				curEv = Evaluate(cur.s, w.t)
+				start.s, start.clear = w.clearMark(start.s, q), append(slices.Clone(start.clear), w.markOf(start.s, q, false))
+				start.cost += 3
+				startEv = Evaluate(start.s, w.t)
 			}
-			if up {
-				cur, curEv = w.compUp(cur, curEv, qi)
-			} else {
-				cur, curEv = w.compDown(cur, curEv, qi)
-			}
-			// A light meal grown past its light cap keeps no mark: only the way
-			// that clears it is a way (the mark would be a warning).
-			if !clear && len(cur.moved) > 0 && e.s.lightMeal(q.Date, q.SlotID) {
-				limit, _, err := MealLimit(cur.s, w.t, q.ID, GoalLighter)
-				if err == nil && w.plateKcal(curEv, q.ID) > limit+1e-9 {
+			// A starch side recipe can leave the day under its floor where a
+			// vegetable side plus bread would not: the second build is only for
+			// that case.
+			for _, vegOnly := range []bool{false, true} {
+				cur, curEv := start, startEv
+				switch {
+				case up:
+					cur, curEv = w.compUp(cur, curEv, qi, vegOnly)
+				case vegOnly:
 					continue
+				default:
+					cur, curEv = w.compDown(cur, curEv, qi)
 				}
-			}
-			if len(cur.moved) > 0 {
-				if clear {
-					cur.moved = append([]string{slotName(e.s, q.SlotID) + " is no longer a light meal"}, cur.moved...)
+				// A light meal grown past its light cap keeps no mark: only the way
+				// that clears it is a way (the mark would be a warning).
+				if !clear && len(cur.moved) > 0 && e.s.lightMeal(q.Date, q.SlotID) {
+					limit, _, err := MealLimit(cur.s, w.t, q.ID, GoalLighter)
+					if err == nil && w.plateKcal(curEv, q.ID) > limit+1e-9 {
+						break
+					}
 				}
-				out = append(out, cur)
+				if len(cur.moved) > 0 {
+					if clear {
+						cur.moved = append([]string{slotName(e.s, q.SlotID) + " is no longer a light meal"}, cur.moved...)
+					}
+					out = append(out, cur)
+				}
+				if d, ok := w.dayEval(curEv); !up || !ok || d.Kcal >= d.FloorKcal-1e-9 {
+					break
+				}
 			}
 		}
 	}
@@ -1347,7 +1359,7 @@ func (w *waySearch) score(r wayCheck) (float64, bool) {
 // compUp grows the other meal the way a person would: a larger portion of
 // its own main (up to MaxDishPortions), then a matching side or bread, never
 // a gap filler that does not belong to the dish.
-func (w *waySearch) compUp(e wayEdit, ev Evaluation, qi int) (wayEdit, Evaluation) {
+func (w *waySearch) compUp(e wayEdit, ev Evaluation, qi int, vegOnly bool) (wayEdit, Evaluation) {
 	q := e.s.Plates[qi]
 	who := slotName(e.s, q.SlotID)
 	apply := func(c wayEdit) {
@@ -1390,8 +1402,12 @@ func (w *waySearch) compUp(e wayEdit, ev Evaluation, qi int) (wayEdit, Evaluatio
 	// Then a side recipe from the library (verified like find_alternatives:
 	// cooked on the day's cook cell or eaten from a batch), then bread up to
 	// its add-on limit.
+	sideRoles := []food.Role{food.RoleSideStarch, food.RoleSideVeg}
+	if vegOnly {
+		sideRoles = sideRoles[1:]
+	}
 	if w.lift(ev) > 0 {
-		res, err := Alternatives(e.s, w.t, AltRequest{PlateID: q.ID, What: AltAdd, Limit: 8, Constraints: AltConstraints{Roles: []food.Role{food.RoleSideStarch, food.RoleSideVeg}}})
+		res, err := Alternatives(e.s, w.t, AltRequest{PlateID: q.ID, What: AltAdd, Limit: 8, Constraints: AltConstraints{Roles: sideRoles}})
 		if err == nil {
 			var cands []wayEdit
 			for _, a := range res.Alternatives {
