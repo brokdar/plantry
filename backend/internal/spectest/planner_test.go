@@ -214,13 +214,17 @@ func TestKR7_ReplanDoesNotRepeatNeighbours(t *testing.T) {
 			date := chatWeek.AddDate(0, 0, dayIdx)
 			t.Run(fmt.Sprintf("%s/%s", h, date.Format("01-02")), func(t *testing.T) {
 				e := newEnv(t, "chat-"+h, chatWeek)
+				before := e.st()
 				id, err := e.planner.Regenerate(context.Background(), planning.Request{
 					Start: chatWeek, Today: today,
 					Scope: planning.Scope{Kind: planning.ScopeDay, Date: date}, Chooser: airun.ChooserHeuristic,
 				})
 				require.NoError(t, err)
-				_, err = e.planner.Run(context.Background(), id)
+				v, err := e.planner.Run(context.Background(), id)
 				require.NoError(t, err)
+				if v.ErrorKey == "error.plan.day_same_dish" && snapshot(e.st()) == snapshot(before) {
+					return // nothing saved, told: v1.2 KR7's last step, a pass
+				}
 				s := e.st()
 				mains := map[string]map[int64]bool{} // date -> main foods
 				perMeal := map[string][]int64{}

@@ -174,7 +174,10 @@ func TestB1_NamedNumberBecomesDayTarget(t *testing.T) {
 			}
 			rs, _ := e.turn("about "+fmt.Sprint(N)+" kcal on that day", tc{"find_ways", map[string]any{"goal": "lower_day", "date": date, "target_kcal": N}})
 			require.Len(t, rs, 1)
-			var out waysOut
+			// goal is an object here (kind, date, target_kcal), so decode only the ways
+			var out struct {
+				Ways []planning.Way `json:"ways"`
+			}
 			require.NoError(t, json.Unmarshal([]byte(rs[0].Raw), &out))
 			if !assert.NotEmpty(t, out.Ways, "no way for a reachable number: %.200s", rs[0].Raw) {
 				return
@@ -255,6 +258,11 @@ func TestKR7_ReplanWithRepeatedMainSavesNothingAndSaysSo(t *testing.T) {
 	}
 	require.NotZero(t, dish, "a recently eaten main")
 	date := chatWeek.AddDate(0, 0, 2)
+	// v1.2 KR7 orders the fallbacks: cold plate, extra portion, the same dish twice outside
+	// H8, otherwise no replan. Take the cold plate away (no no-cook leaf in the library) so
+	// that no fallback is left; the only way out is "nothing saved, told".
+	_, err := e.db.Exec(`UPDATE foods SET no_cook = 0 WHERE kind = 'leaf'`)
+	require.NoError(t, err)
 	e.deps.Choosers[airun.ChooserHeuristic] = repeatStub{date: date, dish: dish}
 	e.planner = planning.NewService(e.deps)
 	before := snapshot(s)
@@ -266,5 +274,5 @@ func TestKR7_ReplanWithRepeatedMainSavesNothingAndSaysSo(t *testing.T) {
 	v, err := e.planner.Run(context.Background(), id)
 	require.NoError(t, err)
 	assert.Equal(t, before, snapshot(e.st()), "the replan must save nothing (status %s, notes %q)", v.Status, v.Notes)
-	assert.True(t, v.Notes != "" || v.ErrorKey != "", "the reply must say nothing was replanned")
+	assert.Equal(t, "error.plan.day_same_dish", v.ErrorKey, "the reply must say nothing was replanned (notes %q)", v.Notes)
 }
