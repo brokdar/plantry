@@ -27,6 +27,8 @@ type planCase struct {
 	Err     error
 	Chooser string
 	Notes   string
+	Meals   int
+	OutBand int
 }
 
 var (
@@ -69,6 +71,19 @@ func allPlans(t *testing.T) []planCase {
 						c.Days++
 						if d.TargetKcal != nil && d.Kcal >= d.BandLow-0.5 && d.Kcal <= d.BandHigh+0.5 {
 							c.InBand++
+						}
+					}
+					for _, p := range ev.Plates {
+						if w := slotWord(s, p.SlotID); w == "lunch" || w == "dinner" {
+							c.Meals++
+						}
+					}
+					T := fullTarget(s)
+					for _, p := range ev.Plates {
+						if w := slotWord(s, p.SlotID); w == "lunch" || w == "dinner" {
+							if b := bandOfSlot(s, p.SlotID); p.Kcal < b.Min/100*T || p.Kcal > b.Max/100*T {
+								c.OutBand++ // the band oracle of SB1, not the product's S10
+							}
 						}
 					}
 					out[hi*len(plannerWks)+wi] = c
@@ -195,5 +210,17 @@ func TestKR7_ReplanDoesNotRepeatNeighbours(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// PL7: at least 80 % of the planned lunches and dinners lie inside their slot band.
+func TestPL7_PlannerMealsInsideSlotBands(t *testing.T) {
+	for _, c := range allPlans(t) {
+		t.Run(c.HH+"/"+c.Start, func(t *testing.T) {
+			if c.Meals == 0 {
+				t.Skip("no lunch or dinner planned")
+			}
+			assert.GreaterOrEqual(t, float64(c.Meals-c.OutBand)/float64(c.Meals), 0.8, "%d of %d lunches and dinners outside their band", c.OutBand, c.Meals)
+		})
 	}
 }

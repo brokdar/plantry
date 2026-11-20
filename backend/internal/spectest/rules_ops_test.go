@@ -33,7 +33,7 @@ func TestSF1_NoHardIssueSaved(t *testing.T) {
 	forOps(t, nil, func(t *testing.T, r opRun) {
 		allowed := map[string]bool{}
 		if r.Kind == "away_day" || r.Kind == "away_meal" {
-			allowed["H1"], allowed["H3"], allowed["H4"], allowed["H5"] = true, true, true, true
+			allowed["H1"], allowed["H3"], allowed["H4"], allowed["H5"], allowed["H9"] = true, true, true, true, true // H9: only with report and offer, see TestSF1c
 		}
 		if r.Kind == "delete_plate" {
 			allowed["H1"], allowed["H3"], allowed["H4"], allowed["H9"] = true, true, true, true
@@ -205,25 +205,23 @@ func TestKR4_PortionsInRange(t *testing.T) {
 	})
 }
 
-// SF4: a day with one meal away is judged on a prorated minimum (lower than
-// the full-day one), not on the full floor.
+// SF4 (v1.1): a part-away day is judged on the planned part: the floor is the
+// full-day floor x (1 - the away slots' expected shares), both terms.
 func TestSF4_PartAwayFloorProrated(t *testing.T) {
 	forOps(t, []string{"away_meal"}, func(t *testing.T, r opRun) {
 		date := r.Op["date"].(string)
-		floor := func(s planning.State) float64 {
-			for _, d := range planning.Evaluate(s, planning.WindowTarget(s)).Days {
-				if d.Date == date {
-					return d.FloorKcal
-				}
+		var day *planning.DayEval
+		ev := planning.Evaluate(r.After, planning.WindowTarget(r.After))
+		for i := range ev.Days {
+			if ev.Days[i].Date == date {
+				day = &ev.Days[i]
 			}
-			return -1
 		}
-		fb, fa := floor(r.Before), floor(r.After)
-		if fb <= 0 || fa < 0 {
+		if day == nil || day.Away || day.FloorKcal <= 0 {
 			t.Skip("day not judged")
 		}
-		assert.Less(t, fa, fb, "minimum after the meal is away must be prorated")
-		assert.Greater(t, fa, 0.0)
+		want := fullFloor(r.After) * (1 - unplanned(r.After, date))
+		assert.InDelta(t, want, day.FloorKcal, 1.0, "floor = full-day floor x (1 - unplanned shares)")
 	})
 }
 
