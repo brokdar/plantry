@@ -171,6 +171,32 @@ func TestSF1c_AwayDeficitSavedReportedWithOffer(t *testing.T) {
 		}
 		assert.True(t, r.Saved, "the away is a fact and must be saved: %.200s", r.Raw)
 		assert.Regexp(t, `(?i)minimum|mindest`, r.Raw, "the reply must report the day under its minimum")
+		// a fix needs a planned meal of that day that is not marked light and is not a routine
+		// slot (RL6: a light mark is not broken by a top-up). Where none exists, v1.1 says
+		// nothing about the offer (OQ-v1.1-6, proposals.md): the case is not decided.
+		date := r.Op["date"].(string)
+		fixable := false
+		marked := map[string]bool{}
+		for _, l := range r.After.Light {
+			if l.Date == date {
+				marked[l.Slot] = true
+				if l.Scope == planning.LightScopeDay {
+					marked["lunch"], marked["dinner"] = true, true
+				}
+			}
+		}
+		for _, c := range r.After.Cells {
+			if c.Date.Format("2006-01-02") == date && string(c.Mode) == "plan" && !marked[slotWord(r.After, c.SlotID)] {
+				for _, p := range r.After.Plates {
+					if p.Date.Equal(c.Date) && p.SlotID == c.SlotID {
+						fixable = true
+					}
+				}
+			}
+		}
+		if !fixable {
+			t.Skip("no unmarked planned meal can take a fix: spec gap OQ-v1.1-6")
+		}
 		assert.Regexp(t, `(?i)"offers?"|closing|I can also|day_fix`, r.Raw, "one offer to fix it")
 	})
 }

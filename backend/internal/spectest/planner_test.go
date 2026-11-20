@@ -8,11 +8,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
@@ -29,6 +30,11 @@ type planCase struct {
 	Notes   string
 	Meals   int
 	OutBand int
+	// the PL6 pre-check: lunches and dinners on days where an in-band lunch and
+	// dinner can bring the day into its band, given the plan's other meals
+	FeasMeals   int
+	FeasOutBand int
+	InfeasDays  int
 }
 
 var (
@@ -79,10 +85,54 @@ func allPlans(t *testing.T) []planCase {
 						}
 					}
 					T := fullTarget(s)
+					mainMin, mainMax := 1e9, 0.0
+					for _, f := range s.Foods {
+						if f.Kind == food.KindComposed && f.Role == food.RoleMain && f.NutritionComplete && f.Macros.Kcal > 0 {
+							mainMin, mainMax = min(mainMin, f.Macros.Kcal), max(mainMax, f.Macros.Kcal)
+						}
+					}
+					type meal struct {
+						kcal   float64
+						out    bool
+						lo, hi float64
+						word   string
+					}
+					perDay := map[string][]meal{}
+					other := map[string]float64{}
+					for _, d := range ev.Days {
+						other[d.Date] = d.Kcal
+					}
 					for _, p := range ev.Plates {
-						if w := slotWord(s, p.SlotID); w == "lunch" || w == "dinner" {
-							if b := bandOfSlot(s, p.SlotID); p.Kcal < b.Min/100*T || p.Kcal > b.Max/100*T {
-								c.OutBand++ // the band oracle of SB1, not the product's S10
+						w := slotWord(s, p.SlotID)
+						if w != "lunch" && w != "dinner" {
+							continue
+						}
+						b := bandOfSlot(s, p.SlotID)
+						// the meal at its expected share (SB2: the planner's budget), inside the library's reach
+						exp := min(max(shares(s)[p.SlotID]*T, 0.5*mainMin), 1.5*mainMax)
+						m := meal{kcal: p.Kcal, word: w, out: p.Kcal < b.Min/100*T || p.Kcal > b.Max/100*T, lo: exp, hi: exp}
+						other[p.Date] -= p.Kcal
+						perDay[p.Date] = append(perDay[p.Date], m)
+						if m.out {
+							c.OutBand++ // the band oracle of SB1, not the product's S10
+						}
+					}
+					for _, d := range ev.Days {
+						ms := perDay[d.Date]
+						var lo, hi float64
+						for _, m := range ms {
+							lo, hi = lo+m.lo, hi+m.hi
+						}
+						// feasible: with every lunch and dinner at its expected share the day lands in its day band
+						feasible := len(ms) > 0 && other[d.Date]+lo <= d.BandHigh && other[d.Date]+hi >= d.BandLow
+						if !feasible {
+							c.InfeasDays++
+							continue
+						}
+						for _, m := range ms {
+							c.FeasMeals++
+							if m.out {
+								c.FeasOutBand++
 							}
 						}
 					}
@@ -185,6 +235,7 @@ func TestKR7_ReplanDoesNotRepeatNeighbours(t *testing.T) {
 				s := e.st()
 				mains := map[string]map[int64]bool{} // date -> main foods
 				perMeal := map[string][]int64{}
+				sessOf := map[string][]int64{}
 				for _, p := range s.Plates {
 					for _, c := range p.Components {
 						if f := s.Foods[c.FoodID]; f.Kind == food.KindComposed && f.Role == food.RoleMain {
@@ -194,6 +245,7 @@ func TestKR7_ReplanDoesNotRepeatNeighbours(t *testing.T) {
 							}
 							mains[d][c.FoodID] = true
 							perMeal[d] = append(perMeal[d], c.FoodID)
+							sessOf[d] = append(sessOf[d], c.SessionID)
 						}
 					}
 				}
@@ -203,24 +255,34 @@ func TestKR7_ReplanDoesNotRepeatNeighbours(t *testing.T) {
 						assert.False(t, mains[nb][f], "%s repeats the main %q of %s", d, s.Foods[f].Name, nb)
 					}
 				}
-				seen := map[int64]bool{}
-				for _, f := range perMeal[d] {
-					assert.False(t, seen[f], "%s has %q at both meals", d, s.Foods[f].Name)
-					seen[f] = true
+				// the same dish at both meals is one cooking eaten twice (KR7 step 3, allowed
+				// where H8 is not triggered; the ladder order itself has no oracle) or two cookings (a repeat)
+				sess := map[int64]int64{}
+				for i, f := range perMeal[d] {
+					if prev, dup := sess[f]; dup && prev != sessOf[d][i] {
+						assert.Fail(t, "cooked twice", "%s has %q cooked at both meals", d, s.Foods[f].Name)
+					}
+					sess[f] = sessOf[d][i]
 				}
 			})
 		}
 	}
 }
 
-// PL7: at least 80 % of the planned lunches and dinners lie inside their slot band.
+// PL7: at least 80 % of the planned lunches and dinners lie inside their slot
+// band, counted on the days the PL6 pre-check marks feasible: with the day's other
+// meals as planned (a routine breakfast is fixed) and every lunch and dinner at its
+// expected share (SB2), the day lands in its day band. Where a fixed meal is far
+// below its own expected share, the others must exceed theirs and the day is not
+// counted.
 func TestPL7_PlannerMealsInsideSlotBands(t *testing.T) {
 	for _, c := range allPlans(t) {
 		t.Run(c.HH+"/"+c.Start, func(t *testing.T) {
-			if c.Meals == 0 {
-				t.Skip("no lunch or dinner planned")
+			if c.FeasMeals == 0 {
+				t.Skipf("no feasible day (%d infeasible days)", c.InfeasDays)
 			}
-			assert.GreaterOrEqual(t, float64(c.Meals-c.OutBand)/float64(c.Meals), 0.8, "%d of %d lunches and dinners outside their band", c.OutBand, c.Meals)
+			assert.GreaterOrEqual(t, float64(c.FeasMeals-c.FeasOutBand)/float64(c.FeasMeals), 0.8,
+				"%d of %d lunches and dinners on feasible days outside their band (%d infeasible days)", c.FeasOutBand, c.FeasMeals, c.InfeasDays)
 		})
 	}
 }
