@@ -75,7 +75,8 @@ func TestSF3_NamedDishAppliedWithVarietyWarning(t *testing.T) {
 			assert.NotEmpty(t, chs, "the named dish was not saved (plate %d, %s): %.300s", plateID, dish.Name, rs[0].Raw)
 			assert.Regexp(t, regexp.MustCompile(`(?i)variety|repeat|recently|wiederhol|kürzlich`), rs[0].Raw, "no variety warning in the result")
 			for k := range e.violations() {
-				assert.True(t, before[k], "new hard issue %s", k)
+				// SF1(b): H8 for a user-named dish is not a hard issue of this write
+				assert.True(t, before[k] || strings.HasPrefix(k, "H8/"), "new hard issue %s", k)
 			}
 		})
 	}
