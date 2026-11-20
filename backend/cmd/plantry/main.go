@@ -156,6 +156,7 @@ func run() error {
 	slotSvc := slot.NewService(slotRepo)
 
 	txRunner := sqlite.NewTxRunner(conn)
+	slotSvc.WithTx(txRunner)
 	presetRepo := sqlite.NewPresetRepo(conn)
 
 	// Availability gates where plates may go (D10, D12), so it is built

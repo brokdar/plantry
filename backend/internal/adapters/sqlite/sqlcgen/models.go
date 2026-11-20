@@ -352,12 +352,14 @@ type RecipeSuggestion struct {
 }
 
 type TimeSlot struct {
-	ID        int64
-	NameKey   string
-	Icon      string
-	SortOrder int64
-	Active    int64
-	Kind      string
+	ID         int64
+	NameKey    string
+	Icon       string
+	SortOrder  int64
+	Active     int64
+	Kind       string
+	BandMinPct sql.NullFloat64
+	BandMaxPct sql.NullFloat64
 }
 
 type UserProfile struct {

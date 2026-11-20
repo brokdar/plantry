@@ -44,6 +44,7 @@ var issueTexts = map[string]IssueText{
 	CodeWeekFatRange:          {"weekly fat", "The week's fat share is outside its range."},
 	CodeMealNotLight:          {"light meal", "A meal the user wants light holds more than a light meal should."},
 	CodeMealNotHearty:         {"filling meal", "A meal the user wants filling holds less than a filling meal needs."},
+	CodeMealOutsideSlotBand:   {"meal outside its share of the day", "A meal holds less or more of the day's energy than its time slot is meant to."},
 	CodeDishRepeats:           {"dish as main too often", "One dish is the main of more meals than the user's limit."},
 	CodeAddOnExcess:           {"sides", "A side is over its usual serving or repeated too often."},
 	CodeWeekMeatAboveDGE:      {"weekly meat", "The week holds more meat than the recommended maximum."},

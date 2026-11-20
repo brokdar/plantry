@@ -98,6 +98,9 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 		if h.Slots != nil {
 			api.Route("/settings/slots", func(r chi.Router) {
 				r.Get("/", h.Slots.List)
+				r.Get("/bands", h.Slots.Bands)
+				r.Put("/bands", h.Slots.SetBands)
+				r.Post("/bands/preset", h.Slots.ApplyPreset)
 				r.Post("/", h.Slots.Create)
 				r.Put("/{id}", h.Slots.Update)
 				r.Delete("/{id}", h.Slots.Delete)

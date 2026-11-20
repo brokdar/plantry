@@ -82,11 +82,19 @@ func (b *Builder) Build(ctx context.Context, w window.Window, today, from, to ti
 	s.SlotOrder = make(plate.SlotOrder, len(slots))
 	s.SlotNames = make(map[int64]string, len(slots))
 	s.SlotKind = make(map[int64]slot.Kind, len(slots))
+	var bands []slot.Band
+	s.SlotBand = make(map[int64]slot.Band, len(slots))
 	for _, sl := range slots {
 		s.SlotKind[sl.ID] = sl.Kind
 		s.SlotOrder[sl.ID] = sl.SortOrder
 		s.SlotNames[sl.ID] = sl.NameKey
+		if sl.Active {
+			b := sl.Effective()
+			bands = append(bands, b)
+			s.SlotBand[sl.ID] = b
+		}
 	}
+	s.SlotShare = slot.Shares(bands)
 	if s.Light, err = b.d.Light.List(ctx, w.Start, w.End); err != nil {
 		return State{}, fmt.Errorf("read light requests: %w", err)
 	}

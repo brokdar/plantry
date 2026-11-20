@@ -376,9 +376,9 @@ func (s State) withAltLight(t Target, p Plate, light string) (State, float64, fl
 		return s, 0, 0, fmt.Errorf("%w: light needs a kcal target in the profile", domain.ErrInvalidInput)
 	}
 	if level == LevelHearty {
-		return s, 0, HeartyMealShare * dk.normalShare(), nil
+		return s, 0, HeartyMealShare * dk.mealShare(p.SlotID), nil
 	}
-	return s, dk.mealCap(), 0, nil
+	return s, dk.mealCap(p.SlotID), 0, nil
 }
 
 // altCurrent describes the component at old of p and its plate.
@@ -1039,9 +1039,9 @@ func (x *index) kcalFit(p Plate, kcal float64) float64 {
 	}
 	switch {
 	case x.s.lightMeal(p.Date, p.SlotID):
-		return max(0, kcal-dk.mealCap())
+		return max(0, kcal-dk.mealCap(p.SlotID))
 	case x.s.heartyMeal(p.Date, p.SlotID):
-		return max(0, HeartyMealShare*dk.normalShare()-kcal)
+		return max(0, HeartyMealShare*dk.mealShare(p.SlotID)-kcal)
 	case x.s.lightDay(p.Date), x.s.heartyDay(p.Date):
 		return math.Abs(kcal - dk.Adjusted/float64(dk.Active()))
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // Option is one computed way to close a soft rule's gap on a day: add a
@@ -283,6 +284,7 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 	out = append(out, x.lightIssues(ev)...)
 	out = append(out, x.dishIssues()...)
 	out = append(out, x.addOnIssues()...)
+	out = append(out, x.slotBandIssues(ev)...)
 	// S4: the weekly average outside the policy's week band. No date and no
 	// options: the model decides which days to move.
 	if w := ev.Week; w != nil && w.Days >= MinWeekDays {
@@ -698,4 +700,46 @@ func bandGap(kcal, low, high float64) float64 {
 		return high - kcal
 	}
 	return 0
+}
+
+// slotBandIssues reports S10 `meal_outside_slot_band` for every lunch or dinner
+// plate whose kcal per eater are outside its slot's band (SB1), in percent of
+// the day's full target. Only complete days that are not away are judged, a
+// meal with a light or hearty mark (or on a light or hearty day) is exempt (the
+// explicit request outranks the band), and the issue has no options.
+func (x *index) slotBandIssues(ev Evaluation) []Issue {
+	k := x.s.Profile.KcalTarget
+	if k == nil || *k <= 0 || len(x.s.SlotBand) == 0 {
+		return nil
+	}
+	judged := map[string]bool{}
+	for _, d := range ev.Days {
+		judged[d.Date] = d.Complete && !d.Away && !d.NutritionMissing
+	}
+	var out []Issue
+	for _, p := range ev.Plates {
+		b, ok := x.s.SlotBand[p.SlotID]
+		if !ok || !judged[p.Date] || p.Kcal <= 0 || x.mealOf(p.SlotID) != mealFull || x.unfixable(p) {
+			continue
+		}
+		day, err := time.Parse(time.DateOnly, p.Date)
+		if err != nil || x.s.lightMeal(day, p.SlotID) || x.s.heartyMeal(day, p.SlotID) || x.s.lightDay(day) || x.s.heartyDay(day) {
+			continue
+		}
+		lo, hi := b.MinPct/100**k, b.MaxPct/100**k
+		side := ""
+		switch {
+		case p.Kcal < lo-0.5:
+			side = "below"
+		case p.Kcal > hi+0.5:
+			side = "above"
+		}
+		if side == "" {
+			continue
+		}
+		out = append(out, issue("S10", CodeMealOutsideSlotBand, SeveritySoft).atCell(plate.CellKey{Date: day, SlotID: p.SlotID}).
+			with("kcal", math.Round(p.Kcal)).with("min_kcal", math.Round(lo)).with("max_kcal", math.Round(hi)).
+			with("band_min_pct", b.MinPct).with("band_max_pct", b.MaxPct).with("side", side))
+	}
+	return out
 }

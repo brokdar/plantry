@@ -279,7 +279,20 @@
       "grid_effect": "Plantry plant die Mahlzeiten mit „Planen“, lässt „Kein Essen“ frei und füllt Routinen aus einer gespeicherten Routine.",
       "grid_no_slots": "Lege zuerst eine Mahlzeit an, dann deine übliche Woche.",
       "routines_label": "Routinen",
-      "routines_effect": "Routinen sind gespeicherte Mahlzeiten, die regelmäßig wiederkehren, etwa dein Frühstück unter der Woche."
+      "routines_effect": "Routinen sind gespeicherte Mahlzeiten, die regelmäßig wiederkehren, etwa dein Frühstück unter der Woche.",
+      "bands_label": "Größe der Mahlzeiten",
+      "bands_effect": "Ein Bereich ist der Anteil der Tagesenergie, den eine Mahlzeit haben soll, in Prozent. Plantry zielt bei jeder Mahlzeit auf die Mitte ihres Bereichs, die Grenzen für eine leichtere oder vollere Mahlzeit folgen ihm, und das Tagesminimum sinkt um den Anteil einer Mahlzeit, die ihr auswärts esst. Eine Mahlzeit außerhalb ihres Bereichs wird angezeigt, nie blockiert.",
+      "bands_min": "Min %",
+      "bands_max": "Max %",
+      "bands_share": "Zielt auf etwa {{pct}} % des Tages",
+      "bands_sum": "Die Minima ergeben {{min}} %, die Maxima {{max}} %.",
+      "bands_invalid": "Die Minima ergeben {{min}} % (höchstens 100), die Maxima {{max}} % (mindestens 100). Passe die Bereiche an, um zu speichern.",
+      "bands_row_invalid": "{{name}}: Das Minimum darf nicht über dem Maximum liegen, beide bleiben zwischen 0 und 100.",
+      "bands_save": "Bereiche speichern",
+      "bands_saved": "Bereiche gespeichert",
+      "bands_preset_lunch": "Mittagessen ist die größte Mahlzeit",
+      "bands_preset_dinner": "Abendessen ist die größte Mahlzeit",
+      "bands_default_note": "Ohne Änderung gilt: Frühstück 20-30, Mittagessen 30-40, Abendessen 25-40 %."
     },
     "cooking": {
       "cooking_group": "Kochen",
@@ -1067,7 +1080,8 @@
       "timeout": "Der Plan hat zu lange gedauert. Bitte versuch es noch einmal."
     },
     "slot": {
-      "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden."
+      "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden.",
+      "invalid_bands": "Die Bereiche passen nicht zusammen: Die Minima dürfen höchstens 100 % ergeben, die Maxima mindestens 100 %."
     },
     "image": {
       "upload_failed": "Bildvorgang fehlgeschlagen. Bitte versuche es erneut.",

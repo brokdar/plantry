@@ -23,11 +23,12 @@ func NewSlotRepo(db *sql.DB) *SlotRepo {
 
 func (r *SlotRepo) Create(ctx context.Context, s *slot.TimeSlot) error {
 	row, err := r.queriesFor(ctx).CreateTimeSlot(ctx, sqlcgen.CreateTimeSlotParams{
-		NameKey:   s.NameKey,
-		Icon:      s.Icon,
-		SortOrder: int64(s.SortOrder),
-		Active:    boolToInt(s.Active),
-		Kind:      kindOrMeal(s.Kind),
+		NameKey:    s.NameKey,
+		Icon:       s.Icon,
+		SortOrder:  int64(s.SortOrder),
+		Active:     boolToInt(s.Active),
+		Kind:       kindOrMeal(s.Kind),
+		BandMinPct: nullFloat(s.BandMinPct), BandMaxPct: nullFloat(s.BandMaxPct),
 	})
 	if err != nil {
 		return err
@@ -51,12 +52,13 @@ func (r *SlotRepo) Get(ctx context.Context, id int64) (*slot.TimeSlot, error) {
 
 func (r *SlotRepo) Update(ctx context.Context, s *slot.TimeSlot) error {
 	row, err := r.queriesFor(ctx).UpdateTimeSlot(ctx, sqlcgen.UpdateTimeSlotParams{
-		ID:        s.ID,
-		NameKey:   s.NameKey,
-		Icon:      s.Icon,
-		SortOrder: int64(s.SortOrder),
-		Active:    boolToInt(s.Active),
-		Kind:      kindOrMeal(s.Kind),
+		ID:         s.ID,
+		NameKey:    s.NameKey,
+		Icon:       s.Icon,
+		SortOrder:  int64(s.SortOrder),
+		Active:     boolToInt(s.Active),
+		Kind:       kindOrMeal(s.Kind),
+		BandMinPct: nullFloat(s.BandMinPct), BandMaxPct: nullFloat(s.BandMaxPct),
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -128,6 +130,27 @@ func mapTimeSlotToDomain(row *sqlcgen.TimeSlot, s *slot.TimeSlot) {
 	s.SortOrder = int(row.SortOrder)
 	s.Active = row.Active != 0
 	s.Kind = slot.Kind(row.Kind)
+	s.BandMinPct, s.BandMaxPct = floatPtr(row.BandMinPct), floatPtr(row.BandMaxPct)
+}
+
+func nullFloat(p *float64) sql.NullFloat64 {
+	if p == nil {
+		return sql.NullFloat64{}
+	}
+	return sql.NullFloat64{Float64: *p, Valid: true}
+}
+
+func floatPtr(n sql.NullFloat64) *float64 {
+	if !n.Valid {
+		return nil
+	}
+	v := n.Float64
+	return &v
+}
+
+// SetBand stores a slot's own band; nil values restore the default.
+func (r *SlotRepo) SetBand(ctx context.Context, id int64, minPct, maxPct *float64) error {
+	return r.queriesFor(ctx).SetTimeSlotBand(ctx, sqlcgen.SetTimeSlotBandParams{BandMinPct: nullFloat(minPct), BandMaxPct: nullFloat(maxPct), ID: id})
 }
 
 func boolToInt(b bool) int64 {

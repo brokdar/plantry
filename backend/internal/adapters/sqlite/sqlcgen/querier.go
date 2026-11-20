@@ -220,6 +220,7 @@ type Querier interface {
 	// (confirmed) of some of a run's drafts makes an open run partially_accepted.
 	SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) error
 	SetSessionsState(ctx context.Context, arg SetSessionsStateParams) error
+	SetTimeSlotBand(ctx context.Context, arg SetTimeSlotBandParams) error
 	// D12: assigns the day to the oldest pending, never-shown suggestion after
 	// the given id.
 	ShowNextPending(ctx context.Context, arg ShowNextPendingParams) (RecipeSuggestion, error)

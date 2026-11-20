@@ -60,10 +60,21 @@ func (r *fakeRepo) Delete(_ context.Context, id int64) error {
 
 func (r *fakeRepo) List(_ context.Context, _ bool) ([]slot.TimeSlot, error) {
 	out := make([]slot.TimeSlot, 0, len(r.items))
-	for _, t := range r.items {
-		out = append(out, *t)
+	for id := int64(1); id < r.nextID; id++ {
+		if t, ok := r.items[id]; ok {
+			out = append(out, *t)
+		}
 	}
 	return out, nil
+}
+
+func (r *fakeRepo) SetBand(_ context.Context, id int64, lo, hi *float64) error {
+	t, ok := r.items[id]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	t.BandMinPct, t.BandMaxPct = lo, hi
+	return nil
 }
 
 func (r *fakeRepo) CountPlatesUsing(_ context.Context, id int64) (int64, error) {

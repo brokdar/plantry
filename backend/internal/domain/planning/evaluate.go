@@ -148,6 +148,11 @@ type DayEval struct {
 	// Away: the day's lunch and dinner are No plate (DayKcal.Away); H9, S2,
 	// the day S3 and the week do not judge it.
 	Away bool `json:"away,omitempty"`
+	// AwayKcal is the energy the slots that are not planned are assumed to hold
+	// (the day's full target x their expected shares, SB3) and PlannedTargetKcal
+	// the day's target less it; both only on a day with a slot not planned.
+	AwayKcal          float64 `json:"away_kcal,omitempty"`
+	PlannedTargetKcal float64 `json:"planned_target_kcal,omitempty"`
 }
 
 // PlateEval is one plate of the window with its per-eater macros.
@@ -269,6 +274,10 @@ func evaluate(s State, t Target, weekOpts bool) Evaluation {
 			}
 			de.BandLow, de.BandHigh = math.Round(sc*x.pol.DayLow), math.Round(sc*x.pol.DayHigh)
 			de.FloorKcal = math.Round(dk.Floor(x.pol))
+			if dk.AwayShare > 1e-9 {
+				de.AwayKcal = math.Round(dk.Target * dk.AwayShare)
+				de.PlannedTargetKcal = math.Round(dk.Target) - de.AwayKcal
+			}
 			de.RoomKcal = math.Max(0, de.BandHigh-math.Round(dk.Kcal))
 		}
 		// A day away is not judged and is never called light.

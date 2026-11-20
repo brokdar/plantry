@@ -920,10 +920,11 @@ func (h *planner) kcalShare(c plate.CellKey) float64 {
 	if t == nil || *t <= 0 {
 		return 0
 	}
-	n, meals := 0, 0
+	var cells []Cell
+	n := 0
 	for _, o := range h.s.Cells {
 		if dayOf(o.Date) == dayOf(c.Date) {
-			meals++
+			cells = append(cells, o)
 			if o.Mode != availability.ModeNone {
 				n++
 			}
@@ -932,17 +933,19 @@ func (h *planner) kcalShare(c plate.CellKey) float64 {
 	if n == 0 {
 		return 0
 	}
+	// The meal aims at its slot's expected share of the day's full target (SB2).
+	share := *t * daySlotShares(h.s, cells)[c.SlotID]
 	switch {
 	case h.s.lightMeal(c.Date, c.SlotID):
-		return LightMealShare * *t / float64(meals)
+		return LightMealShare * share
 	case h.s.heartyMeal(c.Date, c.SlotID):
-		return HeartyMealShare * *t / float64(meals)
+		return HeartyMealShare * share
 	case h.s.lightDay(c.Date):
-		return *t / float64(n) * LightDayShare
+		return share * LightDayShare
 	case h.s.heartyDay(c.Date):
-		return *t / float64(n) * HeartyDayShare
+		return share * HeartyDayShare
 	}
-	return *t / float64(n)
+	return share
 }
 
 // side swaps a plate's side (the side scope): a new side recipe cooked at

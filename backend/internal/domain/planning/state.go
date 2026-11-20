@@ -46,6 +46,11 @@ type State struct {
 	// SlotKind maps slot ids to their kind (light or meal); a slot without
 	// an entry is a full meal.
 	SlotKind map[int64]slot.Kind
+	// SlotShare is each active slot's expected share of the day (SB2: the band
+	// midpoint over the sum of midpoints); empty means an even split.
+	SlotShare map[int64]float64
+	// SlotBand is each active slot's effective energy band (SB1).
+	SlotBand map[int64]slot.Band
 	// Plates are the plates in and around the window: the window's own plus
 	// the ones eating from sessions the window's plates eat from. A plate
 	// with a negative ID is proposed (see Merge).

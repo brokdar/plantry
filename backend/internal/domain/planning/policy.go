@@ -139,12 +139,12 @@ func (p Policy) Floor(target, share float64) float64 {
 
 // shiftedTarget is a day's scaled target moved by its light and hearty
 // meals: a light meal by -(1-LightMealShare) and a hearty one by
-// +(HeartyMealShare-1) of its normal share (scaled / active meals). The sum
-// stays inside the day band, so a meal intent never takes a day further than
-// a normal day may deviate; only the day scope goes beyond.
-func (p Policy) shiftedTarget(scaled float64, active, light, hearty int) float64 {
-	share := scaled / float64(active)
-	shift := float64(hearty)*(HeartyMealShare-1)*share - float64(light)*(1-LightMealShare)*share
+// +(HeartyMealShare-1) of its normal share (its slot's expected share of the
+// day's target; lightBase and heartyBase are the sums of those shares in kcal).
+// The sum stays inside the day band, so a meal intent never takes a day further
+// than a normal day may deviate; only the day scope goes beyond.
+func (p Policy) shiftedTarget(scaled, lightBase, heartyBase float64) float64 {
+	shift := heartyBase*(HeartyMealShare-1) - lightBase*(1-LightMealShare)
 	return min(max(scaled+shift, p.DayLow*scaled), p.DayHigh*scaled)
 }
 

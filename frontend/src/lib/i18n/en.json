@@ -279,7 +279,20 @@
       "grid_effect": "Plantry plans the Plan meals, leaves No plate meals empty and fills Routine meals from a saved routine.",
       "grid_no_slots": "Add a meal slot first, then set up your usual week.",
       "routines_label": "Routines",
-      "routines_effect": "Routines are saved plates for recurring meals, such as your weekday breakfast."
+      "routines_effect": "Routines are saved plates for recurring meals, such as your weekday breakfast.",
+      "bands_label": "Meal sizes",
+      "bands_effect": "A band is the share of the day's energy a meal should hold, in percent. Plantry aims each meal at the middle of its band, the limits for a lighter or a fuller meal follow it, and the day's minimum shrinks by the share of a meal you are away for. A meal outside its band is pointed out, never blocked.",
+      "bands_min": "Min %",
+      "bands_max": "Max %",
+      "bands_share": "Aims at about {{pct}} % of the day",
+      "bands_sum": "Minimums add up to {{min}} %, maximums to {{max}} %.",
+      "bands_invalid": "Minimums add up to {{min}} % (at most 100), maximums to {{max}} % (at least 100). Adjust the bands to save.",
+      "bands_row_invalid": "{{name}}: the minimum must not be above the maximum, and both stay between 0 and 100.",
+      "bands_save": "Save bands",
+      "bands_saved": "Bands saved",
+      "bands_preset_lunch": "Lunch is the biggest meal",
+      "bands_preset_dinner": "Dinner is the biggest meal",
+      "bands_default_note": "Without a change, breakfast is 20-30, lunch 30-40 and dinner 25-40 %."
     },
     "cooking": {
       "cooking_group": "Cooking",
@@ -1040,7 +1053,8 @@
       "timeout": "Making the plan took too long. Please try again."
     },
     "slot": {
-      "in_use": "This time slot is used by plates and cannot be deleted."
+      "in_use": "This time slot is used by plates and cannot be deleted.",
+      "invalid_bands": "The meal bands do not add up: minimums must total at most 100 % and maximums at least 100 %."
     },
     "image": {
       "upload_failed": "Image operation failed. Please try again.",

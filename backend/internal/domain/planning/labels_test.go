@@ -19,7 +19,7 @@ func TestPlainText_CoversEveryCodeWithoutCodes(t *testing.T) {
 		CodeInvalidPortions, CodePlateWithoutComponent, CodePlateOutsideTarget, CodePlateOnConfirmedCell,
 		CodeVarietyRepeat, CodeVarietyRelaxed, CodeVarietyRepeatWeek, CodeVarietyRepeatNamed, CodeKcalBelowFloor, CodeKcalBelowBand,
 		CodeKcalAboveBand, CodeProteinLow, CodeWeekKcalBelowBand, CodeWeekKcalAboveBand, CodeWeekProteinLow,
-		CodeWeekCarbsRange, CodeWeekFatRange, CodeMealNotLight, CodeMealNotHearty, CodeDishRepeats, CodeAddOnExcess,
+		CodeWeekCarbsRange, CodeWeekFatRange, CodeMealNotLight, CodeMealNotHearty, CodeDishRepeats, CodeMealOutsideSlotBand, CodeAddOnExcess,
 		CodeWeekMeatAboveDGE, CodeWeekFishBelowDGE, CodeWeekLegumesBelow,
 		"leftover_before_cook", "past_keep_days", "deficit", "frozen_deficit",
 	}

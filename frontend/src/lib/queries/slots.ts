@@ -6,6 +6,11 @@ import {
   createTimeSlot,
   updateTimeSlot,
   deleteTimeSlot,
+  getSlotBands,
+  setSlotBands,
+  applySlotBandPreset,
+  type SlotBand,
+  type SlotBandPreset,
   type TimeSlotInput,
 } from "@/lib/api/slots"
 import { queryClient } from "@/lib/query-client"
@@ -50,6 +55,32 @@ export function useDeleteTimeSlot() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: slotKeys.lists() })
     },
+    onError: (err) => toastError(err, t),
+  })
+}
+
+export function useSlotBands() {
+  return useQuery({ queryKey: slotKeys.bands(), queryFn: getSlotBands })
+}
+
+function refreshBands() {
+  void queryClient.invalidateQueries({ queryKey: slotKeys.all })
+}
+
+export function useSetSlotBands() {
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (items: SlotBand[]) => setSlotBands(items),
+    onSuccess: refreshBands,
+    onError: (err) => toastError(err, t),
+  })
+}
+
+export function useApplySlotBandPreset() {
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (name: SlotBandPreset) => applySlotBandPreset(name),
+    onSuccess: refreshBands,
     onError: (err) => toastError(err, t),
   })
 }

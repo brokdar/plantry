@@ -63,6 +63,7 @@ var sentinelStatus = map[error]int{
 	domain.ErrPresetNotAllowed:          http.StatusBadRequest,
 	domain.ErrSlotInactive:              http.StatusBadRequest,
 	domain.ErrAvailabilitySlotUnknown:   http.StatusBadRequest,
+	domain.ErrInvalidSlotBands:          http.StatusBadRequest,
 	domain.ErrAvailabilityPresetUnknown: http.StatusBadRequest,
 	domain.ErrCellUnavailable:           http.StatusConflict,
 	domain.ErrCellOccupied:              http.StatusConflict,

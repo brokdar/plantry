@@ -81,6 +81,9 @@ var (
 	ErrPresetRequired   = errors.New("routine requires a preset")
 	ErrPresetNotAllowed = errors.New("preset only allowed for routine")
 	ErrSlotInactive     = errors.New("slot inactive")
+	// ErrInvalidSlotBands: the slot energy bands of the active slots do not add
+	// up (minimums over 100, maximums under 100), or a band is not 0-100.
+	ErrInvalidSlotBands = errors.New("invalid slot bands")
 	// ErrAvailabilitySlotUnknown and ErrAvailabilityPresetUnknown name a
 	// slot or preset in a request body that does not exist (400, not 404).
 	ErrAvailabilitySlotUnknown   = errors.New("availability slot unknown")
@@ -224,6 +227,7 @@ var messageKeys = []struct {
 	{ErrPresetRequired, "error.availability.preset_required"},
 	{ErrPresetNotAllowed, "error.availability.preset_not_allowed"},
 	{ErrSlotInactive, "error.availability.slot_inactive"},
+	{ErrInvalidSlotBands, "error.slot.invalid_bands"},
 	{ErrAvailabilitySlotUnknown, "error.availability.slot_unknown"},
 	{ErrAvailabilityPresetUnknown, "error.availability.preset_unknown"},
 	{ErrCellUnavailable, "error.plate.cell_unavailable"},

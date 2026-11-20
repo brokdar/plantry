@@ -65,10 +65,13 @@ const (
 	CodeMealNotLight      = "meal_not_light"
 	CodeMealNotHearty     = "meal_not_hearty"
 	CodeDishRepeats       = "dish_repeats_exceeded"
-	CodeAddOnExcess       = "add_on_excess"
-	CodeWeekMeatAboveDGE  = "week_meat_above_dge"
-	CodeWeekFishBelowDGE  = "week_fish_below_dge"
-	CodeWeekLegumesBelow  = "week_legumes_below_dge"
+	// CodeMealOutsideSlotBand: a lunch or dinner holds less or more of the day's
+	// energy than its slot band (S10, soft, no options).
+	CodeMealOutsideSlotBand = "meal_outside_slot_band"
+	CodeAddOnExcess         = "add_on_excess"
+	CodeWeekMeatAboveDGE    = "week_meat_above_dge"
+	CodeWeekFishBelowDGE    = "week_fish_below_dge"
+	CodeWeekLegumesBelow    = "week_legumes_below_dge"
 )
 
 // MaxDishPortions is the most portions of a cooked dish one eater gets on a

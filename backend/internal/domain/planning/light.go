@@ -260,21 +260,13 @@ func (s State) slotIs(id int64, name string) bool {
 	return ok && strings.TrimPrefix(n, "slot.") == name
 }
 
-// mealCap is the most kcal per eater a light meal may hold: LightMealShare
-// of the day's normal target split evenly over its planned meals.
-func (dk DayKcal) mealCap() float64 {
+// mealCap is the most kcal per eater a light meal of slot id may hold:
+// LightMealShare of the slot's expected share of the day's full target (SB2).
+func (dk DayKcal) mealCap(slotID int64) float64 {
 	if dk.Active() == 0 {
 		return 0
 	}
-	return LightMealShare * dk.normalShare()
-}
-
-// normalShare is one meal's even share of the day's normal target.
-func (dk DayKcal) normalShare() float64 {
-	if dk.Active() == 0 {
-		return 0
-	}
-	return dk.Scaled / float64(dk.Active())
+	return LightMealShare * dk.mealShare(slotID)
 }
 
 // lightIssues reports S6 `meal_not_light` for every light meal whose plate
@@ -300,17 +292,17 @@ func (x *index) lightIssues(ev Evaluation) []Issue {
 			}
 			cell := plate.CellKey{Date: day, SlotID: p.SlotID}
 			if l.Hearty() {
-				if least := HeartyMealShare * dk.normalShare(); p.Kcal < least-1e-9 {
+				if least := HeartyMealShare * dk.mealShare(p.SlotID); p.Kcal < least-1e-9 {
 					out = append(out, issue("S6b", CodeMealNotHearty, SeveritySoft).atCell(cell).
 						with("kcal", math.Round(p.Kcal)).with("min_kcal", math.Round(least)).
-						with("normal_share_kcal", math.Round(dk.normalShare())))
+						with("normal_share_kcal", math.Round(dk.mealShare(p.SlotID))))
 				}
 				continue
 			}
-			if limit := dk.mealCap(); p.Kcal > limit+1e-9 {
+			if limit := dk.mealCap(p.SlotID); p.Kcal > limit+1e-9 {
 				out = append(out, issue("S6", CodeMealNotLight, SeveritySoft).atCell(cell).
 					with("kcal", math.Round(p.Kcal)).with("max_kcal", math.Round(limit)).
-					with("normal_share_kcal", math.Round(dk.normalShare())))
+					with("normal_share_kcal", math.Round(dk.mealShare(p.SlotID))))
 			}
 		}
 	}
@@ -435,10 +427,10 @@ func (x *index) markIntent(pe *PlateEval, p Plate) {
 		return
 	}
 	if level == LevelHearty {
-		pe.MinKcal = math.Round(HeartyMealShare * dk.normalShare())
+		pe.MinKcal = math.Round(HeartyMealShare * dk.mealShare(p.SlotID))
 		return
 	}
-	pe.MaxKcal = math.Round(dk.mealCap())
+	pe.MaxKcal = math.Round(dk.mealCap(p.SlotID))
 }
 
 // mealNote is the run-notes line of the light and hearty meals the plan does
