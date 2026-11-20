@@ -129,6 +129,10 @@ func TestApplyChanges_LighterLeavingDayUnderRangeOffersOneSmallFix(t *testing.T)
 			require.Len(t, fixes, 1)
 			opt := relMaps(fixes[0]["options"])[0]
 			assert.Equal(t, tc.name, opt["name"])
+			assert.Equal(t, true, opt["recommended"], "the day's one fix is the recommended option")
+			for _, n := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
+				assert.Nil(t, n["options"], "the same day listed as new carries no second recommendation")
+			}
 			tell := got["report"].(map[string]any)["tell"].([]any)
 			last := fmt.Sprint(tell[len(tell)-1])
 			assert.Contains(t, last, "I can also add")
@@ -362,4 +366,35 @@ func TestFindWays_CompoundGrowingALightLunchClearsItsMark(t *testing.T) {
 		}
 	}
 	assert.True(t, clearedAny, "an offer clears the lunch's light mark")
+}
+
+// A day number under the day's minimum: find_ways says so and its next step
+// names ONE recommended offer, the lowest the day goes without leaving its
+// range, whose figures are the dry run of its own ops.
+func TestFindWays_ImpossibleDayNumberOffersTheLowestVerifiedStep(t *testing.T) {
+	e := relEnv(t)
+	ctx, _ := e.chat()
+	offered := 0
+	for _, p := range e.draftMeals() {
+		date := p.DateString()
+		out, _, _, err := e.ts.Execute(ctx, "find_ways", json.RawMessage(fmt.Sprintf(`{"goal":"lower_day","date":%q,"target_kcal":900}`, date)))
+		require.NoError(t, err)
+		var res map[string]any
+		require.NoError(t, json.Unmarshal(out, &res))
+		offers := relMaps(res["offer"])
+		if len(offers) == 0 {
+			continue
+		}
+		offered++
+		o := offers[0]
+		assert.Equal(t, true, o["recommended"])
+		assert.Contains(t, res["next"], "END YOUR REPLY with offer[0]")
+		assert.Contains(t, res["closing"], "the lowest it goes")
+		got, err := e.applyWay(res, o, true)
+		require.NoError(t, err)
+		kcal, _, _ := dayOf(t, got)
+		assert.InDelta(t, o["after"].(map[string]any)["day_kcal"], kcal, 1, "promise equals the dry run")
+		assert.GreaterOrEqual(t, kcal, res["minimum_kcal"].(float64))
+	}
+	assert.Positive(t, offered)
 }

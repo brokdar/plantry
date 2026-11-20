@@ -112,9 +112,24 @@ func toolFindWays(svc Services) Tool {
 				}
 				offers = orClosest(offers, closest, res.MaxKcal)
 			}
+			if res.Impossible && len(offers) == 0 {
+				// The real write refits what a main swap leaves beside it and can
+				// take the day under its minimum: the best allowed step is then
+				// searched without changing a main.
+				if kept, err := planning.Ways(st, planning.WindowTarget(st), planning.WayRequest{Date: in.Date, Goal: in.Goal, Limit: 8, TargetKcal: in.TargetKcal, KeepMains: true}); err == nil && kept.Impossible {
+					offers = planning.DemoteUnclean(verify(kept.Offers, 2))
+				}
+			}
 			recommend(ways, offers, in.ToLimit)
 			nameWays(st, ways)
 			nameWays(st, offers)
+			if res.Impossible {
+				for i := range offers {
+					if offers[i].PlateID == 0 {
+						offers[i].What = fmt.Sprintf("take %s down to %.0f kcal, the lowest it goes inside its range: %s", dayLabelStr(res.Date), offers[i].After.DayKcal, offers[i].What)
+					}
+				}
+			}
 			out := map[string]any{"next": nextStep(ways, offers, res, in.ToLimit), "goal": goal, "before": res.Before, "ways": nonNil(ways)}
 			if len(offers) > 0 {
 				out["offer"] = offers
@@ -618,6 +633,8 @@ func nextStepText(ways, offers []planning.Way, res planning.WayResult, toLimit b
 	case toLimit && len(offers) > 0 && offers[0].Reaches && (len(ways) == 0 || !ways[0].Reaches):
 		// A light meal was asked for: only the offer is one.
 		return fmt.Sprintf("the user asked for a light meal and only offer[0] is one (%.0f kcal, a light meal holds at most %.0f); ways[] only make it lighter. If the user asked for another meal to make up the difference (a bigger lunch) or has said yes to that, apply offer[0] now, with its light and goal as returned, and tell what leaves and what comes; otherwise present offer[0] as your one recommendation in a sentence. Nothing else is applied", offers[0].After.MealKcal, res.MaxKcal)
+	case res.Impossible && len(offers) > 0:
+		return fmt.Sprintf("change nothing: say why with the numbers (%s); END YOUR REPLY with offer[0] as your one recommendation, the lowest the day goes (%.0f kcal) and how, and ask whether to do it", res.EmptyWhy, offers[0].After.DayKcal)
 	case res.Impossible:
 		return fmt.Sprintf("change nothing: say why with the numbers (%s); offer offer[0] as the nearest safe option and ask whether to do it", res.EmptyWhy)
 	case (res.Goal == planning.GoalLighter || res.Goal == planning.GoalHeartier) && len(ways) > 0 && !ways[0].Reaches:

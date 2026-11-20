@@ -1031,6 +1031,7 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 	for _, is := range now.Issues {
 		if o := fixOption(is); o != nil && dates[is.Date] {
 			e := toEffectIssue(is)
+			o.Recommended, o.Because = true, "brings the day inside its range, no new problem"
 			e.Options = []planning.Option{*o}
 			for _, b := range before.Issues {
 				if b.Code == planning.CodeKcalBelowBand && b.Date == is.Date {
@@ -1042,6 +1043,15 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 	}
 	if len(fixes) > 0 {
 		delta["day_fix"] = planning.Compact(fixes)
+		// The day's one fix is the recommended option: the same issue listed as
+		// new carries none, so the reply has a single one to state.
+		news, _ := delta["new"].([]any)
+		for _, n := range news {
+			m, _ := n.(map[string]any)
+			if slices.ContainsFunc(fixes, func(f effectIssue) bool { return m["date"] == f.Date && m["code"] == f.Code }) {
+				delete(m, "options")
+			}
+		}
 	}
 	out["issues"] = delta
 	if plates, ok := out["plates"].([]effectPlate); ok {

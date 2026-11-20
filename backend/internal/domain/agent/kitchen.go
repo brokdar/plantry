@@ -139,12 +139,16 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 			continue
 		}
 		// The cleanest replacement (the list is ranked by new warnings).
+		meal := mealName(*st, st.Plates[indexPlate(*st, plateID)])
 		if a, ok := firstClean(res.Alternatives, func(ops []planning.OptionOp) bool { return offerIsClean(ctx, svc, w, ops) }); ok {
 			offers = append(offers, map[string]any{
-				"what": fmt.Sprintf("swap %s's %s for %s", mealName(*st, st.Plates[indexPlate(*st, plateID)]), food.Quote(res.Current.Name), food.Quote(a.Name)), "ops": a.Ops,
+				"what": fmt.Sprintf("swap %s's %s for %s", meal, food.Quote(res.Current.Name), food.Quote(a.Name)), "ops": a.Ops,
 				"recommended": len(offers) == 0, "recommended_because": "removes the repeat, no new warning",
 				"effect": map[string]any{"day": dayLabelStr(is.Date), "day_kcal_after": a.DayKcal},
 			})
+		} else if o := replaceAndFixOffer(ctx, svc, w, *st, meal, res, is.Date); o != nil {
+			o["recommended"] = len(offers) == 0
+			offers = append(offers, o)
 		}
 	}
 	// A named meat dish saves, and its week effect is told with one way to
@@ -331,4 +335,69 @@ func clashNext(next string, offer map[string]any, dry bool) string {
 		return text
 	}
 	return text + ". Also: " + next
+}
+
+// replaceAndFixOffer is the way out of a repeated dish when every replacement
+// leaves its day under its range: the first replacement whose only new issue is
+// that, together with the one normal-food fix that brings the day inside, as
+// one offer. Its effect is the dry run of both together, which must add no
+// issue; nil when none does.
+func replaceAndFixOffer(ctx context.Context, svc Services, w window.Window, st planning.State, meal string, res planning.AltResult, date string) map[string]any {
+	ctx = context.WithValue(ctx, fixDateKey{}, date)
+	for _, a := range res.Alternatives {
+		if len(a.Ops) == 0 || slices.ContainsFunc(a.NewIssues, func(is planning.Issue) bool { return is.Code != planning.CodeKcalBelowBand || is.Date != date }) {
+			continue
+		}
+		ops, err := changeOpsOf(a.Ops)
+		if err != nil {
+			continue
+		}
+		r, err := runApply(ctx, svc, w, applyInput{Ops: ops, DryRun: true, quiet: true}, nil)
+		if err != nil {
+			continue
+		}
+		for _, is := range r.after.Issues {
+			if is.Date != date || is.Code != planning.CodeKcalBelowBand {
+				continue
+			}
+			for _, o := range fixCandidates(is.Options, num(is.Params["kcal"]), num(is.Params["band_low_kcal"]), num(is.Params["band_high_kcal"])) {
+				fixOps := o.Ops
+				if len(fixOps) == 0 {
+					fixOps = []planning.OptionOp{o.Op}
+				}
+				both := slices.Concat(a.Ops, fixOps)
+				bothOps, err := changeOpsOf(both)
+				if err != nil {
+					continue
+				}
+				rb, err := runApply(ctx, svc, w, applyInput{Ops: bothOps, DryRun: true, quiet: true}, nil)
+				if err != nil {
+					continue
+				}
+				was := issueMap(rb.before.Issues)
+				clean := true
+				for _, x := range rb.after.Issues {
+					if _, old := was[issueKey(x)]; !old {
+						clean = false
+					}
+				}
+				if !clean {
+					continue
+				}
+				fix := planning.WayFix{Action: o.Action, Name: o.Name, Date: o.Date, SlotID: o.SlotID}
+				if o.Grams != nil {
+					fix.Grams = *o.Grams
+				}
+				if o.Portions != nil {
+					fix.Portions = *o.Portions
+				}
+				return map[string]any{
+					"what": fmt.Sprintf("swap %s's %s for %s and, so the day stays inside its range, %s", meal, food.Quote(res.Current.Name), food.Quote(a.Name), fixWords(st, &fix)),
+					"ops":  both, "recommended_because": "removes the repeat and keeps the day inside its range, no new warning",
+					"effect": map[string]any{"day": dayLabelStr(date), "day_kcal_after": planning.FiguresOf(rb.after, 0, date).DayKcal},
+				}
+			}
+		}
+	}
+	return nil
 }

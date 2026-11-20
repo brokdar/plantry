@@ -99,6 +99,10 @@ type WayRequest struct {
 	// minimum) meets it, so the search also swaps the whole meal for a lighter
 	// one and lets the other meal grow up to a filling meal.
 	ToLimit bool
+	// KeepMains: a day goal changes no main (quantities, removals and lean
+	// swaps only): the retry for a day whose main swaps the real write would
+	// refit into a day under its minimum.
+	KeepMains bool
 }
 
 // WayFigures are per eater: the energy and protein of the meal and of its
@@ -257,6 +261,8 @@ type waySearch struct {
 	tried      int
 	// noMark: a day goal searched without a day mark (the range stays).
 	noMark bool
+	// keepMains: the day search leaves every main as it is.
+	keepMains bool
 	// toLimit: see WayRequest.ToLimit.
 	toLimit bool
 }
@@ -297,7 +303,7 @@ func waysDay(s State, t Target, req WayRequest) (WayResult, error) {
 
 func ways(s State, t Target, req WayRequest) (WayResult, error) {
 	s.PairAddOns = true
-	w := &waySearch{t: t, goal: req.Goal, pi: -1, toLimit: req.ToLimit, noMark: !req.Marked && (req.Goal == GoalLowerDay || req.Goal == GoalRaiseDay) && req.TargetKcal <= 0}
+	w := &waySearch{t: t, goal: req.Goal, pi: -1, toLimit: req.ToLimit, keepMains: req.KeepMains, noMark: !req.Marked && (req.Goal == GoalLowerDay || req.Goal == GoalRaiseDay) && req.TargetKcal <= 0}
 	switch req.Goal {
 	case GoalLighter, GoalHeartier, GoalMoreProtein, GoalLowerDay, GoalRaiseDay:
 	default:
@@ -466,7 +472,9 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 		if d, ok := w.dayEval(w.base); ok && req.TargetKcal < d.FloorKcal-0.5 {
 			res.Impossible = true
 			res.EmptyWhy = fmt.Sprintf("%.0f kcal is below the day's minimum of %.0f kcal", req.TargetKcal, d.FloorKcal)
-			res.Offers = w.dayGreedy(s, intent, func(d DayEval) float64 { return d.FloorKcal + 25 }, false)
+			// The lowest the day goes without a warning: the low end of its range
+			// when that is above the minimum, else just over the minimum.
+			res.Offers = w.dayGreedy(s, intent, func(d DayEval) float64 { return max(d.FloorKcal+25, d.BandLow) }, false)
 			for i := range res.Offers {
 				res.Offers[i].next = State{}
 			}
@@ -812,7 +820,9 @@ func (w *waySearch) primary(s State) []wayEdit {
 			out = append(out, w.quantityEdits(s, pi, -1)...)
 			out = append(out, w.removeEdits(s, pi)...)
 			out = append(out, w.leanEdits(s, pi)...)
-			out = append(out, w.swapEdits(s, p, AltMain, 0)...)
+			if !w.keepMains {
+				out = append(out, w.swapEdits(s, p, AltMain, 0)...)
+			}
 		case GoalRaiseDay:
 			out = append(out, w.quantityEdits(s, pi, +1)...)
 			// A side or bread that belongs to the dish, no gap fillers.
@@ -1626,6 +1636,11 @@ func (w *waySearch) dayGreedy(s State, intent *LightIntent, aimOf func(DayEval) 
 			}
 		}
 		if len(best.ops) == 0 {
+			// No step left that keeps the floor: the way so far is the lowest the
+			// day goes (the search for a number below the floor wants exactly that).
+			if !stop && len(last.Ops) > 0 {
+				return []Way{last}
+			}
 			return nil
 		}
 		for _, o := range best.ops {
