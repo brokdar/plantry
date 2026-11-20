@@ -295,19 +295,18 @@ func TestRL4_LightLimitIsThreeQuartersOfShare(t *testing.T) {
 			continue
 		}
 		t.Run(wc.name(), func(t *testing.T) {
-			date := plateDate(wc.Base, wc.PlateID)
-			cells := 0
-			for _, c := range wc.Base.Cells {
-				if c.Date.Format("2006-01-02") == date {
-					cells++
-				}
-			}
-			if wc.Base.Profile.KcalTarget == nil || cells == 0 {
+			if wc.Base.Profile.KcalTarget == nil {
 				t.Skip("no kcal target")
 			}
-			// share = the day's full target / the day's meals; the limit is 75 % of it
-			want := 0.75 * *wc.Base.Profile.KcalTarget / float64(cells)
-			assert.InDelta(t, want, wc.Out.MaxKcal, 1.0, "max_kcal must be 75 %% of the meal's share (%.0f kcal / %d meals)", *wc.Base.Profile.KcalTarget, cells)
+			var slotID int64
+			for _, p := range wc.Base.Plates {
+				if p.ID == wc.PlateID {
+					slotID = p.SlotID
+				}
+			}
+			// v1.1: the limit is 75 % of the slot's expected share (SB2) x the day's full target
+			want := 0.75 * fullTarget(wc.Base) * shares(wc.Base)[slotID]
+			assert.InDelta(t, want, wc.Out.MaxKcal, 1.0, "max_kcal must be 75 %% of the slot's expected kcal")
 		})
 	}
 }
