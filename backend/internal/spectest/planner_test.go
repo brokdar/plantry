@@ -91,49 +91,38 @@ func allPlans(t *testing.T) []planCase {
 							mainMin, mainMax = min(mainMin, f.Macros.Kcal), max(mainMax, f.Macros.Kcal)
 						}
 					}
-					type meal struct {
-						kcal   float64
-						out    bool
-						lo, hi float64
-						word   string
-					}
-					perDay := map[string][]meal{}
-					other := map[string]float64{}
 					for _, d := range ev.Days {
-						other[d.Date] = d.Kcal
-					}
-					for _, p := range ev.Plates {
-						w := slotWord(s, p.SlotID)
-						if w != "lunch" && w != "dinner" {
-							continue
+						exp, shift := slotExpected(s, ev, d.Date)
+						var meals []planning.PlateEval
+						for _, p := range ev.Plates {
+							if w := slotWord(s, p.SlotID); p.Date == d.Date && (w == "lunch" || w == "dinner") && p.PlateID > 0 {
+								meals = append(meals, p)
+							}
 						}
-						b := bandOfSlot(s, p.SlotID)
-						// the meal at its expected share (SB2: the planner's budget), inside the library's reach
-						exp := min(max(shares(s)[p.SlotID]*T, 0.5*mainMin), 1.5*mainMax)
-						m := meal{kcal: p.Kcal, word: w, out: p.Kcal < b.Min/100*T || p.Kcal > b.Max/100*T, lo: exp, hi: exp}
-						other[p.Date] -= p.Kcal
-						perDay[p.Date] = append(perDay[p.Date], m)
-						if m.out {
-							c.OutBand++ // the band oracle of SB1, not the product's S10
+						// PL6 (v1.2): a day is infeasible only when a shifted expected kcal lies outside the
+						// library's reach (0.5-1.5 portions of a main); a fixed routine meal no longer matters
+						feasible := len(meals) > 0
+						for _, p := range meals {
+							if e := exp[p.SlotID]; e < 0.5*mainMin || e > 1.5*mainMax {
+								feasible = false
+							}
 						}
-					}
-					for _, d := range ev.Days {
-						ms := perDay[d.Date]
-						var lo, hi float64
-						for _, m := range ms {
-							lo, hi = lo+m.lo, hi+m.hi
+						c.Meals += len(meals)
+						for _, p := range meals {
+							b := bandOfSlot(s, p.SlotID)
+							out := p.Kcal < b.Min/100*T+shift[p.SlotID] || p.Kcal > b.Max/100*T+shift[p.SlotID]
+							if out {
+								c.OutBand++ // the band oracle of SB1/SB5, not the product's S10
+							}
+							if feasible {
+								c.FeasMeals++
+								if out {
+									c.FeasOutBand++
+								}
+							}
 						}
-						// feasible: with every lunch and dinner at its expected share the day lands in its day band
-						feasible := len(ms) > 0 && other[d.Date]+lo <= d.BandHigh && other[d.Date]+hi >= d.BandLow
 						if !feasible {
 							c.InfeasDays++
-							continue
-						}
-						for _, m := range ms {
-							c.FeasMeals++
-							if m.out {
-								c.FeasOutBand++
-							}
 						}
 					}
 					out[hi*len(plannerWks)+wi] = c
@@ -269,12 +258,10 @@ func TestKR7_ReplanDoesNotRepeatNeighbours(t *testing.T) {
 	}
 }
 
-// PL7: at least 80 % of the planned lunches and dinners lie inside their slot
-// band, counted on the days the PL6 pre-check marks feasible: with the day's other
-// meals as planned (a routine breakfast is fixed) and every lunch and dinner at its
-// expected share (SB2), the day lands in its day band. Where a fixed meal is far
-// below its own expected share, the others must exceed theirs and the day is not
-// counted.
+// PL7 (v1.2): at least 80 % of the planned lunches and dinners lie inside their
+// shifted slot band (SB5: a routine meal counts with its real kcal and the others
+// absorb its gap). A day is left out only when a shifted expected kcal is beyond
+// the library's reach.
 func TestPL7_PlannerMealsInsideSlotBands(t *testing.T) {
 	for _, c := range allPlans(t) {
 		t.Run(c.HH+"/"+c.Start, func(t *testing.T) {
