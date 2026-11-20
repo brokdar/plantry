@@ -25,6 +25,9 @@ var (
 	mustNoCook   = regexp.MustCompile(`^(\w{3}) (\d+) (\w{3}): nothing is cooked\.$`)
 	mustDropped  = regexp.MustCompile(`^(\w{3}) (\d+) (\w{3}) cooking changes: (.*)\.$`)
 	mustMoved    = regexp.MustCompile(`^The (".*?") is now cooked on (\w{3}) (\d+) (\w{3}) at (\w+) instead of (\w{3}) (\d+) (\w{3}) at (\w+)\.$`)
+	mustShorter  = regexp.MustCompile(`^(\w{3}) (\d+) (\w{3}) at (\w+) you now cook only (.*): about (.+?) in all \(was (.+?)\); (.*)\.$`)
+	mustSmall    = regexp.MustCompile(`^(\w{3}) (\d+) (\w{3}) (\w+): now for ([\d.]+) people; it is the small \w+ \((\d+) kcal each\)\.$`)
+	quotedName   = regexp.MustCompile(`".*?"`)
 	noLongerCook = regexp.MustCompile(`no longer cooks (".*?")`)
 )
 
@@ -167,6 +170,12 @@ func otherMust(tell string) []mustItem {
 		}
 		return out
 	}
+	if p := mustShorter.FindStringSubmatch(tell); p != nil {
+		return []mustItem{shorterItem(tell, p)}
+	}
+	if p := mustSmall.FindStringSubmatch(tell); p != nil {
+		return []mustItem{smallItem(tell, p)}
+	}
 	if p := mustMoved.FindStringSubmatch(tell); p != nil {
 		dish := p[1]
 		nw, nd, nm, nat := p[2], p[3], p[4], p[5]
@@ -253,4 +262,64 @@ func dayIn(line, wd, dd, mon string, german bool) bool {
 	}
 	return strings.Contains(l, full) || strings.Contains(l, strings.ToLower(wd)+" ") ||
 		regexp.MustCompile(`(?i)\b`+dd+`(st|nd|rd|th)?\.? `+mon+`\b|\b`+mon+`\w* `+dd+`\b`).MatchString(line)
+}
+
+var shortWord = regexp.MustCompile(`(?i)(only|just|no longer|not cooked|leftover|left over|nur|noch|nicht mehr|reste|aufgewärmt)`)
+
+// shorterItem says a day's cooking that shrank: what it still cooks and what
+// it no longer cooks. Said when a line has the day, the first dropped dish
+// and a word for "only" or "leftovers".
+func shorterItem(tell string, p []string) mustItem {
+	wd, dd, mon := p[1], p[2], p[3]
+	var still, drop []string
+	for _, q := range quotedName.FindAllString(p[5], -1) {
+		still = append(still, "„"+strings.Trim(q, `"`)+"“")
+	}
+	var first string
+	for _, part := range strings.Split(p[8], "; ") {
+		q := quotedName.FindString(part)
+		if q == "" {
+			continue
+		}
+		name := strings.Trim(q, `"`)
+		if first == "" {
+			first = name
+		}
+		if strings.Contains(part, "leftovers") {
+			drop = append(drop, fmt.Sprintf("„%s“ gibt es als Reste", name))
+		} else {
+			drop = append(drop, fmt.Sprintf("„%s“ wird nicht mehr gekocht", name))
+		}
+	}
+	return mustItem{
+		en: tell,
+		de: fmt.Sprintf("%s: nur noch %s kochen, etwa %s statt %s; %s.", deDay(wd, dd, mon), strings.Join(still, ", "), p[6], p[7], strings.Join(drop, "; ")),
+		said: func(text string, german bool) bool {
+			return lineWith(text, func(l string) bool {
+				return dayIn(l, wd, dd, mon, german) && strings.Contains(strings.ToLower(l), strings.ToLower(firstWord(first))) && shortWord.MatchString(l)
+			})
+		},
+	}
+}
+
+var smallWord = regexp.MustCompile(`(?i)(small|light|lighter|smaller|klein|leicht)`)
+
+// smallItem says that the person added to a light meal eats the small one.
+func smallItem(tell string, p []string) mustItem {
+	wd, dd, mon, meal := p[1], p[2], p[3], p[4]
+	at, ok := deMeal[meal]
+	if !ok {
+		at = "zu dieser Mahlzeit"
+	}
+	de := map[string]string{"breakfast": "Frühstück", "lunch": "Mittagessen", "dinner": "Abendessen"}[meal]
+	if de == "" {
+		de = "Mahlzeit"
+	}
+	return mustItem{
+		en: tell,
+		de: fmt.Sprintf("%s %s: jetzt für %s Personen; es ist das kleine %s (%s kcal pro Person).", deDay(wd, dd, mon), at, strings.Replace(p[5], ".", ",", 1), de, p[6]),
+		said: func(text string, german bool) bool {
+			return lineWith(text, func(l string) bool { return dayIn(l, wd, dd, mon, german) && smallWord.MatchString(l) })
+		},
+	}
 }
