@@ -134,7 +134,7 @@ func TestApplyChanges_RefusalClosesWithAnOptionOrAnHonestNone(t *testing.T) {
 
 // A day a user's own away leaves under its minimum gets the checked fix that
 // reaches it, or an honest "no fix": next never promises one that is absent.
-func TestApplyChanges_AwayUnderTheFloorGetsAFixOrAnHonestNone(t *testing.T) {
+func TestApplyChanges_AwayUnderTheFloorGetsACheckedFix(t *testing.T) {
 	e := relEnv(t)
 	ctx, _ := e.chat()
 	dinner := slices.IndexFunc(e.draftMeals(), func(p plate.Plate) bool { return p.SlotID == e.slotID("dinner") })
@@ -151,18 +151,17 @@ func TestApplyChanges_AwayUnderTheFloorGetsAFixOrAnHonestNone(t *testing.T) {
 	require.NoError(t, json.Unmarshal(got, &res))
 	require.Equal(t, true, res["saved"])
 	assertNextKeepsItsPromise(t, res, "away")
-	if offers, ok := res["offers"].([]any); ok {
-		o := offers[0].(map[string]any)
-		assert.Equal(t, true, o["recommended"])
-		assert.Contains(t, res["next"], "offers[0]")
-		// the promise is the dry run: the day reaches its minimum
-		chk, err := e.exec("apply_changes", fmt.Sprintf(`{"dry_run":true,"ops":%s}`, mustJSON(t, o["ops"])))
-		require.NoError(t, err)
-		eff := o["effect"].(map[string]any)
-		assert.InDelta(t, eff["day_kcal_after"], dayKcalOf(chk, p.DateString()), 1)
-	} else {
-		assert.Contains(t, res["next"], "no checked fix")
-	}
+	// The fixture has a verified fix: the offer is required, and its promise is the dry run.
+	offers, ok := res["offers"].([]any)
+	require.True(t, ok, "a day this far under its minimum has a checked fix: %v", res["next"])
+	o := offers[0].(map[string]any)
+	assert.Equal(t, true, o["recommended"])
+	assert.Contains(t, res["next"], "offers[0]")
+	chk, err := e.exec("apply_changes", fmt.Sprintf(`{"dry_run":true,"ops":%s}`, mustJSON(t, o["ops"])))
+	require.NoError(t, err)
+	eff := o["effect"].(map[string]any)
+	assert.InDelta(t, eff["day_kcal_after"], dayKcalOf(chk, p.DateString()), 1)
+	assert.GreaterOrEqual(t, dayKcalOf(chk, p.DateString()), 1000.0, "the day reaches its minimum")
 }
 
 func mustJSON(t *testing.T, v any) string {

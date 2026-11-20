@@ -186,3 +186,12 @@ func TestAdviceFor_NextNeverNamesAnAbsentOption(t *testing.T) {
 		}
 	}
 }
+
+// A day under its minimum with no checked fix says so: next promises none.
+func TestAdviceFor_FloorBreachWithoutAFixSaysSo(t *testing.T) {
+	floor := planning.Issue{Rule: "H9", Code: planning.CodeKcalBelowFloor, Severity: planning.SeverityViolation, Date: "2026-11-25"}
+	next, offers := adviceFor(context.Background(), Services{}, planningWindow, planning.Evaluation{}, planning.Evaluation{Issues: []planning.Issue{floor}}, false, nil)
+	assert.Empty(t, offers)
+	assert.Contains(t, next, "no checked fix reaches it")
+	assert.Contains(t, next, "offer no fix, name none")
+}

@@ -17,7 +17,7 @@ import (
 // The closing option of a result: one worked alternative, checked on a copy of
 // the plan, or none. The builders below are the only places that make one for
 // a refused write or a day under its minimum, and next names an option only
-// when it is there (see nextNames).
+// when it is there.
 
 // refusalOffer is, for an op the guard left out, the nearest verified
 // alternative that does what the user asked as far as the rules allow: a

@@ -39,7 +39,7 @@ var factOrder = []string{factSmall, factKeep, factOdd, factDay, factNoCook, fact
 //	small_meal       Day, Meal, N (eaters), Kcal
 //	keeps            Day, Meal, Dish, Day2 (cooked), Days (earlier), Keep, Last
 //	odd_name         Dish
-//	day_range        Day, Kcal, Side (below|above), Lo, Hi, Minimum
+//	day_range        Day, Kcal, Side (below|above), Lo, Hi
 //	nothing_cooked   Day
 //	no_longer_cooked Day, Dish
 //	shorter_cooking  Day, Meal (cooking time), Dishes (still cooked), Time, WasTime, Gone
@@ -509,7 +509,7 @@ var (
 		out := map[string]*regexp.Regexp{}
 		for wd, full := range enWeekdayFull {
 			de := strings.ToLower(deWeekday[wd][0])
-			out[wd] = regexp.MustCompile(`(?i:\b` + full + `\b)|(?i:\b` + de + `\w*)|\b` + enWeekdayAlt[wd] + `\b|\b` + deWeekdayAbb[wd] + `\.`)
+			out[wd] = regexp.MustCompile(`(?i:\b` + full + `\b)|(?i:\b` + de + `\w*)|\b` + enWeekdayAlt[wd] + `\b(?:\s+\d|\.)|\b` + deWeekdayAbb[wd] + `\.`)
 		}
 		return out
 	}()

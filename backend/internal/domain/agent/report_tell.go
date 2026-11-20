@@ -210,7 +210,7 @@ func buildTell(in reportInput, r changeReport) []string {
 				s += fmt.Sprintf(", %s (%s)", suitsPhrase(d.Status), d.Range)
 				if side := strings.Fields(suitsPhrase(d.Status))[0]; side == "below" || side == "above" {
 					lo, hi, _ := strings.Cut(strings.TrimSuffix(d.Range, " kcal"), "-")
-					in.must.add(mustFact{Kind: factDay, Day: d.Day, Kcal: float64(d.KcalAfter), Side: side, Lo: float64(atoi(lo)), Hi: float64(atoi(hi)), Minimum: d.MinimumKcal > 0})
+					in.must.add(mustFact{Kind: factDay, Day: d.Day, Kcal: float64(d.KcalAfter), Side: side, Lo: float64(atoi(lo)), Hi: float64(atoi(hi))})
 				}
 			}
 			add(s + ".")

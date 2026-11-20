@@ -2,6 +2,7 @@ package agent
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
@@ -67,7 +68,9 @@ func restoreMust(m *llm.Message, facts []mustFact) {
 				if german {
 					line = it.de
 				}
-				missing = append(missing, "- "+line)
+				if l := "- " + line; !slices.Contains(missing, l) {
+					missing = append(missing, l) // two facts can say one line
+				}
 			}
 		}
 		if len(missing) > 0 {

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -175,4 +176,19 @@ func TestInsertBeforeClosing(t *testing.T) {
 		assert.Less(t, indexOf(got, "- X"), indexOf(got, tc.wantEnd), tc.name)
 	}
 	assert.Equal(t, "Done.\n\n- a\n- b\n\n- X", insertBeforeClosing("Done.\n\n- a\n- b", "- X"), "a list is not a closing")
+}
+
+// Review F2: a week meat and an away meat fact that say the same line add it once.
+func TestRestoreMust_SameLineOnce(t *testing.T) {
+	got := restoreText("The plan is saved and the week is fine, that is the state of it.",
+		mustFact{Kind: factMeat, N: 471, Was: 321, Limit: 300}, mustFact{Kind: factAwayMeat, N: 471, Limit: 300})
+	assert.Equal(t, 1, strings.Count(got, "Week: meat is 471 g against a limit of 300 g, 171 g over."))
+}
+
+// Review F3: "Sun-dried" is no Sunday; "Sun 22 Nov" and "Sun." are.
+func TestDayIn_ShortFormNeedsItsDateOrDot(t *testing.T) {
+	assert.False(t, dayIn("Sun-dried tomatoes and Sat nav", "Sun 22 Nov"), "sun-dried")
+	assert.False(t, dayIn("Wed like it", "Wed 25 Nov"))
+	assert.True(t, dayIn("on Sun 22 Nov", "Sun 22 Nov"))
+	assert.True(t, dayIn("on Sun. we cook", "Sun 22 Nov"))
 }
