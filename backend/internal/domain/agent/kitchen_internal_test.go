@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -135,4 +137,52 @@ func TestWithoutUndoOptions(t *testing.T) {
 	assert.True(t, got[0].Options[0].Recommended)
 	assert.Len(t, issue.Options, 2, "the input is not changed")
 	assert.Equal(t, []planning.Issue{issue}, withoutUndoOptions([]planning.Issue{issue}, nil))
+}
+
+// Every branch of adviceFor (a check or a saved change) that names an option
+// holds that option: next never promises an offer, or a fix marked recommended,
+// that the result does not carry (auditor 3: a day under its minimum promised
+// "the fix marked recommended" and had none).
+func TestAdviceFor_NextNeverNamesAnAbsentOption(t *testing.T) {
+	rec := []planning.Option{{Name: "Ciabatta", Recommended: true}}
+	floor := func(opts []planning.Option) planning.Issue {
+		return planning.Issue{Rule: "H9", Code: planning.CodeKcalBelowFloor, Severity: planning.SeverityViolation, Date: "2026-11-25", Options: opts}
+	}
+	soft := func(opts []planning.Option) planning.Issue {
+		return planning.Issue{Rule: "S2", Code: planning.CodeKcalBelowBand, Severity: planning.SeveritySoft, Date: "2026-11-25", Options: opts}
+	}
+	other := planning.Issue{Rule: "H2", Code: planning.CodeTooManyCookOccasions, Severity: planning.SeverityViolation, Date: "2026-11-25"}
+	meat := planning.Issue{Rule: "S7", Code: planning.CodeWeekMeatAboveDGE, Severity: planning.SeveritySoft, Params: map[string]any{"meat_g": 471.0, "max_g": 300.0}}
+	for name, after := range map[string]planning.Evaluation{
+		"a floor breach without options":      {Issues: []planning.Issue{floor(nil)}},
+		"a floor breach with options":         {Issues: []planning.Issue{floor(rec)}},
+		"a problem without options":           {Issues: []planning.Issue{other}},
+		"a problem with a soft issue options": {Issues: []planning.Issue{other, soft(rec)}},
+		"a soft issue with options":           {Issues: []planning.Issue{soft(rec)}},
+		"a soft issue without options":        {Issues: []planning.Issue{soft(nil)}},
+		"the week's meat":                     {Week: &planning.WeekEval{MeatG: 471}, Issues: []planning.Issue{meat}},
+	} {
+		for _, dry := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s dry=%v", name, dry), func(t *testing.T) {
+				before := planning.Evaluation{Week: &planning.WeekEval{MeatG: 321}}
+				next, offers := adviceFor(context.Background(), Services{}, planningWindow, before, after, dry, nil)
+				for _, phrase := range []string{"offers[0]", "offer[0]"} {
+					if strings.Contains(next, phrase) {
+						assert.NotEmpty(t, offers, "next names %s: %s", phrase, next)
+					}
+				}
+				hasRec := false
+				for _, is := range after.Issues {
+					for _, o := range is.Options {
+						hasRec = hasRec || o.Recommended
+					}
+				}
+				for _, phrase := range []string{"fix marked recommended", "option marked recommended"} {
+					if strings.Contains(next, phrase) {
+						assert.True(t, hasRec, "next names the %s but no issue holds one: %s", phrase, next)
+					}
+				}
+			})
+		}
+	}
 }

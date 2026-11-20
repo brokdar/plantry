@@ -151,6 +151,20 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 			offers = append(offers, o)
 		}
 	}
+	repeated := len(offers) > 0
+	// A day left under its minimum gets the verified fix that reaches it, or
+	// none: the reply then says so instead of promising one.
+	if hard && !dry {
+		for _, is := range fresh {
+			if is.Code != planning.CodeKcalBelowFloor {
+				continue
+			}
+			if o := floorFixOffer(ctx, svc, w, is, after.Issues); o != nil {
+				offers = append(offers, o)
+				break
+			}
+		}
+	}
 	// A named meat dish saves, and its week effect is told with one way to
 	// balance it (a meat meal elsewhere swapped); tools never offer such a dish.
 	meat := ""
@@ -173,7 +187,7 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 	lead, tail := "the change is done as asked and", "; do not apply the offer unasked"
 	var what string
 	switch {
-	case len(offers) > 0:
+	case repeated:
 		what = "repeat a dish"
 	case hard:
 		what = "leave a day under its minimum"
@@ -190,7 +204,7 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 		// Warnings never stop a requested change: it is saved, then reported.
 		return "NOT saved (a check). A question about what would happen: answer from this result. A requested change: save it now with the same ops and dry_run false, never ask first; it would " + what + ", which you then report", offers
 	}
-	if meat != "" {
+	if meat != "" && !hard {
 		text := lead + " now " + meat + ": tell the user"
 		if len(offers) > 0 {
 			text += ", present offers[0] (a meat meal swapped for a vegetarian one) as your recommended way to balance it"
@@ -200,12 +214,16 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 		return text + tail, offers
 	}
 	switch {
-	case len(offers) > 0:
+	case repeated:
 		return lead + " now repeats a dish: tell the user, present offers[0] as your recommended way out" + tail, offers
+	case hard && len(offers) > 0:
+		return lead + " left a day under its minimum: tell the user plainly and present offers[0] as your closing offer ('I can also ...: say so if you want it')" + tail, offers
 	case hard:
-		return lead + " left a day under its minimum: tell the user plainly and state the fix marked recommended as your closing offer ('I can also ...: say so if you want it')" + tail, nil
-	case other:
+		return lead + " left a day under its minimum and no checked fix reaches it: tell the user plainly, with the shortfall in kcal; offer no fix, name none", nil
+	case other && options:
 		return lead + " left a problem open (see issues.new): tell the user plainly and state the option marked recommended as your closing offer ('I can also ...: say so if you want it')" + tail, nil
+	case other:
+		return lead + " left a problem open (see issues.new) and no checked fix exists: tell the user plainly; offer no fix, name none", nil
 	case options:
 		return lead + " made new issues: report them and state the option marked recommended as your closing offer ('I can also ...: say so if you want it')" + tail, nil
 	}

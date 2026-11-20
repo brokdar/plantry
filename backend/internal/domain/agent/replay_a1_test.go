@@ -59,14 +59,15 @@ func replayEnv(t *testing.T, src string) *planToolEnv {
 	return e
 }
 
-// TestReplayA1 replays three request shapes of the a1 round on a copy of its
-// start database (REPLAY_DB; skipped without it): each result carries one
-// recommended option.
+// chatStartDB is the chat start database of the a1 to e5x rounds, slimmed to
+// the plan, the library and the settings (no run data): the replays below
+// start from a copy of it, so they run in every gate.
+const chatStartDB = "testdata/chat_start.db"
+
+// TestReplayA1 replays three request shapes of the a1 round on a copy of the
+// start database: each result carries one recommended option.
 func TestReplayA1(t *testing.T) {
-	src := os.Getenv("REPLAY_DB")
-	if src == "" {
-		t.Skip("REPLAY_DB: a copy of the a1 chat start database")
-	}
+	src := chatStartDB
 	run := func(e *planToolEnv, ctx context.Context, name, in string) map[string]any {
 		out, _, _, err := e.ts.Execute(ctx, name, json.RawMessage(in))
 		require.NoError(t, err)

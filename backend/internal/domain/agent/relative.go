@@ -123,6 +123,9 @@ func toolFindWays(svc Services) Tool {
 			recommend(ways, offers, in.ToLimit)
 			nameWays(st, ways)
 			nameWays(st, offers)
+			if in.Goal == planning.GoalLowerDay && in.TargetKcal > 0 && !res.Impossible {
+				ways = withCombinedDayWay(ctx, svc, w, goal, res.Date, in.TargetKcal, ways)
+			}
 			if res.Impossible {
 				for i := range offers {
 					if offers[i].PlateID == 0 {
@@ -154,6 +157,57 @@ func toolFindWays(svc Services) Tool {
 			return mustJSON(out), ToolEffectNone, nil
 		},
 	}
+}
+
+// dayTargetSlack is how far above the kcal a user named for a day a way may
+// end and still count as reaching it.
+const dayTargetSlack = 25
+
+// withCombinedDayWay puts first, when no single way takes the day to the kcal
+// the user named, the way that combines the single ones (each on its own
+// meal) until the checked day is there: the user asked for the number, not
+// for one lever. Without a combination that reaches it the ways stay as they
+// are and the closest is told as such.
+func withCombinedDayWay(ctx context.Context, svc Services, w window.Window, goal applyGoal, date string, target float64, ways []planning.Way) []planning.Way {
+	if len(ways) == 0 || ways[0].After.DayKcal <= target+dayTargetSlack {
+		return ways
+	}
+	byDrop := slices.Clone(ways)
+	slices.SortStableFunc(byDrop, func(a, b planning.Way) int {
+		return int(b.Before.DayKcal-b.After.DayKcal) - int(a.Before.DayKcal-a.After.DayKcal)
+	})
+	combined := planning.Way{Kind: "compound", Reaches: true, Meaningful: true}
+	var used []int64
+	var parts []string
+	for _, way := range byDrop {
+		if slices.Contains(used, way.PlateID) {
+			continue
+		}
+		try := combined
+		try.Ops, try.Light = slices.Concat(combined.Ops, way.Ops), slices.Clone(combined.Light)
+		for _, l := range way.Light {
+			if !slices.Contains(try.Light, l) { // every way marks the same day
+				try.Light = append(try.Light, l)
+			}
+		}
+		try.What = strings.Join(append(slices.Clone(parts), way.What), "; and ")
+		checked, why := checkWay(ctx, svc, w, goal, date, try)
+		if why != "" || len(checked.NewIssues) > 0 {
+			continue
+		}
+		combined, used, parts = checked, append(used, way.PlateID), append(parts, way.What)
+		if combined.After.DayKcal <= target+dayTargetSlack {
+			combined.Recommended, combined.Because = true, "no single change reaches the kcal you named; these together do"
+			combined.PlateID, combined.ChangesOther = 0, true
+			out := []planning.Way{combined}
+			for _, o := range ways {
+				o.Recommended, o.Because = false, ""
+				out = append(out, o)
+			}
+			return out
+		}
+	}
+	return ways
 }
 
 // orClosest is the offers of a lighter request: the ones that reach the light
@@ -622,7 +676,9 @@ func nextStep(ways, offers []planning.Way, res planning.WayResult, toLimit bool)
 	case len(offers) > 0:
 		text += fixNote(offers[0])
 	}
-	if len(ways) > 1 && strings.HasPrefix(text, "apply ways[0]") {
+	// A combined day way already adds its levers up: the warning is for the rest.
+	combinedDay := len(ways) > 0 && ways[0].Kind == "compound" && ways[0].ChangesOther && res.Goal == planning.GoalLowerDay
+	if len(ways) > 1 && strings.HasPrefix(text, "apply ways[0]") && !combinedDay {
 		text += ". The ways are alternatives, each from the same starting plan: apply one, never add their effects together"
 	}
 	return text

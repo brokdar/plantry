@@ -121,7 +121,7 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 	for _, s := range skipped {
 		skippedList = append(skippedList, map[string]any{"op": s.idx + 1, "what": s.what, "why": s.why})
 		skippedOut = append(skippedOut, s.what+" ("+s.why+")")
-		if o := replacementOffer(ctx, svc, w, in.Ops[s.idx], len(offers) == 0); o != nil {
+		if o := refusalOffer(ctx, svc, w, in.Ops[s.idx], len(offers) == 0); o != nil {
 			offers = append(offers, o)
 		}
 	}
@@ -158,7 +158,7 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 	if len(offers) > 0 {
 		tell += "and present offers[0] (marked recommended) as the way to do it safely; apply nothing more unasked"
 	} else {
-		tell += "and say what they could change; apply nothing more unasked"
+		tell += "and say plainly that no checked alternative exists for it: name none, promise none; apply nothing more unasked"
 	}
 	switch {
 	case in.DryRun && len(safe) > 0:
