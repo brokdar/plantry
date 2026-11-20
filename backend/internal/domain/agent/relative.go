@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
@@ -307,8 +308,8 @@ func findFix(ctx context.Context, svc Services, w window.Window, goal applyGoal,
 		if is.Date != date || is.Code != planning.CodeKcalBelowBand {
 			continue
 		}
-		for _, o := range is.Options {
-			if !isDayFix(o, day.BandLow, day.BandHigh) || (o.PlateID != nil && *o.PlateID == way.PlateID) {
+		for _, o := range fixCandidates(is.Options, day.Kcal, day.BandLow, day.BandHigh) {
+			if o.PlateID != nil && *o.PlateID == way.PlateID {
 				continue
 			}
 			fixOps := o.Ops
@@ -347,15 +348,70 @@ func findFix(ctx context.Context, svc Services, w window.Window, goal applyGoal,
 	return nil
 }
 
-// isDayFix reports whether an option is a small fix from normal food for a day
-// under its range: an add or raise, no cheese or nut, that lands the day inside
-// the range.
+// isDayFix reports whether an option is a fix from normal food for a day under
+// its range: an add or raise, no cheese or nut, that lands the day inside the
+// range.
 func isDayFix(o planning.Option, low, high float64) bool {
 	return (o.Action == "add" || o.Action == "raise") && !planning.IsCheeseOrNut(o.Name) && o.DayKcal >= low-0.5 && o.DayKcal <= high+0.5
 }
 
-// fixOption is the first option of a below-range day energy issue that is a
-// day fix (nil for any other issue).
+// fixMargin is how far past the range's low end the fix aims: the day lands
+// just inside, not at the target.
+const fixMargin = 50
+
+// smallFix sizes the smallest normal-food step that takes a day of kcal to the
+// low end of its range plus a small margin: a piece of fruit (whole servings)
+// while the gap is under 150 kcal, else bread (half servings), the other kind
+// when that one cannot (at most two servings). It resizes an add option the
+// planner offered; nil when none fits.
+func smallFix(opts []planning.Option, kcal, low, high float64) *planning.Option {
+	gap := low - kcal
+	if gap <= 0 {
+		return nil
+	}
+	order := []string{string(food.RoleSideStarch), string(food.RoleSideVeg)}
+	step := map[string]float64{string(food.RoleSideStarch): 0.5, string(food.RoleSideVeg): 1}
+	if gap < 150 {
+		order[0], order[1] = order[1], order[0]
+	}
+	for _, role := range order {
+		for _, o := range opts {
+			if o.Action != "add" || o.LeafRole != role || o.Grams == nil || *o.Grams <= 0 || o.ServingG <= 0 || o.KcalDelta <= 0 || planning.IsCheeseOrNut(o.Name) {
+				continue
+			}
+			perG := o.KcalDelta / *o.Grams
+			for n := step[role]; n <= 2; n += step[role] {
+				g := math.Round(n * o.ServingG)
+				if d := g * perG; kcal+d >= low+fixMargin && kcal+d <= high {
+					o.Grams, o.KcalDelta, o.DayKcal = &g, math.Round(d), math.Round(kcal+d)
+					amount := g
+					o.Op.Amount = &amount
+					o.Ops = nil
+					return &o
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// fixCandidates are the options to try as a day's fix, best first: the small
+// sized one, then any option from normal food that lands the day inside.
+func fixCandidates(opts []planning.Option, kcal, low, high float64) []planning.Option {
+	var out []planning.Option
+	if o := smallFix(opts, kcal, low, high); o != nil {
+		out = append(out, *o)
+	}
+	for _, o := range opts {
+		if isDayFix(o, low, high) {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// fixOption is the first fix candidate of a below-range day energy issue (nil
+// for any other issue).
 func fixOption(is planning.Issue) *planning.Option {
 	if is.Code != planning.CodeKcalBelowBand {
 		return nil
@@ -364,10 +420,8 @@ func fixOption(is planning.Issue) *planning.Option {
 	if low == 0 || high == 0 {
 		return nil
 	}
-	for _, o := range is.Options {
-		if isDayFix(o, low, high) {
-			return &o
-		}
+	if c := fixCandidates(is.Options, num(is.Params["kcal"]), low, high); len(c) > 0 {
+		return &c[0]
 	}
 	return nil
 }

@@ -20,6 +20,11 @@ type Option struct {
 	Name   string `json:"name"`
 	Date   string `json:"date"`
 	SlotID int64  `json:"slot_id"`
+	// ServingG and LeafRole describe a leaf add: the grams of one serving and
+	// its effective role (side_veg: produce, side_starch: bread), so a caller can
+	// size it in natural units.
+	ServingG float64 `json:"serving_g,omitempty"`
+	LeafRole string  `json:"leaf_role,omitempty"`
 	// Slot names the meal ("lunch"); the chat tools fill it from the plan's slots.
 	Slot string `json:"slot,omitempty"`
 	// PlateID is nil for a proposed plate (address it by date and slot).
@@ -501,6 +506,7 @@ func (x *index) candidates(day time.Time, want float64) []optCand {
 			g := math.Min(math.Round(n*serving/roundGrams)*roundGrams, addCapG(f, dayTarget))
 			c.add = Component{FoodID: id, Grams: &g, Proposed: true}
 			c.opt.Grams = &g
+			c.opt.ServingG, c.opt.LeafRole = serving, string(f.LeafRole)
 			c.kcal, c.protein = f.Macros.Kcal*g/100, f.Macros.Protein*g/100
 		}
 		c.opt.Action, c.opt.FoodID, c.opt.Name, c.opt.Why = "add", id, f.Name, why

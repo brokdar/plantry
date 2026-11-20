@@ -104,37 +104,55 @@ func TestFindWays_InRangeDayHasNoFix(t *testing.T) {
 
 // A "lighter" write on a day that already was under its range (the German
 // "make Wednesday lighter" case: no new issue, so no option was offered) ends
-// the reply with the one fix that brings the day inside the range, and
-// applying that fix gives what the reply said.
-func TestApplyChanges_LighterLeavingDayUnderRangeOffersOneFix(t *testing.T) {
-	e := fixEnv(t, 2700)
-	res := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lighter","plate_id":%d}`, e.dinner3()))
-	way := relMaps(res["ways"])[0]
-	got, err := e.applyWay(res, way, false)
-	require.NoError(t, err)
-	kcal, low, _ := dayOf(t, got)
-	require.Less(t, kcal, low, "the day ends under its range")
-	fixes := relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["day_fix"])
-	require.Len(t, fixes, 1)
-	opt := relMaps(fixes[0]["options"])[0]
-	assert.Contains(t, []string{"Ciabatta", "Apple"}, opt["name"])
-	tell := got["report"].(map[string]any)["tell"].([]any)
-	last := fmt.Sprint(tell[len(tell)-1])
-	assert.Contains(t, last, "I can also add")
-	assert.Contains(t, last, opt["name"])
-	assert.Contains(t, last, "Sat 7 Nov lunch")
-	assert.Contains(t, last, "120 g of Ciabatta")
-	assert.Contains(t, last, fmt.Sprintf("%.0f kcal", opt["day_kcal"]))
+// the reply with ONE small fix that brings the day just inside the range (a
+// piece of fruit for a small gap, bread for a bigger one), and applying that
+// fix gives what the reply said.
+func TestApplyChanges_LighterLeavingDayUnderRangeOffersOneSmallFix(t *testing.T) {
+	for _, tc := range []struct {
+		target   int
+		maxAfter float64 // above the range's low end; 0: only inside the range
+		name     string
+	}{
+		{2600, 200, "Apple"},  // 7 kcal under: a piece of fruit
+		{2700, 200, "Apple"},  // 53 kcal under
+		{2900, 0, "Ciabatta"}, // 218 kcal under: bread
+	} {
+		t.Run(fmt.Sprint(tc.target), func(t *testing.T) {
+			e := fixEnv(t, tc.target)
+			res := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lighter","plate_id":%d}`, e.dinner3()))
+			got, err := e.applyWay(res, relMaps(res["ways"])[0], false)
+			require.NoError(t, err)
+			kcal, low, _ := dayOf(t, got)
+			require.Less(t, kcal, low, "the day ends under its range")
+			fixes := relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["day_fix"])
+			require.Len(t, fixes, 1)
+			opt := relMaps(fixes[0]["options"])[0]
+			assert.Equal(t, tc.name, opt["name"])
+			tell := got["report"].(map[string]any)["tell"].([]any)
+			last := fmt.Sprint(tell[len(tell)-1])
+			assert.Contains(t, last, "I can also add")
+			assert.Contains(t, last, opt["name"])
+			assert.Contains(t, last, "Sat 7 Nov lunch")
+			assert.Contains(t, last, fmt.Sprintf("%.0f g of %s", opt["op"].(map[string]any)["amount"], opt["name"]))
+			assert.Contains(t, last, fmt.Sprintf("%.0f kcal", opt["day_kcal"]))
 
-	raw, err := json.Marshal(map[string]any{"ops": []any{opt["op"]}, "dry_run": true})
-	require.NoError(t, err)
-	after, err := e.exec("apply_changes", string(raw))
-	require.NoError(t, err)
-	k, lo, hi := dayOf(t, after)
-	assert.InDelta(t, opt["day_kcal"], k, 1)
-	assert.GreaterOrEqual(t, k, lo-0.5)
-	assert.LessOrEqual(t, k, hi+0.5)
+			raw, err := json.Marshal(map[string]any{"ops": []any{opt["op"]}, "dry_run": true})
+			require.NoError(t, err)
+			after, err := e.exec("apply_changes", string(raw))
+			require.NoError(t, err)
+			k, lo, hi := dayOf(t, after)
+			t.Logf("target %d: day %.0f, low %.0f, gap %.0f -> %v %v g -> day %.0f", tc.target, kcal, low, low-kcal, opt["name"], opt["op"].(map[string]any)["amount"], k)
+			assert.InDelta(t, opt["day_kcal"], k, 1)
+			assert.GreaterOrEqual(t, k, lo+fixMarginForTest-1)
+			assert.LessOrEqual(t, k, hi+0.5)
+			if tc.maxAfter > 0 {
+				assert.LessOrEqual(t, k, lo+tc.maxAfter, "a small gap gets a small fix")
+			}
+		})
+	}
 }
+
+const fixMarginForTest = 50
 
 func TestIsCheeseOrNut(t *testing.T) {
 	for name, want := range map[string]bool{"Parmesan": true, "Bergkäse": true, "Walnüsse": true, "Peanut butter": true, "Coconut milk": false, "Ciabatta": false, "Apple": false} {
@@ -163,4 +181,36 @@ func TestApplyChanges_AnyWriteUnderRangeOffersOneFix(t *testing.T) {
 	assert.Contains(t, last, "was already under its range before this change")
 	assert.Contains(t, last, "I can also add")
 	assert.Contains(t, last, "kcal, inside its range")
+}
+
+// Tuesday guard: a properly light dinner (to_limit) is met by an offer that
+// grows the other meal; every offer that reaches the limit is satisfied when
+// applied, and one that leaves the day under its range carries the one fix
+// that puts it inside.
+func TestFindWays_ProperlyLightOfferStillMeetsTheLimitAndFixesTheDay(t *testing.T) {
+	e := fixEnv(t, 3000)
+	res := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lighter","plate_id":%d,"to_limit":true}`, e.dinner3()))
+	require.NotNil(t, res["offer"])
+	assert.Contains(t, res["next"], "only offer[0] is one")
+	fixed := 0
+	for _, o := range relMaps(res["offer"]) {
+		require.Equal(t, true, o["reaches_limit"])
+		require.NotEmpty(t, o["moved"], "the other meal changes")
+		got, err := e.applyWay(res, o, true)
+		require.NoError(t, err)
+		assert.Equal(t, true, got["request"].(map[string]any)["reached_light"], "%v", o["what"])
+		if fix, ok := o["fix"].(map[string]any); ok {
+			fixed++
+			ops := append(o["ops"].([]any), fix["ops"].([]any)...)
+			raw, err := json.Marshal(map[string]any{"ops": ops, "goal": res["goal"], "light": o["light"], "dry_run": true})
+			require.NoError(t, err)
+			both, err := e.exec("apply_changes", string(raw))
+			require.NoError(t, err)
+			k, lo, hi := dayOf(t, both)
+			assert.InDelta(t, fix["day_kcal_after"], k, 1)
+			assert.GreaterOrEqual(t, k, lo-0.5)
+			assert.LessOrEqual(t, k, hi+0.5)
+		}
+	}
+	assert.Positive(t, fixed, "an offer leaves the day under its range and carries the fix")
 }
