@@ -235,9 +235,7 @@ func opReplace(ctx context.Context, svc Services, op changeOp, b *batch) (map[st
 	out := opResult(op, after, pc)
 	out["position"] = string(pc.Position)
 	if pc.Position == plate.PositionMain {
-		if steps := refitSides(ctx, svc, after.ID, b); len(steps) > 0 {
-			out["refit"] = steps
-		}
+		refitOrKeep(ctx, svc, after.ID, b, out)
 	}
 	return mealResult(out, res, b), nil
 }

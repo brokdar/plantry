@@ -180,6 +180,9 @@ type applyInput struct {
 	Goal   *applyGoal
 	// quiet leaves the run log out: find_ways checks its ways with it.
 	quiet bool
+	// keepSides leaves a side that clashes with a swapped-in main where it is
+	// (the user named only the main): the result carries the clash and an offer.
+	keepSides bool
 }
 
 // applyRun is what a call computed: the result the model reads and the
@@ -241,7 +244,7 @@ func toolApplyChanges(svc Services) Tool {
 					}
 				}
 			}
-			run, err := runGuarded(ctx, svc, w, applyInput{Ops: in.Ops, DryRun: in.DryRun, Light: light, Goal: in.Goal}, ignoredFields(input))
+			run, err := runGuarded(ctx, svc, w, applyInput{Ops: in.Ops, DryRun: in.DryRun, Light: light, Goal: in.Goal, keepSides: true}, ignoredFields(input))
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -267,6 +270,9 @@ func saveStatus(res map[string]any) (bool, string) {
 // back for a dry run), checks the marks and the goal, and builds the result.
 func runApply(ctx context.Context, svc Services, w window.Window, in applyInput, ignored map[int][]string) (applyRun, error) {
 	light := in.Light
+	if in.keepSides {
+		ctx = context.WithValue(ctx, keepSidesKey{}, true)
+	}
 	if err := checkLight(ctx, svc, w, light); err != nil {
 		return applyRun{}, err
 	}
@@ -360,7 +366,15 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 		svc.Removed.add(ctx, b.removed)
 	}
 	if in.Goal == nil && !in.quiet {
-		if next, offers := adviceFor(ctx, svc, w, before, afterEv, in.DryRun, applied); next != "" {
+		next, offers := adviceFor(ctx, svc, w, before, afterEv, in.DryRun, applied)
+		if o := sideClashOffer(ctx, svc, w, in, applied); o != nil {
+			offers = append([]map[string]any{o}, offers...)
+			next = clashNext(next, o, in.DryRun)
+			if rep != nil {
+				rep.Tell = append(rep.Tell, fmt.Sprint(o["clash"])+"; offer: "+fmt.Sprint(o["what"])+", only if the user says yes")
+			}
+		}
+		if next != "" {
 			result["next"] = next
 			if len(offers) > 0 {
 				result["offers"] = offers
@@ -547,6 +561,25 @@ func idOf(v any) (int64, bool) {
 	return 0, false
 }
 
+// keepSidesKey marks a run of the user's own ops: a replaced main changes no
+// other component.
+type keepSidesKey struct{}
+
+// refitOrKeep handles the sides after a main was replaced. A way's or an
+// alternative's check refits them inside its change (they are in its ops); the
+// user's own write leaves them and records the clash for the offer.
+func refitOrKeep(ctx context.Context, svc Services, plateID int64, b *batch, out map[string]any) {
+	if ctx.Value(keepSidesKey{}) == true {
+		if c := sideClash(ctx, svc, plateID); c != nil {
+			out["side_clash"] = c
+		}
+		return
+	}
+	if steps := refitSides(ctx, svc, plateID, b); len(steps) > 0 {
+		out["refit"] = steps
+	}
+}
+
 // applyOp runs one op through plate.Service (and the availability writer).
 func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[string]any, error) {
 	switch op.Op {
@@ -578,9 +611,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		b.note(op, map[string]any{"food": food.Data(old.FoodName), "to": food.Data(pc.FoodName), "date": p.DateString()})
 		out := opResult(op, p, pc)
 		if pc.Position == plate.PositionMain {
-			if steps := refitSides(ctx, svc, p.ID, b); len(steps) > 0 {
-				out["refit"] = steps
-			}
+			refitOrKeep(ctx, svc, p.ID, b, out)
 		}
 		return out, nil
 	case "set_quantity":
