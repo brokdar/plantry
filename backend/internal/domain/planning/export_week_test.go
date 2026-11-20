@@ -138,3 +138,6 @@ func PlannerTools() []llm.Tool { return []llm.Tool{evaluatePlanTool(), submitPla
 
 // KitchenJSON exposes the kitchen-word pass over a planner result.
 var KitchenJSON = kitchenJSON
+
+// OpenRulesForTest exposes openRules to the external tests.
+var OpenRulesForTest = openRules

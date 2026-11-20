@@ -39,6 +39,11 @@ const (
 // keyTimeout is the error key of a run that ran out of time.
 const keyTimeout = "error.plan.timeout"
 
+// keyHardRuleOpen is the error key of a plan that was saved with a hard rule
+// still broken (the repairs ran out): the run stays partial, the board shows
+// the issue, and the key and notes name the open rule.
+const keyHardRuleOpen = "error.plan.hard_rule_open"
+
 // errShuttingDown refuses a generation once Shutdown began.
 var errShuttingDown = errors.New("plan generation is shutting down")
 
@@ -964,6 +969,10 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	end := RunEnd{Status: airun.StatusOK, Notes: joinNotes(prop.Notes, movedNotes(base, moved)), RepairAttempts: prop.RepairAttempts}
 	if len(violations) > 0 {
 		end.Status = airun.StatusPartial
+		if open := openRules(violations); open != "" {
+			end.ErrorKey = keyHardRuleOpen
+			end.Notes = joinNotes(end.Notes, "A hard rule is still open in the saved plan: "+open+".")
+		}
 	}
 	// The run's scope now also says what moved outside it and how to take
 	// the save back (day and plate scopes).
@@ -991,6 +1000,37 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		"status", end.Status, "repair_attempts", end.RepairAttempts,
 		"violations", len(violations), "score", end.ScoreJSON)...)
 	return end
+}
+
+// openRules names the hard rules a saved plan still breaks, each once with the
+// days it breaks it on. An empty cell (missing_plate) is not named: it is the
+// plan still being built, or a meal nothing can fill.
+func openRules(violations []Issue) string {
+	days := map[string][]string{}
+	var order []string
+	for _, is := range violations {
+		if is.Code == CodeMissingPlate {
+			continue
+		}
+		label := PlainText(is.Code).Label
+		if _, ok := days[label]; !ok {
+			order = append(order, label)
+		}
+		if is.Date != "" && !slices.Contains(days[label], is.Date) {
+			days[label] = append(days[label], is.Date)
+		}
+		if _, ok := days[label]; !ok {
+			days[label] = nil
+		}
+	}
+	parts := make([]string, 0, len(order))
+	for _, l := range order {
+		if len(days[l]) > 0 {
+			l += " (" + strings.Join(days[l], ", ") + ")"
+		}
+		parts = append(parts, l)
+	}
+	return strings.Join(parts, "; ")
 }
 
 // recordAfter stores the `after` evaluation of the plan as saved: the window

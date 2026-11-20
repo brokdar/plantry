@@ -331,6 +331,23 @@ func TestLLMChooser_UnresolvedViolationsArePersisted(t *testing.T) {
 	require.NotNil(t, board.Draft)
 	require.NotNil(t, board.Draft.Notes)
 	assert.True(t, strings.HasPrefix(r.Notes, "Two occasions on Sunday."), r.Notes)
+	// The audit's vg-gen: partial with no key said nothing about the open rule.
+	assert.Equal(t, "error.plan.hard_rule_open", r.ErrorKey)
+	assert.Contains(t, r.Notes, "A hard rule is still open in the saved plan: ")
+	assert.Contains(t, r.Notes, sun)
+}
+
+// A plan whose only hard issue is an empty cell (nothing can fill the meal)
+// is partial without the open-rule key.
+func TestOpenRules_AnEmptyCellIsNotAnOpenRule(t *testing.T) {
+	assert.Empty(t, planning.OpenRulesForTest([]planning.Issue{{Code: planning.CodeMissingPlate, Date: "2026-11-23"}}))
+	got := planning.OpenRulesForTest([]planning.Issue{
+		{Code: planning.CodeTooManyCookOccasions, Date: "2026-11-22"},
+		{Code: planning.CodeTooManyCookOccasions, Date: "2026-11-24"},
+		{Code: planning.CodeMissingPlate, Date: "2026-11-23"},
+		{Code: planning.CodeKcalBelowFloor, Date: "2026-11-25"},
+	})
+	assert.Equal(t, "cooking times per day (2026-11-22, 2026-11-24); day energy minimum (2026-11-25)", got)
 }
 
 // B7-AC4: an unknown food id is an H7 violation that is repaired.
