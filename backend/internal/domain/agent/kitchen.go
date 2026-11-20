@@ -163,6 +163,11 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 				offers = append(offers, o)
 				break
 			}
+			// RL9: no unmarked meal can take a fix: the offer lifts a light mark.
+			if o := unLightOffer(ctx, svc, w, is); o != nil {
+				offers = append(offers, o)
+				break
+			}
 		}
 	}
 	// A named meat dish saves, and its week effect is told with one way to

@@ -27,7 +27,7 @@ var errDryRun = errors.New("dry run")
 var applyChangesSchema = `{
   "type":"object",
   "properties":{
-    "goal":{"type":"object","required":["kind"],"description":"the relative request this call serves (lighter, heartier, more_protein) with its target; take it as find_ways returned it","properties":{"kind":{"type":"string","enum":["lighter","heartier","more_protein","lower_day","raise_day"]},"plate_id":{"type":"integer","minimum":1},"date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}},"additionalProperties":false},
+    "goal":{"type":"object","required":["kind"],"description":"the relative request this call serves (lighter, heartier, more_protein) with its target; take it as find_ways returned it","properties":{"kind":{"type":"string","enum":["lighter","heartier","more_protein","lower_day","raise_day"]},"plate_id":{"type":"integer","minimum":1},"date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"target_kcal":{"type":"number","minimum":1,"description":"lower_day, raise_day: the kcal the user named for the day"}},"additionalProperties":false},
     "dry_run":{"type":"boolean","description":"true: run every op, report the result and roll everything back (nothing is saved). Only for a what-if question: an explicit request is saved at once (saved says whether it was)."},
     ` + lightSchema + `,
     "ops":{
@@ -171,6 +171,9 @@ type applyGoal struct {
 	Kind    string `json:"kind"`
 	PlateID int64  `json:"plate_id,omitempty"`
 	Date    string `json:"date,omitempty"`
+	// TargetKcal is the number the user named for a day (lower_day, raise_day):
+	// it becomes the day's target (P-3).
+	TargetKcal float64 `json:"target_kcal,omitempty"`
 }
 
 // applyInput is one apply_changes call.

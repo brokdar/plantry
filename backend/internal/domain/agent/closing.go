@@ -7,6 +7,7 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -259,4 +260,53 @@ func optionWords(o planning.Option) string {
 		return fmt.Sprintf("raise %s to %s on %s", food.Quote(o.Name), amount, where)
 	}
 	return fmt.Sprintf("add %s of %s to %s", amount, food.Quote(o.Name), where)
+}
+
+// unLightOffer is RL9: when no unmarked planned meal of a day left under its
+// minimum can take a fix, the one offer removes the light mark of the marked
+// lunch or dinner that has the most room, applied only on a yes (the offer
+// carries the mark's removal and nothing else). nil when the day has no
+// marked meal: the reply then says plainly that nothing can be offered.
+func unLightOffer(ctx context.Context, svc Services, w window.Window, is planning.Issue) map[string]any {
+	if svc.State == nil {
+		return nil
+	}
+	st, err := svc.State(ctx, w, todayFrom(ctx))
+	if err != nil {
+		return nil
+	}
+	var best *planning.Plate
+	var mark planning.LightIntent
+	bestKcal := math.Inf(1)
+	ev := planning.Evaluate(st, planning.WindowTarget(st))
+	kcal := map[int64]float64{}
+	for _, pe := range ev.Plates {
+		kcal[pe.PlateID] = pe.Kcal
+	}
+	for i, p := range st.Plates {
+		if p.Date.Format(time.DateOnly) != is.Date {
+			continue
+		}
+		light := st.LightMealAt(p.Date, p.SlotID)
+		if !light || kcal[p.ID] >= bestKcal {
+			continue
+		}
+		best, bestKcal = &st.Plates[i], kcal[p.ID]
+		for _, n := range []string{"lunch", "dinner"} {
+			if strings.TrimPrefix(st.SlotNames[p.SlotID], "slot.") == n {
+				mark = planning.LightIntent{Date: is.Date, Scope: planning.LightScopeNone, Slot: n}
+			}
+		}
+	}
+	if best == nil || mark.Slot == "" {
+		return nil
+	}
+	meal := mealName(st, *best)
+	return map[string]any{
+		"what":                fmt.Sprintf("remove the light mark of %s, so it can take the food the day is missing; I add it only after you say yes", meal),
+		"light":               []planning.LightIntent{mark},
+		"recommended":         true,
+		"recommended_because": "no other planned meal of the day can take more food while it is marked light",
+		"effect":              map[string]any{"day": dayLabelStr(is.Date), "day_kcal_now": math.Round(paramNum(is, "kcal")), "day_minimum": math.Round(paramNum(is, "floor_kcal"))},
+	}
 }

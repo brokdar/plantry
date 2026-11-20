@@ -69,12 +69,12 @@ func toolFindWays(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			goal := applyGoal{Kind: in.Goal, PlateID: in.PlateID, Date: in.Date}
+			goal := applyGoal{Kind: in.Goal, PlateID: in.PlateID, Date: in.Date, TargetKcal: in.TargetKcal}
 			if in.PlateID != 0 {
 				goal.Date = ""
 			}
 			if in.Goal == planning.GoalLowerDay || in.Goal == planning.GoalRaiseDay {
-				goal = applyGoal{Kind: in.Goal, Date: res.Date}
+				goal = applyGoal{Kind: in.Goal, Date: res.Date, TargetKcal: in.TargetKcal}
 			}
 			limit := in.Limit
 			if limit <= 0 {
@@ -141,16 +141,14 @@ func toolFindWays(svc Services) Tool {
 			nameWays(st, ways)
 			nameWays(st, offers)
 			if in.Goal == planning.GoalLowerDay && in.TargetKcal > 0 && !res.Impossible {
-				ways = withCombinedDayWay(ctx, svc, w, goal, res.Date, in.TargetKcal, ways)
+				ways = withCombinedDayWay(ctx, svc, w, goal, res.Date, in.TargetKcal, planning.PolicyOf(st.Profile), ways)
 			}
 			// A way that stops short of the number the user named does not reach
 			// it, whatever the day's range says.
 			if in.TargetKcal > 0 && (in.Goal == planning.GoalLowerDay || in.Goal == planning.GoalRaiseDay) {
 				for _, list := range [][]planning.Way{ways, offers} {
 					for i := range list {
-						short := in.Goal == planning.GoalLowerDay && list[i].After.DayKcal > in.TargetKcal+dayTargetSlack
-						short = short || (in.Goal == planning.GoalRaiseDay && list[i].After.DayKcal < in.TargetKcal-dayTargetSlack)
-						if short {
+						if !inNamedBand(planning.PolicyOf(st.Profile), in.TargetKcal, list[i].After.DayKcal) {
 							list[i].Reaches = false
 						}
 					}
@@ -189,17 +187,19 @@ func toolFindWays(svc Services) Tool {
 	}
 }
 
-// dayTargetSlack is how far above the kcal a user named for a day a way may
-// end and still count as reaching it.
-const dayTargetSlack = 25
+// inNamedBand reports whether a day at kcal has reached the number the user
+// named for it (P-3): it sits inside the normal policy day band around it.
+func inNamedBand(pol planning.Policy, named, kcal float64) bool {
+	return kcal >= named*pol.DayLow-0.5 && kcal <= named*pol.DayHigh+0.5
+}
 
 // withCombinedDayWay puts first, when no single way takes the day to the kcal
 // the user named, the way that combines the single ones (each on its own
 // meal) until the checked day is there: the user asked for the number, not
 // for one lever. Without a combination that reaches it the ways stay as they
 // are and the closest is told as such.
-func withCombinedDayWay(ctx context.Context, svc Services, w window.Window, goal applyGoal, date string, target float64, ways []planning.Way) []planning.Way {
-	if len(ways) == 0 || ways[0].After.DayKcal <= target+dayTargetSlack {
+func withCombinedDayWay(ctx context.Context, svc Services, w window.Window, goal applyGoal, date string, target float64, pol planning.Policy, ways []planning.Way) []planning.Way {
+	if len(ways) == 0 || inNamedBand(pol, target, ways[0].After.DayKcal) {
 		return ways
 	}
 	byDrop := slices.Clone(ways)
@@ -226,7 +226,7 @@ func withCombinedDayWay(ctx context.Context, svc Services, w window.Window, goal
 			continue
 		}
 		combined, used, parts = checked, append(used, way.PlateID), append(parts, way.What)
-		if combined.After.DayKcal <= target+dayTargetSlack {
+		if inNamedBand(pol, target, combined.After.DayKcal) {
 			combined.Recommended, combined.Because = true, "no single change reaches the kcal you named; these together do"
 			combined.PlateID, combined.ChangesOther = 0, true
 			out := []planning.Way{combined}

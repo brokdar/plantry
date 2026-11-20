@@ -935,8 +935,12 @@ func (h *planner) kcalShare(c plate.CellKey) float64 {
 		return 0
 	}
 	// The meal aims at its slot's expected share of the day's full target (SB2).
+	// A routine meal that misses its own share moves it (SB5).
 	weights, total := daySlotShares(h.s, cells)
 	share := *t * weights[c.SlotID] / total
+	if accounts := h.x.dayAccounts([]time.Time{c.Date}); len(accounts) > 0 {
+		share = accounts[0].mealShare(c.SlotID)
+	}
 	switch {
 	case h.s.lightMeal(c.Date, c.SlotID):
 		return LightMealShare * share

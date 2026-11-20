@@ -28,9 +28,16 @@ func e048cOffer(t *testing.T) (e *planToolEnv, res map[string]any, offer map[str
 	return e, res, offers[0]
 }
 
-func TestReplayE048c_TheOfferClearsTheLunchMarkItGrows(t *testing.T) {
+// The two checks read the same offer: it is computed once (the search is the
+// test's cost) and each check is a subtest of it.
+func TestReplayE048c(t *testing.T) {
 	t.Parallel()
-	_, _, o := e048cOffer(t)
+	e, res, o := e048cOffer(t)
+	t.Run("the offer clears the lunch mark it grows", func(t *testing.T) { e048cClearsTheMark(t, o) })
+	t.Run("the day gets one bread fix inside its range", func(t *testing.T) { e048cFixInsideRange(t, e, res, o) })
+}
+
+func e048cClearsTheMark(t *testing.T, o map[string]any) {
 	assert.Equal(t, true, o["recommended"])
 	var cleared bool
 	lights, _ := o["light"].([]any)
@@ -47,11 +54,15 @@ func TestReplayE048c_TheOfferClearsTheLunchMarkItGrows(t *testing.T) {
 	}
 }
 
-func TestReplayE048c_TheDayGetsOneBreadFixInsideItsRange(t *testing.T) {
-	t.Parallel()
-	e, res, o := e048cOffer(t)
+func e048cFixInsideRange(t *testing.T, e *planToolEnv, res, o map[string]any) {
 	fix, ok := o["fix"].(map[string]any)
-	require.True(t, ok, "the offer ends the day under its range: it carries the fix (%v)", o["day_vs_range"])
+	if !ok {
+		// v1.2 (SB5): a routine breakfast far under its share moves the day's
+		// expected kcal up for the other meals, so the offer can end the day
+		// inside its range with nothing left to fix.
+		assert.Equal(t, "inside its range", o["day_vs_range"])
+		return
+	}
 	// v1.1: the slot bands move the day target, so the fix is the one the new
 	// shares call for (a banana, 1902 kcal); what stays is that it is one normal
 	// food and that its promise equals the dry run below.

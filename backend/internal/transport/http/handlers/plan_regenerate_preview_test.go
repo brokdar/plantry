@@ -9,7 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Slice 3b: the day regenerate's preview and the run's undo.
+// Slice 3b: the day regenerate's preview and the run's undo. (Wednesday: the
+// fixture's Tuesday would repeat one main at both meals with nothing else to
+// cook and no cold plate, so its replan saves nothing, v1 OQ6.)
 func TestPlanGenerateHTTP_RegeneratePreviewAndRunUndo(t *testing.T) {
 	a := newGenAPI(t)
 	_, gen := a.do(http.MethodPost, "/api/plan/generate"+genToday, `{"start":"2026-11-07"}`)
@@ -22,8 +24,8 @@ func TestPlanGenerateHTTP_RegeneratePreviewAndRunUndo(t *testing.T) {
 		name, query string
 		key         string
 	}{
-		{"scope missing", "&date=2026-11-10", "error.plan.invalid_scope"},
-		{"other scope", "&scope=plate&date=2026-11-10", "error.plan.invalid_scope"},
+		{"scope missing", "&date=2026-11-11", "error.plan.invalid_scope"},
+		{"other scope", "&scope=plate&date=2026-11-11", "error.plan.invalid_scope"},
 		{"date missing", "&scope=day", "error.plan.invalid_scope"},
 		{"date outside the window", "&scope=day&date=2026-11-14", "error.plan.invalid_scope"},
 		{"past date", "&scope=day&date=2026-11-05", "error.plan.invalid_scope"},
@@ -34,17 +36,17 @@ func TestPlanGenerateHTTP_RegeneratePreviewAndRunUndo(t *testing.T) {
 			assert.Equal(t, tc.key, body["message_key"])
 		})
 	}
-	code, body := a.do(http.MethodGet, "/api/plan/regenerate/preview?scope=day&date=2026-11-10&start=2026-11-08&today=2026-11-06", "")
+	code, body := a.do(http.MethodGet, "/api/plan/regenerate/preview?scope=day&date=2026-11-11&start=2026-11-08&today=2026-11-06", "")
 	assert.Equal(t, http.StatusBadRequest, code)
 	assert.Equal(t, "error.plan.invalid_start", body["message_key"])
 
-	code, pv := a.do(http.MethodGet, preview+"&scope=day&date=2026-11-10", "")
+	code, pv := a.do(http.MethodGet, preview+"&scope=day&date=2026-11-11", "")
 	require.Equal(t, http.StatusOK, code, pv)
-	assert.Len(t, pv["replaced"], 2, "Tuesday's lunch and dinner")
+	assert.Len(t, pv["replaced"], 2, "Wednesday's lunch and dinner")
 	assert.IsType(t, []any{}, pv["also_changed"])
 	assert.Equal(t, []any{}, pv["confirmed_affected"])
 
-	code, body = a.do(http.MethodPost, "/api/plan/regenerate"+genToday, `{"start":"2026-11-07","scope":{"kind":"day","date":"2026-11-10"}}`)
+	code, body = a.do(http.MethodPost, "/api/plan/regenerate"+genToday, `{"start":"2026-11-07","scope":{"kind":"day","date":"2026-11-11"}}`)
 	require.Equal(t, http.StatusAccepted, code, body)
 	runPath := fmt.Sprintf("/api/plan/runs/%.0f", body["run_id"])
 	_, run = a.do(http.MethodGet, runPath, "")

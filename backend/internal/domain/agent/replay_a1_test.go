@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +27,20 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
 
+// gooseMu serialises migrations: goose keeps its logger and filesystem in
+// package variables, so parallel tests may not set them at once.
+var gooseMu sync.Mutex
+
+func migrateCopy(t *testing.T, conn *sql.DB) {
+	t.Helper()
+	gooseMu.Lock()
+	defer gooseMu.Unlock()
+	goose.SetLogger(goose.NopLogger())
+	goose.SetBaseFS(dbmigrations.Migrations)
+	require.NoError(t, goose.SetDialect("sqlite3"))
+	require.NoError(t, goose.Up(conn, "migrations"))
+}
+
 // replayEnv wires the tool set over a COPY of a start database.
 func replayEnv(t *testing.T, src string) *planToolEnv {
 	data, err := os.ReadFile(src)
@@ -36,10 +51,7 @@ func replayEnv(t *testing.T, src string) *planToolEnv {
 	require.NoError(t, err)
 	db.SetMaxOpenConns(1)
 	// The fixture may predate the newest migrations: bring the copy up.
-	goose.SetLogger(goose.NopLogger())
-	goose.SetBaseFS(dbmigrations.Migrations)
-	require.NoError(t, goose.SetDialect("sqlite3"))
-	require.NoError(t, goose.Up(db, "migrations"))
+	migrateCopy(t, db)
 	t.Cleanup(func() { _ = db.Close() })
 	today := time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)
 	start := time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC)

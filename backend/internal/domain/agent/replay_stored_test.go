@@ -13,10 +13,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/require"
 
-	"github.com/jaltszeimer/plantry/backend/db"
 	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
@@ -176,10 +174,7 @@ func replayRun(t *testing.T, roundDir, runDB, variant string) []replayCall {
 	require.NoError(t, os.WriteFile(mig, b, 0o600))
 	mdb, err := sql.Open("sqlite", "file:"+mig+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	require.NoError(t, err)
-	goose.SetLogger(goose.NopLogger())
-	goose.SetBaseFS(db.Migrations)
-	require.NoError(t, goose.SetDialect("sqlite3"))
-	require.NoError(t, goose.Up(mdb, "migrations"))
+	migrateCopy(t, mdb)
 	var smax int64 // the run DB's first runs are the start DB's own history
 	require.NoError(t, mdb.QueryRow(`SELECT COALESCE(MAX(id), 0) FROM ai_runs`).Scan(&smax))
 	require.NoError(t, mdb.Close())

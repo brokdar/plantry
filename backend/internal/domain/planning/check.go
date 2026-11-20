@@ -103,8 +103,11 @@ type Issue struct {
 // Check applies the hard rules H1–H9 (spec §6.4, D21) to the target of s and
 // returns the issues in rule order. Pass the state after Merge to check a
 // proposal, or the persisted state to check a window as it is.
-func Check(s State, t Target) []Issue {
-	x := newIndex(s, t)
+func Check(s State, t Target) []Issue { return check(newIndex(s, t)) }
+
+// check is Check over an index already built (Evaluate shares its own, so the
+// per-day accounts are computed once).
+func check(x *index) []Issue {
 	out := []Issue{}
 	out = append(out, x.h1()...)
 	out = append(out, x.h2()...)

@@ -66,7 +66,11 @@ type index struct {
 	days    []time.Time // dates with a target cell, ascending
 	byCell  map[cellID][]int
 	byPlate map[int64]int
-	byRef   map[sessionRef]int
+	// accounts memoises the account of every day (dayAccounts(x.days)): the
+	// evaluation asks for it once per rule.
+	accounts []DayKcal
+	haveAcc  bool
+	byRef    map[sessionRef]int
 	// dupKeys are the proposed session keys used more than once, in
 	// first-seen order.
 	dupKeys []string

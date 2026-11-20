@@ -33,7 +33,7 @@ func (h *planner) fitMealsToBands() {
 		if dk.Away {
 			continue
 		}
-		h.fitDay(y, dk, *k, &room)
+		h.fitDay(y, dk, &room)
 	}
 }
 
@@ -55,8 +55,7 @@ type bandMove struct {
 	dKcal    float64
 }
 
-func (h *planner) fitDay(y *index, dk DayKcal, kk float64, room *float64) {
-	k := kk
+func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 	merged := Merge(h.s, h.in.Target, h.prop)
 	ev := Evaluate(merged, h.in.Target)
 	plateKcal := map[int64]float64{}
@@ -73,7 +72,7 @@ func (h *planner) fitDay(y *index, dk DayKcal, kk float64, room *float64) {
 			h.s.lightDay(p.Date) || h.s.heartyDay(p.Date) {
 			continue
 		}
-		lo, hi := b.MinPct/100*k, b.MaxPct/100*k
+		lo, hi := dk.bandKcal(b, p.SlotID)
 		switch {
 		case h.s.lightMeal(p.Date, p.SlotID): // the explicit request outranks the band: the cap
 			lo, hi = 0, LightMealShare*dk.mealShare(p.SlotID)

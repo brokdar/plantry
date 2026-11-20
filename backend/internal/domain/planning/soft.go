@@ -716,6 +716,10 @@ func (x *index) slotBandIssues(ev Evaluation) []Issue {
 	for _, d := range ev.Days {
 		judged[d.Date] = d.Complete && !d.Away && !d.NutritionMissing
 	}
+	accounts := map[string]DayKcal{}
+	for _, dk := range x.dayAccounts(x.days) {
+		accounts[dk.Date.Format(time.DateOnly)] = dk
+	}
 	var out []Issue
 	for _, p := range ev.Plates {
 		b, ok := x.s.SlotBand[p.SlotID]
@@ -726,7 +730,7 @@ func (x *index) slotBandIssues(ev Evaluation) []Issue {
 		if err != nil || x.s.lightMeal(day, p.SlotID) || x.s.heartyMeal(day, p.SlotID) || x.s.lightDay(day) || x.s.heartyDay(day) {
 			continue
 		}
-		lo, hi := b.MinPct/100**k, b.MaxPct/100**k
+		lo, hi := accounts[p.Date].bandKcal(b, p.SlotID) // shifted by a routine meal's gap (SB5)
 		side := ""
 		switch {
 		case p.Kcal < lo-0.5:

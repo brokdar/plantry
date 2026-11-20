@@ -242,10 +242,11 @@ type FoodsFt struct {
 }
 
 type PlanLight struct {
-	Date  string
-	Scope string
-	Slot  string
-	Level string
+	Date       string
+	Scope      string
+	Slot       string
+	Level      string
+	TargetKcal float64
 }
 
 type Plate struct {

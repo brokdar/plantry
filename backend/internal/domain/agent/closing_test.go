@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -69,7 +70,8 @@ func TestApplyChanges_RefusalClosesWithAnOptionOrAnHonestNone(t *testing.T) {
 			kcal = m["kcal"].(float64)
 		}
 	}
-	e.sql(`UPDATE user_profile SET kcal_target = ? WHERE id = 1`, (kcal-5)/0.75)
+	floor := (kcal - 5) / 0.75
+	e.sql(`UPDATE user_profile SET kcal_target = ? WHERE id = 1`, floor)
 	cut := fmt.Sprintf(`{"op":"set_quantity","plate_component_id":%d,"portions":0.5}`, mainComponentID(t, a))
 	res := e.mustExec("apply_changes", `{"ops":[`+cut+`]}`)
 	require.Equal(t, false, res["saved"])
@@ -118,8 +120,9 @@ func TestApplyChanges_RefusalClosesWithAnOptionOrAnHonestNone(t *testing.T) {
 	})
 
 	// every swap of two meals the guard refuses is closed the same way
-	refused := 0
-	for _, x := range e.draftMeals() {
+	var refused atomic.Int64
+	eachDraftMeal(t, func(t *testing.T, e *planToolEnv, x plate.Plate) {
+		e.sql(`UPDATE user_profile SET kcal_target = ? WHERE id = 1`, floor)
 		for _, y := range e.draftMeals() {
 			if x.ID == y.ID {
 				continue
@@ -131,11 +134,11 @@ func TestApplyChanges_RefusalClosesWithAnOptionOrAnHonestNone(t *testing.T) {
 			}
 			assertNextKeepsItsPromise(t, got, "swap "+in)
 			if got["skipped"] != nil {
-				refused++
+				refused.Add(1)
 			}
 		}
-	}
-	t.Logf("%d swaps refused", refused)
+	})
+	t.Logf("%d swaps refused", refused.Load())
 }
 
 // A day a user's own away leaves under its minimum gets the checked fix that
@@ -183,9 +186,8 @@ func mustJSON(t *testing.T, v any) string {
 // is never "apply one, never add them up" when the number needs several.
 func TestFindWays_LowerDayCombinesLeversToTheNamedKcal(t *testing.T) {
 	t.Parallel()
-	e := relEnv(t)
-	combined := 0
-	for _, p := range e.draftMeals() {
+	var combined atomic.Int64
+	eachDraftDay(t, func(t *testing.T, e *planToolEnv, p plate.Plate) {
 		date := p.DateString()
 		first := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lower_day","date":%q}`, date))
 		day := first["before"].(map[string]any)["day_kcal"].(float64)
@@ -201,7 +203,7 @@ func TestFindWays_LowerDayCombinesLeversToTheNamedKcal(t *testing.T) {
 			if len(ways) == 0 || ways[0]["kind"] != "compound" {
 				continue
 			}
-			combined++
+			combined.Add(1)
 			assert.Equal(t, true, ways[0]["recommended"])
 			assert.NotContains(t, res["next"], "never add their effects together")
 			got, err := e.applyWay(res, ways[0], true)
@@ -212,29 +214,34 @@ func TestFindWays_LowerDayCombinesLeversToTheNamedKcal(t *testing.T) {
 				assert.NotEqual(t, "problem", is["severity"])
 			}
 		}
-	}
+	})
 	// KR4: a dish other meals eat from goes down to three quarters at the
 	// least, so fewer days reach a named number by combining levers.
-	t.Logf("%d combined ways", combined)
+	t.Logf("%d combined ways", combined.Load())
 }
 
 // Every find_ways call over the week names only options it returns.
 func TestFindWays_NextNeverNamesAnAbsentOption(t *testing.T) {
 	t.Parallel()
-	e := relEnv(t)
-	n := 0
-	for _, p := range e.draftMeals() {
-		for _, in := range []string{
+	var n atomic.Int64
+	eachDraftMeal(t, func(t *testing.T, e *planToolEnv, p plate.Plate) {
+		inputs := []string{
 			fmt.Sprintf(`{"goal":"lighter","plate_id":%d}`, p.ID),
 			fmt.Sprintf(`{"goal":"lighter","plate_id":%d,"to_limit":true}`, p.ID),
 			fmt.Sprintf(`{"goal":"heartier","plate_id":%d}`, p.ID),
 			fmt.Sprintf(`{"goal":"more_protein","plate_id":%d}`, p.ID),
-			fmt.Sprintf(`{"goal":"lower_day","date":%q,"target_kcal":900}`, p.DateString()),
-			fmt.Sprintf(`{"goal":"raise_day","date":%q}`, p.DateString()),
-		} {
-			assertNextKeepsItsPromise(t, e.mustExec("find_ways", in), in)
-			n++
 		}
-	}
-	assert.Positive(t, n)
+		// A whole-day goal answers the same for the day's lunch and dinner:
+		// once per date.
+		if first := e.draftMeals(); slices.IndexFunc(first, func(q plate.Plate) bool { return q.DateString() == p.DateString() }) == slices.IndexFunc(first, func(q plate.Plate) bool { return q.ID == p.ID }) {
+			inputs = append(inputs,
+				fmt.Sprintf(`{"goal":"lower_day","date":%q,"target_kcal":900}`, p.DateString()),
+				fmt.Sprintf(`{"goal":"raise_day","date":%q}`, p.DateString()))
+		}
+		for _, in := range inputs {
+			assertNextKeepsItsPromise(t, e.mustExec("find_ways", in), in)
+			n.Add(1)
+		}
+	})
+	assert.Positive(t, n.Load())
 }

@@ -340,7 +340,7 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 	res := WayResult{Goal: req.Goal, Date: w.date}
 	var intent *LightIntent
 	if dayGoal && !w.noMark {
-		in := LightIntent{Date: w.date, Scope: LightScopeDay}
+		in := LightIntent{Date: w.date, Scope: LightScopeDay, TargetKcal: req.TargetKcal} // a named number is the day's target (P-3)
 		if req.Goal == GoalRaiseDay {
 			in.Level = LevelHearty
 		}

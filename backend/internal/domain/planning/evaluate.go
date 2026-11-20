@@ -209,7 +209,7 @@ func evaluate(s State, t Target, weekOpts bool) Evaluation {
 	x.weekOpts = weekOpts
 	ev := Evaluation{
 		Days: []DayEval{}, Plates: []PlateEval{}, MeatDaysMax: s.Profile.MeatDaysPerWeekMax,
-		Issues: Check(s, t), Light: s.Light,
+		Issues: check(x), Light: s.Light,
 	}
 	ev.Totals = totalsOf(ev.Issues)
 

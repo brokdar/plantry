@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,10 +62,11 @@ func (e *planToolEnv) applyWay(res, way map[string]any, dryRun bool) (map[string
 // compound kind, and it never adds a filler (only a side recipe or bread).
 func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 	t.Parallel()
-	e := relEnv(t)
-	ctx, _ := e.chat()
-	checked, offers, goals := 0, 0, map[string]int{}
-	for _, p := range e.draftMeals() {
+	var checked, offers atomic.Int64
+	var mu sync.Mutex
+	goals := map[string]int{}
+	eachDraftMeal(t, func(t *testing.T, e *planToolEnv, p plate.Plate) {
+		ctx, _ := e.chat()
 		for _, goal := range []string{"lighter", "heartier", "more_protein"} {
 			out, _, _, err := e.ts.Execute(ctx, "find_ways", json.RawMessage(fmt.Sprintf(`{"goal":%q,"plate_id":%d}`, goal, p.ID)))
 			require.NoError(t, err, "plate %d %s", p.ID, goal)
@@ -107,7 +110,7 @@ func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 						assert.Contains(t, []string{"side_starch", "side_veg"}, role)
 					}
 					all = append(all, o)
-					offers++
+					offers.Add(1)
 				}
 			}
 			for _, way := range all {
@@ -126,16 +129,18 @@ func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 						assert.Equal(t, way["reaches_limit"], v, "%s %v", goal, way["what"])
 					}
 				}
-				checked++
+				checked.Add(1)
+				mu.Lock()
 				goals[goal]++
+				mu.Unlock()
 			}
 		}
-	}
-	assert.Positive(t, checked)
+	})
+	assert.Positive(t, checked.Load())
 	for _, g := range []string{"lighter", "heartier", "more_protein"} {
 		assert.Positive(t, goals[g], "ways for %s", g)
 	}
-	t.Logf("checked %d ways and offers, %d offers", checked, offers)
+	t.Logf("checked %d ways and offers, %d offers", checked.Load(), offers.Load())
 }
 
 func (e *planToolEnv) applyWayCtx(ctx context.Context, res, way map[string]any) (map[string]any, error) {
@@ -272,51 +277,48 @@ func TestFindAlternatives_MisplacedLimitIsRedirected(t *testing.T) {
 // dry run and lands the day in the adjusted range.
 func TestFindWays_DayGoalsAndNextStep(t *testing.T) {
 	t.Parallel()
-	e := relEnv(t)
-	ctx, _ := e.chat()
-	dates := map[string]bool{}
-	for _, p := range e.draftMeals() {
-		dates[p.DateString()] = true
-	}
-	checked, nothing := 0, 0
-	for date := range dates {
-		for _, goal := range []string{"lower_day", "raise_day"} {
-			out, _, _, err := e.ts.Execute(ctx, "find_ways", json.RawMessage(fmt.Sprintf(`{"goal":%q,"date":%q}`, goal, date)))
-			require.NoError(t, err, "%s %s", goal, date)
-			var res map[string]any
-			require.NoError(t, json.Unmarshal(out, &res))
-			next, _ := res["next"].(string)
-			ways := relMaps(res["ways"])
-			if len(ways) == 0 {
-				assert.Contains(t, next, "nothing")
-				assert.NotEmpty(t, res["empty_reason"])
-				nothing++
-				continue
-			}
-			assert.Contains(t, next, "apply ways[0] now")
-			for _, way := range ways {
-				got, err := e.applyWayCtx(ctx, res, way)
-				require.NoError(t, err, "%s %s: %v", goal, date, way["what"])
-				req := got["request"].(map[string]any)
-				assert.Equal(t, true, req["satisfied"], "%v", req["why"])
-				assert.Equal(t, true, req["reached_range"], "%v", req["why"])
-				for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
-					assert.NotEqual(t, "problem", is["severity"])
+	var checked, nothing atomic.Int64
+	eachDraftDay(t, func(t *testing.T, e *planToolEnv, p plate.Plate) {
+		ctx, _ := e.chat()
+		date := p.DateString()
+		{
+			for _, goal := range []string{"lower_day", "raise_day"} {
+				out, _, _, err := e.ts.Execute(ctx, "find_ways", json.RawMessage(fmt.Sprintf(`{"goal":%q,"date":%q}`, goal, date)))
+				require.NoError(t, err, "%s %s", goal, date)
+				var res map[string]any
+				require.NoError(t, json.Unmarshal(out, &res))
+				next, _ := res["next"].(string)
+				ways := relMaps(res["ways"])
+				if len(ways) == 0 {
+					assert.Contains(t, next, "nothing")
+					assert.NotEmpty(t, res["empty_reason"])
+					nothing.Add(1)
+					continue
 				}
-				checked++
+				assert.Contains(t, next, "apply ways[0] now")
+				for _, way := range ways {
+					got, err := e.applyWayCtx(ctx, res, way)
+					require.NoError(t, err, "%s %s: %v", goal, date, way["what"])
+					req := got["request"].(map[string]any)
+					assert.Equal(t, true, req["satisfied"], "%v", req["why"])
+					assert.Equal(t, true, req["reached_range"], "%v", req["why"])
+					for _, is := range relMaps(got["after"].(map[string]any)["issues"].(map[string]any)["new"]) {
+						assert.NotEqual(t, "problem", is["severity"])
+					}
+					checked.Add(1)
+				}
 			}
 		}
-	}
-	assert.Positive(t, checked)
-	t.Logf("%d day ways checked, %d day requests without a way", checked, nothing)
+	})
+	assert.Positive(t, checked.Load())
+	t.Logf("%d day ways checked, %d day requests without a way", checked.Load(), nothing.Load())
 }
 
 func TestFindWays_NextStepWithAnOffer(t *testing.T) {
 	t.Parallel()
 	// An offer alone: explain and ask; ways and an offer: apply and mention.
-	e := relEnv(t)
-	ctx, _ := e.chat()
-	for _, p := range e.draftMeals() {
+	eachDraftMeal(t, func(t *testing.T, e *planToolEnv, p plate.Plate) {
+		ctx, _ := e.chat()
 		out, _, _, err := e.ts.Execute(ctx, "find_ways", json.RawMessage(fmt.Sprintf(`{"goal":"lighter","plate_id":%d}`, p.ID)))
 		require.NoError(t, err)
 		var res map[string]any
@@ -333,7 +335,7 @@ func TestFindWays_NextStepWithAnOffer(t *testing.T) {
 		default:
 			assert.Contains(t, next, "nothing to apply")
 		}
-	}
+	})
 }
 
 // mainComponentID returns the id of the plate's main component.
@@ -449,9 +451,8 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 // that warning and is never the recommended one.
 func TestFindAlternatives_ListedWarningsAreTheWritesWarnings(t *testing.T) {
 	t.Parallel()
-	e := relEnv(t)
-	shown, repeats := 0, 0
-	for _, p := range e.draftMeals() {
+	var shown, repeats atomic.Int64
+	eachDraftMeal(t, func(t *testing.T, e *planToolEnv, p plate.Plate) {
 		res := e.mustExec("find_alternatives", fmt.Sprintf(`{"plate_id":%d,"what":"main","limit":10}`, p.ID))
 		for _, a := range relMaps(res["alternatives"]) {
 			ops, err := json.Marshal(a["ops"])
@@ -464,14 +465,14 @@ func TestFindAlternatives_ListedWarningsAreTheWritesWarnings(t *testing.T) {
 				assert.NotEqual(t, true, a["recommended"], "%v creates a warning", a["name"])
 			}
 			if strings.Contains(fmt.Sprint(fresh), "dish repeated") {
-				repeats++
+				repeats.Add(1)
 				assert.Contains(t, fmt.Sprint(listed), "dish repeated", "%v repeats a dish", a["name"])
 			}
-			shown++
+			shown.Add(1)
 		}
-	}
-	require.NotZero(t, shown)
-	require.NotZero(t, repeats, "the week has a candidate that repeats a dish")
+	})
+	require.NotZero(t, shown.Load())
+	require.NotZero(t, repeats.Load(), "the week has a candidate that repeats a dish")
 }
 
 // A replace that names its component needs no plate_id (the component knows
@@ -645,9 +646,8 @@ func TestApplyChanges_ReplaceMainKeepsTheSidesAndOffers(t *testing.T) {
 // not reach it: reaches_limit is judged against that number, not the day's range.
 func TestFindWays_ReachesIsJudgedAgainstTheNamedKcal(t *testing.T) {
 	t.Parallel()
-	e := relEnv(t)
-	checked := 0
-	for _, p := range e.draftMeals() {
+	var checked atomic.Int64
+	eachDraftDay(t, func(t *testing.T, e *planToolEnv, p plate.Plate) {
 		date := p.DateString()
 		first := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lower_day","date":%q}`, date))
 		day := first["before"].(map[string]any)["day_kcal"].(float64)
@@ -663,14 +663,16 @@ func TestFindWays_ReachesIsJudgedAgainstTheNamedKcal(t *testing.T) {
 					continue
 				}
 				for _, w := range relMaps(res[k]) {
-					checked++
-					if w["after"].(map[string]any)["day_kcal"].(float64) > target+25 {
+					checked.Add(1)
+					// P-3: the number is reached inside the policy day band around it
+					// (at most 110 % above), no longer within 25 kcal.
+					if w["after"].(map[string]any)["day_kcal"].(float64) > target*1.1+1 {
 						assert.NotEqual(t, true, w["reaches_cap"], "%s %.0f: %v ends above the named number", date, target, w["what"])
 						assert.NotEqual(t, true, w["reaches_limit"], "%s %.0f: %v ends above the named number", date, target, w["what"])
 					}
 				}
 			}
 		}
-	}
-	assert.Positive(t, checked)
+	})
+	assert.Positive(t, checked.Load())
 }
