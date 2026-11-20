@@ -14,44 +14,65 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
 
+// namedDishCase finds a replacement where only the variety rule (H8) is at
+// stake: the replaced main is the single-use dish of its plate (a session of its
+// own, cooked at that plate's cell), so a fresh session at the same cell keeps
+// the cooking times, leftovers and portions as they are; the new main was eaten
+// inside the variety window (a hard H8 repeat), has the same diet class and at
+// least the energy of the old one (the day cannot fall under its minimum).
+func namedDishCase(s planning.State) (plateID, compID int64, dish planning.FoodFacts, ok bool) {
+	uses := map[int64]int{}
+	for _, p := range s.Plates {
+		for _, c := range p.Components {
+			if c.SessionID != 0 {
+				uses[c.SessionID]++
+			}
+		}
+	}
+	sess := map[int64]planning.Session{}
+	for _, x := range s.Sessions {
+		sess[x.ID] = x
+	}
+	span := s.Window.Start.AddDate(0, 0, -7*s.Settings.VarietyWeeks)
+	lunch, dinner := mealPlates(s)
+	for _, p := range append(dinner, lunch...) {
+		for _, c := range p.Components {
+			old := s.Foods[c.FoodID]
+			x := sess[c.SessionID]
+			if old.Kind != food.KindComposed || old.Role != food.RoleMain || uses[c.SessionID] != 1 || x.CookDate != p.Date || x.CookSlotID != p.SlotID {
+				continue
+			}
+			for _, f := range s.Foods {
+				if f.Kind == food.KindComposed && f.Role == food.RoleMain && f.ID != old.ID && f.NutritionComplete && f.LastEaten != nil &&
+					!f.LastEaten.Before(span) && f.DietClass == old.DietClass && f.Macros.Kcal >= old.Macros.Kcal && (dish.ID == 0 || f.ID < dish.ID) {
+					dish = f
+				}
+			}
+			if dish.ID != 0 {
+				return p.ID, c.ID, dish, true
+			}
+		}
+	}
+	return 0, 0, dish, false
+}
+
 // SF3: a dish the user names is applied even though it repeats inside the
 // variety window; the reply carries a variety warning; nothing is refused.
 func TestSF3_NamedDishAppliedWithVarietyWarning(t *testing.T) {
 	for _, h := range households {
 		t.Run(h, func(t *testing.T) {
 			e := newEnv(t, "chat-"+h, chatWeek)
-			s := e.st()
-			_, dinner := mealPlates(s)
-			// a main eaten in the weeks before the window (a hard H8 repeat)
-			var dish planning.FoodFacts
-			for _, f := range s.Foods {
-				if f.Kind == food.KindComposed && f.Role == food.RoleMain && f.LastEaten != nil && f.NutritionComplete && (dish.ID == 0 || f.ID < dish.ID) {
-					dish = f
-				}
+			plateID, comp, dish, ok := namedDishCase(e.st())
+			if !ok {
+				t.Skip("no replacement in this household where only the variety rule is at stake")
 			}
-			if dish.ID == 0 || len(dinner) == 0 {
-				t.Skip("no recently eaten main in this household")
-			}
-			var comp int64
-			var plateID int64
-			for _, p := range dinner {
-				for _, c := range p.Components {
-					if f := s.Foods[c.FoodID]; f.Role == food.RoleMain && c.FoodID != dish.ID {
-						comp, plateID = c.ID, p.ID
-					}
-				}
-				if comp != 0 {
-					break
-				}
-			}
-			require.NotZero(t, comp)
 			before := e.violations()
 			rs, chs := e.turn("Put "+dish.Name+" on that dinner", tc{"apply_changes", map[string]any{"ops": []any{
 				map[string]any{"op": "replace", "plate_component_id": comp, "food_id": dish.ID, "portions": 1.0},
 			}}})
 			require.Len(t, rs, 1)
 			assert.False(t, rs[0].Err, "refused: %s", rs[0].Raw)
-			assert.NotEmpty(t, chs, "the named dish was not saved (plate %d, %s)", plateID, dish.Name)
+			assert.NotEmpty(t, chs, "the named dish was not saved (plate %d, %s): %.300s", plateID, dish.Name, rs[0].Raw)
 			assert.Regexp(t, regexp.MustCompile(`(?i)variety|repeat|recently|wiederhol|kürzlich`), rs[0].Raw, "no variety warning in the result")
 			for k := range e.violations() {
 				assert.True(t, before[k], "new hard issue %s", k)
