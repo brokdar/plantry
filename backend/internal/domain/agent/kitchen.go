@@ -87,6 +87,8 @@ func recommend(ways, offers []planning.Way, toLimit bool) {
 		mark(&ways[0], "the least change that reaches the goal, no new warning")
 	case len(ways) > 0 && clean(ways[0]):
 		mark(&ways[0], "the furthest this meal can go on its own, no new warning")
+	case len(offers) > 0 && !offers[0].Reaches && clean(offers[0]):
+		mark(&offers[0], "the closest the plan allows, no new warning (not a light meal)")
 	case len(offers) > 0 && clean(offers[0]):
 		mark(&offers[0], "the only way to reach it that keeps the day in its range, no new warning")
 	case len(ways) > 0:

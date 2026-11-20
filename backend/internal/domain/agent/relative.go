@@ -101,6 +101,7 @@ func toolFindWays(svc Services) Tool {
 				// The step stops short of light, or the meal cannot lighten alone:
 				// the one thing offered is the compound way that makes the meal
 				// properly light, never a mid-way one.
+				closest := offers
 				offers = nil
 				if full, err := planning.Ways(st, planning.WindowTarget(st), planning.WayRequest{PlateID: in.PlateID, Date: in.Date, Goal: in.Goal, Limit: 8, ToLimit: true}); err == nil {
 					for _, o := range planning.DemoteUnclean(verify(full.Offers, 2)) {
@@ -109,6 +110,7 @@ func toolFindWays(svc Services) Tool {
 						}
 					}
 				}
+				offers = orClosest(offers, closest, res.MaxKcal)
 			}
 			recommend(ways, offers, in.ToLimit)
 			nameWays(st, ways)
@@ -137,6 +139,29 @@ func toolFindWays(svc Services) Tool {
 			return mustJSON(out), ToolEffectNone, nil
 		},
 	}
+}
+
+// orClosest is the offers of a lighter request: the ones that reach the light
+// limit, else (none does within the kitchen rules) the closest verified
+// compound way, labelled as what it is.
+func orClosest(reaching, closest []planning.Way, maxKcal float64) []planning.Way {
+	if len(reaching) > 0 {
+		return reaching
+	}
+	for i := range closest {
+		closest[i].Why = closestWhy(closest[i], maxKcal)
+	}
+	return closest
+}
+
+// closestWhy labels an offer that stops short of the light limit: the meal's
+// kcal and that it is not a light meal, ahead of any note the way carried.
+func closestWhy(o planning.Way, maxKcal float64) string {
+	why := fmt.Sprintf("the closest it gets: the meal holds %.0f kcal, not a light meal (the limit is %.0f kcal)", o.After.MealKcal, maxKcal)
+	if o.Why != "" {
+		why += "; " + o.Why
+	}
+	return why
 }
 
 // nameWays says which meal and day a way is about ("Tue 24 Nov dinner: ...")
