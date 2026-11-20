@@ -910,49 +910,6 @@ func levels(c Component, dir int) []float64 {
 	return out
 }
 
-// wayLevels are the quantities a way may give component c of plate p: never a
-// fraction under one portion per eater of a dish cooked fresh for this plate
-// alone (nobody cooks half a portion); a smaller serving of a leftover or of a
-// batch other plates eat from is fine.
-func (s State) wayLevels(p Plate, c Component, dir int) []float64 {
-	all := levels(c, dir)
-	if c.Portions == nil || !s.cookedFreshFor(p, c) {
-		return all
-	}
-	return slices.DeleteFunc(all, func(n float64) bool { return n < 1-1e-9 })
-}
-
-// cookedFreshFor reports whether c's batch cooks at p's own cell and no other
-// plate eats from it.
-func (s State) cookedFreshFor(p Plate, c Component) bool {
-	same := func(o Component) bool {
-		return (c.SessionID != 0 && o.SessionID == c.SessionID) || (c.SessionKey != "" && o.SessionKey == c.SessionKey)
-	}
-	if c.SessionID == 0 && c.SessionKey == "" {
-		return true // a fresh session of its own
-	}
-	cooksHere := false
-	for _, ss := range s.Sessions {
-		if (c.SessionID != 0 && ss.ID == c.SessionID) || (c.SessionKey != "" && ss.Key == c.SessionKey) {
-			cooksHere = ss.CookDate.Equal(p.Date) && ss.CookSlotID == p.SlotID
-		}
-	}
-	if !cooksHere {
-		return false
-	}
-	for _, q := range s.Plates {
-		if q.ID == p.ID {
-			continue
-		}
-		for _, o := range q.Components {
-			if same(o) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 func quantityOp(p Plate, c Component, n float64) OptionOp {
 	cid := c.ID
 	op := OptionOp{Op: "set_quantity", PlateComponentID: &cid}
@@ -983,7 +940,7 @@ func (w *waySearch) quantityEdits(s State, pi, dir int) []wayEdit {
 		if !ok || !f.NutritionComplete || f.Macros.Kcal <= 0 || (w.goal == GoalMoreProtein && dir > 0 && !proteinFood(f)) {
 			continue
 		}
-		for _, n := range s.wayLevels(p, c, dir) {
+		for _, n := range levels(c, dir) {
 			out = append(out, wayEdit{
 				s: setQuantity(s, pi, ci, n), ops: []OptionOp{quantityOp(p, c, n)}, what: []string{quantityWords(f, c, n)},
 				cost: 1, kind: "portion", plate: p.ID,
@@ -1043,7 +1000,7 @@ func (w *waySearch) leanEdits(s State, pi int) []wayEdit {
 		return nil
 	}
 	var out []wayEdit
-	for _, n := range append([]float64{-1}, s.wayLevels(p, mc, -1)...) {
+	for _, n := range append([]float64{-1}, levels(mc, -1)...) {
 		ns, nops, what := removeComponents(s, pi, drop...), slices.Clone(ops), []string{"leave out " + strings.Join(names, " and ")}
 		if n > 0 {
 			mci := mi - countBelow(drop, mi)
@@ -1085,8 +1042,8 @@ func (w *waySearch) keepOneSideEdits(s State, pi, mi int) []wayEdit {
 				names = append(names, food.Quote(s.Foods[c.FoodID].Name))
 			}
 		}
-		for _, mn := range append([]float64{-1}, s.wayLevels(p, mc, -1)...) {
-			for _, kn := range append([]float64{-1}, s.wayLevels(p, kc, -1)...) {
+		for _, mn := range append([]float64{-1}, levels(mc, -1)...) {
+			for _, kn := range append([]float64{-1}, levels(kc, -1)...) {
 				if mn < 0 && kn < 0 && len(drop) == 0 {
 					continue
 				}
@@ -1750,7 +1707,7 @@ func (w *waySearch) sideSwapEdits(s State, pi int) []wayEdit {
 	mc := p.Components[mi]
 	mf := s.Foods[mc.FoodID]
 	var out []wayEdit
-	for _, mn := range append([]float64{-1}, s.wayLevels(p, mc, -1)...) {
+	for _, mn := range append([]float64{-1}, levels(mc, -1)...) {
 		for _, dropAdd := range []bool{false, true} {
 			s1 := s
 			var pre []OptionOp

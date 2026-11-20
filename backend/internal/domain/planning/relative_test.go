@@ -280,17 +280,27 @@ func TestWays_LowerDayInsideItsRangeStoresNoMark(t *testing.T) {
 	}
 }
 
-// A dish cooked fresh for one plate is never scaled below one portion per
-// eater: no ordinary cook makes half a portion.
-func TestWays_NoFractionOfAFreshDish(t *testing.T) {
-	res := ways(t, relState(false), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter})
+// N037: a dish cooked fresh for one plate may go down to half a portion (a
+// sauce, a braise, a pan dish): a light dinner asked for is reached at its cap
+// with the day still at its minimum, and the offer says the smaller portion.
+func TestWays_FreshDishMayGoToHalfAPortion(t *testing.T) {
+	res := ways(t, relState(false), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter, ToLimit: true})
+	reaching := 0
 	for _, w := range append(append([]planning.Way{}, res.Ways...), res.Offers...) {
 		for _, op := range w.Ops {
 			if op.Portions != nil {
-				assert.GreaterOrEqual(t, *op.Portions, 1.0, "%s", w.What)
+				assert.GreaterOrEqual(t, *op.Portions, 0.5, "%s", w.What)
 			}
 		}
+		if w.Reaches {
+			reaching++
+			assert.LessOrEqual(t, w.After.MealKcal, res.MaxKcal+0.5, w.What)
+			assert.GreaterOrEqual(t, w.After.DayKcal, res.FloorKcal, w.What)
+		}
 	}
+	require.Positive(t, reaching, "a way reaches the light limit")
+	require.NotEmpty(t, res.Offers)
+	assert.Contains(t, res.Offers[0].What, "0.5 portions (was 1)", "the smaller portion is told")
 }
 
 // E018 rule 2: a lighter meal is still a meal: the main keeps at least half a
