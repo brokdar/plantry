@@ -35,8 +35,31 @@ func TestRestoreResizes(t *testing.T) {
 	r1 := "Done.\n\n- **Cooking:** The salmon cooked on Mon 23 Nov is now 1.5 portions, the lentil curry cooked on Sun 22 Nov is 3.5 portions, and the tomato salad cooked on Mon 23 Nov is 2 portions."
 	assert.Equal(t, r1, restored(r1), "no duplication")
 
-	de := "Das Abendessen ist jetzt leicht. Die Currys wurden angepasst und es bleibt nichts übrig."
-	assert.Equal(t, de, restored(de), "a translated reply is left as written")
+	fr := "Le dîner est maintenant léger. Les currys ont été ajustés."
+	assert.Equal(t, fr, restored(fr), "another language is left as written")
+}
+
+// E044b: a German reply that drops the other-day resize gets it back in German.
+func TestRestoreResizesGerman(t *testing.T) {
+	one := []string{resizeItems[0]}
+	run := func(text string) string {
+		m := llm.Message{Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: text}}}
+		restoreResizes(&m, one)
+		return m.Content[0].Text
+	}
+	failing := "Das Abendessen am Mittwoch ist jetzt leicht und die Portionen sind angepasst.\n\n- Dienstag: Das Gericht wird mit 2 Portionen gekocht.\n- Mittwoch: 1713 kcal."
+	want := failing + "\n\n- So., 22. Nov.: 3,5 Portionen „Speedy lentil coconut curry“ kochen (statt 3)."
+	assert.Equal(t, want, run(failing))
+
+	for _, ok := range []string{
+		"Das ist jetzt fertig und die Sonntags-Charge wird für 3,5 Portionen gekocht.",
+		"Das ist jetzt fertig: Am 22. Nov. wird der Curry mit 3,5 Portionen gekocht.",
+		"Das ist jetzt fertig: Am 22.11. wird der Curry mit 3,5 Portionen gekocht.",
+	} {
+		assert.Equal(t, ok, run(ok))
+	}
+	wrong := "Das ist jetzt fertig und die Sonntags-Charge wird für 35 Portionen gekocht."
+	assert.NotEqual(t, wrong, run(wrong), "other portions do not count")
 }
 
 func TestResizeTold(t *testing.T) {
