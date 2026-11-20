@@ -97,6 +97,18 @@ func toolFindWays(svc Services) Tool {
 				return out
 			}
 			ways, offers = planning.DemoteUnclean(verify(res.Ways, limit)), planning.DemoteUnclean(verify(res.Offers, 2))
+			if in.Goal == planning.GoalLighter && !in.ToLimit && len(ways) > 0 && !ways[0].Reaches {
+				// The step stops short of light: the one thing offered is the
+				// compound way that makes the meal properly light, never a mid-way one.
+				offers = nil
+				if full, err := planning.Ways(st, planning.WindowTarget(st), planning.WayRequest{PlateID: in.PlateID, Date: in.Date, Goal: in.Goal, Limit: 8, ToLimit: true}); err == nil {
+					for _, o := range planning.DemoteUnclean(verify(full.Offers, 2)) {
+						if o.Reaches {
+							offers = append(offers, o)
+						}
+					}
+				}
+			}
 			recommend(ways, offers, in.ToLimit)
 			nameWays(st, ways)
 			nameWays(st, offers)

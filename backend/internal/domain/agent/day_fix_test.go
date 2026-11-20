@@ -214,3 +214,42 @@ func TestFindWays_ProperlyLightOfferStillMeetsTheLimitAndFixesTheDay(t *testing.
 	}
 	assert.Positive(t, fixed, "an offer leaves the day under its range and carries the fix")
 }
+
+// lighter-tue: a lighter step that stops short of light offers only the
+// compound way that makes the dinner properly light, and applying exactly its
+// ops gives the promised dinner and day.
+func TestFindWays_StopsShortOfLightOffersTheLightCompound(t *testing.T) {
+	e := fixEnv(t, 2600)
+	e.sql(`UPDATE plate_components SET portions = 1.5 WHERE plate_id = ?`, e.dinner3())
+	res := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lighter","plate_id":%d}`, e.dinner3()))
+	ways := relMaps(res["ways"])
+	require.NotEmpty(t, ways)
+	require.NotEqual(t, true, ways[0]["reaches_limit"], "the lighter step stops short of light")
+	require.NotNil(t, res["offer"])
+	offers := relMaps(res["offer"])
+	require.NotEmpty(t, offers, "an offer exists")
+	maxKcal := res["max_kcal"].(float64)
+	for _, o := range offers {
+		require.Equal(t, true, o["reaches_limit"], "%v", o["what"])
+		assert.LessOrEqual(t, o["after"].(map[string]any)["meal_kcal"].(float64), maxKcal+0.5)
+		got, err := e.applyWay(res, o, true)
+		require.NoError(t, err)
+		assert.Equal(t, true, got["request"].(map[string]any)["reached_light"])
+		ops := o["ops"].([]any)
+		if fix, ok := o["fix"].(map[string]any); ok {
+			ops = append(ops, fix["ops"].([]any)...)
+			assert.NotNil(t, fix["day_kcal_after"])
+		}
+		raw, err := json.Marshal(map[string]any{"ops": ops, "goal": res["goal"], "light": o["light"], "dry_run": true})
+		require.NoError(t, err)
+		both, err := e.exec("apply_changes", string(raw))
+		require.NoError(t, err)
+		k, _, _ := dayOf(t, both)
+		want := o["after"].(map[string]any)["day_kcal"].(float64)
+		if fix, ok := o["fix"].(map[string]any); ok {
+			want = fix["day_kcal_after"].(float64)
+		}
+		assert.InDelta(t, want, k, 1)
+		t.Logf("dinner %v day %v", o["after"].(map[string]any)["meal_kcal"], k)
+	}
+}
