@@ -99,11 +99,11 @@ func TestSB2_ExpectedShareFunction(t *testing.T) {
 	assert.InDelta(t, 0.351, sh[3], 0.001)
 }
 
-// SB1: bands that cannot cover the day (sum of mins > 100 or sum of maxes < 100)
-// are refused. Needs a product API for storing bands (CC22); until its name is
-// agreed this case cannot run.
+// SB1 (v1.1 signed): any number of slots is allowed; an invalid set (sum of mins
+// > 100 or sum of maxes < 100) is refused with the numbers, nothing lowered or
+// normalised silently. The real tests are in bands_cc22_test.go.
 func TestSB1_BandValidation(t *testing.T) {
-	t.Skip("untestable until the band-setting API exists (CC22): sum of mins <= 100 <= sum of maxes")
+	t.Skip("runs with -tags spectest,cc22 once the band API exists (CC22); contract in bands_cc22_test.go: refusal names the numbers, nothing is lowered or normalised, any slot count is accepted when valid")
 }
 
 // SB2/RL4: the filling minimum is 125 % of the slot's expected kcal.
@@ -300,6 +300,6 @@ func TestSB1_PresetsShareCapAndAwayProration(t *testing.T) {
 		})
 	}
 	t.Run("product", func(t *testing.T) {
-		t.Skip("untestable until the band-setting API exists (CC22): set the preset, then compare find_ways max_kcal, floor_kcal and away_kcal with these numbers")
+		t.Skip("runs with -tags spectest,cc22 once the band API exists (CC22): TestSB1cc22_PresetDrivesLightCapAndAwayProration")
 	})
 }

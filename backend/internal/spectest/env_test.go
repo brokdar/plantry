@@ -11,11 +11,15 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
+
+	appdb "github.com/jaltszeimer/plantry/backend/db"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
@@ -57,6 +61,7 @@ type env struct {
 	prof    *profile.Service
 	set     agent.SettingsReader
 	undo    *agent.Changes
+	slots   *slot.Service
 	final   string // the scripted final reply of the next turns (default "Done.")
 	text    string // the assistant text of the last turn
 	conv    *int64 // the conversation of the turns so far (undo is per conversation)
@@ -72,6 +77,8 @@ func newEnv(t *testing.T, dbName string, start time.Time) *env {
 	require.NoError(t, err)
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
+	// the start databases are dumps at an older schema: bring them to the current one
+	migrate(t, db)
 	e := &env{t: t, db: db, win: window.Window{Start: start, End: start.AddDate(0, 0, 6)}}
 	set := testsvc.Settings(db)
 	e.deps = testsvc.PlanningDeps(db)
@@ -93,6 +100,7 @@ func newEnv(t *testing.T, dbName string, start time.Time) *env {
 	})
 	require.NoError(t, err)
 	e.ctx = context.Background()
+	e.slots = slot.NewService(sqlite.NewSlotRepo(db))
 	e.prof = profile.NewService(sqlite.NewProfileRepo(db))
 	e.set = set
 	e.undo = changes
@@ -235,4 +243,16 @@ func (e *env) reply() string {
 		return "Done."
 	}
 	return e.final
+}
+
+var gooseMu sync.Mutex // goose keeps package-level state
+
+func migrate(t *testing.T, db *sql.DB) {
+	t.Helper()
+	gooseMu.Lock()
+	defer gooseMu.Unlock()
+	goose.SetLogger(goose.NopLogger())
+	goose.SetBaseFS(appdb.Migrations)
+	require.NoError(t, goose.SetDialect("sqlite3"))
+	require.NoError(t, goose.Up(db, "migrations"))
 }
