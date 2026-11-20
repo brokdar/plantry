@@ -22,7 +22,7 @@ func fixCookLimit(in ChooseInput, prop Proposal) (Proposal, []string) {
 	for range maxGuardSteps {
 		merged := Merge(in.State, in.Target, prop)
 		x := newIndex(merged, in.Target)
-		ev := Evaluate(merged, in.Target)
+		ev := evaluateLean(merged, in.Target)
 		hard := hardKeys(ev.Issues)
 		moved := false
 	days:
@@ -45,7 +45,7 @@ func fixCookLimit(in ChooseInput, prop Proposal) (Proposal, []string) {
 					next := cloneProposal(prop)
 					next.Plates[pi].Components = slices.Delete(next.Plates[pi].Components, ci, ci+1)
 					nm := Merge(in.State, in.Target, next)
-					if len(newIndex(nm, in.Target).occasions[dayOf(d)]) >= occ || newHard(hard, Evaluate(nm, in.Target)) != "" {
+					if len(newIndex(nm, in.Target).occasions[dayOf(d)]) >= occ || newHard(hard, evaluateLean(nm, in.Target)) != "" {
 						continue
 					}
 					prop, moved = next, true

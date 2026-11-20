@@ -57,7 +57,7 @@ type bandMove struct {
 
 func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 	merged := Merge(h.s, h.in.Target, h.prop)
-	ev := Evaluate(merged, h.in.Target)
+	ev := evaluateLean(merged, h.in.Target)
 	plateKcal := map[int64]float64{}
 	for _, pe := range ev.Plates {
 		plateKcal[pe.PlateID] = pe.Kcal
@@ -178,7 +178,7 @@ func (h *planner) applyMoves(meals []bandMeal, moves []bandMove) bool {
 	plates := slices.Clone(h.prop.Plates)
 	sessions := slices.Clone(h.prop.Sessions)
 	was := len(openHard(Merge(h.s, h.in.Target, h.prop), h.in.Target))
-	wasSoft := softKeys(Evaluate(Merge(h.s, h.in.Target, h.prop), h.in.Target).Issues)
+	wasSoft := softKeys(evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target).Issues)
 	for i, m := range meals {
 		mv := moves[i]
 		if mv.ci < 0 {
@@ -202,7 +202,7 @@ func (h *planner) applyMoves(meals []bandMeal, moves []bandMove) bool {
 	}
 	// No move may open a soft rule the plan had closed (the week's protein, say).
 	opened := false
-	for k := range softKeys(Evaluate(Merge(h.s, h.in.Target, h.prop), h.in.Target).Issues) {
+	for k := range softKeys(evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target).Issues) {
 		if !wasSoft[k] {
 			opened = true
 		}

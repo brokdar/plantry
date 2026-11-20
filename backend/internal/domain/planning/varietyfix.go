@@ -27,7 +27,7 @@ func fixVariety(in ChooseInput, prop Proposal) (Proposal, []string) {
 	var notes []string
 	for range maxGuardSteps {
 		merged := Merge(in.State, in.Target, prop)
-		ev := Evaluate(merged, in.Target)
+		ev := evaluateLean(merged, in.Target)
 		var bad *Issue
 		for i, is := range ev.Issues {
 			if is.Code == CodeVarietyRepeat && is.Severity == SeverityViolation {
@@ -144,7 +144,7 @@ func variantFor(in ChooseInput, merged State, prop Proposal, is Issue, skip map[
 		if !changed {
 			return prop, "", false
 		}
-		after := Evaluate(Merge(in.State, in.Target, next), in.Target)
+		after := evaluateLean(Merge(in.State, in.Target, next), in.Target)
 		if newHard(hard, after) != "" || h8Count(after) >= repeats || cookDays(after) > cookDays(before) {
 			continue
 		}

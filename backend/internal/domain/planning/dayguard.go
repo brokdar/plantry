@@ -111,7 +111,7 @@ func (x *index) sameMainPair(d time.Time) (late, early int, shared int64, ok boo
 func (x *index) distinctMain(base State, t Target, in Proposal, merged State, pi int, other int64, skip map[int64]bool) (Proposal, string, bool) {
 	p := merged.Plates[pi]
 	label := fmt.Sprintf("%s: lunch and dinner both hold %s", p.Date.Weekday(), food.Quote(foodName(merged, other)))
-	ev := Evaluate(merged, t)
+	ev := evaluateLean(merged, t)
 	hard, soft := hardKeys(ev.Issues), softKeys(ev.Issues)
 	skipped := map[int64]bool{other: true}
 	for id := range skip {
@@ -139,7 +139,7 @@ func (x *index) distinctMain(base State, t Target, in Proposal, merged State, pi
 			continue
 		}
 		nm := Merge(base, t, next)
-		after := Evaluate(nm, t)
+		after := evaluateLean(nm, t)
 
 		if !guardKeepsDay(ev, after, hard, soft) {
 			continue
@@ -263,11 +263,11 @@ func (x *index) coldFirstMeal(base State, t Target, in Proposal, merged State, e
 		}
 	}
 	out.Sessions = slices.DeleteFunc(out.Sessions, func(ss ProposedSession) bool { return ss.Portions <= epsilon })
-	ev := Evaluate(merged, t)
+	ev := evaluateLean(merged, t)
 	hard, soft := hardKeys(ev.Issues), softKeys(ev.Issues)
 
 	nm := Merge(base, t, out)
-	after := Evaluate(nm, t)
+	after := evaluateLean(nm, t)
 
 	for _, is := range after.Issues {
 		switch is.Severity {
@@ -289,7 +289,7 @@ func (x *index) coldFirstMeal(base State, t Target, in Proposal, merged State, e
 		bin.Exclude = append(bin.Exclude, id)
 	}
 	bal, _ := balancePlan(bin, out)
-	if k := newHard(hard, Evaluate(Merge(base, t, bal), t)); k != "" {
+	if k := newHard(hard, evaluateLean(Merge(base, t, bal), t)); k != "" {
 		if strings.Contains(k, CodeKcalBelowFloor) {
 			return in, "", false, "A cold plate at lunch would leave the day under its minimum, so the dish stays."
 		}

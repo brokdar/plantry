@@ -84,6 +84,9 @@ type index struct {
 	merged bool
 	// weekOpts asks the S7 week issues for their swap options (EvaluateWeek).
 	weekOpts bool
+	// noOptions skips the verified options of the energy and protein issues
+	// (the planner's own re-checks read only which issues are open).
+	noOptions bool
 	// occasions holds each day's cooking occasions (H2): the distinct cook
 	// cells of sessions and of fresh components without a session, routine
 	// cells excluded.

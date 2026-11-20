@@ -27,7 +27,7 @@ func balancePlan(in ChooseInput, prop Proposal) (Proposal, []string) {
 	if k := in.State.Profile.KcalTarget; k == nil || *k <= 0 || len(prop.Plates) == 0 {
 		return prop, nil
 	}
-	before := Evaluate(Merge(in.State, in.Target, prop), in.Target)
+	before := evaluateLean(Merge(in.State, in.Target, prop), in.Target)
 	hard := hardKeys(before.Issues)
 	var best *planner
 	var bestEv Evaluation
@@ -47,14 +47,14 @@ func balancePlan(in ChooseInput, prop Proposal) (Proposal, []string) {
 		// One pass leaves what its caps and order hid (a day lifted early can
 		// free room for another); repeat while the week still gains.
 		for range maxBalanceRounds {
-			pct := weekPct(Evaluate(Merge(in.State, in.Target, h.prop), in.Target))
+			pct := weekPct(evaluateLean(Merge(in.State, in.Target, h.prop), in.Target))
 			h.topUpFloors()
-			if weekPct(Evaluate(Merge(in.State, in.Target, h.prop), in.Target))-pct < 0.1 {
+			if weekPct(evaluateLean(Merge(in.State, in.Target, h.prop), in.Target))-pct < 0.1 {
 				break
 			}
 		}
 		h.growShort()
-		after := Evaluate(Merge(in.State, in.Target, h.prop), in.Target)
+		after := evaluateLean(Merge(in.State, in.Target, h.prop), in.Target)
 		if k := newHard(hard, after); k != "" {
 			dropped = "Balancing was dropped: it would have added a hard-rule issue (" + k + ")."
 			continue
@@ -220,7 +220,7 @@ func (h *planner) meatFull() bool {
 	if !meatAllowed(h.s) {
 		return false
 	}
-	ev := Evaluate(Merge(h.s, h.in.Target, h.prop), h.in.Target)
+	ev := evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target)
 	w := ev.Week
 	return w != nil && w.Days >= minDGEDays && w.MeatG >= DGEMeatMaxG*float64(w.Days)/weekDays-1
 }
@@ -243,7 +243,7 @@ func (h *planner) addSide(date time.Time, limit float64) {
 		return
 	}
 	need := limit - dk.Kcal
-	base := Evaluate(merged, h.in.Target)
+	base := evaluateLean(merged, h.in.Target)
 	hard, soft := hardKeys(base.Issues), softKeys(base.Issues)
 	cooked := map[int64]bool{}
 	for _, ev := range y.cooks {
@@ -333,7 +333,7 @@ func (h *planner) growShort() {
 // The denser food grows first; a step that adds a hard or add-on issue, or
 // takes the day past its band top, is dropped. Balancing a model's plan only.
 func (h *planner) growAddOns(date time.Time, limit float64) {
-	base := Evaluate(Merge(h.s, h.in.Target, h.prop), h.in.Target)
+	base := evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target)
 	hard := hardKeys(base.Issues)
 	for range maxDayAddOns * 2 {
 		y, days := h.dayAccounts()
@@ -388,7 +388,7 @@ func (h *planner) growAddOns(date time.Time, limit float64) {
 			if after == nil || after.Kcal <= dk.Kcal || after.Kcal > dk.Adjusted*y.pol.DayHigh {
 				continue
 			}
-			if newHard(hard, Evaluate(merged, h.in.Target)) != "" {
+			if newHard(hard, evaluateLean(merged, h.in.Target)) != "" {
 				continue
 			}
 			if base := y.baseAddOnKeys(); slices.ContainsFunc(slices.Collect(maps.Keys(ny.addOnKeys())), func(k string) bool { return !base[k] }) {

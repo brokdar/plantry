@@ -343,6 +343,9 @@ func (x *index) options(ev Evaluation, t Target, d DayEval, day time.Time, prote
 // optionsFor is options with the bound an option must reach to count as
 // "reachable" (the band's low end for S2/S3, the floor for H9).
 func (x *index) optionsFor(ev Evaluation, t Target, d DayEval, day time.Time, protein bool, target, reach float64) []Option {
+	if x.noOptions {
+		return nil
+	}
 	return recommendFirst(x.optionsRaw(ev, t, d, day, protein, target, reach))
 }
 
@@ -572,12 +575,12 @@ func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, tar
 		p.Components[c.comp] = comp
 	}
 	s.Plates[c.plate] = p
-	for k := range hardKeys(Check(s, t)) {
+	y := newIndex(s, t) // one index for the hard check and the figures below
+	for k := range hardKeys(check(y)) {
 		if !base[k] {
 			return Option{}, false
 		}
 	}
-	y := newIndex(s, t)
 	for k := range y.addOnKeys() {
 		if !x.baseAddOnKeys()[k] {
 			return Option{}, false

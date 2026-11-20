@@ -19,7 +19,7 @@ func proteinNote(s State, t Target) string {
 		return ""
 	}
 	var parts []string
-	for _, is := range Evaluate(s, t).Issues {
+	for _, is := range evaluateLean(s, t).Issues {
 		if is.Code != CodeProteinLow || is.Date == "" {
 			continue
 		}
@@ -234,7 +234,7 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 	if dk == nil || !dk.Complete || dk.Away || dk.NutritionMissing || dk.Kcal <= 0 {
 		return false
 	}
-	ev := Evaluate(merged, h.in.Target)
+	ev := evaluateLean(merged, h.in.Target)
 	var d DayEval
 	for _, e := range ev.Days {
 		if e.Date == date.Format(time.DateOnly) {

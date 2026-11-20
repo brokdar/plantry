@@ -148,12 +148,20 @@ func (x *index) computeAccounts(days []time.Time) []DayKcal {
 	var out []DayKcal
 	// Cells and plates by day, grouped once: the account is asked for in
 	// loops (every way the search tries), so the per-day scans stay short.
+	wanted := make(map[int]bool, len(days))
+	for _, d := range days {
+		wanted[dayOf(d)] = true
+	}
 	cellsBy, platesBy := map[int][]Cell{}, map[int][]Plate{}
 	for _, c := range s.Cells {
-		cellsBy[dayOf(c.Date)] = append(cellsBy[dayOf(c.Date)], c)
+		if dd := dayOf(c.Date); wanted[dd] {
+			cellsBy[dd] = append(cellsBy[dd], c)
+		}
 	}
 	for _, p := range s.Plates {
-		platesBy[dayOf(p.Date)] = append(platesBy[dayOf(p.Date)], p)
+		if dd := dayOf(p.Date); wanted[dd] {
+			platesBy[dd] = append(platesBy[dd], p)
+		}
 	}
 	for _, d := range days {
 		dk := DayKcal{Date: d, Target: k, Complete: true}

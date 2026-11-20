@@ -199,14 +199,23 @@ type ComponentEval struct {
 // foods' macros; pass the state after Merge to evaluate a proposal.
 func Evaluate(s State, t Target) Evaluation { return evaluate(s, t, false) }
 
+// evaluateLean is Evaluate without the options of the energy and protein
+// issues: for the planner's own re-checks, which read the open issues and the
+// figures, never the options (each option costs a re-evaluation).
+func evaluateLean(s State, t Target) Evaluation { return evaluateWith(s, t, false, true) }
+
 // EvaluateWeek is Evaluate with verified swap options on the week's meat and
 // fish issues (S7); the planner's evaluate_plan, its repair feedback and its
 // guard read it. It costs a re-evaluation per candidate swap.
 func EvaluateWeek(s State, t Target) Evaluation { return evaluate(s, t, true) }
 
 func evaluate(s State, t Target, weekOpts bool) Evaluation {
+	return evaluateWith(s, t, weekOpts, false)
+}
+
+func evaluateWith(s State, t Target, weekOpts, noOptions bool) Evaluation {
 	x := newIndex(s, t)
-	x.weekOpts = weekOpts
+	x.weekOpts, x.noOptions = weekOpts, noOptions
 	ev := Evaluation{
 		Days: []DayEval{}, Plates: []PlateEval{}, MeatDaysMax: s.Profile.MeatDaysPerWeekMax,
 		Issues: check(x), Light: s.Light,
