@@ -110,6 +110,22 @@ type WayFigures struct {
 	DayProteinG  float64 `json:"day_protein_g"`
 }
 
+// WayFix is the one small addition of normal food that closes the day a way
+// leaves under its range.
+type WayFix struct {
+	// What says it in words once named ("add 120 g of Ciabatta to Tue 24 Nov lunch").
+	What     string  `json:"what"`
+	Action   string  `json:"action"`
+	Name     string  `json:"name"`
+	Date     string  `json:"date"`
+	SlotID   int64   `json:"slot_id,omitempty"`
+	Grams    float64 `json:"grams,omitempty"`
+	Portions float64 `json:"portions,omitempty"`
+	// DayKcal is the day's kcal (per eater) with the way and the fix applied.
+	DayKcal float64    `json:"day_kcal_after"`
+	Ops     []OptionOp `json:"ops"`
+}
+
 // Way is one verified way to reach the goal: ready ops for apply_changes.
 type Way struct {
 	// Kind is portion, remove, add, swap or compound (the target meal and
@@ -132,6 +148,10 @@ type Way struct {
 	// BelowBand marks an offer whose day still ends under its band (Why says
 	// by how much): the closest the other meal can get it.
 	BelowBand bool `json:"below_band,omitempty"`
+	// Fix is the one small addition from normal food that brings a day the way
+	// leaves under its range into it (nil when the day is in range or none
+	// exists). Applied after the way's Ops it gives exactly DayKcal.
+	Fix *WayFix `json:"fix,omitempty"`
 	// Light is the mark to pass to apply_changes with Ops: set only when the
 	// meal meets its cap (minimum) after the way.
 	Light  []LightIntent `json:"light,omitempty"`

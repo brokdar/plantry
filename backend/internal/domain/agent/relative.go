@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -29,7 +30,7 @@ const findWaysSchema = `{
   "additionalProperties":false
 }`
 
-const findWaysDescription = `Find verified ways to meet a relative request ("make dinner lighter", "heartier", "more protein") in one call. Set to_limit true when the user asked for a LIGHT (filling) meal itself ("a light dinner", "properly light", "leicht"), not just a lighter one: then only a way at the light limit meets the request, offer[0] is one when no way is, and next says what to do. goal: lighter, heartier (one lunch or dinner plate), more_protein (a plate, or the day with date; at least 10 g more), lower_day or raise_day (the day with date: an explicit "eat less (more) on Monday"; the day is marked light (hearty) and the ways bring it into the adjusted range). The food must change in the asked direction by a meaningful amount (at least 10% of the meal or 80 kcal, the smaller): a meal that already meets its cap or minimum still has to change. ways change ONLY the named meal (a smaller or larger portion, leaving out or adding a side or add-on, a lighter or heartier main), the day stays above its floor (heartier: in its band); the first one goes as far as that allows, so reaches_cap false means lighter (heartier) but not yet a light (hearty) meal, why says by how much. offer holds at most two compound ways that also change another meal of the day (a bigger portion of its main and a matching side or bread, or a smaller one) so the named meal reaches its cap or minimum, and may end that meal's light mark: never apply an offer unasked, present it as a choice. Every way was applied to a copy and checked like apply_changes before it is listed. RECOMMENDATION: exactly one way or offer is marked recommended with recommended_because: present it as your recommendation in one phrase. Nothing here adds a food the user removed, a cheese, or a protein that does not fit the dish. RULE: a request that names a meal or a day and a direction is carried out in the same turn with the first way (the result says what to do in next), and the offer, if any, is mentioned as a choice; a request that names neither ("make the plan healthier") gets one question first. Saves nothing.
+const findWaysDescription = `Find verified ways to meet a relative request ("make dinner lighter", "heartier", "more protein") in one call. Set to_limit true when the user asked for a LIGHT (filling) meal itself ("a light dinner", "properly light", "leicht"), not just a lighter one: then only a way at the light limit meets the request, offer[0] is one when no way is, and next says what to do. goal: lighter, heartier (one lunch or dinner plate), more_protein (a plate, or the day with date; at least 10 g more), lower_day or raise_day (the day with date: an explicit "eat less (more) on Monday"; the day is marked light (hearty) and the ways bring it into the adjusted range). The food must change in the asked direction by a meaningful amount (at least 10% of the meal or 80 kcal, the smaller): a meal that already meets its cap or minimum still has to change. ways change ONLY the named meal (a smaller or larger portion, leaving out or adding a side or add-on, a lighter or heartier main), the day stays above its floor (heartier: in its band); the first one goes as far as that allows, so reaches_cap false means lighter (heartier) but not yet a light (hearty) meal, why says by how much. offer holds at most two compound ways that also change another meal of the day (a bigger portion of its main and a matching side or bread, or a smaller one) so the named meal reaches its cap or minimum, and may end that meal's light mark: never apply an offer unasked, present it as a choice. Every way was applied to a copy and checked like apply_changes before it is listed. RECOMMENDATION: exactly one way or offer is marked recommended with recommended_because: present it as your recommendation in one phrase. Nothing here adds a food the user removed, a cheese, or a protein that does not fit the dish. RULE: a request that names a meal or a day and a direction is carried out in the same turn with the first way (the result says what to do in next), and the offer, if any, is mentioned as a choice; a request that names neither ("make the plan healthier") gets one question first. A way or offer whose day still ends under its range has fix {what, ops, day_kcal_after}: one small addition of normal food (never cheese or nuts) that puts the day inside its range, checked on a copy of the plan with the way's ops plus the fix's; say the shortfall plainly and offer the fix as your one recommendation, apply its ops only when the user says yes. Saves nothing.
 Every way and offer also has meal_vs_limit and day_vs_range (ready phrases: use them, never subtract). Returns JSON {next (what to do now), impossible? (the number the user named cannot be met: ways is empty, offer[0] is the nearest safe option), goal:{kind, plate_id?, date?} (pass it as it is to apply_changes), max_kcal? (the most a light meal holds), min_kcal? (the least a filling meal holds), before:{meal_kcal, meal_protein_g, day_kcal, day_protein_g} (per eater), floor_kcal, band_low, band_high (the day), ways:[{kind portion|remove|add|swap, what (the change in words), reaches_cap (more_protein: always true; lower_day and raise_day: the day is in the adjusted range), why?, ops (apply_changes ops), light? (marks to pass with the ops), before and after:{meal_kcal, meal_protein_g, day_kcal, day_protein_g}, new_issues?}], offer?:[the same with changes_other_meal true, kind compound and moved (what changes on the other meal)], empty_reason? (no way changes only this meal, with the numbers)}. To take a way or an offer, call apply_changes with its ops, its light and the goal exactly as returned; the result's request says whether it is satisfied.`
 
 func toolFindWays(svc Services) Tool {
@@ -129,6 +130,11 @@ func toolFindWays(svc Services) Tool {
 // guess which meal a figure belongs to.
 func nameWays(st planning.State, ways []planning.Way) {
 	for i := range ways {
+		if f := ways[i].Fix; f != nil {
+			f.What = fixWords(st, f)
+			// A fix closes the gap: the way's note no longer says "the closest".
+			ways[i].Why = strings.TrimSuffix(strings.Replace(ways[i].Why, ": the closest the other meal can get it", "", 1), "; ")
+		}
 		p := slices.IndexFunc(st.Plates, func(q planning.Plate) bool { return q.ID == ways[i].PlateID })
 		if p < 0 {
 			continue
@@ -145,6 +151,36 @@ func nameWays(st planning.State, ways []planning.Way) {
 		}
 		ways[i].Moved = moved
 	}
+}
+
+// fixWords says a day's fix in kitchen words: "add 120 g of Ciabatta to Tue 24
+// Nov lunch" or "raise Curry on Tue 24 Nov lunch to 1.5 portions".
+func fixWords(st planning.State, f *planning.WayFix) string {
+	where := dayLabelStr(f.Date)
+	if n := strings.TrimPrefix(st.SlotNames[f.SlotID], "slot."); n != "" {
+		where += " " + n
+	}
+	amount := ""
+	switch {
+	case f.Grams > 0:
+		amount = fmt.Sprintf("%.0f g", math.Round(f.Grams))
+	case f.Portions > 0:
+		amount = fmtNum(f.Portions) + " portions"
+	}
+	if f.Action == "raise" {
+		return fmt.Sprintf("raise %s on %s to %s", f.Name, where, amount)
+	}
+	return fmt.Sprintf("add %s of %s to %s", amount, f.Name, where)
+}
+
+// fixNote is the sentence that tells what to do about a day the applied way
+// leaves under its range: say it plainly and offer the one verified fix, never
+// apply it unasked; "" when the day is in range or no fix exists.
+func fixNote(w planning.Way) string {
+	if w.Fix == nil {
+		return ""
+	}
+	return fmt.Sprintf(". The day still ends under its range: say so plainly, and offer ONE small fix from normal food as your recommendation: %s (the day would then hold %.0f kcal, inside its range); apply the fix's ops (fix.ops) only when the user says yes", w.Fix.What, w.Fix.DayKcal)
 }
 
 func nonNil(w []planning.Way) []planning.Way {
@@ -167,7 +203,7 @@ func checkWay(ctx context.Context, svc Services, w window.Window, goal applyGoal
 	if err != nil {
 		return way, err.Error()
 	}
-	run, err := runApply(withLight(ctx, light), svc, w, applyInput{Ops: ops, DryRun: true, Light: light, Goal: &goal, quiet: true}, nil)
+	run, err := runApply(context.WithValue(withLight(ctx, light), fixDateKey{}, date), svc, w, applyInput{Ops: ops, DryRun: true, Light: light, Goal: &goal, quiet: true}, nil)
 	if err != nil {
 		return way, way.What + ": " + err.Error()
 	}
@@ -248,7 +284,92 @@ func checkWay(ctx context.Context, svc Services, w window.Window, goal applyGoal
 			way.Why = fmt.Sprint(req["why"])
 		}
 	}
+	way.Fix = findFix(ctx, svc, w, goal, light, date, way, run)
 	return way, ""
+}
+
+// findFix is the one small fix for a day the way leaves under its range: the
+// first option of the day's energy issue (checked in the way's own dry run)
+// that adds or enlarges a normal food on another meal, is no cheese or nut and
+// puts the day inside its range, confirmed by a dry run of the way's ops plus
+// the fix's. nil when the day is in range or no option holds.
+func findFix(ctx context.Context, svc Services, w window.Window, goal applyGoal, light []planning.LightIntent, date string, way planning.Way, run applyRun) *planning.WayFix {
+	var day *planning.DayEval
+	for i := range run.after.Days {
+		if run.after.Days[i].Date == date {
+			day = &run.after.Days[i]
+		}
+	}
+	if day == nil || day.BandLow == 0 || day.Kcal >= day.BandLow-0.5 {
+		return nil
+	}
+	for _, is := range run.after.Issues {
+		if is.Date != date || is.Code != planning.CodeKcalBelowBand {
+			continue
+		}
+		for _, o := range is.Options {
+			if !isDayFix(o, day.BandLow, day.BandHigh) || (o.PlateID != nil && *o.PlateID == way.PlateID) {
+				continue
+			}
+			fixOps := o.Ops
+			if len(fixOps) == 0 {
+				fixOps = []planning.OptionOp{o.Op}
+			}
+			ops, err := changeOpsOf(append(slices.Clone(way.Ops), fixOps...))
+			if err != nil {
+				continue
+			}
+			both, err := runApply(withLight(ctx, light), svc, w, applyInput{Ops: ops, DryRun: true, Light: light, Goal: &goal, quiet: true}, nil)
+			if err != nil {
+				continue
+			}
+			was := issueMap(both.before.Issues)
+			clean := true
+			for _, x := range both.after.Issues {
+				if _, old := was[issueKey(x)]; !old && x.Severity == planning.SeverityViolation {
+					clean = false
+				}
+			}
+			for _, d := range both.after.Days {
+				if clean && d.Date == date && d.Kcal >= d.BandLow-0.5 && d.Kcal <= d.BandHigh+0.5 {
+					fix := &planning.WayFix{Action: o.Action, Name: o.Name, Date: o.Date, SlotID: o.SlotID, DayKcal: math.Round(d.Kcal), Ops: fixOps}
+					if o.Grams != nil {
+						fix.Grams = *o.Grams
+					}
+					if o.Portions != nil {
+						fix.Portions = *o.Portions
+					}
+					return fix
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// isDayFix reports whether an option is a small fix from normal food for a day
+// under its range: an add or raise, no cheese or nut, that lands the day inside
+// the range.
+func isDayFix(o planning.Option, low, high float64) bool {
+	return (o.Action == "add" || o.Action == "raise") && !planning.IsCheeseOrNut(o.Name) && o.DayKcal >= low-0.5 && o.DayKcal <= high+0.5
+}
+
+// fixOption is the first option of a below-range day energy issue that is a
+// day fix (nil for any other issue).
+func fixOption(is planning.Issue) *planning.Option {
+	if is.Code != planning.CodeKcalBelowBand {
+		return nil
+	}
+	low, high := num(is.Params["band_low_kcal"]), num(is.Params["band_high_kcal"])
+	if low == 0 || high == 0 {
+		return nil
+	}
+	for _, o := range is.Options {
+		if isDayFix(o, low, high) {
+			return &o
+		}
+	}
+	return nil
 }
 
 // checkMarks refuses a light or hearty mark on a meal that does not meet its
@@ -386,6 +507,14 @@ func indexPlate(st planning.State, id int64) int {
 // reads it at the moment of choice.
 func nextStep(ways, offers []planning.Way, res planning.WayResult, toLimit bool) string {
 	text := nextStepText(ways, offers, res, toLimit)
+	switch {
+	case toLimit && len(offers) > 0 && offers[0].Reaches && (len(ways) == 0 || !ways[0].Reaches):
+		text += fixNote(offers[0])
+	case len(ways) > 0:
+		text += fixNote(ways[0])
+	case len(offers) > 0:
+		text += fixNote(offers[0])
+	}
 	if len(ways) > 1 && strings.HasPrefix(text, "apply ways[0]") {
 		text += ". The ways are alternatives, each from the same starting plan: apply one, never add their effects together"
 	}
@@ -408,7 +537,13 @@ func nextStepText(ways, offers []planning.Way, res planning.WayResult, toLimit b
 		}
 		text := fmt.Sprintf("apply ways[0] now and do not ask first: it takes the meal from %.0f to %.0f kcal, a real step and as far as the day allows (%s). Tell the user plainly how far it got and why it stops there", ways[0].Before.MealKcal, ways[0].After.MealKcal, limit)
 		if len(offers) > 0 {
-			text += fmt.Sprintf(". If the user asked for another meal to make up the difference (a bigger lunch) or has said yes to that, apply offer[0] instead of ways[0]: it takes the meal to %.0f kcal; otherwise offer it as the way further", offers[0].After.MealKcal)
+			rec := offers[0]
+			for _, o := range offers {
+				if o.Recommended {
+					rec = o
+				}
+			}
+			text += fmt.Sprintf(". If the user asked for another meal to make up the difference (a bigger lunch) or has said yes to that, apply offer[0] instead of ways[0]: it takes the meal to %.0f kcal; otherwise END YOUR REPLY with the recommended offer as the way further, in one sentence (I can also %s; the day would then hold %.0f kcal): never leave it out, and apply it only when the user says yes", offers[0].After.MealKcal, rec.What, rec.After.DayKcal)
 		}
 		return text
 	case len(ways) > 0 && len(offers) > 0:

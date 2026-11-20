@@ -391,6 +391,10 @@ const maxSettleRounds = 3
 // of the day's cooks into one cell) and reports each move as an applied
 // entry with auto_fix, so the model tells the user. An issue without a
 // verified option stays, marked no_fix_found.
+// fixDateKey asks the write check for the options of that date's below-range
+// day energy issue even when it is not new (find_ways' fix).
+type fixDateKey struct{}
+
 // cookPileKey marks the context of the away guard's re-anchoring.
 type cookPileKey struct{}
 
@@ -908,6 +912,11 @@ func evalWindow(ctx context.Context, svc Services, w window.Window, withOptions 
 	ev := chatView(st)
 	if withOptions {
 		ev.Issues = planning.IssueOptions(st, planning.WindowTarget(st), ev, ev.Issues, keep)
+		for _, is := range ev.Issues {
+			for j := range is.Options {
+				is.Options[j].Slot = strings.TrimPrefix(st.SlotNames[is.Options[j].SlotID], "slot.")
+			}
+		}
 	}
 	return ev, nil
 }
@@ -916,10 +925,17 @@ func evalWindow(ctx context.Context, svc Services, w window.Window, withOptions 
 // sessions, the evaluation's days for the touched dates and the issues the
 // ops made new or resolved against before.
 func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, before planning.Evaluation) (map[string]any, planning.Evaluation, error) {
+	bAff := b.aff
 	// Options only for the issues this call made new or worse.
 	was := issueMap(before.Issues)
 	changed := func(is planning.Issue) bool {
 		b, ok := was[issueKey(is)]
+		if d, _ := ctx.Value(fixDateKey{}).(string); d != "" && is.Date == d && is.Code == planning.CodeKcalBelowBand {
+			return true // find_ways looks for the one fix of this day, new or not
+		}
+		if is.Code == planning.CodeKcalBelowBand && slices.Contains(bAff.Dates, is.Date) {
+			return true // a touched day left under its range gets its one fix, new or not
+		}
 		return !ok || worsened(b, is)
 	}
 	now, err := evalWindows(ctx, svc, ws, true, changed)
@@ -977,6 +993,24 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 		if _, ok := delta[k]; ok {
 			delta[k] = planning.Compact(delta[k])
 		}
+	}
+	// A touched day that ends under its range, new issue or not, carries the one
+	// fix that brings it inside (the reply offers it).
+	var fixes []effectIssue
+	for _, is := range now.Issues {
+		if o := fixOption(is); o != nil && dates[is.Date] {
+			e := toEffectIssue(is)
+			e.Options = []planning.Option{*o}
+			for _, b := range before.Issues {
+				if b.Code == planning.CodeKcalBelowBand && b.Date == is.Date {
+					e.WasUnderRange = true
+				}
+			}
+			fixes = append(fixes, e)
+		}
+	}
+	if len(fixes) > 0 {
+		delta["day_fix"] = planning.Compact(fixes)
 	}
 	out["issues"] = delta
 	if plates, ok := out["plates"].([]effectPlate); ok {

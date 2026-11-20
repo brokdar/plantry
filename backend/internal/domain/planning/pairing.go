@@ -296,3 +296,17 @@ func (s State) SameKind(p Plate, f FoodFacts) (existing Component, kind string, 
 	}
 	return Component{}, "", false
 }
+
+// IsCheeseOrNut reports whether a food name is a cheese or a nut (not coconut):
+// never a calorie filler the household accepts.
+func IsCheeseOrNut(name string) bool {
+	n := diet.Fold(name)
+	if strings.Contains(n, "coconut") || strings.Contains(n, "kokos") {
+		return false
+	}
+	has := func(words []string) bool {
+		return slices.ContainsFunc(words, func(w string) bool { return strings.Contains(n, w) })
+	}
+	// Fold writes ä as ae and ü as ue: Käse, Nüsse.
+	return has(cheeseWords) || has(nutWords) || has([]string{"kaese", "nuess"})
+}

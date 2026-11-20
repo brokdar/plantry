@@ -62,6 +62,8 @@ type effectIssue struct {
 	Options     []planning.Option `json:"options,omitempty"`
 	NoFixFound  bool              `json:"no_fix_found,omitempty"`
 	NoFixReason string            `json:"no_fix_reason,omitempty"`
+	// WasUnderRange marks a day that was under its range before the write too.
+	WasUnderRange bool `json:"was_under_range,omitempty"`
 }
 
 // effectWorsened is an issue open before and after a write whose numbers got

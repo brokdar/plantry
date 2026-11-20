@@ -20,6 +20,8 @@ type Option struct {
 	Name   string `json:"name"`
 	Date   string `json:"date"`
 	SlotID int64  `json:"slot_id"`
+	// Slot names the meal ("lunch"); the chat tools fill it from the plan's slots.
+	Slot string `json:"slot,omitempty"`
 	// PlateID is nil for a proposed plate (address it by date and slot).
 	PlateID *int64 `json:"plate_id"`
 	// Portions or Grams: the amount to add, or the new amount of a raise

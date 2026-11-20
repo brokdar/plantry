@@ -194,14 +194,37 @@ func offerSentence(obj map[string]any) string {
 	}
 	after, _ := obj["after"].(map[string]any)
 	issues, _ := after["issues"].(map[string]any)
-	news, _ := issues["new"].([]any)
-	for _, n := range news {
-		is, _ := n.(map[string]any)
-		opts, _ := is["options"].([]any)
+	// The fix of a day under its range comes first; else the first option of an
+	// issue the change made new.
+	var picks []map[string]any
+	first := func(is any) map[string]any {
+		m, _ := is.(map[string]any)
+		opts, _ := m["options"].([]any)
 		if len(opts) == 0 {
-			continue
+			return nil
 		}
 		o, _ := opts[0].(map[string]any)
+		return o
+	}
+	fixes, _ := issues["day_fix"].([]any)
+	for _, is := range fixes {
+		m, _ := is.(map[string]any)
+		if o := first(is); o != nil {
+			if s := dayFixSentence(o, m); s != "" {
+				if m["was_under_range"] == true {
+					s = dayLabelStr(fmt.Sprint(m["date"])) + " was already under its range before this change. " + s
+				}
+				return s
+			}
+		}
+	}
+	news, _ := issues["new"].([]any)
+	for _, is := range news {
+		if o := first(is); o != nil {
+			picks = append(picks, o)
+		}
+	}
+	for _, o := range picks {
 		name, _ := o["name"].(string)
 		date, _ := o["date"].(string)
 		what := ""
@@ -231,6 +254,9 @@ func offerSentence(obj map[string]any) string {
 		}
 		if date != "" {
 			what += " on " + dayLabelStr(date)
+			if slot, _ := o["slot"].(string); slot != "" {
+				what += " " + slot
+			}
 		}
 		s := "I can also " + what
 		if k := num(o["day_kcal"]); k > 0 {
@@ -239,6 +265,37 @@ func offerSentence(obj map[string]any) string {
 		return s + ": say so if you want it."
 	}
 	return ""
+}
+
+// dayFixSentence says the one fix of a day under its range with the meal, the
+// day, the amount and the day's kcal afterwards ("I can also add 120 g of
+// Ciabatta to Wed 25 Nov lunch (the day would then hold 2023 kcal): say so if
+// you want it."); "" when the option cannot be said.
+func dayFixSentence(o, issue map[string]any) string {
+	name, _ := o["name"].(string)
+	date, _ := issue["date"].(string)
+	slot, _ := o["slot"].(string)
+	op, _ := o["op"].(map[string]any)
+	amount := ""
+	switch {
+	case num(op["amount"]) > 0:
+		amount = fmt.Sprintf("%.0f g of ", math.Round(num(op["amount"])))
+	case num(op["portions"]) > 0:
+		amount = fmtNum(num(op["portions"])) + " portions of "
+	}
+	where := strings.TrimSpace(dayLabelStr(date) + " " + slot)
+	var what string
+	switch o["action"] {
+	case "add":
+		what = "add " + amount + name
+	case "raise":
+		what = "raise " + name + " to " + strings.TrimSuffix(amount, " of ")
+	}
+	k := num(o["day_kcal"])
+	if what == "" || name == "" || where == "" || k <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("I can also %s on %s (the day would then hold %.0f kcal, inside its range): say so if you want it.", what, where, math.Round(k))
 }
 
 // addOfferTell makes the offer the last item of report.tell.
@@ -278,6 +335,11 @@ func waysClosing(obj map[string]any) string {
 		if after, _ := o["after"].(map[string]any); after != nil {
 			if k := num(after["day_kcal"]); k > 0 {
 				notes = append(notes, fmt.Sprintf("the day would then hold %.0f kcal", math.Round(k)))
+			}
+		}
+		if f, _ := o["fix"].(map[string]any); f != nil {
+			if w, _ := f["what"].(string); w != "" {
+				notes = append(notes, fmt.Sprintf("that leaves the day under its range, so I would also %s (the day would then hold %.0f kcal)", w, math.Round(num(f["day_kcal_after"]))))
 			}
 		}
 		if len(notes) > 0 {
