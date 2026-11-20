@@ -177,22 +177,14 @@ func buildTell(in reportInput, r changeReport) []string {
 			continue
 		}
 		var before *float64
+		var beforeMarks []string
 		for _, x := range in.before.Days {
 			if x.Date == d.Date {
-				before = x.TargetKcal
+				before, beforeMarks = x.TargetKcal, x.LightMeals
 			}
 		}
 		if before != nil && !d.Away && absf(*d.TargetKcal-*before) >= 5 {
-			why := "a meal is light or filling"
-			var parts []string
-			for _, lm := range d.LightMeals {
-				if adj, slot, ok := strings.Cut(plainWords(lm), " "); ok {
-					parts = append(parts, fmt.Sprintf("the %s is %s", slot, adj))
-				}
-			}
-			if len(parts) > 0 {
-				why = strings.Join(parts, " and ")
-			}
+			why := markChange(beforeMarks, d.LightMeals)
 			add(fmt.Sprintf("%s: the amount that suits the day is now %.0f kcal (was %.0f) because %s.", dayLabelStr(d.Date), *d.TargetKcal, *before, why))
 		}
 	}
@@ -275,6 +267,43 @@ func plural(n int) string {
 		return ""
 	}
 	return "s"
+}
+
+// markChange names why a day's target moved: the marks the change gained or
+// lost ("the lunch is no longer light"), or the marks it ends with when the
+// change did not touch them.
+func markChange(before, after []string) string {
+	phrase := func(lm string, lost bool) string {
+		adj, slot, ok := strings.Cut(plainWords(lm), " ")
+		switch {
+		case !ok:
+			return ""
+		case lost:
+			return fmt.Sprintf("the %s is no longer %s", slot, adj)
+		}
+		return fmt.Sprintf("the %s is %s", slot, adj)
+	}
+	var parts []string
+	for _, lm := range after {
+		if !slices.Contains(before, lm) {
+			parts = append(parts, phrase(lm, false))
+		}
+	}
+	for _, lm := range before {
+		if !slices.Contains(after, lm) {
+			parts = append(parts, phrase(lm, true))
+		}
+	}
+	if len(parts) == 0 {
+		for _, lm := range after {
+			parts = append(parts, phrase(lm, false))
+		}
+	}
+	parts = slices.DeleteFunc(parts, func(p string) bool { return p == "" })
+	if len(parts) == 0 {
+		return "a meal is light or filling"
+	}
+	return strings.Join(parts, " and ")
 }
 
 func absf(v float64) float64 {

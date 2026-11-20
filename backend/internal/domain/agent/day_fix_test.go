@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
 
@@ -251,5 +252,58 @@ func TestFindWays_StopsShortOfLightOffersTheLightCompound(t *testing.T) {
 		}
 		assert.InDelta(t, want, k, 1)
 		t.Logf("dinner %v day %v", o["after"].(map[string]any)["meal_kcal"], k)
+	}
+}
+
+// de-lighter-wed: a dinner far over its cap that cannot lighten alone (the day
+// sits at its minimum) is offered the compound way that makes it properly
+// light, never a mid-way one; applying exactly its ops gives the promised
+// dinner and day.
+func TestFindWays_CannotLightenAloneOffersTheLightCompound(t *testing.T) {
+	e := fixEnv(t, 3500)
+	e.sql(`UPDATE plate_components SET portions = 1.5 WHERE plate_id = ?`, e.dinner3())
+	res := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lighter","plate_id":%d}`, e.dinner3()))
+	require.Empty(t, relMaps(res["ways"]), "the meal cannot lighten alone")
+	require.Equal(t, float64(1125), res["before"].(map[string]any)["meal_kcal"])
+	offers := relMaps(res["offer"])
+	require.NotEmpty(t, offers)
+	maxKcal := res["max_kcal"].(float64)
+	assert.Contains(t, res["next"], "one recommended action")
+	fixed := 0
+	for _, o := range offers {
+		require.Equal(t, true, o["reaches_limit"], "%v", o["what"])
+		meal := o["after"].(map[string]any)["meal_kcal"].(float64)
+		assert.LessOrEqual(t, meal, maxKcal+0.5)
+		ops, want := o["ops"].([]any), o["after"].(map[string]any)["day_kcal"].(float64)
+		if fix, ok := o["fix"].(map[string]any); ok {
+			fixed++
+			ops, want = append(ops, fix["ops"].([]any)...), fix["day_kcal_after"].(float64)
+		}
+		raw, err := json.Marshal(map[string]any{"ops": ops, "goal": res["goal"], "light": o["light"], "dry_run": true})
+		require.NoError(t, err)
+		got, err := e.exec("apply_changes", string(raw))
+		require.NoError(t, err)
+		k, _, _ := dayOf(t, got)
+		assert.InDelta(t, want, k, 1)
+		assert.Equal(t, true, got["request"].(map[string]any)["reached_light"])
+		t.Logf("dinner %.0f (cap %.0f), day %.0f", meal, maxKcal, k)
+	}
+	assert.Positive(t, fixed, "an offer leaves the day under its range and carries the fix")
+}
+
+// The sentence about a day's moved target names the true cause: a lunch that
+// lost its light mark raised the target.
+func TestMarkChange(t *testing.T) {
+	for name, tc := range map[string]struct {
+		before, after []string
+		want          string
+	}{
+		"lost mark":   {[]string{"light lunch"}, nil, "the lunch is no longer light"},
+		"gained mark": {nil, []string{"light dinner"}, "the dinner is light"},
+		"swapped":     {[]string{"light lunch"}, []string{"light dinner"}, "the dinner is light and the lunch is no longer light"},
+		"unchanged":   {[]string{"light dinner"}, []string{"light dinner"}, "the dinner is light"},
+		"unknown":     {nil, nil, "a meal is light or filling"},
+	} {
+		assert.Equal(t, tc.want, agent.MarkChange(tc.before, tc.after), name)
 	}
 }
