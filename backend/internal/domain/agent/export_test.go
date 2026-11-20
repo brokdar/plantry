@@ -77,3 +77,6 @@ func RefusalTell(err error) []string {
 	}
 	return nil
 }
+
+// MarkChange exposes the cause sentence of a day target that moved.
+var MarkChange = markChange

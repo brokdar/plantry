@@ -97,9 +97,10 @@ func toolFindWays(svc Services) Tool {
 				return out
 			}
 			ways, offers = planning.DemoteUnclean(verify(res.Ways, limit)), planning.DemoteUnclean(verify(res.Offers, 2))
-			if in.Goal == planning.GoalLighter && !in.ToLimit && len(ways) > 0 && !ways[0].Reaches {
-				// The step stops short of light: the one thing offered is the
-				// compound way that makes the meal properly light, never a mid-way one.
+			if in.Goal == planning.GoalLighter && !in.ToLimit && res.Before.MealKcal > res.MaxKcal && (len(ways) == 0 || !ways[0].Reaches) {
+				// The step stops short of light, or the meal cannot lighten alone:
+				// the one thing offered is the compound way that makes the meal
+				// properly light, never a mid-way one.
 				offers = nil
 				if full, err := planning.Ways(st, planning.WindowTarget(st), planning.WayRequest{PlateID: in.PlateID, Date: in.Date, Goal: in.Goal, Limit: 8, ToLimit: true}); err == nil {
 					for _, o := range planning.DemoteUnclean(verify(full.Offers, 2)) {
@@ -617,7 +618,7 @@ func nextStepText(ways, offers []planning.Way, res planning.WayResult, toLimit b
 	case len(ways) > 0:
 		return "apply ways[0] now with apply_changes (its ops, light and goal as returned), then tell the user what changed with before and after"
 	case len(offers) > 0:
-		return "nothing can be applied on its own here: explain why with the numbers and present the offer marked recommended in the same sentence as the explanation ('I would ...'). If the user already asked for the other meal to make up the difference (a bigger lunch) or has said yes to it, apply offer[0] now; otherwise apply it only when the user says yes"
+		return "nothing can be applied on its own here: explain why with the numbers and present offer[0] as your one recommended action ('I would ...'), naming what changes in both meals and the day fix if it has one. If the user already asked for the other meal to make up the difference (a bigger lunch) or has said yes to it, apply offer[0] now; otherwise apply it only when the user says yes"
 	}
 	return "nothing to apply: explain why with the numbers and what the user could change"
 }
