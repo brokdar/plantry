@@ -102,7 +102,7 @@ func TestBuildReport_Items(t *testing.T) {
 			after: reportState(1.5, 0.5, 1),
 			check: func(t *testing.T, r changeReport) {
 				require.Len(t, r.Leftovers, 1)
-				assert.Contains(t, r.Leftovers[0], "is now cooked for 1.5 portions instead of 2 portions; nothing is left over")
+				assert.Contains(t, r.Leftovers[0], "cook 1.5 portions of the \"Salmon\" (was 2)")
 			},
 		},
 		{

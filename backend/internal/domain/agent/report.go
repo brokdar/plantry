@@ -453,7 +453,7 @@ func leftovers(bs, as planning.State) []string {
 			day := now.cooked.Format("Mon 2 Jan")
 			switch {
 			case math.Abs(free) <= 0.005 && math.Abs(was.portions-now.portions) >= 0.005:
-				out = append(out, fmt.Sprintf("The %s cooked on %s is now cooked for %s instead of %s; nothing is left over.", food.Quote(now.dish), day, portionWord(now.portions), portionWord(was.portions)))
+				out = append(out, fmt.Sprintf("%s: cook %s of the %s (was %s).", day, portionWord(now.portions), food.Quote(now.dish), fmtNum(was.portions)))
 			case free > 0.005:
 				out = append(out, fmt.Sprintf("%s of the %s cooked on %s is now left over (it is cooked for %s%s, the meals eat %s). %s", portionWord(free), food.Quote(now.dish), day, portionWord(now.portions), frozen, fmtNum(now.eaten), resized))
 			case free < -0.005:

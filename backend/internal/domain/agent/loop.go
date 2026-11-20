@@ -107,6 +107,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 	}
 
 	requests, turns, conts, continuation, wrapUp := 0, 0, 0, false, false
+	var resizes []string // the other-day batch resizes of the newest saved change
 	for {
 		if requests++; requests > MaxRequests {
 			break
@@ -193,6 +194,9 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		// The words a household reads: stored (and so shown after the stream
 		// ends: the UI refetches the conversation) in kitchen terms; the run log
 		// keeps what the model wrote.
+		if len(extractToolUses(res.resp.Message)) == 0 {
+			restoreResizes(&res.resp.Message, resizes)
+		}
 		plainReplyMessage(&res.resp.Message)
 		replay := llm.ReplayMessage(res.resp.Message)
 		if err := store(RoleAssistant, replay); err != nil {
@@ -322,10 +326,14 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 				continue
 			}
 
+			view := modelView(output)
+			if r, saved := resizeTold(view); saved {
+				resizes = r
+			}
 			resultBlocks = append(resultBlocks, llm.ContentBlock{
 				Type:              llm.ContentTypeToolResult,
 				ToolResultID:      call.ToolUseID,
-				ToolResultContent: modelView(output),
+				ToolResultContent: view,
 			})
 			send(ctx, out, llm.Event{Type: llm.EventToolExecEnd, Payload: llm.ToolExecEndPayload{
 				ID: call.ToolUseID, Name: call.ToolUseName,

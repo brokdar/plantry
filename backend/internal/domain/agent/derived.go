@@ -411,7 +411,7 @@ func cookingMovedTell(obj map[string]any) bool {
 	otherMeal := false
 	for _, it := range tell {
 		t, _ := it.(string)
-		drop := strings.Contains(t, "is now cooked") && !strings.Contains(t, "is now cooked for") || strings.Contains(t, "no longer cooked") ||
+		drop := strings.Contains(t, "is now cooked") || strings.Contains(t, "no longer cooked") ||
 			strings.HasPrefix(t, "To keep one cooking time")
 		for _, d := range days {
 			drop = drop || strings.HasPrefix(t, d+" you cook") || strings.HasPrefix(t, d+" cooking changes")
@@ -420,7 +420,7 @@ func cookingMovedTell(obj map[string]any) bool {
 		case drop:
 		case strings.Contains(t, " is away: "):
 			awayItems = append(awayItems, t)
-		case strings.Contains(t, "is now cooked for") && strings.Contains(t, "nothing is left over"):
+		case resizeLine.MatchString(t):
 			resizes = append(resizes, t)
 		default:
 			if mealLine.MatchString(t) {
@@ -440,8 +440,7 @@ func cookingMovedTell(obj map[string]any) bool {
 	case len(resizes) > 0:
 		short := make([]string, len(resizes))
 		for i, t := range resizes {
-			short[i] = strings.TrimSuffix(strings.Replace(t, "; nothing is left over.", "", 1), ".")
-			short[i] = strings.Replace(short[i], "The ", "the ", 1)
+			short[i] = strings.TrimSuffix(t, ".")
 		}
 		out = append(out, "Apart from that only this changed: "+strings.Join(short, "; ")+".")
 	case !otherMeal && cm["nothing_else_changed"] == true:
@@ -453,6 +452,10 @@ func cookingMovedTell(obj map[string]any) bool {
 	rep["tell"] = out
 	return true
 }
+
+// resizeLine matches the tell item of a batch cooked on another day that
+// was resized: "Sun 22 Nov: cook 3.5 portions of the "Curry" (was 3)."
+var resizeLine = regexp.MustCompile(`^\w{3} \d+ \w{3}: cook [\d.]+ portions? of the .* \(was [\d.]+\)\.$`)
 
 // mealLine matches a tell item about a changed meal ("Tue 24 Nov dinner: ...").
 var mealLine = regexp.MustCompile(`^\w{3} \d+ \w{3} (breakfast|lunch|dinner)[^:]*:`)
