@@ -81,7 +81,11 @@ func unplanned(s planning.State, date string) float64 {
 // slot, and the shift of its band in kcal. A routine meal counts with its real
 // kcal; away, default-none and unplated routine slots stay at their share.
 func slotExpected(s planning.State, ev planning.Evaluation, date string) (exp map[int64]float64, shift map[int64]float64) {
-	sh := shares(s)
+	return slotExpectedWith(s, ev, date, shares(s))
+}
+
+// slotExpectedWith is slotExpected for explicit expected shares (a preset).
+func slotExpectedWith(s planning.State, ev planning.Evaluation, date string, sh map[int64]float64) (exp map[int64]float64, shift map[int64]float64) {
 	T := fullTarget(s)
 	plateKcal := map[int64]float64{}
 	for _, p := range ev.Plates {

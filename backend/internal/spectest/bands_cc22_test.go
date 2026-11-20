@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 )
 
@@ -174,7 +175,13 @@ func TestSB1cc22_PresetDrivesLightCapAndAwayProration(t *testing.T) {
 			require.True(t, ok)
 			rs, _ := e.turn("make it light", tc{"find_ways", map[string]any{"goal": "lighter", "plate_id": pl.ID, "to_limit": true}})
 			require.Len(t, rs, 1)
-			assert.InDelta(t, 0.75*T*sh[bigName], num(rs[0].Out["max_kcal"]), 1.0, "light cap = 75 %% of the %s's expected kcal", bigName)
+			// SB5: the cap is 75 % of the slot's expected kcal, shifted when a routine meal misses its own share
+			byID := map[int64]float64{}
+			for id, name := range s.SlotNames {
+				byID[id] = sh[strings.TrimPrefix(name, "slot.")]
+			}
+			exp, _ := slotExpectedWith(s, planning.Evaluate(s, planning.WindowTarget(s)), pl.Date.Format("2006-01-02"), byID)
+			assert.InDelta(t, 0.75*exp[pl.SlotID], num(rs[0].Out["max_kcal"]), 1.0, "light cap = 75 %% of the %s's shifted expected kcal (SB5)", bigName)
 			// away on one day: the other main meal
 			other := "lunch"
 			if bigName == "lunch" {
