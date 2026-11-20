@@ -19,6 +19,7 @@ func restored(text string) string { return restoreText(text, resizeItems...) }
 // E044: a reply that names the resized batches without their days gets the
 // day sentences back; a reply that has them is left alone.
 func TestRestoreResizes(t *testing.T) {
+	t.Parallel()
 	r3 := "Tuesday dinner is now a light dinner.\n\n- **Cooking:** The salmon, tomato salad and lentil curry batches are resized to cover the new portions, with nothing left over.\n- **Day:** Tue 24 Nov now holds 1713 kcal.\n\nI can also add Ciabatta at lunch: say so if you want it."
 	got := restored(r3)
 	for _, f := range resizeItems {
@@ -39,6 +40,7 @@ func TestRestoreResizes(t *testing.T) {
 
 // E044b: a German reply that drops the other-day resize gets it back in German.
 func TestRestoreResizesGerman(t *testing.T) {
+	t.Parallel()
 	run := func(text string) string { return restoreText(text, resizeItems[0]) }
 	failing := "Das Abendessen am Mittwoch ist jetzt leicht und die Portionen sind angepasst.\n\n- Dienstag: Das Gericht wird mit 2 Portionen gekocht.\n- Mittwoch: 1713 kcal."
 	want := failing + "\n\n- Sonntag, 22. Nov.: 3,5 Portionen „Speedy lentil coconut curry“ kochen (statt 3)."
@@ -57,6 +59,7 @@ func TestRestoreResizesGerman(t *testing.T) {
 }
 
 func TestMustTold(t *testing.T) {
+	t.Parallel()
 	b, _ := json.Marshal(map[string]any{"report": map[string]any{"tell": []string{"x"}, "must": resizeItems}})
 	items, saved := mustTold(b)
 	assert.True(t, saved)
@@ -67,6 +70,7 @@ func TestMustTold(t *testing.T) {
 }
 
 func TestWithoutMust(t *testing.T) {
+	t.Parallel()
 	b, _ := json.Marshal(map[string]any{"saved": true, "report": map[string]any{"tell": []string{"x"}, "must": resizeItems}})
 	got := string(withoutMust(b))
 	assert.NotContains(t, got, "must")

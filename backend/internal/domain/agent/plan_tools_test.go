@@ -26,6 +26,7 @@ import (
 // B3-AC3: get_plan returns the cells, sessions and issues GET /api/plan reads
 // for the chat's window, field by field on a seeded window.
 func TestToolGetPlan_MatchesPlanReadModel(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := testhelper.NewTestDB(t)
 	insert := func(q string) int64 {
@@ -173,6 +174,7 @@ func TestToolGetPlan_MatchesPlanReadModel(t *testing.T) {
 }
 
 func TestToolGetPlan_NeedsAWindow(t *testing.T) {
+	t.Parallel()
 	db := testhelper.NewTestDB(t)
 	ts, err := agent.NewToolSet(agent.Services{PlanView: testsvc.PlanView(db)})
 	require.NoError(t, err)
@@ -183,6 +185,7 @@ func TestToolGetPlan_NeedsAWindow(t *testing.T) {
 }
 
 func TestToolGetPlan_NotRegisteredWithoutPlanView(t *testing.T) {
+	t.Parallel()
 	ts, err := agent.NewToolSet(agent.Services{})
 	require.NoError(t, err)
 	for _, tool := range ts.Describe() {

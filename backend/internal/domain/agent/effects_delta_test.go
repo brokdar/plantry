@@ -55,6 +55,7 @@ func windowCtx() context.Context {
 }
 
 func TestIssueDelta_NewResolvedAndTotal(t *testing.T) {
+	t.Parallel()
 	f := &fakePlanReader{issues: []planning.Issue{issueN(1), issueN(2)}}
 	out := runWrite(t, windowCtx(), f, []planning.Issue{issueN(2), issueN(3)})
 	assert.Equal(t, true, out["issues_checked"])
@@ -66,6 +67,7 @@ func TestIssueDelta_NewResolvedAndTotal(t *testing.T) {
 }
 
 func TestIssueDelta_CapsLists(t *testing.T) {
+	t.Parallel()
 	var many []planning.Issue
 	for i := 1; i <= 25; i++ {
 		many = append(many, issueN(i))
@@ -79,6 +81,7 @@ func TestIssueDelta_CapsLists(t *testing.T) {
 
 // Not-checked must never read like a clean result.
 func TestIssueDelta_UncheckedIsExplicit(t *testing.T) {
+	t.Parallel()
 	t.Run("no window", func(t *testing.T) {
 		out := runWrite(t, context.Background(), &fakePlanReader{}, nil)
 		assert.Equal(t, false, out["issues_checked"])

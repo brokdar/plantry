@@ -67,6 +67,7 @@ func strPtr(s string) *string { return &s }
 // B3-AC1: the recorded system prompt carries today, the 7 window dates, the
 // shopping day, every cell with its plate, the issues and no candidate rows.
 func TestChat_SystemPromptCarriesWindowAndPlan(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := testhelper.NewTestDB(t)
 	slotRepo := sqlite.NewSlotRepo(db)
@@ -170,6 +171,7 @@ func cellCtx() context.Context {
 }
 
 func TestTool_GetPlan_IncludesAvailability(t *testing.T) {
+	t.Parallel()
 	ts, _, dinnerID, _ := cellToolSet(t)
 	ctx := cellCtx()
 	_, _, _, err := ts.Execute(ctx, "apply_changes", json.RawMessage(applyJSON(t, "create_plate", `{"date":"2026-11-04","slot_id":`+strconv.FormatInt(dinnerID, 10)+`}`)))
@@ -191,6 +193,7 @@ func TestTool_GetPlan_IncludesAvailability(t *testing.T) {
 }
 
 func TestTool_CreatePlateIntoNoneCell_ReturnsKeyedToolError(t *testing.T) {
+	t.Parallel()
 	ts, db, dinnerID, _ := cellToolSet(t)
 	input := json.RawMessage(applyJSON(t, "create_plate", `{"date":"2026-11-02","slot_id":`+strconv.FormatInt(dinnerID, 10)+`}`))
 
@@ -226,6 +229,7 @@ func TestTool_CreatePlateIntoNoneCell_ReturnsKeyedToolError(t *testing.T) {
 }
 
 func TestChat_RequiresToday(t *testing.T) {
+	t.Parallel()
 	db := testhelper.NewTestDB(t)
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}})
 	svc := newPromptService(t, db, client, time.Now)
@@ -238,6 +242,7 @@ func TestChat_RequiresToday(t *testing.T) {
 // B3-AC2 (service half): a start that is no shopping day, or none, fails
 // before the model is called.
 func TestChat_RequiresShoppingDayStart(t *testing.T) {
+	t.Parallel()
 	db := testhelper.NewTestDB(t)
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}})
 	svc := newPromptService(t, db, client, time.Now)
@@ -250,6 +255,7 @@ func TestChat_RequiresShoppingDayStart(t *testing.T) {
 }
 
 func TestDebugSystemPrompt_SamePathAsChat(t *testing.T) {
+	t.Parallel()
 	db := testhelper.NewTestDB(t)
 	svc := newPromptService(t, db, fake.NewFromScript(&fake.Script{}), time.Now)
 

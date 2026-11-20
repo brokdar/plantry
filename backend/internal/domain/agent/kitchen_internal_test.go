@@ -16,6 +16,7 @@ import (
 var planningWindow window.Window
 
 func TestRemovedMemo(t *testing.T) {
+	t.Parallel()
 	r := &removedMemo{}
 	ctx := withTurn(context.Background(), chatTurn{conversationID: 7})
 	other := withTurn(context.Background(), chatTurn{conversationID: 8})
@@ -28,6 +29,7 @@ func TestRemovedMemo(t *testing.T) {
 }
 
 func TestRecommend_ExactlyOne(t *testing.T) {
+	t.Parallel()
 	dirty := []planning.Issue{{Code: planning.CodeAddOnExcess}}
 	count := func(ws ...[]planning.Way) (n int) {
 		for _, l := range ws {
@@ -62,6 +64,7 @@ func TestRecommend_ExactlyOne(t *testing.T) {
 }
 
 func TestAdviceFor_NothingUnasked(t *testing.T) {
+	t.Parallel()
 	soft := planning.Issue{Rule: "S2", Code: "kcal_below_band", Severity: planning.SeveritySoft, Date: "2026-11-25", Options: []planning.Option{{Name: "Ciabatta", Recommended: true}}}
 	floor := planning.Issue{Rule: "H9", Code: planning.CodeKcalBelowFloor, Severity: planning.SeverityViolation, Date: "2026-11-25"}
 	ctx := context.Background()
@@ -90,6 +93,7 @@ func TestAdviceFor_NothingUnasked(t *testing.T) {
 // A named dish that raises the week's meat by a real step over its limit is
 // saved and its week effect told; a rise of a few grams says nothing.
 func TestAdviceFor_WeekMeat(t *testing.T) {
+	t.Parallel()
 	meatIssue := planning.Issue{Rule: "S7", Code: planning.CodeWeekMeatAboveDGE, Severity: planning.SeveritySoft, Params: map[string]any{"meat_g": 471.0, "max_g": 300.0}}
 	ev := func(meatG float64) planning.Evaluation {
 		return planning.Evaluation{Week: &planning.WeekEval{MeatG: meatG}, Issues: []planning.Issue{meatIssue}}
@@ -109,6 +113,7 @@ func TestAdviceFor_WeekMeat(t *testing.T) {
 // A recommended offer never creates a warning: an alternative that lists no
 // new issue but whose own check does make one is skipped.
 func TestFirstClean_SkipsWhatItsCheckDirties(t *testing.T) {
+	t.Parallel()
 	op := []planning.OptionOp{{Op: "swap"}}
 	dirty := planning.Alternative{Name: "Tuna pasta", Ops: op}
 	clean := planning.Alternative{Name: "Lentil curry", Ops: op}
@@ -126,6 +131,7 @@ func TestFirstClean_SkipsWhatItsCheckDirties(t *testing.T) {
 // change a component the call made are dropped, and the next one is the
 // recommended one.
 func TestWithoutUndoOptions(t *testing.T) {
+	t.Parallel()
 	id := func(n int64) *int64 { return &n }
 	issue := planning.Issue{Code: planning.CodeKcalAboveBand, Options: []planning.Option{
 		{Name: "remove the bread", Recommended: true, Op: planning.OptionOp{Op: "remove", PlateComponentID: id(7)}},
@@ -144,6 +150,7 @@ func TestWithoutUndoOptions(t *testing.T) {
 // that the result does not carry (auditor 3: a day under its minimum promised
 // "the fix marked recommended" and had none).
 func TestAdviceFor_NextNeverNamesAnAbsentOption(t *testing.T) {
+	t.Parallel()
 	rec := []planning.Option{{Name: "Ciabatta", Recommended: true}}
 	floor := func(opts []planning.Option) planning.Issue {
 		return planning.Issue{Rule: "H9", Code: planning.CodeKcalBelowFloor, Severity: planning.SeverityViolation, Date: "2026-11-25", Options: opts}
@@ -189,6 +196,7 @@ func TestAdviceFor_NextNeverNamesAnAbsentOption(t *testing.T) {
 
 // A day under its minimum with no checked fix says so: next promises none.
 func TestAdviceFor_FloorBreachWithoutAFixSaysSo(t *testing.T) {
+	t.Parallel()
 	floor := planning.Issue{Rule: "H9", Code: planning.CodeKcalBelowFloor, Severity: planning.SeverityViolation, Date: "2026-11-25"}
 	next, offers := adviceFor(context.Background(), Services{}, planningWindow, planning.Evaluation{}, planning.Evaluation{Issues: []planning.Issue{floor}}, false, nil)
 	assert.Empty(t, offers)
@@ -199,6 +207,7 @@ func TestAdviceFor_FloorBreachWithoutAFixSaysSo(t *testing.T) {
 // G3: a reply never offers to undo what the call just did: food added to a
 // meal the call made lighter, food taken from one it made heartier.
 func TestWithoutRegressOptions(t *testing.T) {
+	t.Parallel()
 	plateAt := func(slot int64, kcal float64) planning.PlateEval {
 		return planning.PlateEval{Date: "2026-11-24", SlotID: slot, Kcal: kcal}
 	}

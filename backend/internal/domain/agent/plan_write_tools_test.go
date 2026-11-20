@@ -214,6 +214,7 @@ func (e *planToolEnv) session(id int64) *plate.SessionView {
 
 // B4-AC1
 func TestTool_SetSessionPortions(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	_, id := e.mainSession()
 
@@ -266,6 +267,7 @@ func components(p plate.Plate) []componentKey {
 
 // B4-AC2
 func TestTool_RegenerateSide(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	target, idx := e.sidePlate()
 	old := target.Components[idx]
@@ -321,6 +323,7 @@ func TestTool_RegenerateSide(t *testing.T) {
 }
 
 func TestTool_RegenerateConfirmedPlate(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.mainSession()
 	_, err := e.plates.Confirm(context.Background(), plate.RowSet{PlateIDs: []int64{p.ID}})
@@ -343,6 +346,7 @@ func (g gateChooser) Choose(ctx context.Context, in planning.ChooseInput) (plann
 
 // B4-AC2: a window generation already running fails the tool call.
 func TestTool_RegenerateWhileGenerationRuns(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	g := gateChooser{entered: make(chan struct{}), release: make(chan struct{})}
 	deps := e.deps // shares the Progress registry
@@ -364,6 +368,7 @@ func TestTool_RegenerateWhileGenerationRuns(t *testing.T) {
 
 // B4-AC4
 func TestTool_SetAvailability(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx := context.Background()
 	week := e.week()
@@ -404,6 +409,7 @@ func TestTool_SetAvailability(t *testing.T) {
 
 // B4-AC5
 func TestTool_ConfirmAndSetPlateEaters(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx := context.Background()
 	p, sid := e.mainSession()
@@ -494,6 +500,7 @@ func messageKey(t *testing.T, r llm.ToolResultPayload) string {
 // B4-AC3: unlock is two-phase; the yes must come in a later turn of the same
 // conversation.
 func TestTool_UnlockNeedsTheUsersYesInALaterTurn(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx := context.Background()
 	p, sid := e.mainSession()
@@ -569,6 +576,7 @@ func TestTool_UnlockNeedsTheUsersYesInALaterTurn(t *testing.T) {
 }
 
 func TestTool_UnlockOutsideAChatFails(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.mainSession()
 	_, err := e.exec("unlock", fmt.Sprintf(`{"plate_id":%d}`, p.ID))

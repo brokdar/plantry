@@ -10,6 +10,7 @@ import (
 
 // The key names a set of rows, whatever order the closure lists them in.
 func TestKeyOf_IgnoresIDOrder(t *testing.T) {
+	t.Parallel()
 	a := keyOf(1, plate.RowSet{PlateIDs: []int64{3, 1, 2}, SessionIDs: []int64{9, 4}})
 	b := keyOf(1, plate.RowSet{PlateIDs: []int64{1, 2, 3}, SessionIDs: []int64{4, 9}})
 	assert.Equal(t, a, b)

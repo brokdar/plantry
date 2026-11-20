@@ -16,6 +16,7 @@ import (
 // derived from the result, and the message names the numbers and find_ways
 // (audit B2 showed the S6 as new; E006 stops the mark instead).
 func TestApplyChanges_LightCallOnAMealOverItsCapIsRefused(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	e.withMacros()
 	e.sql(`UPDATE foods SET kcal_100g = 1000 WHERE name = 'Kichererbsen'`)

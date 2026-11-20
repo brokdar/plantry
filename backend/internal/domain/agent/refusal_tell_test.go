@@ -15,6 +15,7 @@ import (
 
 // E036b: a refused light mark carries its own short tell.
 func TestRefusedLightMark_HasATell(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	e.withMacros()
 	e.sql(`UPDATE foods SET kcal_100g = 1000 WHERE name = 'Kichererbsen'`)

@@ -42,6 +42,7 @@ var (
 )
 
 func TestBuildReport_Items(t *testing.T) {
+	t.Parallel()
 	before := reportState(2, 1, 1)
 	bev := planning.Evaluation{
 		Plates: []planning.PlateEval{{PlateID: 10, Kcal: 800}, {PlateID: 11, Kcal: 800}},
@@ -168,6 +169,7 @@ func TestBuildReport_Items(t *testing.T) {
 }
 
 func TestBuildReport_EarlierWarningsAreOnlyCounted(t *testing.T) {
+	t.Parallel()
 	open := planning.Issue{Rule: "S2", Code: planning.CodeKcalBelowBand, Severity: planning.SeveritySoft, Date: "2026-11-23", Params: map[string]any{"kcal": 1700.0, "band_low_kcal": 1800.0, "band_high_kcal": 2200.0}}
 	st := reportState(2, 1, 1)
 	ev := planning.Evaluation{Issues: []planning.Issue{open}}
@@ -177,6 +179,7 @@ func TestBuildReport_EarlierWarningsAreOnlyCounted(t *testing.T) {
 }
 
 func TestBuildReport_AlsoChangedSaysMovedCooksAndAutomaticFixes(t *testing.T) {
+	t.Parallel()
 	st := reportState(2, 1, 1)
 	applied := []map[string]any{
 		{"op": "away", "also_changed": []any{map[string]any{"what": "cook_moved", "session_id": json.Number("1"), "date": "2026-11-22", "slot_id": json.Number("2"), "from_date": "2026-11-21", "from_slot_id": json.Number("2")}}},
@@ -191,6 +194,7 @@ func TestBuildReport_AlsoChangedSaysMovedCooksAndAutomaticFixes(t *testing.T) {
 // E022c: a meal of no-cook foods is named a cold plate in the report, so the
 // reply can say what lunch is.
 func TestBuildReport_NamesAColdPlate(t *testing.T) {
+	t.Parallel()
 	before := reportState(2, 1, 1)
 	after := before
 	after.Foods = map[int64]planning.FoodFacts{
@@ -213,6 +217,7 @@ func TestBuildReport_NamesAColdPlate(t *testing.T) {
 // E042: a regenerate says what it did to the cooking of other days, and why
 // the new meals may hold no meat.
 func TestOtherCookingDays(t *testing.T) {
+	t.Parallel()
 	before := reportState(2, 1, 1) // Fri dinner cooks Salmon for Fri and Sat dinner
 	after := before
 	after.Plates = before.Plates[:1] // Sat dinner's plate is gone: the batch feeds one meal
@@ -225,6 +230,7 @@ func TestOtherCookingDays(t *testing.T) {
 }
 
 func TestWeekEffect_SaysWhyNoMeatFits(t *testing.T) {
+	t.Parallel()
 	w := weekEffect(&planning.WeekEffect{MeatG: 321, LimitG: 300}, &planning.WeekEffect{MeatG: 233, LimitG: 300})
 	assert.Contains(t, w.MeatNote, "holds 233 g of meat per person against a limit of 300 g: 67 g is left")
 	w = weekEffect(&planning.WeekEffect{MeatG: 100, LimitG: 300}, &planning.WeekEffect{MeatG: 120, LimitG: 300})

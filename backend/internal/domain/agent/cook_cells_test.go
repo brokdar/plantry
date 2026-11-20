@@ -29,6 +29,7 @@ func (e *planToolEnv) awayCells(date string) []string {
 // A cook cell that is marked No plate is refused by every op that names one,
 // with the reason and at most three valid cells nearby.
 func TestApplyChanges_CookCellUnavailable(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	v, p := e.laterMealSession()
 	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "3"))
@@ -61,6 +62,7 @@ func TestApplyChanges_CookCellUnavailable(t *testing.T) {
 
 // An away op earlier in the same call counts for a later move_cook.
 func TestApplyChanges_CookCellMadeAwayInTheSameCall(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	v, p := e.laterMealSession()
 	day, breakfast := p.DateString(), e.slotID("breakfast")
@@ -96,6 +98,7 @@ func walkOptions(v any, out *[][]any) {
 // Property: every option the tools emit, for the plan states below, passes its
 // own dry run without a new hard issue and names no cook cell that is away.
 func TestOptions_PassTheirOwnDryRun(t *testing.T) {
+	t.Parallel()
 	d5 := planStart.AddDate(0, 0, 5).Format(time.DateOnly)
 	// Each state returns the day its probe marks away (a dry run) and the cells
 	// it made away for real.
@@ -195,6 +198,7 @@ func TestOptions_PassTheirOwnDryRun(t *testing.T) {
 // plan: away on Sunday, the curry cooked Sunday feeds Monday lunch, Monday
 // dinner cooks the salmon).
 func TestApplyChanges_AwayRehomesCooks(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	_, p := e.laterMealSession()
 	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "1"))

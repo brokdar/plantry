@@ -11,6 +11,7 @@ import (
 // result only when one food is returned or detail is set, never in a list
 // search, per portion, as data.
 func TestFindFoods_Ingredients(t *testing.T) {
+	t.Parallel()
 	ts, repo := newPayloadToolSet(t)
 	item := func(in string) map[string]any {
 		items := execJSON(t, ts, "find_foods", in)["items"].([]any)

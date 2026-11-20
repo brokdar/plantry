@@ -12,6 +12,7 @@ import (
 
 // c: no tell item is empty or said twice.
 func TestBuildTell_NoEmptyAndNoDuplicateItems(t *testing.T) {
+	t.Parallel()
 	one, two := 500, 500
 	r := changeReport{Changed: []reportMeal{
 		{Day: "Thu 26 Nov", Meal: "breakfast", Before: []string{"Oats 1 portion"}, After: []string{"Oats 1 portion"}}, // nothing to say: was "Thu 26 Nov breakfast: ."
@@ -30,6 +31,7 @@ func TestBuildTell_NoEmptyAndNoDuplicateItems(t *testing.T) {
 
 // The dish that moved names its earliest new cooking, whatever the map order.
 func TestLeftovers_MovedDishIsDeterministic(t *testing.T) {
+	t.Parallel()
 	foods := map[int64]planning.FoodFacts{1: {Name: "Lachs"}}
 	day := func(d int) time.Time { return time.Date(2026, 11, d, 0, 0, 0, 0, time.UTC) }
 	bs := planning.State{Foods: foods, Sessions: []planning.Session{{CookSession: plate.CookSession{ID: 1, FoodID: 1, CookDate: day(23), CookSlotID: 3, Portions: 1}}}}

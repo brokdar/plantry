@@ -14,6 +14,7 @@ import (
 )
 
 func TestMealChange_SaysWhatHappenedInPlainWords(t *testing.T) {
+	t.Parallel()
 	from, to := 1583, 1212
 	for _, c := range []struct {
 		name string
@@ -44,6 +45,7 @@ func TestMealChange_SaysWhatHappenedInPlainWords(t *testing.T) {
 // The structured report keeps changed, days and cooking; the sentences are in
 // tell only.
 func TestChangeReport_JSONHoldsTellNotTheSentenceLists(t *testing.T) {
+	t.Parallel()
 	r := changeReport{Leftovers: []string{"a"}, Week: []string{"b"}, NewWarnings: []string{"c"}, Worse: []string{"d"}, AlsoChanged: []string{"e"}, Tell: []string{"x"}}
 	raw, _ := json.Marshal(r)
 	assert.JSONEq(t, `{"tell":["x"],"earlier_warnings_unaffected":0}`, string(raw))
@@ -51,6 +53,7 @@ func TestChangeReport_JSONHoldsTellNotTheSentenceLists(t *testing.T) {
 
 // E036: a day whose protein moved by 5 g or more says it in grams.
 func TestBuildTell_ProteinBeforeAndAfterInGrams(t *testing.T) {
+	t.Parallel()
 	in := reportInput{
 		before: planning.Evaluation{Days: []planning.DayEval{{Date: "2026-11-22", ProteinG: 91}}},
 		after:  planning.Evaluation{Days: []planning.DayEval{{Date: "2026-11-22", ProteinG: 104, ProteinTargetG: 75}}},
@@ -64,6 +67,7 @@ func TestBuildTell_ProteinBeforeAndAfterInGrams(t *testing.T) {
 // E036c: with a day away, a week figure that only moved because the week is
 // counted over fewer days is one neutral line, never "worse".
 func TestWarnings_AwayDoesNotCallUnchangedFoodWorse(t *testing.T) {
+	t.Parallel()
 	meat := func(g, max float64, days int) planning.Issue {
 		return planning.Issue{Rule: "S7", Code: planning.CodeWeekMeatAboveDGE, Severity: planning.SeveritySoft, Params: map[string]any{"meat_g": g, "max_g": max, "days": float64(days)}}
 	}
@@ -82,6 +86,7 @@ func TestWarnings_AwayDoesNotCallUnchangedFoodWorse(t *testing.T) {
 // E041: week figures are told only past a real step or across a line; the
 // whole list is one "for the week" item.
 func TestWeekFacts_OnlyWhatMovedPastAStep(t *testing.T) {
+	t.Parallel()
 	in := reportInput{
 		before: planning.Evaluation{Week: &planning.WeekEval{Days: 7, MeatG: 321, Pct: 100, AvgProteinG: 93, TargetProteinG: 71, LegumeMeals: 9}},
 		after:  planning.Evaluation{Week: &planning.WeekEval{Days: 7, MeatG: 325, Pct: 101, AvgProteinG: 92, TargetProteinG: 71, LegumeMeals: 8}},
@@ -95,6 +100,7 @@ func TestWeekFacts_OnlyWhatMovedPastAStep(t *testing.T) {
 // E051: the batch resizes of a compound change reach the tell, and a cooking
 // that shrinks on another day and a guest at a small meal are told.
 func TestBuildTell_E051(t *testing.T) {
+	t.Parallel()
 	d := func(day int) time.Time { return time.Date(2026, 11, day, 0, 0, 0, 0, time.UTC) }
 	f1, f2, f3 := float64(1), float64(1), float64(1)
 	st := func(chiliCook int, eaters float64) planning.State {

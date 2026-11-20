@@ -223,7 +223,7 @@ func TestGenerationFailure_NoProviderConfigured(t *testing.T) {
 	require.NoError(t, e.db.QueryRow(`SELECT COUNT(*) FROM ai_runs`).Scan(&runs))
 	assert.Zero(t, runs)
 
-	id := e.generate(e.req())
+	id := e.generate(e.svcEnv.req())
 	assert.Equal(t, string(airun.ChooserHeuristic), e.run(id).Chooser)
 	assert.Equal(t, "ok", e.run(id).Status)
 }

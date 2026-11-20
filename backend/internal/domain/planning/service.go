@@ -337,26 +337,18 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held 
 	return run.ID(), nil
 }
 
-// chooser resolves the requested chooser (D11). Without a name it is the
-// LLM when one is wired and its provider resolves, and the heuristic when no
-// provider is configured. A configured provider that fails to resolve is an
-// error, never a silent fallback: the user asks for the heuristic instead.
+// chooser resolves the requested chooser (D11). PL2: without a name it is the
+// heuristic; a model never places meals by default. With an Extractor "llm"
+// means the wish extraction followed by the heuristic, and is the default when
+// its provider resolves. Without one an explicit "llm" runs the registered LLM
+// chooser, whose plan is replaced by the heuristic's when it leaves a hard
+// issue open (PL1b).
 func (s *Service) chooser(ctx context.Context, name airun.Chooser) (airun.Chooser, Chooser, error) {
 	if s.d.Extractor != nil {
 		return s.wishChooser(ctx, name)
 	}
 	if name == "" {
 		name = airun.ChooserHeuristic
-		if c, ok := s.d.Choosers[airun.ChooserLLM]; ok {
-			switch err := ready(ctx, c); {
-			case err == nil:
-				name = airun.ChooserLLM
-			case errors.Is(err, domain.ErrAIProviderMissing):
-			default:
-				s.d.Logger.WarnContext(ctx, "plan.chooser provider not ready", "error", err)
-				return "", nil, err
-			}
-		}
 	}
 	switch name {
 	case airun.ChooserLLM, airun.ChooserHeuristic:
@@ -426,11 +418,8 @@ func isHeuristic(c Chooser) bool {
 	return ok
 }
 
-// openHard are the hard issues a plan still holds (an empty cell is a plan
-// still being built, not counted).
-func openHard(merged State, t Target) []Issue {
-	return slices.DeleteFunc(violationsOf(Check(merged, t)), func(is Issue) bool { return is.Code == CodeMissingPlate })
-}
+// openHard are the hard issues a plan still holds, empty cells included.
+func openHard(merged State, t Target) []Issue { return violationsOf(Check(merged, t)) }
 
 // ready reports whether a chooser can run now: one with a Ready method (the
 // LLM's provider must resolve) says so, any other always can.
@@ -1018,7 +1007,13 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		if hlast, herr := hc.Choose(ctx, cin); herr == nil {
 			hprop, hlog := finishPlan(hc, hlast)
 			if hopen := openHard(Merge(base, j.target, hprop), j.target); len(hopen) < len(open) {
-				hprop.Notes = joinNotes(hprop.Notes, "The model's plan broke "+openRules(open)+"; this is the heuristic plan instead.")
+				what := openRules(open)
+				if what == "" {
+					what = "left meals empty"
+				} else {
+					what = "broke " + what
+				}
+				hprop.Notes = joinNotes(hprop.Notes, "The model's plan "+what+"; this is the heuristic plan instead.")
 				prop, runLog, last = hprop, hlog, hlast
 			}
 		}

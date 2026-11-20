@@ -47,6 +47,7 @@ func dayOf(t *testing.T, res map[string]any) (kcal, low, high float64) {
 // (never cheese or nuts, never on the lightened meal). What it promises is what
 // the way's ops plus the fix's ops give.
 func TestFindWays_UnderRangeDayGetsOneFix(t *testing.T) {
+	t.Parallel()
 	e := fixEnv(t, 2600)
 	id := e.dinner3()
 	for _, in := range []string{
@@ -99,6 +100,7 @@ func TestFindWays_UnderRangeDayGetsOneFix(t *testing.T) {
 
 // A day the way keeps in its range has no fix.
 func TestFindWays_InRangeDayHasNoFix(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	res := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lighter","plate_id":%d}`, e.dinner3()))
 	for _, w := range relMaps(res["ways"]) {
@@ -113,6 +115,7 @@ func TestFindWays_InRangeDayHasNoFix(t *testing.T) {
 // piece of fruit for a small gap, bread for a bigger one), and applying that
 // fix gives what the reply said.
 func TestApplyChanges_LighterLeavingDayUnderRangeOffersOneSmallFix(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		target   int
 		maxAfter float64 // above the range's low end; 0: only inside the range
@@ -174,6 +177,7 @@ func TestApplyChanges_LighterLeavingDayUnderRangeOffersOneSmallFix(t *testing.T)
 const fixMarginForTest = 50
 
 func TestIsCheeseOrNut(t *testing.T) {
+	t.Parallel()
 	for name, want := range map[string]bool{"Parmesan": true, "Bergkäse": true, "Walnüsse": true, "Peanut butter": true, "Coconut milk": false, "Ciabatta": false, "Apple": false} {
 		assert.Equal(t, want, planning.IsCheeseOrNut(name), name)
 	}
@@ -182,6 +186,7 @@ func TestIsCheeseOrNut(t *testing.T) {
 // Any write that leaves a touched day under its range, not only a light
 // request, ends with the one fix and says the day was already under before.
 func TestApplyChanges_AnyWriteUnderRangeOffersOneFix(t *testing.T) {
+	t.Parallel()
 	e := fixEnv(t, 2700)
 	var lunch int64
 	var comp int64
@@ -207,6 +212,7 @@ func TestApplyChanges_AnyWriteUnderRangeOffersOneFix(t *testing.T) {
 // applied, and one that leaves the day under its range carries the one fix
 // that puts it inside.
 func TestFindWays_ProperlyLightOfferStillMeetsTheLimitAndFixesTheDay(t *testing.T) {
+	t.Parallel()
 	e := fixEnv(t, 3000)
 	res := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lighter","plate_id":%d,"to_limit":true}`, e.dinner3()))
 	require.NotNil(t, res["offer"])
@@ -244,6 +250,7 @@ func TestFindWays_ProperlyLightOfferStillMeetsTheLimitAndFixesTheDay(t *testing.
 // compound way that makes the dinner properly light, and applying exactly its
 // ops gives the promised dinner and day.
 func TestFindWays_StopsShortOfLightOffersTheLightCompound(t *testing.T) {
+	t.Parallel()
 	e := fixEnv(t, 2600)
 	e.sql(`UPDATE plate_components SET portions = 1.5 WHERE plate_id = ?`, e.dinner3())
 	res := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lighter","plate_id":%d}`, e.dinner3()))
@@ -291,6 +298,7 @@ func TestFindWays_StopsShortOfLightOffersTheLightCompound(t *testing.T) {
 // light, never a mid-way one; applying exactly its ops gives the promised
 // dinner and day.
 func TestFindWays_CannotLightenAloneOffersTheLightCompound(t *testing.T) {
+	t.Parallel()
 	e := fixEnv(t, 3500)
 	e.sql(`UPDATE plate_components SET portions = 1.5 WHERE plate_id = ?`, e.dinner3())
 	res := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lighter","plate_id":%d}`, e.dinner3()))
@@ -328,6 +336,7 @@ func TestFindWays_CannotLightenAloneOffersTheLightCompound(t *testing.T) {
 // The sentence about a day's moved target names the true cause: a lunch that
 // lost its light mark raised the target.
 func TestMarkChange(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		before, after []string
 		want          string
@@ -349,6 +358,7 @@ func TestMarkChange(t *testing.T) {
 // fix. Applying exactly offer + fix gives no light-meal warning on the lunch and
 // the promised day.
 func TestFindWays_CompoundGrowingALightLunchClearsItsMark(t *testing.T) {
+	t.Parallel()
 	clearedAny := false
 	for _, lp := range []float64{0.3} {
 		for _, target := range []int{2200, 2250, 2300, 2700} {
@@ -402,6 +412,7 @@ func TestFindWays_CompoundGrowingALightLunchClearsItsMark(t *testing.T) {
 // names ONE recommended offer, the lowest the day goes without leaving its
 // range, whose figures are the dry run of its own ops.
 func TestFindWays_ImpossibleDayNumberOffersTheLowestVerifiedStep(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	ctx, _ := e.chat()
 	offered := 0

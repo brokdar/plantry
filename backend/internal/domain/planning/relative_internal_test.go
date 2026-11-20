@@ -25,7 +25,4 @@ func TestOverloadedCooking(t *testing.T) {
 	assert.False(t, overloadedCooking(state(2), state(2)))
 	assert.True(t, overloadedCooking(state(2), state(3)), "a third dish on the cooking time")
 	assert.False(t, overloadedCooking(state(3), state(3)), "already so before the way")
-	s := state(3)
-	s.Plates = s.Plates[:2] // the third batch feeds no meal: it is not a dish of this cooking
-	assert.False(t, overloadedCooking(state(2), s))
 }

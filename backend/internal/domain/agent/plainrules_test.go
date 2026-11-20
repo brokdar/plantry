@@ -20,6 +20,7 @@ var ruleToken = regexp.MustCompile(`\b[HS]\d+b?\b`)
 // rule code or an issue code (it repeats what it reads, the user cannot read
 // "S2" or "H9").
 func TestPlainRules_IssueHasLabelAndNoCodes(t *testing.T) {
+	t.Parallel()
 	raw := json.RawMessage(`{"after":{"issues":{"new":[{"rule":"S2","code":"kcal_below_band","severity":"soft","date":"2026-11-10","params":{"kcal":1500}}],
 		"worsened":[{"rule":"S7","code":"week_meat_above_dge","severity":"soft","before":{"meat_g":321},"after":{"meat_g":471}}]}},
 		"empty_reason":{"candidates":3,"dropped":{"H9.kcal_below_floor":2,"S6.meal_not_light":1,"nutrition_missing":1}}}`)
@@ -53,6 +54,7 @@ func TestPlainRules_IssueHasLabelAndNoCodes(t *testing.T) {
 }
 
 func TestPlainRules_ResultWithoutIssuesIsUntouched(t *testing.T) {
+	t.Parallel()
 	raw := json.RawMessage(`{"b":1,"a":[{"code":"x"}]}`)
 	assert.JSONEq(t, string(raw), string(agent.PlainRules(raw)))
 }
@@ -63,6 +65,7 @@ func TestPlainRules_ResultWithoutIssuesIsUntouched(t *testing.T) {
 // it, and the tools have a parameter named dry_run (an underscore, so no
 // match); only that one prohibition sentence is excluded.
 func TestChatModelReadsNoRuleCodesOrDryRun(t *testing.T) {
+	t.Parallel()
 	kcal, kg := 2000.0, 70.0
 	prof := &profile.Profile{KcalTarget: &kcal, WeightKg: &kg, HouseholdPortions: 1, Locale: "en"}
 	prompt, _ := agent.ComposePrompt(prof, "", "", time.Time{})
@@ -87,6 +90,7 @@ func TestChatModelReadsNoRuleCodesOrDryRun(t *testing.T) {
 // An issue with no verified fix (E002b) and a cook in a no-plate slot (E001)
 // read by label too; no_fix_found and no_fix_reason stay.
 func TestPlainRules_NoFixAndCookInNoneCell(t *testing.T) {
+	t.Parallel()
 	raw := json.RawMessage(`{"issues":[{"rule":"H2","code":"too_many_cook_occasions","severity":"violation","no_fix_found":true,"no_fix_reason":"ask the user"},
 		{"rule":"H1","code":"cook_in_none_cell","severity":"violation","session_id":4}]}`)
 	var res struct {
@@ -104,6 +108,7 @@ func TestPlainRules_NoFixAndCookInNoneCell(t *testing.T) {
 // E017b: planner words inside result keys and reason values read as kitchen
 // words; the keys the model passes back (session_id) stay.
 func TestPlainRules_KeysAndReasonsInKitchenWords(t *testing.T) {
+	t.Parallel()
 	raw := json.RawMessage(`{"issues":[{"rule":"S2","code":"kcal_below_band","severity":"soft","params":{"band_low_kcal":1815,"band_high_kcal":2218,"floor_kcal":1650,"band_low_pct":95}},
 		{"rule":"S9","code":"add_on_excess","severity":"soft","session_id":4,"params":{"reason":"over_cap","max_grams":200}}],"days":[{"cook_occasions":1}]}`)
 	out := string(agent.PlainRules(raw))

@@ -16,12 +16,13 @@ import (
 )
 
 type fakeExtractor struct {
-	c     planning.Constraints
-	err   error
-	calls int
+	c        planning.Constraints
+	err      error
+	readyErr error
+	calls    int
 }
 
-func (f *fakeExtractor) Ready(context.Context) error { return nil }
+func (f *fakeExtractor) Ready(context.Context) error { return f.readyErr }
 func (f *fakeExtractor) Extract(context.Context, planning.State, string) (planning.Constraints, error) {
 	f.calls++
 	return f.c, f.err

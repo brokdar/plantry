@@ -147,6 +147,7 @@ func count(t *testing.T, db *sql.DB, q string) int {
 // Case 1: the provider fails on the first call. Nothing is planned, the user
 // gets a translatable key, the run log says what happened.
 func TestChatFailure_ProviderErrorOnFirstCall(t *testing.T) {
+	t.Parallel()
 	for _, tc := range providerFailures {
 		t.Run(tc.name, func(t *testing.T) {
 			client := &failOn{Client: fake.NewFromScript(&fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}}), n: 1, err: tc.err}
@@ -220,6 +221,7 @@ func (e *planToolEnv) eatersOf(id int64) float64 {
 // made is complete and recorded as one undoable change; the run log has the
 // call and the failed second one.
 func TestChatFailure_ProviderFailsAfterAWrite(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.freshMain()
 	want := p.Eaters + 2
@@ -245,6 +247,7 @@ func TestChatFailure_ProviderFailsAfterAWrite(t *testing.T) {
 // Case 4: a reply cut off at the output limit during a tool call runs nothing
 // and the run goes on.
 func TestChatFailure_CutOffDuringAToolCall(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.freshMain()
 	cut := toolTurn("tu_cut", "apply_changes", fmt.Sprintf(`{"ops":[{"op":"set_eaters","plate_id":%d,"eaters":%v}]}`, p.ID, p.Eaters+2))
@@ -283,6 +286,7 @@ func (c cancelBeforeCommit) InTx(ctx context.Context, fn func(context.Context) e
 // rolls back whole, no change is recorded, and the run ends cancelled with
 // its steps and the plan after.
 func TestChatFailure_CancelWhileAWriteToolRuns(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.freshMain()
 	script := &fake.Script{Turns: []fake.Turn{
@@ -313,6 +317,7 @@ func TestChatFailure_CancelWhileAWriteToolRuns(t *testing.T) {
 // the batch rolls back whole; a plate the user changed (still a draft) is
 // written over, and the result shows the plan as it is now.
 func TestChatFailure_PlanChangesBetweenDryRunAndWrite(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	week := e.week()

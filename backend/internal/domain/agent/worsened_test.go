@@ -27,6 +27,7 @@ func byKey(is ...planning.Issue) map[string]planning.Issue {
 // An issue open before and after whose numbers got worse is reported with
 // both params: it is neither new nor resolved (audit B3).
 func TestDeltaOf_Worsened(t *testing.T) {
+	t.Parallel()
 	before := byKey(
 		issueWith("S7", planning.CodeWeekMeatAboveDGE, "", map[string]any{"meat_g": 321.0, "max_g": 300.0}),
 		issueWith("S2", planning.CodeKcalBelowBand, "2026-11-10", map[string]any{"kcal": 1700.0, "band_low_kcal": 1800.0, "band_high_kcal": 2200.0}),
@@ -60,11 +61,13 @@ func asMaps(t *testing.T, v any) []map[string]any {
 }
 
 func TestDeltaOf_NothingWorseOmitsTheKey(t *testing.T) {
+	t.Parallel()
 	is := issueWith("S7", planning.CodeWeekMeatAboveDGE, "", map[string]any{"meat_g": 321.0})
 	assert.NotContains(t, agent.DeltaOf(byKey(is), byKey(is)), "worsened")
 }
 
 func TestDeltaOf_WorsenedIsCapped(t *testing.T) {
+	t.Parallel()
 	before, now := map[string]planning.Issue{}, map[string]planning.Issue{}
 	for i := 1; i <= 14; i++ {
 		d := "2026-11-" + string(rune('0'+i/10)) + string(rune('0'+i%10))
@@ -81,6 +84,7 @@ func TestDeltaOf_WorsenedIsCapped(t *testing.T) {
 // must not add an empty date: that read as "outside the evaluated windows" and
 // turned issues_checked off with an empty reason (audit B4).
 func TestMealResult_SkipsEmptyDates(t *testing.T) {
+	t.Parallel()
 	b := agent.NewBatch()
 	agent.MealResult(map[string]any{}, plate.MealResult{AlsoChanged: []plate.AlsoChanged{
 		{What: plate.AlsoCooksFresh, SessionID: 3, PlateID: 4, Date: "2026-11-09"},
@@ -92,6 +96,7 @@ func TestMealResult_SkipsEmptyDates(t *testing.T) {
 
 // An after-value that cannot be measured is neither worsened nor improved.
 func TestDeltaOf_UnmeasurableAfterIsNotWorsened(t *testing.T) {
+	t.Parallel()
 	before := issueWith("S7", planning.CodeWeekMeatAboveDGE, "", map[string]any{"meat_g": 321.0, "max_g": 300.0})
 	after := issueWith("S7", "unknown_code", "", nil)
 	assert.NotContains(t, agent.DeltaOf(byKey(before), byKey(after)), "worsened")

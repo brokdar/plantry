@@ -17,6 +17,7 @@ import (
 // user is told what happened and what to do, and the run is an error with its
 // key.
 func TestChatFailure_FinalTextCutOff(t *testing.T) {
+	t.Parallel()
 	cut := fake.Turn{StopReason: "max_tokens", Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{{Type: "text", Text: "Here is your week: on Monday"}}}}
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{cut}})
 

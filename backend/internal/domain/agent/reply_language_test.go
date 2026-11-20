@@ -15,6 +15,7 @@ import (
 // the report's English sentences are content to translate, and a reply ends
 // with the offer or with nothing, never with a bare question.
 func TestPrompt_ReplyLanguageAndClosing(t *testing.T) {
+	t.Parallel()
 	kcal := 2000.0
 	for _, locale := range []string{"de", "en", ""} {
 		prompt, _ := agent.ComposePrompt(&profile.Profile{KcalTarget: &kcal, HouseholdPortions: 1, Locale: locale}, "", "", time.Time{})

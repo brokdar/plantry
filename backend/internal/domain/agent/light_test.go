@@ -15,6 +15,7 @@ import (
 // call: the touched day says it is light (and records it in the run log's
 // dry-run step); a malformed one is refused before anything runs.
 func TestApplyChanges_LightRequest(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, _ := e.freshMain()

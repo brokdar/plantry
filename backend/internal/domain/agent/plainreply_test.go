@@ -11,6 +11,7 @@ import (
 // E030: the final reply passes a rewriter for unambiguous planner terms. The
 // sentences are the replies of the paid rounds 4 to 6.
 func TestPlainReply(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, in, want string }{
 		{"percent band", "Average energy is 102% of target (was 100%), within the 95–105% band.", "Average energy is 102% of target (was 100%), within the 95–105% range."},
 		{"band of the week", "average energy is 99% of target, within the 95–105% band.", "average energy is 99% of target, within the 95–105% range."},

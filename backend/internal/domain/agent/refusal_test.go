@@ -18,6 +18,7 @@ import (
 // tool the refused reply started runs, the plan is unchanged and the run is
 // recorded as an error with its key.
 func TestChatFailure_ModelRefuses(t *testing.T) {
+	t.Parallel()
 	for name, withTool := range map[string]bool{"text only": false, "with a tool call": true} {
 		t.Run(name, func(t *testing.T) {
 			e := newPlanToolEnv(t)

@@ -399,6 +399,9 @@ func TestWays_ToLimitAppliesNothingThatStopsShort(t *testing.T) {
 	for _, w := range res.Ways {
 		assert.True(t, w.Reaches, "way %s stops short of the limit", w.What)
 	}
+	for _, o := range res.Offers {
+		assert.True(t, o.Reaches, o.What)
+	}
 	if len(res.Ways) == 0 {
 		assert.NotEmpty(t, res.EmptyWhy)
 	}

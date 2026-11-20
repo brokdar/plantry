@@ -57,6 +57,7 @@ func dayKcalOf(res map[string]any, date string) float64 {
 // never names an offer the result does not hold, over every refusal we can
 // build here (the cut that no smaller step saves, a swap of two meals).
 func TestApplyChanges_RefusalClosesWithAnOptionOrAnHonestNone(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	dinners := slices.DeleteFunc(e.draftMeals(), func(p plate.Plate) bool { return p.SlotID != e.slotID("dinner") })
 	require.GreaterOrEqual(t, len(dinners), 2)
@@ -135,6 +136,7 @@ func TestApplyChanges_RefusalClosesWithAnOptionOrAnHonestNone(t *testing.T) {
 // A day a user's own away leaves under its minimum gets the checked fix that
 // reaches it, or an honest "no fix": next never promises one that is absent.
 func TestApplyChanges_AwayUnderTheFloorGetsACheckedFix(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	ctx, _ := e.chat()
 	dinner := slices.IndexFunc(e.draftMeals(), func(p plate.Plate) bool { return p.SlotID == e.slotID("dinner") })
@@ -175,6 +177,7 @@ func mustJSON(t *testing.T, v any) string {
 // change on its own meal, checked together), listed first; the closing option
 // is never "apply one, never add them up" when the number needs several.
 func TestFindWays_LowerDayCombinesLeversToTheNamedKcal(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	combined := 0
 	for _, p := range e.draftMeals() {
@@ -212,6 +215,7 @@ func TestFindWays_LowerDayCombinesLeversToTheNamedKcal(t *testing.T) {
 
 // Every find_ways call over the week names only options it returns.
 func TestFindWays_NextNeverNamesAnAbsentOption(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	n := 0
 	for _, p := range e.draftMeals() {

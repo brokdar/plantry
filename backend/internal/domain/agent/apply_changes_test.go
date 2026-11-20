@@ -78,6 +78,7 @@ func issueRules(t *testing.T, res map[string]any, key string) []string {
 // A dry run reports the full result and writes nothing: no row of any plan
 // table, no override, no ai_changes row and no change handed to the loop.
 func TestApplyChanges_DryRunLeavesTheDatabaseUnchanged(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, sid := e.freshMain()
@@ -117,6 +118,7 @@ func TestApplyChanges_DryRunLeavesTheDatabaseUnchanged(t *testing.T) {
 // All ops share one transaction: a failing op names itself and rolls back
 // the ops before it.
 func TestApplyChanges_FailingOpRollsBackTheBatch(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.freshMain()
 	before := e.dbCounts()
@@ -135,6 +137,7 @@ func TestApplyChanges_FailingOpRollsBackTheBatch(t *testing.T) {
 // second cooking occasion (H2) unless it is cooked together with the existing
 // batch. cook_at puts it on the existing cook cell, so H2 stays quiet.
 func TestApplyChanges_CookAtSharesTheCookCell(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	e.setCookLimit(1)
 	p, _ := e.freshMain()
@@ -161,6 +164,7 @@ func TestApplyChanges_CookAtSharesTheCookCell(t *testing.T) {
 // find_foods no_cook returns leaves that need no cooking (raw produce) and
 // leaves out cooked ones.
 func TestFindFoods_NoCookReturnsLeaves(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	e.insert(`INSERT INTO foods (name, kind, source, shop_section, kcal_100g, protein_100g, fat_100g, carbs_100g) VALUES ('Gurke', 'leaf', 'manual', 'produce', 15, 0.7, 0.1, 3.6)`)
 	e.insert(`INSERT INTO foods (name, kind, source, kcal_100g, protein_100g, fat_100g, carbs_100g) VALUES ('Reis', 'leaf', 'manual', 130, 2.7, 0.3, 28)`)

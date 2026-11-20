@@ -116,6 +116,7 @@ func (e *plateToolEnv) newPlate(t *testing.T) int64 {
 
 // B2-AC5
 func TestTool_AddFoodToPlate_TakesPerEaterQuantities(t *testing.T) {
+	t.Parallel()
 	e := newPlateToolEnv(t)
 	plateID := e.newPlate(t)
 
@@ -155,6 +156,7 @@ func TestTool_AddFoodToPlate_TakesPerEaterQuantities(t *testing.T) {
 }
 
 func TestTool_UpdatePlateComponent_TakesPerEaterQuantities(t *testing.T) {
+	t.Parallel()
 	e := newPlateToolEnv(t)
 	plateID := e.newPlate(t)
 	leaf := e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":100,"unit":"g"}`, plateID, e.rice))
@@ -173,6 +175,7 @@ func TestTool_UpdatePlateComponent_TakesPerEaterQuantities(t *testing.T) {
 }
 
 func TestTool_SwapFood_TakesPerEaterQuantities(t *testing.T) {
+	t.Parallel()
 	e := newPlateToolEnv(t)
 	plateID := e.newPlate(t)
 	composed := e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d}`, plateID, e.chili))
@@ -187,6 +190,7 @@ func TestTool_SwapFood_TakesPerEaterQuantities(t *testing.T) {
 }
 
 func TestTool_CreatePlate_EatersAndPlateSummary(t *testing.T) {
+	t.Parallel()
 	e := newPlateToolEnv(t)
 	p := e.mustOp(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-02","slot_id":%d,"eaters":3}`, e.slotID))
 	assert.Equal(t, 3.0, p["eaters"])
@@ -222,6 +226,7 @@ func platesOf(plan map[string]any) []map[string]any {
 
 // The chat has no tool for what its prompt already holds (slots, profile).
 func TestToolSet_NoListSlotsNoGetProfile(t *testing.T) {
+	t.Parallel()
 	e := newPlateToolEnv(t)
 	for _, name := range []string{"list_slots", "get_profile"} {
 		_, err := e.exec(t, name, `{}`)
@@ -230,6 +235,7 @@ func TestToolSet_NoListSlotsNoGetProfile(t *testing.T) {
 }
 
 func TestPrompt_SaysPortionsPerEater(t *testing.T) {
+	t.Parallel()
 	prompt, _ := agent.ComposePrompt(nil, "", "", time.Time{})
 	assert.Contains(t, prompt, "portions per eater")
 	assert.Equal(t, "v37", agent.PromptVersion)
@@ -237,6 +243,7 @@ func TestPrompt_SaysPortionsPerEater(t *testing.T) {
 
 // B2-AC6: the chat modes and week ids are gone from the agent package.
 func TestAgentPackage_HasNoChatModeSymbols(t *testing.T) {
+	t.Parallel()
 	files, err := filepath.Glob("*.go")
 	require.NoError(t, err)
 	fset := token.NewFileSet()
@@ -277,6 +284,7 @@ var toolToday = time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
 // B2-AC3 (D7): the agent never writes a day before today.
 func TestTool_PastDateGuard(t *testing.T) {
+	t.Parallel()
 	e := newPlateToolEnv(t)
 	_, err := e.op(t, "create_plate", fmt.Sprintf(`{"date":"2026-10-31","slot_id":%d}`, e.slotID))
 	require.ErrorIs(t, err, domain.ErrAIPastDate)
@@ -310,6 +318,7 @@ func TestTool_PastDateGuard(t *testing.T) {
 
 // B2-AC1 through the tools: a confirmed plate (the user's) is refused.
 func TestTool_ConfirmedPlateIsRefused(t *testing.T) {
+	t.Parallel()
 	e := newPlateToolEnv(t)
 	p, err := e.plates.Create(e.ctx, plate.PlateInput{Date: toolToday, SlotID: e.slotID})
 	require.NoError(t, err)
@@ -322,6 +331,7 @@ func TestTool_ConfirmedPlateIsRefused(t *testing.T) {
 
 // B2-AC4 (D9): likes and dislikes belong to plate feedback.
 func TestTool_RecordPreference_ReservedKeys(t *testing.T) {
+	t.Parallel()
 	e := newPlateToolEnv(t)
 	for _, key := range []string{"likes", "dislikes", "likes.extra", "dislikes.x"} {
 		t.Run(key, func(t *testing.T) {
@@ -342,6 +352,7 @@ func TestTool_RecordPreference_ReservedKeys(t *testing.T) {
 
 // B2-AC6 (D10): plates carry state and reason; their sessions are listed.
 func TestTool_GetPlan_StateAndSessions(t *testing.T) {
+	t.Parallel()
 	e := newPlateToolEnv(t)
 	draft := e.newPlate(t)
 	e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d}`, draft, e.chili))

@@ -59,6 +59,7 @@ func (e *planToolEnv) applyWay(res, way map[string]any, dryRun bool) (map[string
 // cap flag agrees. Ways change only the named meal; an offer is the only
 // compound kind, and it never adds a filler (only a side recipe or bread).
 func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	ctx, _ := e.chat()
 	checked, offers, goals := 0, 0, map[string]int{}
@@ -155,6 +156,7 @@ func (e *planToolEnv) applyWayCtx(ctx context.Context, res, way map[string]any) 
 // A light mark is stored only on a meal that meets its cap: the call is
 // refused with the numbers and a pointer to find_ways; a hearty mark the same.
 func TestApplyChanges_MarkOnAMealThatMissesItsLimitIsRefused(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	e.sql(`UPDATE user_profile SET kcal_target = 600 WHERE id = 1`) // a share of 200 kcal: cap 150, minimum 250
 	ctx, _ := e.chat()
@@ -189,6 +191,7 @@ func TestApplyChanges_MarkOnAMealThatMissesItsLimitIsRefused(t *testing.T) {
 // A call that only sets a mark needs no no-op op when the meal meets its cap;
 // for a relative request (a goal) ops are required and the food must change.
 func TestApplyChanges_MarkOnlyAndGoalRules(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	e.sql(`UPDATE user_profile SET kcal_target = 20000 WHERE id = 1`) // caps far above any meal
 	ctx, _ := e.chat()
@@ -226,6 +229,7 @@ func TestApplyChanges_MarkOnlyAndGoalRules(t *testing.T) {
 // Taking the first way for real: the request is satisfied, the mark is
 // stored with it and the food changed.
 func TestFindWays_ApplyFirstWayStoresMarkAndSatisfies(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	ctx, _ := e.chat()
 	for _, p := range e.draftMeals() {
@@ -253,6 +257,7 @@ func TestFindWays_ApplyFirstWayStoresMarkAndSatisfies(t *testing.T) {
 
 // E013: a limit inside constraints is refused with the place it belongs.
 func TestFindAlternatives_MisplacedLimitIsRedirected(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	ctx, _ := e.chat()
 	p := e.draftMeals()[0]
@@ -266,6 +271,7 @@ func TestFindAlternatives_MisplacedLimitIsRedirected(t *testing.T) {
 // E008: lower_day and raise_day come with a next step, every way passes its
 // dry run and lands the day in the adjusted range.
 func TestFindWays_DayGoalsAndNextStep(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	ctx, _ := e.chat()
 	dates := map[string]bool{}
@@ -306,6 +312,7 @@ func TestFindWays_DayGoalsAndNextStep(t *testing.T) {
 }
 
 func TestFindWays_NextStepWithAnOffer(t *testing.T) {
+	t.Parallel()
 	// An offer alone: explain and ask; ways and an offer: apply and mention.
 	e := relEnv(t)
 	ctx, _ := e.chat()
@@ -345,6 +352,7 @@ func mainComponentID(t *testing.T, p plate.Plate) int64 {
 // subset is saved and the rest is named with numbers; a single unsafe op is
 // refused (nothing saved); explicit away and all-safe calls are untouched.
 func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	ctx, _ := e.chat()
 	var dinners []plate.Plate
@@ -440,6 +448,7 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 // produce: a candidate that repeats a dish (seen only by the real check) lists
 // that warning and is never the recommended one.
 func TestFindAlternatives_ListedWarningsAreTheWritesWarnings(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	shown, repeats := 0, 0
 	for _, p := range e.draftMeals() {
@@ -468,6 +477,7 @@ func TestFindAlternatives_ListedWarningsAreTheWritesWarnings(t *testing.T) {
 // A replace that names its component needs no plate_id (the component knows
 // its plate): models send plate_component_id alone.
 func TestApplyChanges_ReplaceByComponentAlone(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	p, _ := e.twoDinners()
 	food := e.unusedFood("main")
@@ -477,6 +487,7 @@ func TestApplyChanges_ReplaceByComponentAlone(t *testing.T) {
 
 // A swap that carries session_id or cook_at is a replace, not a refused field.
 func TestApplyChanges_SwapWithASource(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	p, _ := e.twoDinners()
 	food := e.unusedFood("main")
@@ -491,6 +502,7 @@ func TestApplyChanges_SwapWithASource(t *testing.T) {
 // goal applied on a fresh copy of the plan give the same meal and day kcal,
 // the same reach of the limit and no change the way did not list.
 func TestFindWays_PromiseIsTheResult(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	dinner := func(e *planToolEnv) int64 {
 		for _, p := range e.draftMeals() {
@@ -549,6 +561,7 @@ func TestFindWays_PromiseIsTheResult(t *testing.T) {
 // A light meal asked for (to_limit) is met only at the limit (RL4): every way
 // listed reaches it, and when none does there is at most one offer.
 func TestFindWays_ToLimitOffersOnlyWhatReaches(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	for _, p := range e.draftMeals() {
 		if p.SlotID != e.slotID("dinner") {
@@ -575,6 +588,7 @@ func TestFindWays_ToLimitOffersOnlyWhatReaches(t *testing.T) {
 // the old dish stays, and the result carries the clash and one offer whose dry
 // run equals its promise (the offer's ops, applied, leave one starch).
 func TestApplyChanges_ReplaceMainKeepsTheSidesAndOffers(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	p, _ := e.twoDinners()
 	var sideFood int64
@@ -630,6 +644,7 @@ func TestApplyChanges_ReplaceMainKeepsTheSidesAndOffers(t *testing.T) {
 // d/a4: a way that ends more than 25 kcal above the number the user named does
 // not reach it: reaches_limit is judged against that number, not the day's range.
 func TestFindWays_ReachesIsJudgedAgainstTheNamedKcal(t *testing.T) {
+	t.Parallel()
 	e := relEnv(t)
 	checked := 0
 	for _, p := range e.draftMeals() {

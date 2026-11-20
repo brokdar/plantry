@@ -36,6 +36,7 @@ func lines(m map[string]any) []string {
 // batch links) and said in plain words; undone once, it is not undoable again,
 // neither by the tool nor by the HTTP undo.
 func TestUndoLastChange_MoveSwapRestoresExactly(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, q := e.twoDinners()
 	dump := e.planDump()
@@ -63,6 +64,7 @@ func TestUndoLastChange_MoveSwapRestoresExactly(t *testing.T) {
 // count 2 undoes the two newest changes, newest first; an undone change is
 // skipped.
 func TestUndoLastChange_CountAndSkipsUndone(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	a, b := e.twoDinners()
 	dump := e.planDump()
@@ -98,6 +100,7 @@ func TestUndoLastChange_CountAndSkipsUndone(t *testing.T) {
 // An older change stays stale when something that is not undone touched its
 // rows after it, even if a newer change was undone in between.
 func TestUndoLastChange_ChainStillGuardsForeignEdits(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.mainSession()
 	ctx, conv := e.chat()
@@ -116,6 +119,7 @@ func TestUndoLastChange_ChainStillGuardsForeignEdits(t *testing.T) {
 
 // A newer edit of the plan refuses the undo with a reason and writes nothing.
 func TestUndoLastChange_StaleIsRefused(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.mainSession()
 	ctx, conv := e.chat()
@@ -139,6 +143,7 @@ func TestUndoLastChange_StaleIsRefused(t *testing.T) {
 
 // A confirmed meal refuses the undo and points at unlock.
 func TestUndoLastChange_ConfirmedIsRefused(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.mainSession()
 	ctx, conv := e.chat()

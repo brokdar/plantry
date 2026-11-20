@@ -37,9 +37,9 @@ func TestCompareGolden(t *testing.T) {
 	dir := t.TempDir()
 	a, b := filepath.Join(dir, "a.jsonl"), filepath.Join(dir, "b.jsonl")
 
-	_, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-prompt-version", "p1-a", "-out", a)
+	_, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-parallel", "8", "-prompt-version", "p1-a", "-out", a)
 	require.NoError(t, err)
-	out, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-prompt-version", "p1-b", "-out", b, "-compare", a)
+	out, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-parallel", "8", "-prompt-version", "p1-b", "-out", b, "-compare", a)
 	require.NoError(t, err)
 
 	for path, label := range map[string]string{a: "p1-a", b: "p1-b"} {

@@ -144,6 +144,7 @@ func realisticWeek() (planning.State, *profile.Profile) {
 // cut it ("[prompt truncated]") and with it the facts of the later foods and
 // the per-day table (audit B1). Run with -v for the byte counts.
 func TestChatPrompt_RealisticWeekFitsWithRoomToSpare(t *testing.T) {
+	t.Parallel()
 	st, prof := realisticWeek()
 	require.Len(t, st.Plates, 20)
 	require.Len(t, st.Sessions, 22)

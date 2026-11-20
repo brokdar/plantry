@@ -11,6 +11,7 @@ import (
 // E030: the report of an undo has nothing new or worse and no day status: the
 // plan is back where it was before the undone change.
 func TestUndoReport_NothingNewAfterAnUndo(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, conv := e.chat()
 	_, p := e.laterMealSession()

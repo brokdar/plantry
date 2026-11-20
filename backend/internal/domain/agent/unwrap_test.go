@@ -10,6 +10,7 @@ import (
 
 // A sole {"params": {...}} wrapper is unwrapped for every tool (audit B7).
 func TestExecute_UnwrapsASoleParamsObject(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	out, _, _, err := e.ts.Execute(e.ctx, "get_plan", json.RawMessage(`{"params":{"from":"2026-11-07","to":"2026-11-08"}}`))
 	require.NoError(t, err)

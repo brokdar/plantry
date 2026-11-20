@@ -120,6 +120,13 @@ func toolFindWays(svc Services) Tool {
 					offers = planning.DemoteUnclean(verify(kept.Offers, 2))
 				}
 			}
+			if in.ToLimit {
+				// RL4: what the real check shows short of the limit is no way and no offer.
+				keep := func(list []planning.Way) []planning.Way {
+					return slices.DeleteFunc(list, func(w planning.Way) bool { return !w.Reaches })
+				}
+				ways, offers = keep(ways), keep(offers)
+			}
 			if len(offers) > 1 {
 				offers = offers[:1] // G3: one offer per reply
 			}

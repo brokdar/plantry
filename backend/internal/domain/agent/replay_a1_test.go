@@ -67,6 +67,7 @@ const chatStartDB = "testdata/chat_start.db"
 // TestReplayA1 replays three request shapes of the a1 round on a copy of the
 // start database: each result carries one recommended option.
 func TestReplayA1(t *testing.T) {
+	t.Parallel()
 	src := chatStartDB
 	run := func(e *planToolEnv, ctx context.Context, name, in string) map[string]any {
 		out, _, _, err := e.ts.Execute(ctx, name, json.RawMessage(in))

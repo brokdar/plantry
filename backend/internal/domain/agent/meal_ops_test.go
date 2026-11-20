@@ -130,6 +130,7 @@ func cellJSON(date string, slotID int64) string {
 }
 
 func TestApplyChanges_MoveToEmptyCell(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.twoDinners()
 	lunch := e.slotID("lunch")
@@ -157,6 +158,7 @@ func TestApplyChanges_MoveToEmptyCell(t *testing.T) {
 }
 
 func TestApplyChanges_MoveOccupant(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		occupant func(e *planToolEnv, q plate.Plate) (string, string) // json, the cell q ends on ("" removed)
@@ -216,6 +218,7 @@ func plateNamesOf(p plate.Plate) string {
 }
 
 func TestApplyChanges_MoveOntoTakenNeedsOccupant(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, q := e.twoDinners()
 	_, err := e.exec("apply_changes", fmt.Sprintf(`{"ops":[{"op":"move","plate_id":%d,"to":%s}]}`, p.ID, cellJSON(q.DateString(), q.SlotID)))
@@ -233,6 +236,7 @@ func (e *planToolEnv) unusedFood(role string) int64 {
 }
 
 func TestApplyChanges_ReplaceMain(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.twoDinners()
 	food := e.unusedFood("main")
@@ -255,6 +259,7 @@ func TestApplyChanges_ReplaceMain(t *testing.T) {
 }
 
 func TestApplyChanges_ReplaceSide(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.twoDinners()
 	// Give the plate exactly one side.
@@ -298,6 +303,7 @@ func (e *planToolEnv) noCookOn(date string, slotID int64) bool {
 }
 
 func TestApplyChanges_Away(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"cells", "date"} {
 		t.Run(mode, func(t *testing.T) {
 			e := newPlanToolEnv(t)
@@ -360,6 +366,7 @@ func (e *planToolEnv) laterMealSession() (*plate.SessionView, plate.Plate) {
 }
 
 func TestApplyChanges_MoveCook(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	v, p := e.laterMealSession()
 	day := p.DateString()
@@ -384,6 +391,7 @@ func TestApplyChanges_MoveCook(t *testing.T) {
 }
 
 func TestApplyChanges_Copy(t *testing.T) {
+	t.Parallel()
 	for _, as := range []string{"leftover", "fresh"} {
 		t.Run(as, func(t *testing.T) {
 			e := newPlanToolEnv(t)
@@ -418,6 +426,7 @@ func TestApplyChanges_Copy(t *testing.T) {
 // Several availability ops in one call are one change; undo restores every
 // cell and is stale when any cell was edited since.
 func TestApplyChanges_MultiCellAvailabilityUndo(t *testing.T) {
+	t.Parallel()
 	setup := func(t *testing.T) (*planToolEnv, *agent.Change, string, []plate.Plate) {
 		e := newPlanToolEnv(t)
 		p, q := e.twoDinners()
@@ -448,6 +457,7 @@ func TestApplyChanges_MultiCellAvailabilityUndo(t *testing.T) {
 }
 
 func TestApplyChanges_UnknownFieldNamesTheField(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.twoDinners()
 	_, err := e.exec("apply_changes", fmt.Sprintf(`{"ops":[{"op":"set_quantity","plate_component_id":%d,"quantity":2}]}`, p.Components[0].ID))
@@ -462,6 +472,7 @@ func TestApplyChanges_UnknownFieldNamesTheField(t *testing.T) {
 }
 
 func TestFindAlternatives(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.twoDinners()
 	var main plate.PlateComponent
@@ -506,6 +517,7 @@ func TestFindAlternatives(t *testing.T) {
 // cook_at alternatives (cooked with an existing cooking cell); their replace
 // op applies through apply_changes and adds no H2.
 func TestFindAlternatives_CookAtAppliesWithoutH2(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "1"))
 	lunch := e.slotID("lunch")
@@ -545,6 +557,7 @@ func TestFindAlternatives_CookAtAppliesWithoutH2(t *testing.T) {
 // portions equal the old ones plus the plate's, covering its meals, and no
 // H3 appears.
 func TestFindAlternatives_GrowingSessionAppliesAsEvaluated(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	v, _ := e.laterMealSession()
 	require.InDelta(t, v.Consumed, v.Portions, plate.PortionEpsilon, "the batch exactly covers its meals")
@@ -593,6 +606,7 @@ func TestFindAlternatives_GrowingSessionAppliesAsEvaluated(t *testing.T) {
 // saved plan, is the warning variety_repeat_week, not a hard variety_repeat
 // (the user chose the dish).
 func TestApplyChanges_WindowRepeatIsAWarning(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "3"))
 	a, b := e.twoDinners()

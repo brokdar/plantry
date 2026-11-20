@@ -20,12 +20,14 @@ func compose(p *profile.Profile, summary string, today time.Time) string {
 func day(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
 
 func TestPrompt_NoLegacyDayIndex(t *testing.T) {
+	t.Parallel()
 	if strings.Contains(compose(nil, "", time.Time{}), "0=Monday") {
 		t.Error("system prompt must not contain legacy day-index notation '0=Monday'")
 	}
 }
 
 func TestPrompt_CarriesSummaryBetweenProfileAndRules(t *testing.T) {
+	t.Parallel()
 	kcal := 2000.0
 	prompt := compose(&profile.Profile{KcalTarget: &kcal}, "SUMMARY\n", day(2026, 11, 2))
 
@@ -38,6 +40,7 @@ func TestPrompt_CarriesSummaryBetweenProfileAndRules(t *testing.T) {
 // D3: drafts, unlock, past days, regenerate vs direct tools, one summary; no
 // week-copy paragraph.
 func TestPrompt_ToolRules(t *testing.T) {
+	t.Parallel()
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{"wait until the user accepts", "unlock", "later message", "call unlock in that same turn", "before today", "regenerate", "Reply after a change", "get_plan"} {
 		if !strings.Contains(prompt, want) {
@@ -52,6 +55,7 @@ func TestPrompt_ToolRules(t *testing.T) {
 // v16: meal edits, moves as swaps, absence as one away op, replacements via
 // find_alternatives with minutes, tool limits and one undo per request.
 func TestPrompt_MealEditRules(t *testing.T) {
+	t.Parallel()
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
 		"change only what the user asked", "the fix is your closing offer", "only to clear a problem",
@@ -73,6 +77,7 @@ func TestPrompt_MealEditRules(t *testing.T) {
 // v17 and v18: consequences only from tool results, one dry-run rule, the ops
 // that were dry-ran, warnings named but not blocking, the meal intent's shift.
 func TestPrompt_V17Rules(t *testing.T) {
+	t.Parallel()
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
 		"never infer what happens to other meals", "without a check first", "without asking \"should I save?\"",
@@ -89,6 +94,7 @@ func TestPrompt_V17Rules(t *testing.T) {
 // issue is reported with the fix offered, never applied unasked (no
 // contradiction with "offer the fix" and the protein instruction).
 func TestPrompt_SoftIssuesAreOffered(t *testing.T) {
+	t.Parallel()
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
 		"A request is not done while a problem it caused is open",
@@ -110,6 +116,7 @@ func TestPrompt_SoftIssuesAreOffered(t *testing.T) {
 // S5 (carb and fat ranges) ranks last: after preferences, never at the cost
 // of kcal or protein.
 func TestPrompt_S5RanksLowest(t *testing.T) {
+	t.Parallel()
 	kcal := 2000.0
 	prompt := compose(&profile.Profile{KcalTarget: &kcal}, "", time.Time{})
 	for _, want := range []string{"6 carb and fat ranges (weekly carbs and fat: never at the cost of kcal or protein), 7 preferences and effort", "food-group rules (the DGE weekly food rules", "never at the cost of kcal or protein"} {
@@ -133,6 +140,7 @@ func planLines(n int, note string) string {
 }
 
 func TestPrompt_OverBudgetDropsPastCellsFirst(t *testing.T) {
+	t.Parallel()
 	summary := planLines(4, strings.Repeat("Rindergulasch mit Spätzle ", 4))
 	today := day(2026, 10, 20)
 
@@ -156,6 +164,7 @@ func TestPrompt_OverBudgetDropsPastCellsFirst(t *testing.T) {
 }
 
 func TestPrompt_StillOverBudgetIsCutOnRuneBoundary(t *testing.T) {
+	t.Parallel()
 	summary := planLines(8, strings.Repeat("Käse, Möhren und Brötchen. ", 20))
 
 	prompt := compose(nil, summary, day(2026, 10, 1))
@@ -172,6 +181,7 @@ func TestPrompt_StillOverBudgetIsCutOnRuneBoundary(t *testing.T) {
 }
 
 func TestPrompt_OversizedProfileCutsOnRuneBoundary(t *testing.T) {
+	t.Parallel()
 	long := strings.Repeat("Ich esse gern Käse, Möhren und Brötchen. ", 700)
 	p := &profile.Profile{SystemPrompt: &long}
 
@@ -192,6 +202,7 @@ func TestPrompt_OversizedProfileCutsOnRuneBoundary(t *testing.T) {
 // and code execution paragraph gone, three playbooks and the cook-occasion
 // count.
 func TestPrompt_V18(t *testing.T) {
+	t.Parallel()
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
 		"Playbook, light, filling, more protein, lower or raise a day", "Playbook, replace a dish", "Playbook, away",
@@ -223,6 +234,7 @@ func TestPrompt_V18(t *testing.T) {
 
 // Over budget the prompt never cuts silently: ComposePrompt reports the cut.
 func TestPrompt_ReportsTheCut(t *testing.T) {
+	t.Parallel()
 	short, cut := ComposePrompt(nil, "", "SUMMARY\n", day(2026, 11, 2))
 	if cut != 0 || strings.Contains(short, truncationNote) {
 		t.Errorf("a prompt that fits has no cut, got %d", cut)
@@ -235,6 +247,7 @@ func TestPrompt_ReportsTheCut(t *testing.T) {
 
 // The facts come before the plan summary, so a cut at the end never takes them.
 func TestPrompt_FactsBeforeSummary(t *testing.T) {
+	t.Parallel()
 	prompt, _ := ComposePrompt(nil, "FACTS\n", "SUMMARY\n", day(2026, 11, 2))
 	if f, s := strings.Index(prompt, "FACTS"), strings.Index(prompt, "SUMMARY"); f < 0 || s < f {
 		t.Errorf("want facts < summary, got %d %d", f, s)

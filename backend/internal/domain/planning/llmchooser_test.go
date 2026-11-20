@@ -64,6 +64,23 @@ func newLLMEnvOver(t *testing.T, wrap func(llm.Client) llm.Client) *llmEnv {
 }
 
 // generate runs a window generation with the default chooser.
+// req is the service env's request asking for the LLM chooser: without a name
+// the planner is the heuristic (PL2).
+func (e *llmEnv) req() planning.Request {
+	r := e.svcEnv.req()
+	r.Chooser = airun.ChooserLLM
+	return r
+}
+
+func (e *llmEnv) regenerate(sc planning.Scope) int64 {
+	e.t.Helper()
+	req := e.req()
+	req.Scope = sc
+	id, err := e.svc.Regenerate(e.ctx, req)
+	require.NoError(e.t, err)
+	return id
+}
+
 func (e *llmEnv) gen(turns ...fake.Turn) int64 {
 	e.t.Helper()
 	e.script.Turns = turns

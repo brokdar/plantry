@@ -26,6 +26,7 @@ import (
 // check (no model) for real requests and prints each report. Skipped without
 // the variable.
 func TestChangeReport_RealData(t *testing.T) {
+	t.Parallel()
 	src := os.Getenv("PLANTRY_PROOF_DB")
 	if src == "" {
 		t.Skip("PLANTRY_PROOF_DB not set")

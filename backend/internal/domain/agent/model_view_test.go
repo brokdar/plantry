@@ -15,6 +15,7 @@ import (
 // worse by a real step; a share that moved 0.2 points or meat 4 g further out
 // is not news.
 func TestWorsened_NeedsARealStep(t *testing.T) {
+	t.Parallel()
 	fat := func(pct float64) planning.Issue {
 		return issueWith("S5", planning.CodeWeekFatRange, "", map[string]any{"pct": pct, "range_low_pct": 25.0, "range_high_pct": 35.0})
 	}
@@ -45,6 +46,7 @@ func TestWorsened_NeedsARealStep(t *testing.T) {
 // E024-3 and E024-5: the model reads days as "Wed 25 Nov" (ids and the fields
 // it sends back keep ISO dates), and a check never looks like a write.
 func TestModelView_DatesAndDryRun(t *testing.T) {
+	t.Parallel()
 	raw := json.RawMessage(`{"saved":false,"status":"Nothing changed: check","dry_run":true,"dry_run_note":"Nothing was saved.","applied":[{"op":"swap","date":"2026-11-25"}],
 		"after":{"days":[{"date":"2026-11-25","kcal":1800}],"message":"Wed 2026-11-25 is over"},"report":{"changed":[]},
 		"ways":[{"ops":[{"op":"add","date":"2026-11-25"}],"light":[{"date":"2026-11-25","scope":"meal"}]}]}`)
@@ -70,6 +72,7 @@ func TestModelView_DatesAndDryRun(t *testing.T) {
 
 // E024-2: differences the model used to compute are in the result.
 func TestAddDerived(t *testing.T) {
+	t.Parallel()
 	ways := json.RawMessage(`{"max_kcal":550,"range_low":1815,"range_high":2218,"ways":[{"after":{"meal_kcal":1212,"day_kcal":1697}}]}`)
 	var res struct {
 		Ways []map[string]any `json:"ways"`
@@ -98,6 +101,7 @@ func TestAddDerived(t *testing.T) {
 // E024 with E025: the guard and the report read the same warning set, so a
 // write is never refused for a worsening the report would not mention.
 func TestGuardAndReportShareTheWarningSet(t *testing.T) {
+	t.Parallel()
 	meat := func(g float64) planning.Issue {
 		return issueWith("S7", planning.CodeWeekMeatAboveDGE, "", map[string]any{"meat_g": g, "max_g": 300.0})
 	}
@@ -114,6 +118,7 @@ func TestGuardAndReportShareTheWarningSet(t *testing.T) {
 // E030: the model reads the hearty level as "filling" in results and sends
 // "filling" back; the tool maps it to the stored level.
 func TestModelView_FillingLevel(t *testing.T) {
+	t.Parallel()
 	raw := json.RawMessage(`{"days":[{"light_level":"hearty","light_meals":["hearty dinner"]}],"request":{"reached_hearty":true},"ways":[{"light":[{"date":"2026-11-25","level":"hearty"}]}]}`)
 	out := string(agent.ModelView(raw))
 	assert.NotContains(t, out, "hearty")
@@ -123,6 +128,7 @@ func TestModelView_FillingLevel(t *testing.T) {
 
 // E036: the offer is the last item of tell, as a ready statement, or nothing.
 func TestAddDerived_OfferIsTheLastTellItem(t *testing.T) {
+	t.Parallel()
 	run := func(in string) []any {
 		var res struct {
 			Report struct {
@@ -151,6 +157,7 @@ func TestAddDerived_OfferIsTheLastTellItem(t *testing.T) {
 // E036: the meat-day count of the window is dropped unless the report says it
 // moved; so is the week ledger.
 func TestDropAfterWeek_DropsMeatDays(t *testing.T) {
+	t.Parallel()
 	out := string(agent.DropAfterWeek(json.RawMessage(`{"report":{"tell":[]},"after":{"days":[],"week":{"days":7},"meat_days":3,"meat_days_max":3}}`)))
 	assert.NotContains(t, out, "meat_days")
 	assert.NotContains(t, out, `"week"`)
@@ -160,6 +167,7 @@ func TestDropAfterWeek_DropsMeatDays(t *testing.T) {
 // E036b: the moved cooking of an away call is told in at most three items,
 // and the per-dish lines of the same moves are gone.
 func TestAddDerived_CookingMovedIsTold(t *testing.T) {
+	t.Parallel()
 	in := `{"dry_run":false,"report":{"tell":["Sun 22 Nov is away: the day is not counted.","Mon 23 Nov you cook (1 cooking time): \"A\" at lunch for x.","The \"A\" is now cooked on Mon 23 Nov at lunch instead of Sun 22 Nov at dinner.","To keep one cooking time a day, \"A\" is now cooked at Mon 23 Nov lunch instead of Sun dinner.","Weekly energy: 1935 kcal a day."]},
 		"cooking_moved":{"cooked_now":[{"day":"Mon 23 Nov","cooking_time":"lunch","dishes":[{"dish":"\"A\"","feeds":["Mon 23 Nov lunch","Tue 24 Nov lunch"]},{"dish":"\"B\"","feeds":["Mon 23 Nov dinner"]}]}],"nothing_else_changed":true}}`
 	var res struct {
@@ -178,6 +186,7 @@ func TestAddDerived_CookingMovedIsTold(t *testing.T) {
 
 // E036b: find_ways gets a ready closing sentence for its first offer.
 func TestAddDerived_WaysClosing(t *testing.T) {
+	t.Parallel()
 	var res map[string]any
 	out := agent.AddDerived("find_ways", json.RawMessage(`{"offer":[{"what":"halve the salmon and leave out the yogurt","changes_other_meal":true,"after":{"day_kcal":1934}}],"ways":[]}`))
 	require.NoError(t, json.Unmarshal(out, &res))

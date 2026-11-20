@@ -12,6 +12,7 @@ import (
 // offer, and it says plainly that it is not a light meal (E048b: Wednesday's
 // beef ragu, where the kitchen rules keep the meal at 560 kcal or more).
 func TestOrClosest(t *testing.T) {
+	t.Parallel()
 	near := planning.Way{What: "swap the salad for broccoli", After: planning.WayFigures{MealKcal: 754}, Why: "the lunch stays within a filling lunch"}
 	hit := planning.Way{What: "reaches", Reaches: true, After: planning.WayFigures{MealKcal: 540}}
 

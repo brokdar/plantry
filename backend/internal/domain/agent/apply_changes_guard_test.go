@@ -17,6 +17,7 @@ import (
 // The guards hold inside a batch: a past date or a confirmed row in a later
 // op fails the call and rolls back the valid ops before it.
 func TestApplyChanges_GuardsRollBackTheBatch(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.freshMain()
 	week := e.week()
@@ -46,6 +47,7 @@ func TestApplyChanges_GuardsRollBackTheBatch(t *testing.T) {
 
 // A multi-op call is one change; its undo reverts every op.
 func TestApplyChanges_UndoRevertsTheWholeBatch(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, _ := e.freshMain()
@@ -71,6 +73,7 @@ func TestApplyChanges_UndoRevertsTheWholeBatch(t *testing.T) {
 // A date outside the chat window is evaluated in its own window: the days
 // and issues of that window come back and issues_checked stays true.
 func TestApplyChanges_EvaluatesWindowsOfTouchedDates(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.freshMain()
 	next := planStart.AddDate(0, 0, 9).Format(time.DateOnly)
@@ -90,6 +93,7 @@ func TestApplyChanges_EvaluatesWindowsOfTouchedDates(t *testing.T) {
 // after.plates carries per-plate and per-component kcal and protein per
 // eater, and a cook_at op reports the cook day too.
 func TestApplyChanges_PlateFiguresAndCookDay(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	e.withMacros()
 	p, _ := e.freshMain()
@@ -139,6 +143,7 @@ func TestApplyChanges_PlateFiguresAndCookDay(t *testing.T) {
 // marked provisional and say to re-send the op list; rows that exist keep
 // their ids, and a real apply carries real ids and no note.
 func TestApplyChanges_DryRunMarksNewRowsProvisional(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.freshMain()
 	slotID := e.emptyOtherSlot(p)
@@ -190,6 +195,7 @@ func (e *planToolEnv) withMacros() {
 // A dry run that touches an existing plate outside the chat window by date
 // and slot, without naming its id, leaves that plate's id alone.
 func TestApplyChanges_DryRunKeepsIdsOutsideTheWindow(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	e.withMacros()
 	p, _ := e.freshMain()
@@ -216,6 +222,7 @@ func TestApplyChanges_DryRunKeepsIdsOutsideTheWindow(t *testing.T) {
 // and protein to one decimal, and every plate lists slim components with their
 // own figures (no food, role or session: the cells carry them).
 func TestToolGetPlan_CompactEvaluationWithSlimComponents(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	e.withMacros()
 	res, err := e.exec("get_plan", `{}`)

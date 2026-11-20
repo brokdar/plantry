@@ -24,6 +24,7 @@ type goldenRestore struct {
 }
 
 func TestRestoreMust_RealReplies(t *testing.T) {
+	t.Parallel()
 	b, err := os.ReadFile("testdata/restore_golden.json")
 	require.NoError(t, err)
 	var cases []goldenRestore

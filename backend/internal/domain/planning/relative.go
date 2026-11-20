@@ -396,7 +396,7 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 		}
 	}
 
-	var found, offers, nearest []Way
+	var found, offers []Way
 	comps := map[string]int{}
 	// compensating re-evaluates the plan many times: a few primary edits of
 	// each kind get it.
@@ -451,8 +451,8 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 			}
 		case way.Meaningful && w.toLimit && !way.Reaches && !w.dayGoal():
 			// RL4: a request for a light (filling) meal is met at the limit or
-			// not at all; the nearest step is only ever an offer.
-			nearest = append(nearest, way)
+			// not at all: no closest way. (The caller offers the nearest
+			// comparative step from a search without to_limit.)
 		case way.Meaningful && (way.Reaches || !w.dayGoal()) && !w.wastesKcal(way):
 			found = append(found, way)
 		}
@@ -475,16 +475,6 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 	slices.SortStableFunc(offers, func(a, b Way) int { return a.cmp(b) })
 	if len(offers) > maxOffers {
 		offers = offers[:maxOffers]
-	}
-	if w.toLimit && len(found) == 0 {
-		// RL4 (b): the offer is the way nearest to the limit when no way (and
-		// no compound way) reaches it. The caller keeps exactly one after it
-		// has checked them.
-		if len(offers) == 0 {
-			nearest = dedupeWays(nearest)
-			slices.SortStableFunc(nearest, func(a, b Way) int { return a.cmp(b) })
-			offers = nearest[:min(len(nearest), maxOffers)]
-		}
 	}
 	if w.dayGoal() && req.TargetKcal > 0 && req.Goal == GoalLowerDay {
 		if d, ok := w.dayEval(w.base); ok && req.TargetKcal < d.FloorKcal-0.5 {
@@ -945,11 +935,10 @@ func levels(c Component, dir int, floor float64) []float64 {
 // dessert, a drink, a sauce or a vegetable. The main of a plate is always
 // enlargeable.
 func heartierFood(f FoodFacts) bool {
-	role := f.Role
 	if !f.Composed() {
-		role = f.LeafRole
+		return f.LeafRole == food.RoleSideStarch || proteinFood(f)
 	}
-	switch role {
+	switch f.Role {
 	case food.RoleMain, food.RoleSideStarch, food.RoleSideProtein:
 		return true
 	}
@@ -964,19 +953,9 @@ const maxDishesPerCooking = 2
 // more than maxDishesPerCooking dishes that base did not already have.
 func overloadedCooking(base, next State) bool {
 	count := func(s State) map[string]int {
-		eaten := map[int64]bool{}
-		for _, p := range s.Plates {
-			for _, c := range p.Components {
-				if c.SessionID != 0 {
-					eaten[c.SessionID] = true
-				}
-			}
-		}
 		out := map[string]int{}
 		for _, sess := range s.Sessions {
-			if eaten[sess.ID] {
-				out[fmt.Sprintf("%s|%d", sess.CookDate.Format(time.DateOnly), sess.CookSlotID)]++
-			}
+			out[fmt.Sprintf("%s|%d", sess.CookDate.Format(time.DateOnly), sess.CookSlotID)]++
 		}
 		return out
 	}

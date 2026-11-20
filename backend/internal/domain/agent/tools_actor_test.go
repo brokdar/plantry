@@ -18,6 +18,7 @@ import (
 // B3-AC2: a tool call writes its plate events as the agent of the run in
 // ctx, overriding the user actor the HTTP middleware set.
 func TestToolSet_ExecuteActsAsAgentOfRun(t *testing.T) {
+	t.Parallel()
 	e := newPlateToolEnv(t)
 	plateID := int64(e.mustOp(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-02","slot_id":%d}`, e.slotID))["plate_id"].(float64))
 
@@ -46,6 +47,7 @@ func TestToolSet_ExecuteActsAsAgentOfRun(t *testing.T) {
 // Phase 3 B1-AC2 (D2): rows a tool call creates are drafts tagged with the
 // chat run; the tools need no change because the actor is already the agent.
 func TestToolSet_CreatesDraftsOfTheChatRun(t *testing.T) {
+	t.Parallel()
 	e := newPlateToolEnv(t)
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(e.db), slog.New(slog.DiscardHandler), time.Now)
 	ctx, run := rec.Start(actor.With(e.ctx, actor.User, 0), airun.Start{Kind: airun.KindChat, PromptVersion: "v1"})

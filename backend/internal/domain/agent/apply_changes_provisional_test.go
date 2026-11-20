@@ -13,6 +13,7 @@ import (
 // The ops build copies (copy) and cells (away) as []map[string]any, and a move's
 // also_changed arrives as planning.Compact's []any: the walk marks all of them.
 func TestMarkProvisional_TypedListsAndAlsoChanged(t *testing.T) {
+	t.Parallel()
 	gone := map[string]bool{"plate_id:90": true, "session_id:92": true}
 	missing := func(kind string, id int64) bool { return gone[kind+":"+strconv.FormatInt(id, 10)] }
 
@@ -47,6 +48,7 @@ func TestMarkProvisional_TypedListsAndAlsoChanged(t *testing.T) {
 // An option whose op used one is marked provisional too; rows that exist keep
 // their ids.
 func TestMarkProvisional_IssuesAndOptions(t *testing.T) {
+	t.Parallel()
 	gone := map[string]bool{"plate_id:90": true, "plate_component_id:91": true, "session_id:92": true}
 	missing := func(kind string, id int64) bool { return gone[kind+":"+strconv.FormatInt(id, 10)] }
 

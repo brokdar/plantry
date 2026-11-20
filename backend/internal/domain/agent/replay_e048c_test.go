@@ -29,6 +29,7 @@ func e048cOffer(t *testing.T) (e *planToolEnv, res map[string]any, offer map[str
 }
 
 func TestReplayE048c_TheOfferClearsTheLunchMarkItGrows(t *testing.T) {
+	t.Parallel()
 	_, _, o := e048cOffer(t)
 	assert.Equal(t, true, o["recommended"])
 	var cleared bool
@@ -47,6 +48,7 @@ func TestReplayE048c_TheOfferClearsTheLunchMarkItGrows(t *testing.T) {
 }
 
 func TestReplayE048c_TheDayGetsOneBreadFixInsideItsRange(t *testing.T) {
+	t.Parallel()
 	e, res, o := e048cOffer(t)
 	fix, ok := o["fix"].(map[string]any)
 	require.True(t, ok, "the offer ends the day under its range: it carries the fix (%v)", o["day_vs_range"])

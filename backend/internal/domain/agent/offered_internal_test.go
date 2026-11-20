@@ -12,6 +12,7 @@ import (
 // (unless it is also the request, or the user named its food); a later turn
 // may apply it.
 func TestOfferedMemo_AnOfferWaitsForAYes(t *testing.T) {
+	t.Parallel()
 	m := &offeredMemo{}
 	turn := func(seq uint64, named ...int64) context.Context {
 		n := map[int64]bool{}

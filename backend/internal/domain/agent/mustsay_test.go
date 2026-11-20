@@ -37,6 +37,7 @@ var noYogurtFacts = []mustFact{
 
 // E047: the no-yogurt reply stopped at Tuesday and never said the week.
 func TestRestoreMust_NoYogurt(t *testing.T) {
+	t.Parallel()
 	got := restoreText(noYogurtReply, noYogurtFacts...)
 	closing := "I can also swap Wed 25 Nov's yogurt for Hasselback potatoes. Say so if you want it."
 	want := noYogurtReply[:len(noYogurtReply)-len(closing)] +
@@ -47,6 +48,7 @@ func TestRestoreMust_NoYogurt(t *testing.T) {
 }
 
 func TestRestoreMust_AlreadySaid(t *testing.T) {
+	t.Parallel()
 	r := noYogurtReply + "\n\nFriday ends at 1794 kcal, below its range. The week averages 92% of the target."
 	assert.Equal(t, r, restoreText(r, noYogurtFacts...))
 }
@@ -54,6 +56,7 @@ func TestRestoreMust_AlreadySaid(t *testing.T) {
 // E047: "321 g, same as before" hid that the shorter week is 64 g over; the fat
 // share rose.
 func TestRestoreMust_AwaySun(t *testing.T) {
+	t.Parallel()
 	facts := []mustFact{
 		{Kind: factAwayMeat, N: 321, Limit: 257},
 		{Kind: factShare, Share: "fat", N: 41, Lo: 25, Hi: 35},
@@ -74,6 +77,7 @@ var cookThuFacts = []mustFact{
 
 // E047: cook-thu left Friday's lost cooking unsaid.
 func TestRestoreMust_CookThu(t *testing.T) {
+	t.Parallel()
 	reply := "The chili is now cooked on Thursday at dinner.\n\nThursday's cooking is about 3 h 45 min in all."
 	got := restoreText(reply, cookThuFacts...)
 	assert.Contains(t, got, "- The \"Chili con carne\" is now cooked on Thu 26 Nov at dinner instead of Fri 27 Nov at dinner.")
@@ -84,6 +88,7 @@ func TestRestoreMust_CookThu(t *testing.T) {
 }
 
 func TestRestoreMust_German(t *testing.T) {
+	t.Parallel()
 	facts := append([]mustFact{
 		{Kind: factAwayMeat, N: 321, Limit: 257},
 		cookThuFacts[0],
@@ -114,6 +119,7 @@ var shorterFact = mustFact{
 
 // E051: Friday's cooking that shrinks to the potatoes, and the guest at the small lunch.
 func TestRestoreMust_ShorterCooking(t *testing.T) {
+	t.Parallel()
 	reply := "The chili is now cooked on Thursday at dinner.\n\nThursday's cooking is about 3 h 45 min in all."
 	assert.Contains(t, restoreText(reply, shorterFact), `- Fri 27 Nov at dinner you now cook only "Hasselback potatoes": about 1 h 15 min in all (was 2 h 35 min); the "Chili con carne" is now eaten as leftovers.`)
 	got := restoreText("Das Chili wird jetzt am Donnerstag gekocht und der Tag ist damit anders.", shorterFact)
@@ -123,6 +129,7 @@ func TestRestoreMust_ShorterCooking(t *testing.T) {
 }
 
 func TestRestoreMust_SmallLunchGuest(t *testing.T) {
+	t.Parallel()
 	f := mustFact{Kind: factSmall, Day: "Mon 23 Nov", Meal: "lunch", N: 2, Kcal: 331}
 	reply := "Your friend is added to Monday's lunch.\n\nThe curry is now cooked for 4 portions."
 	assert.Contains(t, restoreText(reply, f), "- Mon 23 Nov lunch: now for 2 people; it is the small lunch (331 kcal each).")
@@ -134,6 +141,7 @@ func TestRestoreMust_SmallLunchGuest(t *testing.T) {
 
 // The old matcher took "salmon " for Monday and "followed " for Wednesday.
 func TestDayIn_WordBoundaries(t *testing.T) {
+	t.Parallel()
 	assert.False(t, dayIn("The salmon is cooked for 2 portions", "Mon 23 Nov"))
 	assert.False(t, dayIn("It followed the plan", "Wed 25 Nov"))
 	assert.False(t, dayIn("The sun showed up", "Sun 22 Nov"))
@@ -145,6 +153,7 @@ func TestDayIn_WordBoundaries(t *testing.T) {
 }
 
 func TestNumberIn_Words(t *testing.T) {
+	t.Parallel()
 	assert.True(t, numberIn("it keeps three days", "3"))
 	assert.True(t, numberIn("hält drei Tage", "3"))
 	assert.True(t, numberIn("3,5 Portionen", "3.5"))
@@ -153,6 +162,7 @@ func TestNumberIn_Words(t *testing.T) {
 }
 
 func TestCountDays(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "1 day", countDays(1, false))
 	assert.Equal(t, "4 days", countDays(4, false))
 	assert.Equal(t, "1 Tag", countDays(1, true))
@@ -164,6 +174,7 @@ func TestCountDays(t *testing.T) {
 }
 
 func TestInsertBeforeClosing(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, text, wantEnd string }{
 		{"en offer", "Done.\n\nSay so if you want it.", "Say so if you want it."},
 		{"en question", "Done.\n\nShall I do the same for Friday?", "Shall I do the same for Friday?"},
@@ -180,6 +191,7 @@ func TestInsertBeforeClosing(t *testing.T) {
 
 // Review F2: a week meat and an away meat fact that say the same line add it once.
 func TestRestoreMust_SameLineOnce(t *testing.T) {
+	t.Parallel()
 	got := restoreText("The plan is saved and the week is fine, that is the state of it.",
 		mustFact{Kind: factMeat, N: 471, Was: 321, Limit: 300}, mustFact{Kind: factAwayMeat, N: 471, Limit: 300})
 	assert.Equal(t, 1, strings.Count(got, "Week: meat is 471 g against a limit of 300 g, 171 g over."))
@@ -187,6 +199,7 @@ func TestRestoreMust_SameLineOnce(t *testing.T) {
 
 // Review F3: "Sun-dried" is no Sunday; "Sun 22 Nov" and "Sun." are.
 func TestDayIn_ShortFormNeedsItsDateOrDot(t *testing.T) {
+	t.Parallel()
 	assert.False(t, dayIn("Sun-dried tomatoes and Sat nav", "Sun 22 Nov"), "sun-dried")
 	assert.False(t, dayIn("Wed like it", "Wed 25 Nov"))
 	assert.True(t, dayIn("on Sun 22 Nov", "Sun 22 Nov"))

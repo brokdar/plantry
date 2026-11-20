@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -45,6 +46,10 @@ type Config struct {
 	// written to and left in, as <scenario>-<run>.db; empty uses a scratch
 	// directory that is removed.
 	KeepDB string
+	// Parallel is how many runs go at once (each has its own database); 0 or 1
+	// runs them one after the other, as a live run must. The records keep the
+	// scenario and run order.
+	Parallel int
 }
 
 // Live is a real LLM provider's client.
@@ -122,14 +127,37 @@ func Run(ctx context.Context, cfg Config, scenarios []Scenario) ([]Record, error
 		return nil, err
 	}
 	defer func() { _ = d.close() }()
-	var out []Record
+	type job struct {
+		sc Scenario
+		n  int
+	}
+	var jobs []job
 	for _, sc := range scenarios {
 		for n := 1; n <= cfg.Runs; n++ {
-			rec, err := runOnce(ctx, cfg, d, lib, sc, n)
+			jobs = append(jobs, job{sc, n})
+		}
+	}
+	out := make([]Record, len(jobs))
+	errs := make([]error, len(jobs))
+	sem := make(chan struct{}, max(cfg.Parallel, 1))
+	var wg sync.WaitGroup
+	for i, j := range jobs {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer func() { <-sem; wg.Done() }()
+			rec, err := runOnce(ctx, cfg, d, lib, j.sc, j.n)
 			if err != nil {
-				return nil, fmt.Errorf("%s run %d: %w", sc.Name, n, err)
+				errs[i] = fmt.Errorf("%s run %d: %w", j.sc.Name, j.n, err)
+				return
 			}
-			out = append(out, rec)
+			out[i] = rec
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
 		}
 	}
 	return out, nil

@@ -11,6 +11,7 @@ import (
 // A lighter dinner that stops short of light ends with the recommended
 // bigger-lunch offer, said as the sentence to close the reply with.
 func TestNextStep_StopsShortClosesWithTheRecommendedOffer(t *testing.T) {
+	t.Parallel()
 	ways := []planning.Way{{Kind: "swap", What: "Tue dinner: swap", Before: planning.WayFigures{MealKcal: 1583}, After: planning.WayFigures{MealKcal: 1212}}}
 	offers := []planning.Way{
 		{Kind: "compound", What: "Tue dinner: first", After: planning.WayFigures{MealKcal: 700, DayKcal: 1900}},

@@ -29,6 +29,7 @@ var (
 // as session_id are ids the model passes back and are not words. The report
 // and every prose field hold no ISO date (days are "Thu 26 Nov").
 func TestChatModelReadsKitchenWords(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	texts := map[string]string{}
 	kcal, kg := 2000.0, 70.0

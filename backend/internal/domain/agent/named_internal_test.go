@@ -10,6 +10,7 @@ import (
 
 // SF3: only a food whose whole name is in the request counts as named.
 func TestNamedFoods(t *testing.T) {
+	t.Parallel()
 	foods := map[int64]planning.FoodFacts{
 		1: {Name: "Hasselback potatoes"}, 2: {Name: "Reis"}, 3: {Name: "Reispfanne"},
 		4: {Name: "Chili"}, 5: {Name: "Chili"}, 6: {Name: "Käsespätzle"},
