@@ -501,10 +501,16 @@ func writeProfile(b *strings.Builder, p Profile) {
 	if p.KcalTarget != nil {
 		fmt.Fprintf(b, "- daily kcal target per person: %.0f\n", *p.KcalTarget)
 	}
+	// NU6: with a body weight the protein target is grams per kg, so the
+	// profile's protein share is not shown.
+	protein := p.ProteinPct
+	if p.WeightKg != nil {
+		protein = nil
+	}
 	for _, m := range []struct {
 		name string
 		pct  *float64
-	}{{"protein", p.ProteinPct}, {"fat", p.FatPct}, {"carbs", p.CarbsPct}} {
+	}{{"protein", protein}, {"fat", p.FatPct}, {"carbs", p.CarbsPct}} {
 		if m.pct != nil {
 			fmt.Fprintf(b, "- %s target: %.0f%% of kcal\n", m.name, *m.pct)
 		}

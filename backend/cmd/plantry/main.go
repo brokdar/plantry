@@ -253,22 +253,16 @@ func run() error {
 		Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{
 			airun.ChooserHeuristic: planning.Heuristic{},
-			airun.ChooserLLM: planning.NewLLMChooser(llmResolver).WithProgrammatic(func(ctx context.Context) bool {
-				v, err := settingsSvc.Get(ctx, settingsdom.KeyAIProgrammaticTools)
-				if err != nil {
-					slog.WarnContext(ctx, "plan.programmatic.setting", "error", err)
-					return false
-				}
-				return v.Raw == "true"
-			}).WithEffort(func(ctx context.Context) string {
-				v, err := settingsSvc.Get(ctx, settingsdom.KeyAIReasoningEffortGenerate)
-				if err != nil {
-					slog.WarnContext(ctx, "plan.effort.setting", "error", err)
-					return ""
-				}
-				return v.Raw
-			}),
 		},
+		// PL2: a model only reads the wish into constraints; the heuristic plans.
+		Extractor: planning.NewLLMExtractor(llmResolver).WithEffort(func(ctx context.Context) string {
+			v, err := settingsSvc.Get(ctx, settingsdom.KeyAIReasoningEffortGenerate)
+			if err != nil {
+				slog.WarnContext(ctx, "plan.effort.setting", "error", err)
+				return ""
+			}
+			return v.Raw
+		}),
 		Logger: logger,
 	})
 	defer func() {

@@ -191,6 +191,10 @@ func (h *planner) plan() (Proposal, error) {
 		eaters := h.eaters(c.Date)
 		limit := h.s.Settings.MaxCookOccasionsPerDay
 		maxed := limit > 0 && len(h.occasions[dayOf(c.Date)]) >= limit
+		// The user's cooking-day limit: a day that does not cook yet is closed
+		// once the limit's days cook (a day that cooks already stays open).
+		daysUsed := h.in.MaxCookDays > 0 && len(h.occasions[dayOf(c.Date)]) == 0 && h.cookDays() >= h.in.MaxCookDays
+		maxed = maxed || daysUsed
 		// A forced cell cooks unless earlier cooks of the rerun used its
 		// day's cap meanwhile.
 		if _, ok := h.forced[idOf(c)]; ok && (!maxed || h.occasions[dayOf(c.Date)][idOf(c)]) {
@@ -217,6 +221,15 @@ func (h *planner) plan() (Proposal, error) {
 			if h.eatAnyway(c, eaters) {
 				continue
 			}
+			if daysUsed && (limit <= 0 || len(h.occasions[dayOf(c.Date)]) < limit) {
+				// Only the cooking-day limit stops this cell: an empty meal breaks
+				// a hard rule, a third cooking day does not. Cook, and say so.
+				h.notes = append(h.notes, fmt.Sprintf(h.text(textCookDays), h.weekday(c.Date), h.in.MaxCookDays))
+				if err := h.cook(c); err != nil {
+					return Proposal{}, err
+				}
+				continue
+			}
 			// The day's cap is used by other cells' cooks (confirmed ones
 			// included) and no batch can feed c: leave it empty; the checker
 			// reports it (H1). A cell that already is an occasion may cook.
@@ -229,6 +242,7 @@ func (h *planner) plan() (Proposal, error) {
 		}
 	}
 	h.topUpFloors()
+	h.prop.MaxCookDays = h.in.MaxCookDays
 	h.prop.OwnSet = true
 	h.prop.Own = strings.TrimSpace(strings.Join(append([]string{h.exploreNote()}, h.notes...), "\n"))
 	if note := lightNote(h.s.Light, h.in.Locale); note != "" {
@@ -578,6 +592,17 @@ func (h *planner) cook(c plate.CellKey) error {
 		h.place(pp, code)
 	}
 	return nil
+}
+
+// cookDays is the number of days with a cooking time so far.
+func (h *planner) cookDays() int {
+	n := 0
+	for _, occ := range h.occasions {
+		if len(occ) > 0 {
+			n++
+		}
+	}
+	return n
 }
 
 func (h *planner) addOccasion(c plate.CellKey) {
@@ -957,6 +982,7 @@ const (
 	textMeatOver
 	textNoMain
 	textCookMoved
+	textCookDays
 )
 
 var texts = map[string]map[textKey]string{
@@ -970,6 +996,7 @@ var texts = map[string]map[textKey]string{
 		textMeatOver:         "%s is a meat day past the limit of %d per week: no other recipe fit",
 		textNoMain:           "No main recipe available for %s %s: the cell stays empty",
 		textCookMoved:        "%s now cooked %s %s",
+		textCookDays:         "%s needed a cooking day beyond your limit of %d: without it a meal would stay empty",
 	},
 	"de": {
 		textNew:              "Neu: noch nie gegessen",
@@ -981,6 +1008,7 @@ var texts = map[string]map[textKey]string{
 		textMeatOver:         "%s ist ein Fleischtag über dem Wochenlimit von %d: kein anderes Rezept passte",
 		textNoMain:           "Kein Hauptgericht verfügbar für %s %s: die Zelle bleibt leer",
 		textCookMoved:        "%s wird jetzt %s %s gekocht",
+		textCookDays:         "%s brauchte einen Kochtag über deinem Limit von %d: sonst bliebe eine Mahlzeit leer",
 	},
 }
 

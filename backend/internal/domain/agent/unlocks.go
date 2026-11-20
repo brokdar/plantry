@@ -85,6 +85,8 @@ type chatTurn struct {
 	conversationID int64
 	seq            uint64
 	unlocks        *pendingUnlocks
+	// named are the foods the user's message names (SF3).
+	named map[int64]bool
 }
 
 type turnKey struct{}

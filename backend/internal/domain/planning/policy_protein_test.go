@@ -51,9 +51,11 @@ func TestPolicyOf_ProteinPerKg(t *testing.T) {
 	})
 }
 
+// CC7: the order is the spec's (2.5): carb and fat ranges rank above preferences.
 func TestPolicy_DescribeRanksS5Lowest(t *testing.T) {
 	d := planning.PolicyOf(planning.Profile{}).Describe()
-	assert.Contains(t, d, "6 preferences and effort, 7 carb and fat ranges")
+	assert.Contains(t, d, "6 carb and fat ranges")
+	assert.Contains(t, d, "7 preferences and effort")
 	assert.Contains(t, d, "never at the cost of kcal or protein")
 }
 

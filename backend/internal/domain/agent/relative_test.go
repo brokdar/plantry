@@ -546,9 +546,8 @@ func TestFindWays_PromiseIsTheResult(t *testing.T) {
 	}
 }
 
-// A light meal asked for (to_limit) is met only at the limit: every offer
-// listed reaches it, and when no way does, the recommended one is an offer that
-// does and next says so.
+// A light meal asked for (to_limit) is met only at the limit (RL4): every way
+// listed reaches it, and when none does there is at most one offer.
 func TestFindWays_ToLimitOffersOnlyWhatReaches(t *testing.T) {
 	e := relEnv(t)
 	for _, p := range e.draftMeals() {
@@ -561,13 +560,13 @@ func TestFindWays_ToLimitOffersOnlyWhatReaches(t *testing.T) {
 		if _, ok := res["offer"]; ok {
 			offers = relMaps(res["offer"])
 		}
-		for _, o := range offers {
-			assert.Equal(t, true, o["reaches_cap"], "%v does not reach the light limit", o["what"])
+		// RL4: a way is applied only when it reaches the limit; with none that
+		// does, exactly one offer (the nearest step) and nothing applied.
+		for _, w := range ways {
+			assert.True(t, w["reaches_cap"] == true || w["reaches_limit"] == true, "%v does not reach the light limit", w["what"])
 		}
-		reaching := len(ways) > 0 && ways[0]["reaches_cap"] == true
-		if !reaching && len(offers) > 0 {
-			assert.Equal(t, true, offers[0]["recommended"], "the offer that reaches is the recommendation")
-			assert.Contains(t, res["next"], "asked for a light meal")
+		if len(ways) == 0 {
+			assert.LessOrEqual(t, len(offers), 1)
 		}
 	}
 }
@@ -626,4 +625,37 @@ func TestApplyChanges_ReplaceMainKeepsTheSidesAndOffers(t *testing.T) {
 			}
 		}
 	}
+}
+
+// d/a4: a way that ends more than 25 kcal above the number the user named does
+// not reach it: reaches_limit is judged against that number, not the day's range.
+func TestFindWays_ReachesIsJudgedAgainstTheNamedKcal(t *testing.T) {
+	e := relEnv(t)
+	checked := 0
+	for _, p := range e.draftMeals() {
+		date := p.DateString()
+		first := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lower_day","date":%q}`, date))
+		day := first["before"].(map[string]any)["day_kcal"].(float64)
+		floor, _ := first["floor_kcal"].(float64)
+		for _, drop := range []float64{150, 300, 450} {
+			target := day - drop
+			if target < floor {
+				continue
+			}
+			res := e.mustExec("find_ways", fmt.Sprintf(`{"goal":"lower_day","date":%q,"target_kcal":%.0f}`, date, target))
+			for _, k := range []string{"ways", "offer"} {
+				if res[k] == nil {
+					continue
+				}
+				for _, w := range relMaps(res[k]) {
+					checked++
+					if w["after"].(map[string]any)["day_kcal"].(float64) > target+25 {
+						assert.NotEqual(t, true, w["reaches_cap"], "%s %.0f: %v ends above the named number", date, target, w["what"])
+						assert.NotEqual(t, true, w["reaches_limit"], "%s %.0f: %v ends above the named number", date, target, w["what"])
+					}
+				}
+			}
+		}
+	}
+	assert.Positive(t, checked)
 }

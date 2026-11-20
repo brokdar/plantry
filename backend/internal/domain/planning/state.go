@@ -24,6 +24,10 @@ type State struct {
 	// Avoid are foods the user removed earlier in the conversation: no way,
 	// option or alternative adds them again (set by the chat tools).
 	Avoid map[int64]bool
+	// Named are the foods the user's message names (set by the chat tools from
+	// the request text, never from a model argument): a variety repeat of one
+	// is the warning variety_repeat_named, not a violation (SF3).
+	Named map[int64]bool
 	// PairAddOns turns on the add-on pairing rules (addOnFits) for the chat
 	// tools; the planner's own top-ups keep their candidates.
 	PairAddOns bool

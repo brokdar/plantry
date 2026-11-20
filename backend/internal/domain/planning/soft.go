@@ -225,6 +225,10 @@ func (x *index) dgeIssues(w *WeekEval) []Issue {
 // scaled target) and S3 (protein share below the profile's minus the
 // margin) for every complete day of ev with a plate. Each carries its
 // options.
+//
+// A day's energy issue carries two separate gaps: gap_to_target_kcal (target
+// minus kcal, signed) and gap_to_range_kcal (the distance to the nearest edge
+// of the day's range, signed the same way: positive under the range).
 func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 	var out []Issue
 	proteinTarget := x.s.Profile.ProteinPct
@@ -250,7 +254,8 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 			if code != "" {
 				is := issue("S2", code, SeveritySoft).onDate(day).
 					with("kcal", math.Round(d.Kcal)).with("target_kcal", math.Round(target)).
-					with("gap_kcal", math.Round(target-d.Kcal)).
+					with("gap_to_target_kcal", math.Round(target-d.Kcal)).
+					with("gap_to_range_kcal", math.Round(bandGap(d.Kcal, target*x.pol.DayLow, target*x.pol.DayHigh))).
 					with("band_low_kcal", math.Round(target*x.pol.DayLow)).with("band_high_kcal", math.Round(target*x.pol.DayHigh))
 				if code == CodeKcalBelowBand {
 					is.Options = x.options(ev, t, d, day, false)
@@ -679,6 +684,18 @@ func (x *index) dayLastPlate(day time.Time) int {
 func (x *index) addDayTarget(day time.Time) float64 {
 	for _, dk := range x.dayAccounts([]time.Time{day}) {
 		return dk.Adjusted
+	}
+	return 0
+}
+
+// bandGap is the distance from kcal to the nearest edge of [low, high],
+// positive when under the range, negative when over it.
+func bandGap(kcal, low, high float64) float64 {
+	switch {
+	case kcal < low:
+		return low - kcal
+	case kcal > high:
+		return high - kcal
 	}
 	return 0
 }

@@ -102,10 +102,14 @@ type Deps struct {
 	Runs      Runs
 	Overrides Overrides
 	// Light stores the light requests a successful run was given.
-	Light      LightStore
-	Tx         domain.Transactor
-	Progress   *Progress
-	Choosers   map[airun.Chooser]Chooser
+	Light    LightStore
+	Tx       domain.Transactor
+	Progress *Progress
+	Choosers map[airun.Chooser]Chooser
+	// Extractor reads a run's free-text wish into constraints (PL2). With it,
+	// the "llm" chooser is this extraction followed by the heuristic: a model
+	// never places a meal. Without it the LLM chooser plans as before.
+	Extractor  Extractor
 	Go         func(func())
 	Logger     *slog.Logger
 	RunTimeout time.Duration
@@ -227,6 +231,9 @@ type job struct {
 	kept  int
 	// replacesBatch: a plate scope on a batch's cook plate replaces the batch.
 	replacesBatch bool
+	// wish: the run reads its instruction into constraints before the
+	// heuristic plans (the "llm" chooser with an Extractor).
+	wish bool
 }
 
 func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held bool) (int64, error) {
@@ -289,6 +296,7 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held 
 		return 0, err
 	}
 	j.kind, j.chooser, j.name = kind, chooser, name
+	j.wish = s.d.Extractor != nil && name == airun.ChooserLLM
 	if kind == airun.KindGenerate {
 		j.eaters = req.EatersByDate
 	}
@@ -303,6 +311,9 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held 
 	version := HeuristicVersion
 	if p, ok := chooser.(interface{ PromptVersion() string }); ok {
 		version = p.PromptVersion()
+	}
+	if j.wish {
+		version = WishVersion + "+" + version
 	}
 	runCtx, run, err := s.d.RunLog.Start(ctx, RunStart{
 		Kind: kind, PromptVersion: version, WindowStart: w.Start, WindowEnd: w.End,
@@ -331,6 +342,9 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held 
 // provider is configured. A configured provider that fails to resolve is an
 // error, never a silent fallback: the user asks for the heuristic instead.
 func (s *Service) chooser(ctx context.Context, name airun.Chooser) (airun.Chooser, Chooser, error) {
+	if s.d.Extractor != nil {
+		return s.wishChooser(ctx, name)
+	}
 	if name == "" {
 		name = airun.ChooserHeuristic
 		if c, ok := s.d.Choosers[airun.ChooserLLM]; ok {
@@ -357,6 +371,65 @@ func (s *Service) chooser(ctx context.Context, name airun.Chooser) (airun.Choose
 		return "", nil, err
 	}
 	return name, c, nil
+}
+
+// wishChooser is chooser with an Extractor (PL2): "llm" means the extraction
+// of the wish, planned by the heuristic. Without a name it is "llm" when the
+// provider resolves, else the heuristic; an explicit "llm" without one fails.
+func (s *Service) wishChooser(ctx context.Context, name airun.Chooser) (airun.Chooser, Chooser, error) {
+	if name == "" {
+		name = airun.ChooserHeuristic
+		switch err := s.d.Extractor.Ready(ctx); {
+		case err == nil:
+			name = airun.ChooserLLM
+		case errors.Is(err, domain.ErrAIProviderMissing):
+		default:
+			s.d.Logger.WarnContext(ctx, "plan.chooser provider not ready", "error", err)
+			return "", nil, err
+		}
+	}
+	switch name {
+	case airun.ChooserLLM:
+		if err := s.d.Extractor.Ready(ctx); err != nil {
+			return "", nil, err
+		}
+	case airun.ChooserHeuristic:
+	default:
+		return "", nil, fmt.Errorf("%w: chooser %q", domain.ErrInvalidInput, name)
+	}
+	var c Chooser = Heuristic{}
+	if h, ok := s.d.Choosers[airun.ChooserHeuristic]; ok {
+		c = h
+	}
+	return name, c, nil
+}
+
+// readWish extracts the constraints of a run's wish. A wish that cannot be
+// read does not fail the run: the heuristic plans without it and the note
+// says so (never silently).
+func (s *Service) readWish(ctx context.Context, base State, instruction string) (Constraints, string) {
+	c, err := s.d.Extractor.Extract(ctx, base, instruction)
+	if err != nil {
+		s.d.Logger.WarnContext(ctx, "plan.wish failed", "error", err)
+		return Constraints{}, "Your wish could not be read, so the plan follows your settings only."
+	}
+	if len(c.Ignored) > 0 {
+		return c, "Not used from your wish: " + strings.Join(c.Ignored, "; ") + "."
+	}
+	return c, ""
+}
+
+// isHeuristic reports whether c is the heuristic chooser, whose plans get the
+// heuristic's own finishing steps.
+func isHeuristic(c Chooser) bool {
+	_, ok := c.(Heuristic)
+	return ok
+}
+
+// openHard are the hard issues a plan still holds (an empty cell is a plan
+// still being built, not counted).
+func openHard(merged State, t Target) []Issue {
+	return slices.DeleteFunc(violationsOf(Check(merged, t)), func(is Issue) bool { return is.Code == CodeMissingPlate })
 }
 
 // ready reports whether a chooser can run now: one with a Ready method (the
@@ -859,6 +932,21 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		Avoid: j.avoid, AvoidBatches: j.avoidBatches, Exclude: j.exclude, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
 		Stage: func(st Stage) { stage(st) }, Logger: s.d.Logger,
 	}
+	var wishNote string
+	if j.wish && strings.TrimSpace(j.instruction) != "" && j.side == nil {
+		var c Constraints
+		c, wishNote = s.readWish(ctx, base, j.instruction)
+		base.Light = MergeLight(base.Light, c.Light)
+		j.light = MergeLight(j.light, c.Light)
+		j.exclude = append(j.exclude, c.Avoid...)
+		for d, n := range c.Eaters {
+			if j.eaters == nil {
+				j.eaters = map[string]float64{}
+			}
+			j.eaters[d] = n
+		}
+		cin.State, cin.Exclude, cin.EatersByDate, cin.MaxCookDays = base, j.exclude, j.eaters, c.MaxCookDays
+	}
 	if j.side != nil || hasOpenCell(base, j.target) {
 		stage(StageChoosing)
 		last, err = j.chooser.Choose(ctx, cin)
@@ -867,54 +955,76 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		}
 	}
 
-	// No saved plate holds a dish above the portion cap, whatever the chooser
-	// left (the checker flagged it and the repairs had their turns).
-	prop, capNotes := capPortions(base, last)
-	chooserNotes, orig := prop.Notes, prop
-	var runLog map[string]any
-	// The week's meat stays within its budget and holds a fish meal whenever a
-	// verified swap exists, whatever the chooser left. A model's plan also gets
-	// its quantities finished in Go (portions, a side, add-ons), the way the
-	// heuristic sets its own: the same steps evaluate_plan showed the model.
-	if j.side == nil {
-		var finishNotes []string
-		if _, heuristic := j.chooser.(Heuristic); heuristic {
-			dayProp, dayNotes := guardDayMains(base, j.target, prop, idSet(j.exclude))
-			prop, finishNotes = dayProp, dayNotes
-			if len(dayNotes) > 0 {
-				// A dish changed under the heuristic's quantities: set them again.
-				var balNotes []string
-				prop, balNotes = balancePlan(cin, prop)
-				finishNotes = append(finishNotes, balNotes...)
-			}
-			var weekNotes []string
-			prop, weekNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
-			finishNotes = append(finishNotes, weekNotes...)
-		} else {
-			prop, finishNotes = finishProposal(cin, prop)
-		}
-		// The saved note says what the plan is, computed from it; the lines
-		// of the passes stay in the run log.
-		own := prop.Own
-		if !prop.OwnSet {
-			own = orig.Notes
-		}
-		// The model's own sentence goes through the reply rewriter the chat uses.
-		own = plainwords.Reply(own)
-		prop.Notes = joinNotes(append([]string{own}, savedPlanNotes(cin, orig, prop)...)...)
-		runLog = map[string]any{"chooser_notes": chooserNotes, "changes": append(slices.Clone(capNotes), finishNotes...)}
-		// A plan that still breaks a hard rule keeps the chooser's warnings: they are true of it.
-		if len(violationsOf(Check(Merge(base, j.target, prop), j.target))) > 0 {
-			var warn []string
-			for _, l := range strings.Split(chooserNotes, "\n") {
-				if strings.HasPrefix(l, "Warning, not resolved") {
-					warn = append(warn, l)
+	// finishPlan finishes a chooser's proposal: the portion cap, the week's meat
+	// budget and fish meal, and for a model's plan the quantities in Go.
+	finishPlan := func(ch Chooser, last Proposal) (prop Proposal, runLog map[string]any) {
+		prop, capNotes := capPortions(base, last)
+		chooserNotes, orig := prop.Notes, prop
+		// The week's meat stays within its budget and holds a fish meal whenever a
+		// verified swap exists, whatever the chooser left. A model's plan also gets
+		// its quantities finished in Go (portions, a side, add-ons), the way the
+		// heuristic sets its own: the same steps evaluate_plan showed the model.
+		if j.side == nil {
+			var finishNotes []string
+			if isHeuristic(ch) {
+				dayProp, dayNotes := guardDayMains(base, j.target, prop, idSet(j.exclude))
+				prop, finishNotes = dayProp, dayNotes
+				if len(dayNotes) > 0 {
+					// A dish changed under the heuristic's quantities: set them again.
+					var balNotes []string
+					prop, balNotes = balancePlan(cin, prop)
+					finishNotes = append(finishNotes, balNotes...)
 				}
+				var weekNotes []string
+				prop, weekNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
+				finishNotes = append(finishNotes, weekNotes...)
+			} else {
+				prop, finishNotes = finishProposal(cin, prop)
 			}
-			prop.Notes = joinNotes(append([]string{prop.Notes}, warn...)...)
+			// The saved note says what the plan is, computed from it; the lines
+			// of the passes stay in the run log.
+			own := prop.Own
+			if !prop.OwnSet {
+				own = orig.Notes
+			}
+			// The model's own sentence goes through the reply rewriter the chat uses.
+			own = plainwords.Reply(own)
+			prop.Notes = joinNotes(append([]string{own}, savedPlanNotes(cin, orig, prop)...)...)
+			runLog = map[string]any{"chooser_notes": chooserNotes, "changes": append(slices.Clone(capNotes), finishNotes...)}
+			// A plan that still breaks a hard rule keeps the chooser's warnings: they are true of it.
+			if len(violationsOf(Check(Merge(base, j.target, prop), j.target))) > 0 {
+				var warn []string
+				for _, l := range strings.Split(chooserNotes, "\n") {
+					if strings.HasPrefix(l, "Warning, not resolved") {
+						warn = append(warn, l)
+					}
+				}
+				prop.Notes = joinNotes(append([]string{prop.Notes}, warn...)...)
+			}
+		} else if len(capNotes) > 0 {
+			prop.Notes = joinNotes(append([]string{prop.Notes}, capNotes...)...)
 		}
-	} else if len(capNotes) > 0 {
-		prop.Notes = joinNotes(append([]string{prop.Notes}, capNotes...)...)
+		return prop, runLog
+	}
+	prop, runLog := finishPlan(j.chooser, last)
+	// PL1b: a plan with a hard rule still open is never the result of a run:
+	// the heuristic plans it again and the notes say so.
+	if open := openHard(Merge(base, j.target, prop), j.target); !isHeuristic(j.chooser) && len(open) > 0 && j.side == nil {
+		hc := s.d.Choosers[airun.ChooserHeuristic]
+		if hc == nil {
+			hc = Heuristic{}
+		}
+		stage(StageChoosing)
+		if hlast, herr := hc.Choose(ctx, cin); herr == nil {
+			hprop, hlog := finishPlan(hc, hlast)
+			if hopen := openHard(Merge(base, j.target, hprop), j.target); len(hopen) < len(open) {
+				hprop.Notes = joinNotes(hprop.Notes, "The model's plan broke "+openRules(open)+"; this is the heuristic plan instead.")
+				prop, runLog, last = hprop, hlog, hlast
+			}
+		}
+	}
+	if wishNote != "" {
+		prop.Notes = joinNotes(prop.Notes, wishNote)
 	}
 	merged := Merge(base, j.target, prop)
 	issues := Check(merged, j.target)

@@ -195,3 +195,23 @@ func TestAdviceFor_FloorBreachWithoutAFixSaysSo(t *testing.T) {
 	assert.Contains(t, next, "no checked fix reaches it")
 	assert.Contains(t, next, "offer no fix, name none")
 }
+
+// G3: a reply never offers to undo what the call just did: food added to a
+// meal the call made lighter, food taken from one it made heartier.
+func TestWithoutRegressOptions(t *testing.T) {
+	plateAt := func(slot int64, kcal float64) planning.PlateEval {
+		return planning.PlateEval{Date: "2026-11-24", SlotID: slot, Kcal: kcal}
+	}
+	before := planning.Evaluation{Plates: []planning.PlateEval{plateAt(2, 600), plateAt(3, 800)}}
+	now := planning.Evaluation{Plates: []planning.PlateEval{plateAt(2, 600), plateAt(3, 500)}}
+	issue := planning.Issue{Options: []planning.Option{
+		{Name: "bread on dinner", Date: "2026-11-24", SlotID: 3, KcalDelta: 120, Recommended: true},
+		{Name: "bread on lunch", Date: "2026-11-24", SlotID: 2, KcalDelta: 120},
+	}}
+	got := withoutRegressOptions(before, now, []planning.Issue{issue})
+	if assert.Len(t, got[0].Options, 1) {
+		assert.Equal(t, "bread on lunch", got[0].Options[0].Name)
+		assert.True(t, got[0].Options[0].Recommended, "the option left is the recommendation")
+	}
+	assert.Equal(t, []planning.Issue{issue}, withoutRegressOptions(before, before, []planning.Issue{issue}), "no change, no filter")
+}

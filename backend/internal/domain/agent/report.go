@@ -424,9 +424,15 @@ func leftovers(bs, as planning.State, must *mustSink) []string {
 	}
 	slices.Sort(keys)
 	// A dish whose cooking is gone from one day and new on another moved.
+	// A dish with two new cookings names the earliest one, whatever the map
+	// order (the keys are sorted, the earliest cook date wins).
 	movedTo := map[string]batchFacts{}
-	for k, v := range a {
-		if _, ok := b[k]; !ok {
+	for _, k := range keys {
+		v, isNew := a[k]
+		if _, old := b[k]; !isNew || old {
+			continue
+		}
+		if cur, ok := movedTo[v.dish]; !ok || v.cooked.Before(cur.cooked) {
 			movedTo[v.dish] = v
 		}
 	}
@@ -833,13 +839,16 @@ func issueSentence(is planning.Issue, st planning.State) string {
 		return fmt.Sprintf("%s: %s %.0f g is %s.", where, food.Quote(fmt.Sprint(is.Params["name"])), n("grams"), why)
 	}
 	switch is.Code {
-	case planning.CodeVarietyRepeat, planning.CodeVarietyRelaxed, planning.CodeVarietyRepeatWeek:
+	case planning.CodeVarietyRepeat, planning.CodeVarietyRelaxed, planning.CodeVarietyRepeatWeek, planning.CodeVarietyRepeatNamed:
 		if dish := issueDish(is, st); dish != "" {
 			if is.Code == planning.CodeVarietyRepeatWeek {
 				if meals := sessionMealLabels(st, is); len(meals) > 1 {
 					return fmt.Sprintf("%s is cooked more than once this week: it is eaten at %s.", dish, strings.Join(meals, ", "))
 				}
 				return fmt.Sprintf("%s: %s is cooked more than once this week.", where, dish)
+			}
+			if is.Code == planning.CodeVarietyRepeatNamed {
+				return fmt.Sprintf("%s: %s is in the plan as you asked, but it was cooked or eaten recently before.", where, dish)
 			}
 			return fmt.Sprintf("%s: %s was cooked or eaten too recently before.", where, dish)
 		}

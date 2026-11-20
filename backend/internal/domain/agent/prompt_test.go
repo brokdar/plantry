@@ -112,7 +112,7 @@ func TestPrompt_SoftIssuesAreOffered(t *testing.T) {
 func TestPrompt_S5RanksLowest(t *testing.T) {
 	kcal := 2000.0
 	prompt := compose(&profile.Profile{KcalTarget: &kcal}, "", time.Time{})
-	for _, want := range []string{"preferences and effort, 7 carb and fat ranges (weekly carbs and fat: last", "food-group rules (the DGE weekly food rules", "never at the cost of kcal or protein"} {
+	for _, want := range []string{"6 carb and fat ranges (weekly carbs and fat: never at the cost of kcal or protein), 7 preferences and effort", "food-group rules (the DGE weekly food rules", "never at the cost of kcal or protein"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt must contain %q", want)
 		}

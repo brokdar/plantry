@@ -31,6 +31,8 @@ PLANTRY_REPLAY_OUT=/tmp/replay.json \
 go test ./internal/domain/agent -run TestReplayStored -parallel 8 -v
 ```
 
+`PLANTRY_REPLAY_FULL=1` also puts each call's arguments and replayed result into the report; `python3 -I ~/.local/share/plantry-dev/loop/tools/census.py --replay /tmp/replay.json` then counts the defect classes of what the current code returns (classes e1 and e2 need planner runs and are not in it). The replay does not know the user's message, so a dish the user named (SF3) is not marked named in it.
+
 Without `PLANTRY_REPLAY_ROUNDS` the test skips, so the normal gate is unaffected.
 `PLANTRY_REPLAY_NAMES="ho1-0b8ca4c hh1-0b8ca4c"` limits the rounds (default
 a1-fca42e7, a2-0b8ca4c, ho1-0b8ca4c, hh1-0b8ca4c). About 3 minutes for the four

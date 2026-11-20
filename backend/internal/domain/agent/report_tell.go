@@ -78,12 +78,18 @@ func mealChange(m reportMeal) string {
 	if len(m.After) == 0 {
 		parts = []string{"no meal any more"}
 	}
+	if len(parts) == 0 {
+		return "" // nothing about this meal changed in words
+	}
 	s := where + ": " + strings.Join(parts, "; ")
 	if m.KcalFrom != nil && m.KcalTo != nil && *m.KcalFrom != *m.KcalTo {
 		s += fmt.Sprintf(" (%d → %d kcal)", *m.KcalFrom, *m.KcalTo)
 	}
 	return s + "."
 }
+
+// emptyTellItem matches an item with nothing after its label.
+var emptyTellItem = regexp.MustCompile(`^([^:]*:)?\s*[.;,]*\s*$`)
 
 // buildTell is the list the reply must convey, in order: what changed, why
 // a dish was swapped (meat), the days against their goal, what is cooked when,
@@ -95,6 +101,9 @@ func buildTell(in reportInput, r changeReport) []string {
 		if s = strings.TrimSpace(s); s != "" {
 			if len([]rune(s)) > maxTellText {
 				s = string([]rune(s)[:maxTellText]) + "…"
+			}
+			if emptyTellItem.MatchString(s) || slices.ContainsFunc(out, func(o string) bool { return strings.EqualFold(o, s) }) {
+				return // a bare label ("Thu 26 Nov breakfast: .") or an item said already
 			}
 			out = append(out, s)
 		}

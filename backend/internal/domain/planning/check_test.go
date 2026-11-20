@@ -712,3 +712,25 @@ func TestCheck_CleanWindowHasNoIssues(t *testing.T) {
 	assert.Equal(t, []string{"leftover_before_cook"}, codes(got, "H4"))
 	assert.Len(t, got, 1)
 }
+
+// SF3: a dish the user named that repeats inside the variety window is a
+// warning (variety_repeat_named) on persisted data; unnamed it stays a violation.
+func TestCheck_H8NamedDishRepeatIsAWarning(t *testing.T) {
+	s := baseState()
+	manyMains(&s, 5)
+	last := day(sat).AddDate(0, 0, -7)
+	f := s.Foods[100]
+	f.LastEaten = &last
+	s.Foods[100] = f
+	s.Plates = []planning.Plate{{ID: 1, Date: day(sat), SlotID: dinner, Eaters: 1, Components: []planning.Component{{FoodID: 100, Portions: f64(1)}}}}
+
+	got := only(planning.Check(s, windowTarget(s)), "H8")
+	require.Len(t, got, 1)
+	assert.Equal(t, planning.SeverityViolation, got[0].Severity)
+
+	s.Named = map[int64]bool{100: true}
+	got = only(planning.Check(s, windowTarget(s)), "H8")
+	require.Len(t, got, 1)
+	assert.Equal(t, planning.CodeVarietyRepeatNamed, got[0].Code)
+	assert.Equal(t, planning.SeverityWarning, got[0].Severity)
+}

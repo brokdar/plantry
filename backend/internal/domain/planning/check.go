@@ -49,7 +49,10 @@ const (
 	CodeVarietyRepeat         = "variety_repeat"
 	CodeVarietyRelaxed        = "variety_relaxed"
 	CodeVarietyRepeatWeek     = "variety_repeat_week"
-	CodeKcalBelowFloor        = "kcal_below_floor"
+	// CodeVarietyRepeatNamed: a dish the user named repeats inside the variety
+	// window; applied with this warning (SF3).
+	CodeVarietyRepeatNamed = "variety_repeat_named"
+	CodeKcalBelowFloor     = "kcal_below_floor"
 	// Soft rules (Evaluate).
 	CodeKcalBelowBand     = "kcal_below_band"
 	CodeKcalAboveBand     = "kcal_above_band"
@@ -541,6 +544,9 @@ func (x *index) h8() []Issue {
 		code, sev := code, sev
 		if !x.merged && code == CodeVarietyRepeat && x.s.Window.Contains(prev) {
 			code, sev = CodeVarietyRepeatWeek, SeverityWarning
+		}
+		if !x.merged && code == CodeVarietyRepeat && x.s.Named[ev.foodID] {
+			code, sev = CodeVarietyRepeatNamed, SeverityWarning
 		}
 		is := issue("H8", code, sev)
 		if ev.session >= 0 {

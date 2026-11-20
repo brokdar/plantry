@@ -113,7 +113,7 @@ func TestWays_LighterChangesOnlyThisMealAndOffersTheRest(t *testing.T) {
 		// still a lighter dinner; it says so and stores no mark.
 		if o.Reaches {
 			assert.LessOrEqual(t, o.After.MealKcal, res.MaxKcal+0.5)
-			assert.Contains(t, o.Light, planning.LightIntent{Date: sat, Scope: "meal", Slot: "dinner"})
+			assert.NotContains(t, o.Light, planning.LightIntent{Date: sat, Scope: "meal", Slot: "dinner"}, "SC3: a comparative stores no mark")
 		} else {
 			assert.True(t, planning.MeaningfulMealKcal(res.Before.MealKcal, res.Before.MealKcal-o.After.MealKcal), o.What)
 			assert.NotContains(t, o.Light, planning.LightIntent{Date: sat, Scope: "meal", Slot: "dinner"})
@@ -389,4 +389,77 @@ func TestWays_MoreProteinOnlyAddsProteinFoods(t *testing.T) {
 		assert.False(t, w.After.DayKcal-w.Before.DayKcal > planning.RelProteinWasteKcal && w.After.DayProteinG-w.Before.DayProteinG < planning.RelProteinWasteG, w.What)
 	}
 	assert.True(t, added, "the protein food is among the ways")
+}
+
+// RL4: a light meal asked for is met at the limit or not at all. No way that
+// stops short of it is a way (the model would apply ways[0]); the nearest
+// step is the one offer.
+func TestWays_ToLimitAppliesNothingThatStopsShort(t *testing.T) {
+	res := ways(t, relLeftover(), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter, ToLimit: true})
+	for _, w := range res.Ways {
+		assert.True(t, w.Reaches, "way %s stops short of the limit", w.What)
+	}
+	if len(res.Ways) == 0 {
+		assert.NotEmpty(t, res.EmptyWhy)
+	}
+}
+
+// SC3: a comparative "lighter" stores no light mark even when the meal ends
+// under the light limit; "light" to the limit does.
+func TestWays_OnlyToLimitStoresTheMark(t *testing.T) {
+	mark := planning.LightIntent{Date: sat, Scope: "meal", Slot: "dinner"}
+	for _, toLimit := range []bool{false, true} {
+		res := ways(t, relState(false), planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter, ToLimit: toLimit})
+		reaching := 0
+		for _, w := range append(append([]planning.Way{}, res.Ways...), res.Offers...) {
+			if !w.Reaches {
+				continue
+			}
+			reaching++
+			if toLimit {
+				assert.Contains(t, w.Light, mark, w.What)
+			} else {
+				assert.NotContains(t, w.Light, mark, w.What)
+			}
+		}
+		assert.Positive(t, reaching, "toLimit=%v: some way reaches the limit in this fixture", toLimit)
+	}
+}
+
+// KR5: "heartier" grows the main, a starch or a protein food, never fruit or a
+// vegetable.
+func TestWays_HeartierNeverAddsFruitOrVegetables(t *testing.T) {
+	const fruit int64 = 63
+	s := relState(false)
+	s.Foods[fruit] = planning.FoodFacts{
+		ID: fruit, Name: "Dried apricots", Kind: food.KindLeaf, LeafRole: food.RoleSideVeg, DietClass: "vegan", NoCook: true, ServingG: 150,
+		Macros: nutrition.Macros{Kcal: 250, Protein: 1}, NutritionComplete: true,
+	}
+	s.NoCook = append(s.NoCook, fruit)
+	res := ways(t, s, planning.WayRequest{PlateID: 3, Goal: planning.GoalHeartier, Limit: 8})
+	require.NotEmpty(t, res.Ways)
+	for _, w := range append(append([]planning.Way{}, res.Ways...), res.Offers...) {
+		for _, op := range w.Ops {
+			assert.NotEqual(t, fruit, op.FoodID, "%s", w.What)
+		}
+	}
+}
+
+// KR4: half a portion only for a dish cooked fresh for one meal; a dish other
+// meals eat from too goes down to three quarters at the least.
+func TestWays_HalfPortionOnlyForADishCookedForOneMeal(t *testing.T) {
+	smallest := func(s planning.State) float64 {
+		res := ways(t, s, planning.WayRequest{PlateID: 3, Goal: planning.GoalLighter, ToLimit: true, Limit: 8})
+		least := 99.0
+		for _, w := range append(append([]planning.Way{}, res.Ways...), res.Offers...) {
+			for _, op := range w.Ops {
+				if op.Portions != nil && derefInt(op.PlateComponentID) == 30 {
+					least = min(least, *op.Portions)
+				}
+			}
+		}
+		return least
+	}
+	assert.GreaterOrEqual(t, smallest(relLeftover()), 0.75, "the dish feeds another meal")
+	assert.Equal(t, 0.5, smallest(relState(false)), "cooked fresh for this meal alone: half a portion is allowed")
 }

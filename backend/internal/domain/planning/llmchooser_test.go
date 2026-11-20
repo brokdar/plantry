@@ -304,37 +304,32 @@ func TestLLMChooser_RepairsAnH2Violation(t *testing.T) {
 	assert.Equal(t, 12, sessions)
 }
 
-// B7-AC3: three invalid proposals: the last one is persisted with its
-// violations, the run is partial and the board shows the issue.
+// B7-AC3 as PL1b changed it: three invalid proposals are never saved: the
+// heuristic plan is saved instead, the run is ok with no violation and the
+// notes say so.
 func TestLLMChooser_UnresolvedViolationsArePersisted(t *testing.T) {
 	e := newLLMEnv(t)
 
 	id := e.gen(submit(t, "tu_1", e.h2Plan()))
 
 	r := e.run(id)
-	assert.Equal(t, "partial", r.Status)
-	assert.Equal(t, 2, r.RepairAttempts)
+	assert.Equal(t, "ok", r.Status)
 	assert.Equal(t, 3, r.LLMSteps)
 	var vs []planning.Issue
 	require.NoError(t, json.Unmarshal([]byte(r.Violations), &vs))
-	require.Len(t, vs, 1)
-	assert.Equal(t, "H2", vs[0].Rule)
-	assert.Equal(t, sun, vs[0].Date)
+	assert.Empty(t, vs)
+	assert.Contains(t, r.Notes, "heuristic plan instead")
 	plates, _ := e.rows(id)
 	assert.Equal(t, 21, plates)
 
 	board, err := testsvc.PlanView(e.db).Plan(e.ctx, &e.start, day(svcToday))
 	require.NoError(t, err)
-	assert.True(t, slices.ContainsFunc(board.Issues, func(is planning.Issue) bool {
-		return is.Code == planning.CodeTooManyCookOccasions && is.Date == sun
-	}), "board issues %+v", board.Issues)
+	assert.False(t, slices.ContainsFunc(board.Issues, func(is planning.Issue) bool {
+		return is.Code == planning.CodeTooManyCookOccasions
+	}), "the saved heuristic plan holds no hard issue: board issues %+v", board.Issues)
 	require.NotNil(t, board.Draft)
-	require.NotNil(t, board.Draft.Notes)
-	assert.True(t, strings.HasPrefix(r.Notes, "Two occasions on Sunday."), r.Notes)
-	// The audit's vg-gen: partial with no key said nothing about the open rule.
-	assert.Equal(t, "error.plan.hard_rule_open", r.ErrorKey)
-	assert.Contains(t, r.Notes, "A hard rule is still open in the saved plan: ")
-	assert.Contains(t, r.Notes, sun)
+	assert.Empty(t, r.ErrorKey)
+	assert.Contains(t, r.Notes, "The model's plan broke cooking times per day")
 }
 
 // A plan whose only hard issue is an empty cell (nothing can fill the meal)
@@ -439,9 +434,8 @@ func TestLLMChooser_UnreadableReplies(t *testing.T) {
 		e := newLLMEnv(t)
 		id := e.gen(submit(t, "tu_1", e.h2Plan()), bad)
 		r := e.run(id)
-		assert.Equal(t, "partial", r.Status)
-		assert.Equal(t, 2, r.RepairAttempts)
-		assert.True(t, strings.HasPrefix(r.Notes, "Two occasions on Sunday.\nWarning, not resolved:"), r.Notes)
+		assert.Equal(t, "ok", r.Status, "PL1b: the unresolved proposal is not saved, the heuristic plan is")
+		assert.Contains(t, r.Notes, "heuristic plan instead")
 	})
 }
 

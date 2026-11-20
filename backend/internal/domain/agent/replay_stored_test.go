@@ -115,6 +115,10 @@ type replayCall struct {
 	Paths  []string `json:"paths,omitempty"` // differing field paths, indexes as []
 	Diffs  []string `json:"diffs,omitempty"` // first few "path: stored -> now"
 	NDiffs int      `json:"n_diffs,omitempty"`
+	// Args and Got (the replayed result) are set when PLANTRY_REPLAY_FULL is
+	// set: the census reads them.
+	Args json.RawMessage `json:"args,omitempty"`
+	Got  json.RawMessage `json:"got,omitempty"`
 }
 
 func isChatRun(t *testing.T, meta string) bool {
@@ -197,10 +201,11 @@ func replayRun(t *testing.T, roundDir, runDB, variant string) []replayCall {
 	require.NoError(t, turns.Err())
 
 	var out []replayCall
+	full := os.Getenv("PLANTRY_REPLAY_FULL") != ""
 	diverged := false // a regenerate is not replayed, so later calls see another plan
-	for _, id := range ids {
+	for turn, id := range ids {
 		ctx, _ := e.rec.Start(e.ctx, airun.Start{Kind: airun.KindChat, ConversationID: &conv})
-		ctx = agent.WithTurn(ctx, conv)
+		ctx = agent.WithTurnSeq(ctx, conv, uint64(turn+1))
 		rows, err := src.Query(`SELECT seq, name, COALESCE(args_json,''), COALESCE(result_json,'') FROM ai_run_steps
 			WHERE run_id = ? AND type = 'tool_call' AND caller = 'direct' ORDER BY seq`, id)
 		require.NoError(t, err)
@@ -229,6 +234,9 @@ func replayRun(t *testing.T, roundDir, runDB, variant string) []replayCall {
 			got, _, _, err := e.ts.Execute(ctx, s.name, json.RawMessage(s.args))
 			if err != nil {
 				got, _ = json.Marshal(map[string]string{"error": err.Error()})
+			}
+			if full {
+				c.Args, c.Got = json.RawMessage(s.args), got
 			}
 			var a, b any
 			require.NoError(t, json.Unmarshal([]byte(s.want), &a))

@@ -335,3 +335,14 @@ func TestHeuristic_NoMainLeavesFullMealCellEmpty(t *testing.T) {
 	}
 	assert.Equal(t, len(in.Target.Cells), missing)
 }
+
+// NU6: with a body weight the protein target is grams per kg, so the profile
+// block does not also show the profile's protein share.
+func TestPrompt_NoProteinShareWithABodyWeight(t *testing.T) {
+	in := run4Input()
+	pct, w := 30.0, 70.0
+	in.State.Profile.ProteinPct = &pct
+	assert.Contains(t, planning.RenderPrompt(in), "protein target: 30% of kcal")
+	in.State.Profile.WeightKg = &w
+	assert.NotContains(t, planning.RenderPrompt(in), "protein target: 30% of kcal")
+}

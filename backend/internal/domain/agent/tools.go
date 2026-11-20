@@ -73,13 +73,17 @@ type ToolSet struct {
 	byName  map[string]*Tool
 	schemas map[string]*gojsonschema.Schema
 	changes ChangeStore // nil: changes are not recorded
+	offered *offeredMemo
 }
 
 // Services aggregates the domain services the default tool set depends on.
 type Services struct {
 	// Removed remembers the foods the user had removed in a conversation, so
 	// no way, option or alternative adds one back (set by NewToolSet).
-	Removed           *removedMemo
+	Removed *removedMemo
+	// Offered remembers the ops the tools offered, so an offer is not applied
+	// in the turn that made it (set by NewToolSet).
+	Offered           *offeredMemo
 	Foods             *food.Service
 	NutritionResolver *food.NutritionResolver
 	Plates            *plate.Service
@@ -116,10 +120,25 @@ func NewToolSet(svc Services) (*ToolSet, error) {
 	if svc.Removed == nil {
 		svc.Removed = &removedMemo{}
 	}
+	if svc.Offered == nil {
+		svc.Offered = &offeredMemo{}
+	}
+	if state := svc.State; state != nil {
+		// The foods the user named are part of the state every check reads
+		// (SF3); they come from the request text, never from a tool argument.
+		svc.State = func(ctx context.Context, w window.Window, today time.Time) (planning.State, error) {
+			st, err := state(ctx, w, today)
+			if t, ok := turnFrom(ctx); ok && len(t.named) > 0 {
+				st.Named = t.named
+			}
+			return st, err
+		}
+	}
 	ts := &ToolSet{
 		byName:  map[string]*Tool{},
 		schemas: map[string]*gojsonschema.Schema{},
 		changes: svc.Changes,
+		offered: svc.Offered,
 	}
 	for _, t := range defaultTools(svc) {
 		if err := ts.register(t); err != nil {
@@ -188,6 +207,9 @@ func (s *ToolSet) Execute(ctx context.Context, name string, input json.RawMessag
 	ctx, note := withChangeNote(ctx)
 	mark := s.watermark(ctx, run.ID())
 	output, effect, err := s.execute(ctx, name, input)
+	if err == nil {
+		s.offered.record(ctx, output)
+	}
 	result := output
 	if err != nil {
 		result = mustMarshal(map[string]string{"error": err.Error()})

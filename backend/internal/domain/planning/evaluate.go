@@ -271,8 +271,11 @@ func evaluate(s State, t Target, weekOpts bool) Evaluation {
 			de.FloorKcal = math.Round(dk.Floor(x.pol))
 			de.RoomKcal = math.Max(0, de.BandHigh-math.Round(dk.Kcal))
 		}
-		de.Light, de.LightLevel = x.lightOf(dk.Date)
-		de.LightMeals = x.lightMeals(dk.Date)
+		// A day away is not judged and is never called light.
+		if !dk.Away {
+			de.Light, de.LightLevel = x.lightOf(dk.Date)
+			de.LightMeals = x.lightMeals(dk.Date)
+		}
 		if t := x.pol.ProteinTargetG(dk.Share()); t > 0 {
 			de.ProteinTargetG = t
 		}

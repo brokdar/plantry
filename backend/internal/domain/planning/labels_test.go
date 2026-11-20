@@ -17,7 +17,7 @@ func TestPlainText_CoversEveryCodeWithoutCodes(t *testing.T) {
 		CodeDietIncompatible, CodeMeatDaysExceeded, CodeDietUnknown, CodeConfirmedInTarget, CodeSessionOutsideTarget,
 		CodeUnknownFood, CodeUnknownSession, CodeNotComposed, CodeSessionFoodMismatch, CodeDuplicateSessionKey,
 		CodeInvalidPortions, CodePlateWithoutComponent, CodePlateOutsideTarget, CodePlateOnConfirmedCell,
-		CodeVarietyRepeat, CodeVarietyRelaxed, CodeVarietyRepeatWeek, CodeKcalBelowFloor, CodeKcalBelowBand,
+		CodeVarietyRepeat, CodeVarietyRelaxed, CodeVarietyRepeatWeek, CodeVarietyRepeatNamed, CodeKcalBelowFloor, CodeKcalBelowBand,
 		CodeKcalAboveBand, CodeProteinLow, CodeWeekKcalBelowBand, CodeWeekKcalAboveBand, CodeWeekProteinLow,
 		CodeWeekCarbsRange, CodeWeekFatRange, CodeMealNotLight, CodeMealNotHearty, CodeDishRepeats, CodeAddOnExcess,
 		CodeWeekMeatAboveDGE, CodeWeekFishBelowDGE, CodeWeekLegumesBelow,

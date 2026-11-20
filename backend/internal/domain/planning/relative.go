@@ -53,14 +53,18 @@ const (
 
 	// maxWays is the most ways Ways returns (a caller that checks them again
 	// asks for more than it shows); defaultWays is what it returns by default.
-	maxWays        = 8
-	maxOffers      = 4
-	defaultWays    = 4
-	wayPortionMin  = 0.5
-	wayCompSteps   = 3
-	maxCompPerKind = 3
-	wayAddTries    = 12
-	wayMaxServings = 2
+	maxWays       = 8
+	maxOffers     = 4
+	defaultWays   = 4
+	wayPortionMin = 0.5
+	// wayPortionShared is the smallest portion a way gives a dish that other
+	// meals eat from too (KR4): half a portion is only for a dish cooked fresh
+	// for one meal.
+	wayPortionShared = 0.75
+	wayCompSteps     = 3
+	maxCompPerKind   = 3
+	wayAddTries      = 12
+	wayMaxServings   = 2
 )
 
 // MeaningfulKcal reports whether a change of delta kcal (in the asked
@@ -392,7 +396,7 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 		}
 	}
 
-	var found, offers []Way
+	var found, offers, nearest []Way
 	comps := map[string]int{}
 	// compensating re-evaluates the plan many times: a few primary edits of
 	// each kind get it.
@@ -445,6 +449,10 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 			if way.Reaches {
 				offer(e, r.ev)
 			}
+		case way.Meaningful && w.toLimit && !way.Reaches && !w.dayGoal():
+			// RL4: a request for a light (filling) meal is met at the limit or
+			// not at all; the nearest step is only ever an offer.
+			nearest = append(nearest, way)
 		case way.Meaningful && (way.Reaches || !w.dayGoal()) && !w.wastesKcal(way):
 			found = append(found, way)
 		}
@@ -467,6 +475,16 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 	slices.SortStableFunc(offers, func(a, b Way) int { return a.cmp(b) })
 	if len(offers) > maxOffers {
 		offers = offers[:maxOffers]
+	}
+	if w.toLimit && len(found) == 0 {
+		// RL4 (b): the offer is the way nearest to the limit when no way (and
+		// no compound way) reaches it. The caller keeps exactly one after it
+		// has checked them.
+		if len(offers) == 0 {
+			nearest = dedupeWays(nearest)
+			slices.SortStableFunc(nearest, func(a, b Way) int { return a.cmp(b) })
+			offers = nearest[:min(len(nearest), maxOffers)]
+		}
 	}
 	if w.dayGoal() && req.TargetKcal > 0 && req.Goal == GoalLowerDay {
 		if d, ok := w.dayEval(w.base); ok && req.TargetKcal < d.FloorKcal-0.5 {
@@ -569,7 +587,7 @@ func (w *waySearch) check(next State) wayCheck {
 			r.other = true
 		}
 	}
-	if MeatOverStep(w.base, r.ev) {
+	if MeatOverStep(w.base, r.ev) || overloadedCooking(w.s0, next) {
 		r.other = true
 	}
 	if a, b := w.base.Week, r.ev.Week; a != nil && b != nil && b.MeatG > a.MeatG+1 &&
@@ -742,7 +760,9 @@ func (w *waySearch) way(e wayEdit, r wayCheck, intent *LightIntent) Way {
 	if e.note != "" && a.Why == "" {
 		a.Why = e.note
 	}
-	if a.Reaches && intent != nil {
+	// SC3: only "light/filling" to the limit (toLimit) and a whole-day request
+	// store a mark; a comparative "lighter/heartier" does not.
+	if a.Reaches && intent != nil && (w.toLimit || w.dayGoal()) {
 		a.Light = append(a.Light, *intent)
 	}
 	a.Light = append(a.Light, e.clear...)
@@ -897,13 +917,13 @@ func removeComponents(s State, pi int, drop ...int) State {
 }
 
 // levels are the quantities a component may take in direction dir (-1 less,
-// +1 more): composed portions on the quarter grid within [wayPortionMin,
-// MaxDishPortions], a leaf's grams at 75 and 50 % (125 and 150 %).
-func levels(c Component, dir int) []float64 {
+// +1 more): composed portions on the quarter grid within [floor,
+// MaxDishPortions] (see portionFloor), a leaf's grams at 75 and 50 % (125 and 150 %).
+func levels(c Component, dir int, floor float64) []float64 {
 	var out []float64
 	switch {
 	case c.Portions != nil && *c.Portions > 0:
-		for n := *c.Portions + float64(dir)*roundPortions; n >= wayPortionMin-1e-9 && n <= MaxDishPortions+1e-9; n += float64(dir) * roundPortions {
+		for n := *c.Portions + float64(dir)*roundPortions; n >= floor-1e-9 && n <= MaxDishPortions+1e-9; n += float64(dir) * roundPortions {
 			out = append(out, n)
 		}
 	case c.Grams != nil && *c.Grams > 0:
@@ -918,6 +938,89 @@ func levels(c Component, dir int) []float64 {
 		}
 	}
 	return out
+}
+
+// heartierFood reports whether a food may be added or enlarged for a
+// "heartier" request (KR5): a main, a starch or a protein food, never fruit, a
+// dessert, a drink, a sauce or a vegetable. The main of a plate is always
+// enlargeable.
+func heartierFood(f FoodFacts) bool {
+	role := f.Role
+	if !f.Composed() {
+		role = f.LeafRole
+	}
+	switch role {
+	case food.RoleMain, food.RoleSideStarch, food.RoleSideProtein:
+		return true
+	}
+	return false
+}
+
+// maxDishesPerCooking is the most dishes one cooking time holds in a way, an
+// offer or a fix (KR2); the away path is exempt.
+const maxDishesPerCooking = 2
+
+// overloadedCooking reports whether next has a cooking time (cook cell) with
+// more than maxDishesPerCooking dishes that base did not already have.
+func overloadedCooking(base, next State) bool {
+	count := func(s State) map[string]int {
+		eaten := map[int64]bool{}
+		for _, p := range s.Plates {
+			for _, c := range p.Components {
+				if c.SessionID != 0 {
+					eaten[c.SessionID] = true
+				}
+			}
+		}
+		out := map[string]int{}
+		for _, sess := range s.Sessions {
+			if eaten[sess.ID] {
+				out[fmt.Sprintf("%s|%d", sess.CookDate.Format(time.DateOnly), sess.CookSlotID)]++
+			}
+		}
+		return out
+	}
+	was := count(base)
+	for k, n := range count(next) {
+		if n > maxDishesPerCooking && n > was[k] {
+			return true
+		}
+	}
+	return false
+}
+
+// portionFloor is the smallest portion a way gives component c (KR4): half a
+// portion for a dish cooked fresh for one meal (its session cooks at the
+// cell of the plate that holds c and no other plate eats it), else three
+// quarters.
+func portionFloor(s State, c Component) float64 {
+	if c.SessionID == 0 {
+		return wayPortionMin
+	}
+	eaters := 0
+	var home *Plate
+	for i, p := range s.Plates {
+		for _, o := range p.Components {
+			if o.SessionID == c.SessionID {
+				eaters++
+				if o.ID == c.ID {
+					home = &s.Plates[i]
+				}
+			}
+		}
+	}
+	if eaters <= 1 && home != nil {
+		for _, sess := range s.Sessions {
+			if sess.ID == c.SessionID && sess.CookDate.Equal(home.Date) && sess.CookSlotID == home.SlotID {
+				return wayPortionMin
+			}
+		}
+		return wayPortionShared
+	}
+	if eaters > 1 {
+		return wayPortionShared
+	}
+	return wayPortionMin
 }
 
 func quantityOp(p Plate, c Component, n float64) OptionOp {
@@ -950,7 +1053,10 @@ func (w *waySearch) quantityEdits(s State, pi, dir int) []wayEdit {
 		if !ok || !f.NutritionComplete || f.Macros.Kcal <= 0 || (w.goal == GoalMoreProtein && dir > 0 && !proteinFood(f)) {
 			continue
 		}
-		for _, n := range levels(c, dir) {
+		if w.goal == GoalHeartier && dir > 0 && !isMainComp(s, p, ci) && !heartierFood(f) {
+			continue
+		}
+		for _, n := range levels(c, dir, portionFloor(s, c)) {
 			out = append(out, wayEdit{
 				s: setQuantity(s, pi, ci, n), ops: []OptionOp{quantityOp(p, c, n)}, what: []string{quantityWords(f, c, n)},
 				cost: 1, kind: "portion", plate: p.ID,
@@ -1010,7 +1116,7 @@ func (w *waySearch) leanEdits(s State, pi int) []wayEdit {
 		return nil
 	}
 	var out []wayEdit
-	for _, n := range append([]float64{-1}, levels(mc, -1)...) {
+	for _, n := range append([]float64{-1}, levels(mc, -1, portionFloor(s, mc))...) {
 		ns, nops, what := removeComponents(s, pi, drop...), slices.Clone(ops), []string{"leave out " + strings.Join(names, " and ")}
 		if n > 0 {
 			mci := mi - countBelow(drop, mi)
@@ -1052,8 +1158,8 @@ func (w *waySearch) keepOneSideEdits(s State, pi, mi int) []wayEdit {
 				names = append(names, food.Quote(s.Foods[c.FoodID].Name))
 			}
 		}
-		for _, mn := range append([]float64{-1}, levels(mc, -1)...) {
-			for _, kn := range append([]float64{-1}, levels(kc, -1)...) {
+		for _, mn := range append([]float64{-1}, levels(mc, -1, portionFloor(s, mc))...) {
+			for _, kn := range append([]float64{-1}, levels(kc, -1, portionFloor(s, kc))...) {
 				if mn < 0 && kn < 0 && len(drop) == 0 {
 					continue
 				}
@@ -1141,7 +1247,7 @@ func (w *waySearch) addCands(s State, p Plate, want float64, protein bool) []add
 	var out []addCand
 	for _, id := range s.NoCook {
 		f, ok := s.Foods[id]
-		if !ok || onPlate[id] || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet || (protein && !proteinFood(f)) || !fitsDiet(f.DietClass, w.household) || (f.Composed() && f.Role == food.RoleStandalone) || (!f.Composed() && !s.addOnFits(p, f, slotName(s, p.SlotID))) {
+		if !ok || onPlate[id] || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet || (protein && !proteinFood(f)) || (w.goal == GoalHeartier && !heartierFood(f)) || !fitsDiet(f.DietClass, w.household) || (f.Composed() && f.Role == food.RoleStandalone) || (!f.Composed() && !s.addOnFits(p, f, slotName(s, p.SlotID))) {
 			continue
 		}
 		var best *addCand
@@ -1402,7 +1508,7 @@ func (w *waySearch) compUp(e wayEdit, ev Evaluation, qi int, vegOnly bool) (wayE
 		if !isMainComp(e.s, q, qi2) || !ok || !f.NutritionComplete {
 			continue
 		}
-		for _, n := range levels(c, +1) {
+		for _, n := range levels(c, +1, portionFloor(e.s, c)) {
 			raise = append(raise, wayEdit{s: setQuantity(e.s, qi, qi2, n), ops: []OptionOp{quantityOp(q, c, n)}, what: []string{quantityWords(f, c, n)}, cost: 1})
 		}
 	}
@@ -1712,7 +1818,7 @@ func (w *waySearch) mealOK(next State) bool {
 			continue
 		}
 		if c.Portions != nil {
-			return *c.Portions >= wayPortionMin-1e-9
+			return *c.Portions >= portionFloor(next, c)-1e-9
 		}
 		return c.Multiplier() >= 0.5*wasMain-1e-9
 	}
@@ -1745,7 +1851,7 @@ func (w *waySearch) sideSwapEdits(s State, pi int) []wayEdit {
 	mc := p.Components[mi]
 	mf := s.Foods[mc.FoodID]
 	var out []wayEdit
-	for _, mn := range append([]float64{-1}, levels(mc, -1)...) {
+	for _, mn := range append([]float64{-1}, levels(mc, -1, portionFloor(s, mc))...) {
 		for _, dropAdd := range []bool{false, true} {
 			s1 := s
 			var pre []OptionOp
