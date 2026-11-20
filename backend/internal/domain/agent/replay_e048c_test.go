@@ -32,13 +32,16 @@ func TestReplayE048c_TheOfferClearsTheLunchMarkItGrows(t *testing.T) {
 	_, _, o := e048cOffer(t)
 	assert.Equal(t, true, o["recommended"])
 	var cleared bool
-	for _, l := range relMaps(o["light"]) {
-		if l["slot"] == "lunch" && l["scope"] == "none" {
+	lights, _ := o["light"].([]any)
+	for _, x := range lights {
+		if l, _ := x.(map[string]any); l["slot"] == "lunch" && l["scope"] == "none" {
 			cleared = true
 		}
 	}
 	assert.True(t, cleared, "the lunch the offer grows is no longer light: %v", o["light"])
-	for _, n := range relMaps(o["new_issues"]) {
+	issues, _ := o["new_issues"].([]any)
+	for _, x := range issues {
+		n, _ := x.(map[string]any)
 		assert.NotEqual(t, "light meal", n["label"], "no warning for a light mark that is gone")
 	}
 }
