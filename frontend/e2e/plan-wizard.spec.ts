@@ -401,6 +401,14 @@ test("F3-AC3: an assistant failure offers Plan without the assistant", async ({
   page,
   request,
 }) => {
+  // CC4 / PL2 (spec v1): the heuristic plans and the model only reads the
+  // user's note, and a note it cannot read ends partial, not failed. The
+  // script's failing plan call is never made, so this flow needs a new
+  // trigger for a failed run.
+  test.fixme(
+    true,
+    "PL2: the model no longer plans; no assistant failure to show"
+  )
   test.slow()
   // Hearty recipes, so the heuristic plan is ok (H9 floor; see above).
   const library = await seedRecipeLibrary(uid(), 10, undefined, 490)

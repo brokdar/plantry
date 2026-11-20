@@ -80,6 +80,13 @@ test.describe("generated week on the LLM", () => {
   test("F2-AC5: progress while running, run notes, Why this?", async ({
     page,
   }) => {
+    // CC4 / PL2 (spec v1): the heuristic plans and the model only reads the
+    // note; with no note no model runs, so there is no running LLM plan whose
+    // progress the board shows. Needs a rewrite around the note flow.
+    test.fixme(
+      true,
+      "PL2: the model no longer plans; no LLM run to show progress for"
+    )
     const tag = uid()
     // A window of its own, past the heuristic spec's band.
     const start = addDays((await futureWindow()).start, 7 * 20)
