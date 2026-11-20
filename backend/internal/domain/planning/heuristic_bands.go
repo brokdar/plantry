@@ -3,7 +3,6 @@ package planning
 import (
 	"math"
 	"slices"
-	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
@@ -22,26 +21,41 @@ func (h *planner) fitMealsToBands() {
 		return
 	}
 	y, days := h.dayAccounts()
+	// The week outweighs a meal's place in its band (priority 2 over 7): meals
+	// may give up kcal only while the week average stays inside its band.
+	sumKcal, sumTarget := 0.0, 0.0
+	for _, dk := range days {
+		sumKcal += dk.Kcal
+		sumTarget += dk.Adjusted
+	}
+	room := sumKcal - y.pol.WeekLow*1.01*sumTarget
 	for _, dk := range days {
 		if dk.Away {
 			continue
 		}
-		h.fitDay(y, dk, *k)
+		h.fitDay(y, dk, *k, &room)
 	}
 }
 
 // bandMeal is a meal of one day whose main's portions may move.
 type bandMeal struct {
-	pi, ci   int
-	kcal     float64   // the plate, per eater
-	lo, hi   float64   // its band in kcal
-	perPort  float64   // kcal per eater of one portion of the main
-	options  []float64 // portions to try
-	eaters   float64
-	portions float64
+	pi     int
+	kcal   float64 // the plate, per eater
+	lo, hi float64 // its band in kcal
+	eaters float64
+	moves  []bandMove // the changes to try: none first
 }
 
-func (h *planner) fitDay(y *index, dk DayKcal, kk float64) {
+// bandMove changes one component of a plate: a recipe's portions (its batch
+// follows) or a leaf's grams (shrinking only), by dKcal per eater.
+type bandMove struct {
+	ci       int
+	portions float64 // new portions (recipe), 0 for a leaf
+	grams    float64 // new grams (leaf)
+	dKcal    float64
+}
+
+func (h *planner) fitDay(y *index, dk DayKcal, kk float64, room *float64) {
 	k := kk
 	merged := Merge(h.s, h.in.Target, h.prop)
 	ev := Evaluate(merged, h.in.Target)
@@ -66,22 +80,31 @@ func (h *planner) fitDay(y *index, dk DayKcal, kk float64) {
 		case h.s.heartyMeal(p.Date, p.SlotID): // the filling minimum
 			lo, hi = HeartyMealShare*dk.mealShare(p.SlotID), math.Inf(1)
 		}
-		ci := h.bandMain(p)
-		if ci < 0 {
-			continue
-		}
-		c := p.Components[ci]
-		f := h.s.Foods[c.FoodID]
-		floor := wayPortionShared
-		if c.SessionKey == "" {
-			floor = wayPortionMin
-		}
-		m := bandMeal{
-			pi: pi, ci: ci, kcal: plateKcal[int64(-(pi + 1))], lo: lo, hi: hi,
-			perPort: f.Macros.Kcal, eaters: p.eaters(h.s), portions: c.Portions,
-		}
-		for n := floor; n <= MaxDishPortions+epsilon; n += 0.25 {
-			m.options = append(m.options, n)
+		m := bandMeal{pi: pi, kcal: plateKcal[int64(-(pi + 1))], lo: lo, hi: hi, eaters: p.eaters(h.s), moves: []bandMove{{ci: -1}}}
+		for ci, c := range p.Components {
+			f, ok := h.s.Foods[c.FoodID]
+			if !ok || f.Macros.Kcal <= 0 || c.SessionID != 0 {
+				continue
+			}
+			switch {
+			case f.Composed() && c.Portions > 0 && (f.Role == "main" || f.Role == "side_starch" || f.Role == "side_veg"):
+				floor := wayPortionShared
+				if c.SessionKey == "" {
+					floor = wayPortionMin
+				}
+				for n := floor; n <= MaxDishPortions+epsilon; n += 0.25 {
+					if n != c.Portions {
+						m.moves = append(m.moves, bandMove{ci: ci, portions: n, dKcal: (n - c.Portions) * f.Macros.Kcal})
+					}
+				}
+			case !f.Composed() && c.Grams > 0 && f.Macros.Protein < 10: // protein stays: it carries the week target
+				for _, k := range []float64{0.5, 0.75} {
+					g := math.Round(c.Grams*k/roundGrams) * roundGrams
+					if g < c.Grams {
+						m.moves = append(m.moves, bandMove{ci: ci, grams: g, dKcal: f.Macros.Kcal * (g - c.Grams) / 100})
+					}
+				}
+			}
 		}
 		meals = append(meals, m)
 		if len(meals) == 3 {
@@ -91,8 +114,8 @@ func (h *planner) fitDay(y *index, dk DayKcal, kk float64) {
 	if len(meals) == 0 {
 		return
 	}
-	inBand := func(m bandMeal, n float64) bool {
-		v := m.kcal + (n-m.portions)*m.perPort
+	inBand := func(m bandMeal, mv bandMove) bool {
+		v := m.kcal + mv.dKcal
 		return v >= m.lo && v <= m.hi
 	}
 	dayLo, dayHi := dk.Adjusted*y.pol.DayLow, dk.Adjusted*y.pol.DayHigh
@@ -100,92 +123,95 @@ func (h *planner) fitDay(y *index, dk DayKcal, kk float64) {
 	dayDist := func(v float64) float64 { return math.Max(0, math.Max(dayLo-v, v-dayHi)) }
 	startIn := 0
 	for _, m := range meals {
-		if inBand(m, m.portions) {
+		if inBand(m, m.moves[0]) {
 			startIn++
 		}
 	}
 	type pick struct {
-		ns      []float64
-		in      int
-		dayGap  float64
-		changed int
+		mv     []bandMove
+		in     int
+		dayGap float64
 	}
 	best := pick{in: startIn, dayGap: dayDist(dk.Kcal)}
-	best.ns = make([]float64, len(meals))
-	for i, m := range meals {
-		best.ns[i] = m.portions
-	}
-	var walk func(i int, ns []float64)
-	walk = func(i int, ns []float64) {
+	var walk func(i int, mv []bandMove)
+	walk = func(i int, mv []bandMove) {
 		if i == len(meals) {
 			day := dk.Kcal
-			in, changed := 0, 0
+			in := 0
 			for j, m := range meals {
-				day += (ns[j] - m.portions) * m.perPort
-				if inBand(m, ns[j]) {
+				day += mv[j].dKcal
+				if inBand(m, mv[j]) {
 					in++
-				}
-				if ns[j] != m.portions {
-					changed++
 				}
 			}
 			// A change never takes the day below its target when it was above it: the
 			// week outweighs a meal's place in its band (priority 2 over 7).
-			if day < floor || day < math.Min(dk.Kcal, dk.Adjusted)-epsilon || dayDist(day) > dayDist(dk.Kcal)+epsilon {
+			// A day gives up kcal only down to its own band and while the week has room.
+			if day < floor || day < dayLo-epsilon && day < dk.Kcal || dk.Kcal-day > *room+epsilon || dayDist(day) > dayDist(dk.Kcal)+epsilon {
 				return
 			}
 			if in > best.in || (in == best.in && in > startIn && dayDist(day) < best.dayGap-epsilon) {
-				best = pick{ns: slices.Clone(ns), in: in, dayGap: dayDist(day), changed: changed}
+				best = pick{mv: slices.Clone(mv), in: in, dayGap: dayDist(day)}
 			}
 			return
 		}
-		for _, n := range meals[i].options {
-			walk(i+1, append(ns, n))
+		for _, x := range meals[i].moves {
+			walk(i+1, append(mv, x))
 		}
 	}
 	walk(0, nil)
 	if best.in <= startIn {
 		return
 	}
-	h.applyPortions(meals, best.ns, dk.Date)
+	if h.applyMoves(meals, best.mv) {
+		day := dk.Kcal
+		for _, mv := range best.mv {
+			day += mv.dKcal
+		}
+		*room -= dk.Kcal - day
+	}
 }
 
-// applyPortions sets the mains' portions (their batches by the same amount) and
-// keeps them when no hard issue is added; else it restores the proposal.
-func (h *planner) applyPortions(meals []bandMeal, ns []float64, date time.Time) {
+// applyMoves applies one move per meal (the recipe's batch by the same amount)
+// and keeps them when no hard issue is added; else it restores the proposal.
+func (h *planner) applyMoves(meals []bandMeal, moves []bandMove) bool {
 	saved := h.prop
 	plates := slices.Clone(h.prop.Plates)
 	sessions := slices.Clone(h.prop.Sessions)
 	was := len(openHard(Merge(h.s, h.in.Target, h.prop), h.in.Target))
+	wasSoft := softKeys(Evaluate(Merge(h.s, h.in.Target, h.prop), h.in.Target).Issues)
 	for i, m := range meals {
+		mv := moves[i]
+		if mv.ci < 0 {
+			continue
+		}
 		p := &h.prop.Plates[m.pi]
 		p.Components = slices.Clone(p.Components)
-		c := &p.Components[m.ci]
+		c := &p.Components[mv.ci]
+		if mv.grams > 0 || (mv.portions == 0 && c.Grams > 0) {
+			c.Grams = mv.grams
+			continue
+		}
 		if c.SessionKey != "" {
 			for si := range h.prop.Sessions {
 				if h.prop.Sessions[si].Key == c.SessionKey {
-					h.prop.Sessions[si].Portions += m.eaters * (ns[i] - c.Portions)
+					h.prop.Sessions[si].Portions += m.eaters * (mv.portions - c.Portions)
 				}
 			}
 		}
-		c.Portions = ns[i]
+		c.Portions = mv.portions
 	}
-	if len(openHard(Merge(h.s, h.in.Target, h.prop), h.in.Target)) > was {
+	// No move may open a soft rule the plan had closed (the week's protein, say).
+	opened := false
+	for k := range softKeys(Evaluate(Merge(h.s, h.in.Target, h.prop), h.in.Target).Issues) {
+		if !wasSoft[k] {
+			opened = true
+		}
+	}
+	if opened || len(openHard(Merge(h.s, h.in.Target, h.prop), h.in.Target)) > was {
 		saved.Plates, saved.Sessions = plates, sessions
 		h.prop = saved
+		return false
 	}
-}
-
-// bandMain is the index of the main component of proposed plate p whose
-// portions may move: a recipe main cooked fresh for the plate or eating a batch
-// this proposal cooks; -1 when none.
-func (h *planner) bandMain(p ProposedPlate) int {
-	for i, c := range p.Components {
-		f, ok := h.s.Foods[c.FoodID]
-		if !ok || c.Portions <= 0 || c.SessionID != 0 || !f.Composed() || f.Macros.Kcal <= 0 || f.Role != "main" {
-			continue
-		}
-		return i
-	}
-	return -1
+	return true
 }
