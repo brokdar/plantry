@@ -170,6 +170,15 @@ func otherMust(tell string) []mustItem {
 		}
 		return out
 	}
+	if p := mustKeep.FindStringSubmatch(tell); p != nil {
+		return []mustItem{keepItem(p)}
+	}
+	if p := mustTooOld.FindStringSubmatch(tell); p != nil {
+		return []mustItem{tooOldItem(p)}
+	}
+	if p := mustOddName.FindStringSubmatch(tell); p != nil {
+		return []mustItem{oddNameItem(p)}
+	}
 	if p := mustShorter.FindStringSubmatch(tell); p != nil {
 		return []mustItem{shorterItem(tell, p)}
 	}

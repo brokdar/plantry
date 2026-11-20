@@ -123,6 +123,12 @@ func buildTell(in reportInput, r changeReport) []string {
 	for _, line := range smallMealGuests(in) {
 		add(line)
 	}
+	for _, line := range keepLines(in, r.Changed) {
+		add(line)
+	}
+	for _, line := range oddNameLines(r.Changed) {
+		add(line)
+	}
 	// Where the day's protein stands, in grams, when this change moved it by
 	// 5 g or more.
 	for _, a := range in.after.Days {

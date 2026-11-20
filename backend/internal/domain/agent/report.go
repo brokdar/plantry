@@ -529,6 +529,9 @@ func alsoChanged(st planning.State, applied []map[string]any) []string {
 					why := map[string]string{"before_cook": "it comes before the batch is cooked", "past_keep_days": "the batch would be too old by then", "cooked": "the batch is already cooked"}[fmt.Sprint(m["why"])]
 					s := fmt.Sprintf("%s now cooks its own %s instead of eating the one cooked earlier", cell(m, "date", "slot_id"), dish)
 					if why != "" {
+						if m["why"] == "past_keep_days" {
+							why += keepTooOld(st, asInt64(m["session_id"]))
+						}
 						s += " (" + why + ")"
 					}
 					out = append(out, s+".")
