@@ -1077,7 +1077,8 @@
       "nothing_to_accept": "In dieser Woche gibt es keine Entwürfe.",
       "state_mismatch": "Einige dieser Essen haben sich inzwischen geändert, deshalb lässt sich das nicht rückgängig machen.",
       "changed_during_run": "Der Plan hat sich währenddessen geändert, deshalb wurde nichts übernommen. Bitte versuch es noch einmal.",
-      "timeout": "Der Plan hat zu lange gedauert. Bitte versuch es noch einmal."
+      "timeout": "Der Plan hat zu lange gedauert. Bitte versuch es noch einmal.",
+      "day_same_dish": "Für diesen Tag passt kein anderes Hauptgericht und kein kalter Teller, er hätte dasselbe Hauptgericht zu beiden Mahlzeiten. Es wurde nichts geändert."
     },
     "slot": {
       "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden.",

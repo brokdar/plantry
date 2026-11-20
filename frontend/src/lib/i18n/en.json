@@ -1050,7 +1050,8 @@
       "nothing_to_accept": "This week has no draft plates.",
       "state_mismatch": "Some of these plates changed in the meantime, so this can't be undone.",
       "changed_during_run": "That plan changed while it was being made, so nothing was applied. Please try again.",
-      "timeout": "Making the plan took too long. Please try again."
+      "timeout": "Making the plan took too long. Please try again.",
+      "day_same_dish": "No other main or cold plate fits this day, so it would have the same main at both meals. Nothing was changed."
     },
     "slot": {
       "in_use": "This time slot is used by plates and cannot be deleted.",

@@ -206,6 +206,9 @@ func TestService_ReplannedDayCooksADifferentMainThanItsNeighbours(t *testing.T) 
 					continue
 				}
 				for _, c := range p.Components {
+					if c.CookSessionID == nil { // a cold plate's leaf: nothing cooked
+						continue
+					}
 					v, err := e.plates.Session(e.ctx, *c.CookSessionID)
 					require.NoError(t, err)
 					if v.CookDate.Format(time.DateOnly) == date {

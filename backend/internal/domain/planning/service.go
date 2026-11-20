@@ -44,6 +44,10 @@ const keyTimeout = "error.plan.timeout"
 // the issue, and the key and notes name the open rule.
 const keyHardRuleOpen = "error.plan.hard_rule_open"
 
+// keyDayRepeat is the error key of a day replan that can only end with the same
+// main at both meals (v1 OQ6: it saves nothing and says so).
+const keyDayRepeat = "error.plan.day_same_dish"
+
 // errShuttingDown refuses a generation once Shutdown began.
 var errShuttingDown = errors.New("plan generation is shutting down")
 
@@ -1042,6 +1046,23 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		return RunEnd{
 			Status: airun.StatusError, ErrorKey: keyHardRuleOpen,
 			Notes: "A hard rule is still open, so nothing was saved: " + openRules(still) + ".",
+		}
+	}
+	// KR7 (v1 OQ6): a day replan that can only end with the same main at both
+	// meals saves nothing and says so.
+	if j.scope.Kind == ScopeDay && j.side == nil {
+		x := newIndex(Merge(base, j.target, prop), j.target)
+		for _, d := range x.days {
+			if !d.Equal(j.scope.Date) {
+				continue
+			}
+			if _, _, other, ok := x.sameMainPair(d); ok {
+				closeStatus, closeStage = "error", "checking"
+				return RunEnd{
+					Status: airun.StatusError, ErrorKey: keyDayRepeat,
+					Notes: prop.Notes + " Nothing was saved: " + food.Quote(foodName(Merge(base, j.target, prop), other)) + " would be the main at both meals of the day and no other main or cold plate fits.",
+				}
+			}
 		}
 	}
 	if wishNote != "" {

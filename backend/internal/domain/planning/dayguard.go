@@ -28,26 +28,34 @@ func guardDayMains(base State, t Target, in Proposal, skip map[int64]bool) (Prop
 	out := in
 	var notes []string
 	for _, d := range newIndex(Merge(base, t, in), t).days {
-		merged := Merge(base, t, out)
-		x := newIndex(merged, t)
-		pi, early, other, ok := x.sameMainPair(d)
-		if !ok {
-			continue
-		}
-		next, note, replaced := x.distinctMain(base, t, out, merged, pi, other, skip)
-		if !replaced {
-			cold, coldNote, ok, why := x.coldFirstMeal(base, t, out, merged, early, pi, other, skip)
-			switch {
-			case ok:
-				next, note = cold, coldNote
-			case x.hasNoColdFoods(merged, skip):
-				note += " The household has no suitable no-cook foods (a bread, a protein, a raw vegetable) for a cold plate."
-			case why != "":
-				note += " " + why
+		// A day with three meals on one main has up to three pairs: each
+		// pass closes one, and stops when none changes.
+		for range 3 {
+			merged := Merge(base, t, out)
+			x := newIndex(merged, t)
+			pi, early, other, ok := x.sameMainPair(d)
+			if !ok {
+				break
+			}
+			next, note, replaced := x.distinctMain(base, t, out, merged, pi, other, skip)
+			if !replaced {
+				cold, coldNote, ok, why := x.coldFirstMeal(base, t, out, merged, early, pi, other, skip)
+				switch {
+				case ok:
+					next, note = cold, coldNote
+					replaced = true
+				case x.hasNoColdFoods(merged, skip):
+					note += " The household has no suitable no-cook foods (a bread, a protein, a raw vegetable) for a cold plate."
+				case why != "":
+					note += " " + why
+				}
+			}
+			out = next
+			notes = append(notes, note)
+			if !replaced {
+				break
 			}
 		}
-		out = next
-		notes = append(notes, note)
 	}
 	return out, notes
 }
