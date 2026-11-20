@@ -579,7 +579,7 @@ func TestFindWays_ToLimitOffersOnlyWhatReaches(t *testing.T) {
 			assert.True(t, w["reaches_cap"] == true || w["reaches_limit"] == true, "%v does not reach the light limit", w["what"])
 		}
 		if len(ways) == 0 {
-			assert.LessOrEqual(t, len(offers), 1)
+			assert.Len(t, offers, 1, "C-8(b): exactly one offer, the nearest step")
 		}
 	}
 }

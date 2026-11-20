@@ -87,6 +87,8 @@ type chatTurn struct {
 	unlocks        *pendingUnlocks
 	// named are the foods the user's message names (SF3).
 	named map[int64]bool
+	// cells are the meals the message names ("Thursday dinner"): "date|slot".
+	cells map[string]bool
 }
 
 type turnKey struct{}

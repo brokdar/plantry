@@ -397,18 +397,33 @@ func (s *Service) wishChooser(ctx context.Context, name airun.Chooser) (airun.Ch
 }
 
 // readWish extracts the constraints of a run's wish. A wish that cannot be
-// read does not fail the run: the heuristic plans without it and the note
-// says so (never silently).
-func (s *Service) readWish(ctx context.Context, base State, instruction string) (Constraints, string) {
+// read does not fail the run: the heuristic plans without it, the note says so
+// in the profile's language and the run ends partial (never a silent success).
+// The reasons stay English, in the log only.
+func (s *Service) readWish(ctx context.Context, base State, instruction string) (c Constraints, note string, failed bool) {
 	c, err := s.d.Extractor.Extract(ctx, base, instruction)
 	if err != nil {
 		s.d.Logger.WarnContext(ctx, "plan.wish failed", "error", err)
-		return Constraints{}, "Your wish could not be read, so the plan follows your settings only."
+		return Constraints{}, wishTexts[wishLang(base.Profile.Locale)][0], true
 	}
 	if len(c.Ignored) > 0 {
-		return c, "Not used from your wish: " + strings.Join(c.Ignored, "; ") + "."
+		s.d.Logger.InfoContext(ctx, "plan.wish partly unused", "ignored", c.Ignored)
+		return c, wishTexts[wishLang(base.Profile.Locale)][1], false
 	}
-	return c, ""
+	return c, "", false
+}
+
+// wishTexts are the wish notes: [0] not read, [1] partly unused.
+var wishTexts = map[string][2]string{
+	"en": {"Your wish could not be read, so the plan follows your settings only.", "Part of your wish was not used."},
+	"de": {"Dein Wunsch konnte nicht gelesen werden, deshalb folgt der Plan nur deinen Einstellungen.", "Ein Teil deines Wunsches wurde nicht verwendet."},
+}
+
+func wishLang(locale string) string {
+	if strings.HasPrefix(locale, "de") {
+		return "de"
+	}
+	return "en"
 }
 
 // isHeuristic reports whether c is the heuristic chooser, whose plans get the
@@ -922,9 +937,10 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		Stage: func(st Stage) { stage(st) }, Logger: s.d.Logger,
 	}
 	var wishNote string
+	var wishFailed bool
 	if j.wish && strings.TrimSpace(j.instruction) != "" && j.side == nil {
 		var c Constraints
-		c, wishNote = s.readWish(ctx, base, j.instruction)
+		c, wishNote, wishFailed = s.readWish(ctx, base, j.instruction)
 		base.Light = MergeLight(base.Light, c.Light)
 		j.light = MergeLight(j.light, c.Light)
 		j.exclude = append(j.exclude, c.Avoid...)
@@ -1018,6 +1034,16 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 			}
 		}
 	}
+	// PL1b: when the heuristic does no better the run does not save the plan:
+	// it ends in error naming the rule, and the drafts stay as they are. (An
+	// empty cell nothing can fill is not a rule broken: that plan is partial.)
+	if still := slices.DeleteFunc(openHard(Merge(base, j.target, prop), j.target), func(is Issue) bool { return is.Code == CodeMissingPlate }); !isHeuristic(j.chooser) && j.side == nil && len(still) > 0 {
+		closeStatus, closeStage = "error", "checking"
+		return RunEnd{
+			Status: airun.StatusError, ErrorKey: keyHardRuleOpen,
+			Notes: "A hard rule is still open, so nothing was saved: " + openRules(still) + ".",
+		}
+	}
 	if wishNote != "" {
 		prop.Notes = joinNotes(prop.Notes, wishNote)
 	}
@@ -1078,6 +1104,9 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 			end.ErrorKey = keyHardRuleOpen
 			end.Notes = joinNotes(end.Notes, "A hard rule is still open in the saved plan: "+open+".")
 		}
+	}
+	if wishFailed && end.Status == airun.StatusOK {
+		end.Status = airun.StatusPartial // the wish was not read: not a silent success
 	}
 	// The run's scope now also says what moved outside it and how to take
 	// the save back (day and plate scopes).

@@ -88,7 +88,9 @@ func mealChange(m reportMeal) string {
 	return s + "."
 }
 
-// emptyTellItem matches an item with nothing after its label.
+// emptyTellItem matches an item with nothing after its label. Spec RP5/G4: an
+// item is one rendered line of one fact class, so a bare label is no item and
+// a line said twice (case aside) is one (census classes c_empty, c_dup).
 var emptyTellItem = regexp.MustCompile(`^([^:]*:)?\s*[.;,]*\s*$`)
 
 // buildTell is the list the reply must convey, in order: what changed, why

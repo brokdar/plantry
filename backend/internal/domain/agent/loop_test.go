@@ -98,6 +98,7 @@ func (c *blockingClient) Complete(ctx context.Context, _ llm.Request) (string, e
 func minimalToolSet(t *testing.T, toolName string, output json.RawMessage, effect ToolEffect, handlerErr error) *ToolSet {
 	t.Helper()
 	ts := &ToolSet{
+		offered: &offeredMemo{},
 		byName:  map[string]*Tool{},
 		schemas: map[string]*gojsonschema.Schema{},
 	}

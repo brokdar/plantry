@@ -48,7 +48,8 @@ type Config struct {
 	KeepDB string
 	// Parallel is how many runs go at once (each has its own database); 0 or 1
 	// runs them one after the other, as a live run must. The records keep the
-	// scenario and run order.
+	// scenario and run order. A live run is always one at a time. Now and
+	// Logger are called from several goroutines.
 	Parallel int
 }
 
@@ -138,27 +139,44 @@ func Run(ctx context.Context, cfg Config, scenarios []Scenario) ([]Record, error
 		}
 	}
 	out := make([]Record, len(jobs))
-	errs := make([]error, len(jobs))
-	sem := make(chan struct{}, max(cfg.Parallel, 1))
-	var wg sync.WaitGroup
+	parallel := max(cfg.Parallel, 1)
+	if cfg.Live != nil {
+		parallel = 1 // a live run costs money and meets rate limits: one at a time
+	}
+	// The first failure cancels the jobs that have not started. Shared state is
+	// read-only (the library) or locked (dbs); cfg.Now and cfg.Logger are
+	// called from several goroutines and must be safe for that.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var (
+		wg       sync.WaitGroup
+		errOnce  sync.Once
+		firstErr error
+	)
+	sem := make(chan struct{}, parallel)
 	for i, j := range jobs {
 		sem <- struct{}{}
+		if ctx.Err() != nil {
+			<-sem
+			break
+		}
 		wg.Add(1)
 		go func() {
 			defer func() { <-sem; wg.Done() }()
 			rec, err := runOnce(ctx, cfg, d, lib, j.sc, j.n)
 			if err != nil {
-				errs[i] = fmt.Errorf("%s run %d: %w", j.sc.Name, j.n, err)
+				errOnce.Do(func() {
+					firstErr = fmt.Errorf("%s run %d: %w", j.sc.Name, j.n, err)
+					cancel()
+				})
 				return
 			}
 			out[i] = rec
 		}()
 	}
 	wg.Wait()
-	for _, err := range errs {
-		if err != nil {
-			return nil, err
-		}
+	if firstErr != nil {
+		return nil, firstErr
 	}
 	return out, nil
 }

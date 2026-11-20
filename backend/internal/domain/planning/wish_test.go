@@ -80,8 +80,25 @@ func TestService_UnreadableWishIsSaidInTheNotes(t *testing.T) {
 
 	end := e.runs.end(e.generate(req))
 
-	assert.NotEqual(t, airun.StatusError, end.Status)
+	assert.Equal(t, airun.StatusPartial, end.Status, "an unread wish is not a silent success")
 	assert.Contains(t, end.Notes, "could not be read")
+	assert.NotContains(t, end.Notes, domain.ErrAIProviderFailed.Error(), "the reason stays in the log")
+}
+
+// The note of an unread wish is in the profile's language.
+func TestService_UnreadableWishNoteFollowsTheLocale(t *testing.T) {
+	e := newSvcEnv(t)
+	e.exec(`UPDATE user_profile SET locale = 'de' WHERE id = 1`)
+	e.deps.Extractor = &fakeExtractor{err: domain.ErrAIProviderFailed}
+	e.deps.Choosers = map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: planning.Heuristic{}}
+	e.svc = planning.NewService(e.deps)
+	req := e.req()
+	req.Chooser, req.Instruction = airun.ChooserLLM, "egal"
+
+	end := e.runs.end(e.generate(req))
+
+	assert.Equal(t, airun.StatusPartial, end.Status)
+	assert.Contains(t, end.Notes, "Dein Wunsch konnte nicht gelesen werden")
 }
 
 // The cooking-day limit of the wish: the heuristic keeps to it while every meal
@@ -207,4 +224,22 @@ func TestService_ReplannedDayCooksADifferentMainThanItsNeighbours(t *testing.T) 
 			}
 		}
 	}
+}
+
+// PL1b: when the heuristic does no better, nothing is saved: the run ends in
+// error naming the rule and the plan is as it was.
+func TestService_NoBetterFallbackSavesNothing(t *testing.T) {
+	e := newSvcEnv(t)
+	e.deps.Choosers = map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: brokenChooser{}, airun.ChooserLLM: brokenChooser{}}
+	e.svc = planning.NewService(e.deps)
+	before := len(e.window())
+	req := e.req()
+	req.Chooser = airun.ChooserLLM
+
+	end := e.runs.end(e.generate(req))
+
+	assert.Equal(t, airun.StatusError, end.Status)
+	assert.Equal(t, "error.plan.hard_rule_open", end.ErrorKey)
+	assert.Contains(t, end.Notes, "nothing was saved")
+	assert.Len(t, e.window(), before, "the drafts are as they were")
 }

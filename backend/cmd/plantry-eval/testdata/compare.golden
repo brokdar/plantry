@@ -10,7 +10,7 @@ hearty_meal                 1     1   0           1         4.345            14 
 light_day                   1     1   0           1         5.041            14        0        0      4578       -         0
 light_dinners_no_addons     1     1   0           1         7.77             14        0        0      4647       -         0
 light_meal_weekday_dinners  1     1   0           1         7.77             14        0        0      4647       -         0
-light_two_meals_floor       1     1   2           1         11.865           14        0        0      13896      -         0
+light_two_meals_floor       1     0   0           -         -                -         -        -      13896      -         0
 many_none_cells             1     1   0           1         -                2         0        0      3104       -         0
 nutrition_lose              1     1   0           1         4.794            14        0        0      4533       -         0
 nutrition_maintain          1     1   0           1         0.524            14        0        0      4534       -         0
@@ -20,9 +20,15 @@ protein_gap_week            1     1   0           1         2.149            8  
 replan_one_day              1     1   0           1         0.176            1         0        0      4430       -         0
 single_batch_cooker         1     1   0           1         23.978           9         0        0      4497       -         0
 small_library_h8            1     1   0           1         -                7         14       0      2888       -         0
-unreachable_floor           1     1   7           1         82.916           14        0        0      13632      -         0
+unreachable_floor           1     0   0           -         -                -         -        -      13632      -         0
 vegetarian_variety          1     1   0           1         1.984            7         0        0      3985       -         0
 walkthrough_batch_cooker    1     1   0           1         27.375           5         0        0      4511       -         0
+FAIL light_two_meals_floor run 1: no_hard_violations status error error.plan.hard_rule_open, 0 violations
+FAIL light_two_meals_floor run 1: evaluation the run stored no closing evaluation
+FAIL light_two_meals_floor run 1: min_plates 0 plates, want ≥ 14
+FAIL unreachable_floor run 1: no_hard_violations status error error.plan.hard_rule_open, 0 violations
+FAIL unreachable_floor run 1: evaluation the run stored no closing evaluation
+FAIL unreachable_floor run 1: min_plates 0 plates, want ≥ 14
 Wrote 23 records to b.jsonl
 
 Compare 0123456789ab llm/p1-a/fake -> 0123456789ab llm/p1-b/fake
@@ -234,25 +240,14 @@ light_meal_weekday_dinners
   latency_ms          0         0        0
 
 light_two_meals_floor
-  component           previous  current  delta
-  ok_runs             1         1        0
-  hard_violations     2         2        0
-  repair_attempts     2         2        0
-  plates              21        21       0
-  coverage            1         1        0
-  macro_daily_pct     11.865    11.865   0
-  macro_weekly_pct    11.557    11.557   0
-  cook_occasions      14        14       0
-  days_with_prepared  0         0        0
-  variety_distinct    14        14       0
-  variety_repeats     0         0        0
-  explore_placed      0         0        0
-  preference_fit      0         0        0
-  waste_portions      0         0        0
-  unknown_data_share  0         0        0
-  input_tokens        13896     13896    0
-  output_tokens       4818      4818     0
-  latency_ms          0         0        0
+  component        previous  current  delta
+  ok_runs          0         0        0
+  hard_violations  0         0        0
+  repair_attempts  0         0        0
+  plates           0         0        0
+  input_tokens     13896     13896    0
+  output_tokens    4818      4818     0
+  latency_ms       0         0        0
 
 many_none_cells
   component           previous  current  delta
@@ -440,25 +435,14 @@ small_library_h8
   latency_ms          0         0        0
 
 unreachable_floor
-  component           previous  current  delta
-  ok_runs             1         1        0
-  hard_violations     7         7        0
-  repair_attempts     2         2        0
-  plates              21        21       0
-  coverage            1         1        0
-  macro_daily_pct     82.916    82.916   0
-  macro_weekly_pct    82.916    82.916   0
-  cook_occasions      14        14       0
-  days_with_prepared  0         0        0
-  variety_distinct    14        14       0
-  variety_repeats     0         0        0
-  explore_placed      0         0        0
-  preference_fit      0         0        0
-  waste_portions      0         0        0
-  unknown_data_share  0         0        0
-  input_tokens        13632     13632    0
-  output_tokens       5436      5436     0
-  latency_ms          0         0        0
+  component        previous  current  delta
+  ok_runs          0         0        0
+  hard_violations  0         0        0
+  repair_attempts  0         0        0
+  plates           0         0        0
+  input_tokens     13632     13632    0
+  output_tokens    5436      5436     0
+  latency_ms       0         0        0
 
 vegetarian_variety
   component           previous  current  delta

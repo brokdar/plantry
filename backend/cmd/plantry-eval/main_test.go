@@ -37,10 +37,14 @@ func TestCompareGolden(t *testing.T) {
 	dir := t.TempDir()
 	a, b := filepath.Join(dir, "a.jsonl"), filepath.Join(dir, "b.jsonl")
 
+	// PL1b: the two floor scenarios end in error in scripted LLM mode (the
+	// model and the heuristic both leave the floor open, nothing is saved), so
+	// the CLI reports those two runs; the reports are still written.
+	const floorFailures = "2 of 23 runs failed expectations"
 	_, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-parallel", "8", "-prompt-version", "p1-a", "-out", a)
-	require.NoError(t, err)
+	require.ErrorContains(t, err, floorFailures)
 	out, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-parallel", "8", "-prompt-version", "p1-b", "-out", b, "-compare", a)
-	require.NoError(t, err)
+	require.ErrorContains(t, err, floorFailures)
 
 	for path, label := range map[string]string{a: "p1-a", b: "p1-b"} {
 		f, err := os.Open(path)

@@ -121,11 +121,18 @@ func toolFindWays(svc Services) Tool {
 				}
 			}
 			if in.ToLimit {
-				// RL4: what the real check shows short of the limit is no way and no offer.
+				// RL4: what the real check shows short of the limit is no way and no
+				// compound offer; with nothing left, the one offer (C-8 b) is the
+				// nearest comparative step: a lighter, not yet light, meal.
 				keep := func(list []planning.Way) []planning.Way {
 					return slices.DeleteFunc(list, func(w planning.Way) bool { return !w.Reaches })
 				}
 				ways, offers = keep(ways), keep(offers)
+				if len(ways) == 0 && len(offers) == 0 && in.PlateID != 0 {
+					if near, err := planning.Ways(st, planning.WindowTarget(st), planning.WayRequest{PlateID: in.PlateID, Goal: in.Goal, Limit: 8}); err == nil {
+						offers = planning.DemoteUnclean(verify(near.Ways, 1))
+					}
+				}
 			}
 			if len(offers) > 1 {
 				offers = offers[:1] // G3: one offer per reply

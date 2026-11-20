@@ -123,6 +123,16 @@ func NewToolSet(svc Services) (*ToolSet, error) {
 	if svc.Offered == nil {
 		svc.Offered = &offeredMemo{}
 	}
+	if svc.Plates != nil && svc.Offered.cell == nil {
+		plates := svc.Plates
+		svc.Offered.cell = func(ctx context.Context, id int64) (string, int64, bool) {
+			p, err := plates.Get(ctx, id)
+			if err != nil || p == nil {
+				return "", 0, false
+			}
+			return p.Date.Format("2006-01-02"), p.SlotID, true
+		}
+	}
 	if state := svc.State; state != nil {
 		// The foods the user named are part of the state every check reads
 		// (SF3); they come from the request text, never from a tool argument.
@@ -208,7 +218,7 @@ func (s *ToolSet) Execute(ctx context.Context, name string, input json.RawMessag
 	mark := s.watermark(ctx, run.ID())
 	output, effect, err := s.execute(ctx, name, input)
 	if err == nil {
-		s.offered.record(ctx, output)
+		s.offered.record(ctx, name, output)
 	}
 	result := output
 	if err != nil {

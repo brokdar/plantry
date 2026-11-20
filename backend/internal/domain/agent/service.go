@@ -202,7 +202,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	// Drive the loop. Tools read today (D25), the window and the turn from
 	// ctx.
 	ctx = withWindow(withToday(ctx, req.Today), w)
-	ctx = withTurn(ctx, chatTurn{conversationID: conv.ID, seq: s.turns.Add(1), unlocks: s.unlocks, named: namedFoods(req.UserText, st.Foods)})
+	ctx = withTurn(ctx, chatTurn{conversationID: conv.ID, seq: s.turns.Add(1), unlocks: s.unlocks, named: namedFoods(req.UserText, st.Foods), cells: namedCells(req.UserText, w, st.SlotNames)})
 	runReq := RunRequest{
 		ConversationID: conv.ID,
 		Model:          model,
