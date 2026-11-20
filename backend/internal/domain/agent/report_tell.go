@@ -120,6 +120,9 @@ func buildTell(in reportInput, r changeReport) []string {
 	for _, day := range goneOrder {
 		add(fmt.Sprintf("%s is away: %s have no meal and the day is not counted.", day, strings.Join(gone[day], " and ")))
 	}
+	for _, line := range smallMealGuests(in) {
+		add(line)
+	}
 	// Where the day's protein stands, in grams, when this change moved it by
 	// 5 g or more.
 	for _, a := range in.after.Days {
@@ -232,6 +235,11 @@ func buildTell(in reportInput, r changeReport) []string {
 	// A cooking time that got longer, or one more dish in it, with the dishes
 	// and the total time.
 	for _, line := range longerCooking(in) {
+		add(line)
+	}
+	// A cooking time on a day no changed meal sits on that got shorter, with
+	// what it no longer cooks and where that is eaten now.
+	for _, line := range shorterCooking(in, touched) {
 		add(line)
 	}
 	moved := strings.Join(r.Leftovers, "\n")
@@ -494,6 +502,94 @@ func longerCooking(in reportInput) []string {
 			was = duration(b.minutes)
 		}
 		out = append(out, fmt.Sprintf("%s at %s you now cook %s: about %s in all (was %s).", dayLabelStr(date), slotWord(in.afterSt, slotID), strings.Join(a.dishes, ", "), duration(a.minutes), was))
+	}
+	return out
+}
+
+// shorterCooking lists the cook cells of a day this change did not otherwise
+// touch whose total time shrank by 30 minutes or more and still cook
+// something: what it cooks now, the time, and for each dish it no longer
+// cooks whether the day eats it as leftovers.
+func shorterCooking(in reportInput, touched map[string]bool) []string {
+	before, after := cookCells(in.beforeSt), cookCells(in.afterSt)
+	keys := make([]string, 0, len(before))
+	for k := range before {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	var out []string
+	for _, k := range keys {
+		b, a := before[k], after[k]
+		date, rest, _ := strings.Cut(k, "|")
+		if a.minutes == 0 || b.minutes-a.minutes < 30 || touched[dayLabelStr(date)] {
+			continue
+		}
+		var slotID int64
+		_, _ = fmt.Sscan(rest, &slotID)
+		eaten := eatenOn(in.afterSt, date)
+		var gone []string
+		for _, d := range b.dishes {
+			if slices.Contains(a.dishes, d) {
+				continue
+			}
+			if eaten[d] {
+				gone = append(gone, fmt.Sprintf("the %s is now eaten as leftovers", d))
+			} else {
+				gone = append(gone, fmt.Sprintf("the %s is no longer cooked", d))
+			}
+		}
+		out = append(out, fmt.Sprintf("%s at %s you now cook only %s: about %s in all (was %s); %s.", dayLabelStr(date), slotWord(in.afterSt, slotID), strings.Join(a.dishes, ", "), duration(a.minutes), duration(b.minutes), strings.Join(gone, "; ")))
+	}
+	return out
+}
+
+// eatenOn is the quoted names of the dishes the plates of one date eat.
+func eatenOn(st planning.State, date string) map[string]bool {
+	out := map[string]bool{}
+	for _, p := range st.Plates {
+		if p.Date.Format("2006-01-02") != date {
+			continue
+		}
+		for _, c := range p.Components {
+			if c.SessionID != 0 {
+				out[food.Quote(foodName(st, c.FoodID))] = true
+			}
+		}
+	}
+	return out
+}
+
+// smallMealGuests says, for a plate that gained eaters and sits on a light
+// meal of its day, that the added person eats the small meal.
+func smallMealGuests(in reportInput) []string {
+	was := map[int64]float64{}
+	for _, p := range in.beforeSt.Plates {
+		was[p.ID] = p.Eaters
+	}
+	kcal := map[int64]float64{}
+	for _, p := range in.after.Plates {
+		kcal[p.PlateID] = p.Kcal
+	}
+	var out []string
+	for _, p := range in.afterSt.Plates {
+		b, ok := was[p.ID]
+		k, hasKcal := kcal[p.ID]
+		if p.ID <= 0 || !ok || p.Eaters <= b || !hasKcal {
+			continue
+		}
+		meal := slotWord(in.afterSt, p.SlotID)
+		iso := p.Date.Format("2006-01-02")
+		light := false
+		for _, d := range in.after.Days {
+			if d.Date == iso {
+				for _, lm := range d.LightMeals {
+					light = light || plainWords(lm) == "light "+meal
+				}
+			}
+		}
+		if light {
+			out = append(out, fmt.Sprintf("%s %s: now for %s people; it is the small %s (%.0f kcal each).", dayLabel(p.Date), meal, fmtNum(p.Eaters), meal, k))
+		}
 	}
 	return out
 }

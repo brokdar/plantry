@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 
@@ -87,4 +90,43 @@ func TestWeekFacts_OnlyWhatMovedPastAStep(t *testing.T) {
 	in.after.Week.LegumeMeals = 0
 	got := weekFacts(in, planning.State{}, planning.State{})
 	assert.Equal(t, []string{"beans or lentils are on the plan not at all (was 9 times)"}, got)
+}
+
+// E051: the batch resizes of a compound change reach the tell, and a cooking
+// that shrinks on another day and a guest at a small meal are told.
+func TestBuildTell_E051(t *testing.T) {
+	d := func(day int) time.Time { return time.Date(2026, 11, day, 0, 0, 0, 0, time.UTC) }
+	f1, f2, f3 := float64(1), float64(1), float64(1)
+	st := func(chiliCook int, eaters float64) planning.State {
+		return planning.State{
+			SlotNames: map[int64]string{2: "slot.lunch", 3: "slot.dinner"},
+			Foods:     map[int64]planning.FoodFacts{1: {Name: "Chili con carne", Minutes: 80}, 2: {Name: "Hasselback potatoes", Minutes: 75}},
+			Sessions: []planning.Session{
+				{CookSession: plate.CookSession{ID: 1, FoodID: 1, CookDate: d(chiliCook), CookSlotID: 3}},
+				{CookSession: plate.CookSession{ID: 2, FoodID: 2, CookDate: d(27), CookSlotID: 3}},
+			},
+			Plates: []planning.Plate{
+				{ID: 7, Date: d(27), SlotID: 3, Eaters: 1, Components: []planning.Component{{FoodID: 1, Portions: &f1, SessionID: 1}, {FoodID: 2, Portions: &f2, SessionID: 2}}},
+				{ID: 8, Date: d(23), SlotID: 2, Eaters: eaters, Components: []planning.Component{{FoodID: 2, Portions: &f3, SessionID: 2}}},
+			},
+		}
+	}
+	in := reportInput{
+		beforeSt: st(27, 1), afterSt: st(26, 2),
+		after: planning.Evaluation{
+			Plates: []planning.PlateEval{{PlateID: 8, Kcal: 331}},
+			Days:   []planning.DayEval{{Date: "2026-11-23", LightMeals: []string{"light lunch"}}},
+		},
+	}
+	got := buildTell(in, changeReport{Leftovers: []string{`Sun 22 Nov: cook 3.5 portions of the "Curry" (was 3).`}})
+	assert.Contains(t, got, `Fri 27 Nov at dinner you now cook only "Hasselback potatoes": about 1 h 15 min in all (was 2 h 35 min); the "Chili con carne" is now eaten as leftovers.`)
+	assert.Contains(t, got, "Mon 23 Nov lunch: now for 2 people; it is the small lunch (331 kcal each).")
+	assert.Contains(t, got, `Sun 22 Nov: cook 3.5 portions of the "Curry" (was 3).`)
+	for _, line := range got {
+		if strings.Contains(line, "only") || strings.Contains(line, "small") || strings.Contains(line, "cook 3.5") {
+			assert.NotEmpty(t, mustItems(line), line)
+		}
+	}
+	in.after.Days[0].LightMeals = nil
+	assert.NotContains(t, strings.Join(buildTell(in, changeReport{}), "\n"), "small")
 }

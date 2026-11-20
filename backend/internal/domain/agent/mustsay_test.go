@@ -101,3 +101,24 @@ func TestMustItems_Ignored(t *testing.T) {
 		assert.Empty(t, mustItems(s), s)
 	}
 }
+
+// E051: Friday's cooking that shrinks to the potatoes, and the guest at the small lunch.
+func TestRestoreMust_ShorterCooking(t *testing.T) {
+	tell := `Fri 27 Nov at dinner you now cook only "Hasselback potatoes": about 1 h 15 min in all (was 2 h 35 min); the "Chili con carne" is now eaten as leftovers.`
+	reply := "The chili is now cooked on Thursday at dinner.\n\nThursday's cooking is about 3 h 45 min in all."
+	assert.Contains(t, restoreText(reply, tell), "- "+tell)
+	got := restoreText("Das Chili wird jetzt am Donnerstag gekocht und der Tag ist damit anders.", tell)
+	assert.Contains(t, got, "- Freitag, 27. Nov.: nur noch „Hasselback potatoes“ kochen, etwa 1 h 15 min statt 2 h 35 min; „Chili con carne“ gibt es als Reste.")
+	ok := "The chili is now cooked on Thursday. On Friday you only cook the potatoes and eat the chili as leftovers."
+	assert.Equal(t, ok, restoreText(ok, tell))
+}
+
+func TestRestoreMust_SmallLunchGuest(t *testing.T) {
+	tell := "Mon 23 Nov lunch: now for 2 people; it is the small lunch (331 kcal each)."
+	reply := "Your friend is added to Monday's lunch.\n\nThe curry is now cooked for 4 portions."
+	assert.Contains(t, restoreText(reply, tell), "- "+tell)
+	got := restoreText("Dein Freund ist jetzt beim Mittagessen am Montag dabei und die Charge ist größer.", tell)
+	assert.Contains(t, got, "- Montag, 23. Nov. zum Mittagessen: jetzt für 2 Personen; es ist das kleine Mittagessen (331 kcal pro Person).")
+	ok := "Your friend is added to Monday's lunch, which is the small lunch of that day (331 kcal)."
+	assert.Equal(t, ok, restoreText(ok, tell))
+}
