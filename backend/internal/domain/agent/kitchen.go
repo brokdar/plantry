@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sync"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -276,4 +277,58 @@ func meatBalanceOffer(ctx context.Context, svc Services, w window.Window, touche
 		}
 	}
 	return best
+}
+
+// sideClashOffer turns the clash a user-named main swap left (applied entry
+// "side_clash") into the one recommended offer. Its effect is the dry run of
+// its own ops on the plan the swap leaves (the saved plan, or for a check the
+// swap's ops followed by the offer's), so what it promises is what it does.
+func sideClashOffer(ctx context.Context, svc Services, w window.Window, in applyInput, applied []map[string]any) map[string]any {
+	var clash map[string]any
+	for _, a := range applied {
+		if c, ok := a["side_clash"].(map[string]any); ok {
+			clash = c
+			break
+		}
+	}
+	if clash == nil {
+		return nil
+	}
+	offerOps, _ := clash["ops"].([]planning.OptionOp)
+	ops, err := changeOpsOf(offerOps)
+	if err != nil || len(ops) == 0 {
+		return nil
+	}
+	if in.DryRun {
+		ops = slices.Concat(in.Ops, ops)
+	}
+	r, err := runApply(ctx, svc, w, applyInput{Ops: ops, DryRun: true, quiet: true}, nil)
+	if err != nil {
+		return nil
+	}
+	fresh := newWarnings(r.before, r.after)
+	plateID, _ := clash["plate_id"].(int64)
+	date, _ := clash["date"].(string)
+	effect := map[string]any{"new_warnings": len(fresh)}
+	if date != "" {
+		f := planning.FiguresOf(r.after, plateID, date)
+		effect["day_kcal_after"] = f.DayKcal
+	}
+	return map[string]any{
+		"what": clash["what"], "ops": offerOps, "clash": clash["clash"],
+		"recommended": true, "recommended_because": "one starch on the plate, the change you asked for stays as it is",
+		"effect": effect,
+	}
+}
+
+// clashNext puts the clash into the next-step text: told, offered, never done.
+func clashNext(next string, offer map[string]any, dry bool) string {
+	text := fmt.Sprintf("the swap is done as asked and nothing else was changed; tell the user plainly that %v, and offer offers[0] (%v) as your one recommended option; apply it only on a yes", offer["clash"], offer["what"])
+	if dry {
+		text = "the swap as asked changes nothing else; after saving it, tell the user that " + fmt.Sprint(offer["clash"]) + " and offer offers[0] (" + fmt.Sprint(offer["what"]) + ") only on a yes"
+	}
+	if next == "" {
+		return text
+	}
+	return text + ". Also: " + next
 }

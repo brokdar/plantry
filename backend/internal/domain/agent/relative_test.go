@@ -572,10 +572,10 @@ func TestFindWays_ToLimitOffersOnlyWhatReaches(t *testing.T) {
 	}
 }
 
-// A replaced main takes its old side's misfit with it: the side that belonged
-// to the old dish is swapped for one that fits the new main, in the same
-// change, and the result says so.
-func TestApplyChanges_ReplaceMainRefitsTheSides(t *testing.T) {
+// A user-named main swap changes only that main: the side that belonged to
+// the old dish stays, and the result carries the clash and one offer whose dry
+// run equals its promise (the offer's ops, applied, leave one starch).
+func TestApplyChanges_ReplaceMainKeepsTheSidesAndOffers(t *testing.T) {
 	e := relEnv(t)
 	p, _ := e.twoDinners()
 	var sideFood int64
@@ -588,13 +588,42 @@ func TestApplyChanges_ReplaceMainRefitsTheSides(t *testing.T) {
 	e.sql(`UPDATE foods SET name = 'Roast potatoes', role = 'side_starch' WHERE id = ?`, sideFood)
 	pasta := e.unusedFood("main")
 	e.sql(`UPDATE foods SET name = 'Pasta al pomodoro' WHERE id = ?`, pasta)
-	res := e.mustExec("apply_changes", fmt.Sprintf(`{"dry_run":true,"ops":[{"op":"replace","plate_id":%d,"position":"main","food_id":%d}]}`, p.ID, pasta))
-	steps, _ := applied0(t, res)["refit"].([]any)
-	require.NotEmpty(t, steps, "the potatoes beside the pasta are refitted: %v", res["applied"])
-	assert.Contains(t, fmt.Sprint(steps[0]), "does not fit the new main")
-	for _, c := range relMaps(res["after"].(map[string]any)["plates"]) {
-		if int64(c["plate_id"].(float64)) == p.ID {
-			assert.NotContains(t, fmt.Sprint(c["components"]), "Roast potatoes")
+	ops := fmt.Sprintf(`{"dry_run":true,"ops":[{"op":"replace","plate_id":%d,"position":"main","food_id":%d}]}`, p.ID, pasta)
+	onPlate := func(res map[string]any) string {
+		for _, c := range relMaps(res["after"].(map[string]any)["plates"]) {
+			if int64(c["plate_id"].(float64)) == p.ID {
+				return fmt.Sprint(c["components"])
+			}
+		}
+		return ""
+	}
+	res := e.mustExec("apply_changes", ops)
+	assert.Nil(t, applied0(t, res)["refit"], "no side is changed: %v", res["applied"])
+	clash, _ := applied0(t, res)["side_clash"].(map[string]any)
+	require.NotNil(t, clash, "the clash is carried: %v", res["applied"])
+	assert.Contains(t, fmt.Sprint(clash["clash"]), "Roast potatoes")
+	assert.Contains(t, onPlate(res), "Roast potatoes", "the side stays on the plate")
+	offers := relMaps(res["offers"])
+	require.Len(t, offers, 1, "one recommended offer: %v", res)
+	assert.Equal(t, true, offers[0]["recommended"])
+	assert.Contains(t, fmt.Sprint(res["next"]), "only on a yes")
+	assert.Contains(t, fmt.Sprint(res["report"].(map[string]any)["tell"]), "Roast potatoes")
+
+	// Saved: the swap alone; then the offer's ops do what its effect promised.
+	saved := e.mustExec("apply_changes", strings.Replace(ops, `"dry_run":true`, `"dry_run":false`, 1))
+	assert.Contains(t, onPlate(saved), "Roast potatoes")
+	offers = relMaps(saved["offers"])
+	require.Len(t, offers, 1, "%v", saved)
+	effect, _ := offers[0]["effect"].(map[string]any)
+	oraw, err := json.Marshal(offers[0]["ops"])
+	require.NoError(t, err)
+	done := e.mustExec("apply_changes", fmt.Sprintf(`{"dry_run":false,"ops":%s}`, oraw))
+	assert.NotContains(t, onPlate(done), "Roast potatoes", "the offer does what it said")
+	if kcal, ok := effect["day_kcal_after"].(float64); ok {
+		for _, d := range relMaps(done["after"].(map[string]any)["days"]) {
+			if d["date"] == p.Date.Format("2006-01-02") {
+				assert.InDelta(t, kcal, d["kcal"], 1, "the promised day figure is the one reached")
+			}
 		}
 	}
 }
