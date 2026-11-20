@@ -118,15 +118,16 @@ func TestBuildTell_E051(t *testing.T) {
 			Days:   []planning.DayEval{{Date: "2026-11-23", LightMeals: []string{"light lunch"}}},
 		},
 	}
+	in.must = &mustSink{}
 	got := buildTell(in, changeReport{Leftovers: []string{`Sun 22 Nov: cook 3.5 portions of the "Curry" (was 3).`}})
 	assert.Contains(t, got, `Fri 27 Nov at dinner you now cook only "Hasselback potatoes": about 1 h 15 min in all (was 2 h 35 min); the "Chili con carne" is now eaten as leftovers.`)
 	assert.Contains(t, got, "Mon 23 Nov lunch: now for 2 people; it is the small lunch (331 kcal each).")
 	assert.Contains(t, got, `Sun 22 Nov: cook 3.5 portions of the "Curry" (was 3).`)
-	for _, line := range got {
-		if strings.Contains(line, "only") || strings.Contains(line, "small") || strings.Contains(line, "cook 3.5") {
-			assert.NotEmpty(t, mustItems(line), line)
-		}
+	var kinds []string
+	for _, f := range in.must.facts {
+		kinds = append(kinds, f.Kind)
 	}
+	assert.ElementsMatch(t, []string{factSmall, factShorter}, kinds, "the small meal and the shorter cooking carry typed facts")
 	in.after.Days[0].LightMeals = nil
 	assert.NotContains(t, strings.Join(buildTell(in, changeReport{}), "\n"), "small")
 }

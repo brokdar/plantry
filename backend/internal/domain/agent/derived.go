@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -450,7 +451,30 @@ func cookingMovedTell(obj map[string]any) bool {
 		out = append(out, t)
 	}
 	rep["tell"] = out
+	dropMust(rep, days)
 	return true
+}
+
+// dropMust removes the facts the away rewrite says in its own items: a cooking
+// that moved or was resized, and the dishes no longer cooked on the days that
+// now cook together.
+func dropMust(rep map[string]any, days []string) {
+	list, _ := rep["must"].([]any)
+	var kept []any
+	for _, e := range list {
+		f, _ := e.(map[string]any)
+		kind, _ := f["kind"].(string)
+		day, _ := f["day"].(string)
+		if kind == factResize || kind == factMoved || (kind == factDropped && slices.Contains(days, day)) {
+			continue
+		}
+		kept = append(kept, e)
+	}
+	if len(kept) == 0 {
+		delete(rep, "must")
+		return
+	}
+	rep["must"] = kept
 }
 
 // resizeLine matches the tell item of a batch cooked on another day that

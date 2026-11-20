@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"strings"
@@ -126,7 +127,7 @@ func buildTell(in reportInput, r changeReport) []string {
 	for _, line := range keepLines(in, r.Changed) {
 		add(line)
 	}
-	for _, line := range oddNameLines(r.Changed) {
+	for _, line := range oddNameLines(in, r.Changed) {
 		add(line)
 	}
 	// Where the day's protein stands, in grams, when this change moved it by
@@ -207,6 +208,10 @@ func buildTell(in reportInput, r changeReport) []string {
 			s := fmt.Sprintf("%s holds %d kcal (was %d)", d.Day, d.KcalAfter, d.KcalBefore)
 			if d.Range != "" && d.Status != "" {
 				s += fmt.Sprintf(", %s (%s)", suitsPhrase(d.Status), d.Range)
+				if side := strings.Fields(suitsPhrase(d.Status))[0]; side == "below" || side == "above" {
+					lo, hi, _ := strings.Cut(strings.TrimSuffix(d.Range, " kcal"), "-")
+					in.must.add(mustFact{Kind: factDay, Day: d.Day, Kcal: float64(d.KcalAfter), Side: side, Lo: float64(atoi(lo)), Hi: float64(atoi(hi)), Minimum: d.MinimumKcal > 0})
+				}
 			}
 			add(s + ".")
 		}
@@ -225,6 +230,7 @@ func buildTell(in reportInput, r changeReport) []string {
 		if len(c.Cooked) == 0 {
 			if !awayDays[c.Day] {
 				add(c.Day + ": nothing is cooked.")
+				in.must.add(mustFact{Kind: factNoCook, Day: c.Day})
 			}
 			continue
 		}
@@ -236,7 +242,7 @@ func buildTell(in reportInput, r changeReport) []string {
 			add(fmt.Sprintf("%s you cook (%d cooking time%s): %s.", c.Day, c.CookingTimes, plural(c.CookingTimes), strings.Join(parts, "; ")))
 			continue
 		}
-		add(otherDayCooking(c.Day, beforeCook, afterCook, strings.Join(r.Leftovers, "\n")))
+		add(otherDayCooking(in, c.Day, beforeCook, afterCook, strings.Join(r.Leftovers, "\n")))
 	}
 	// A cooking time that got longer, or one more dish in it, with the dishes
 	// and the total time.
@@ -402,7 +408,7 @@ func qtyDelta(from, to string) string {
 
 // otherDayCooking says the cooking that changed on a day no changed meal sits
 // on: what it now cooks and what it no longer cooks.
-func otherDayCooking(day string, before, after map[string][]reportDish, moved string) string {
+func otherDayCooking(in reportInput, day string, before, after map[string][]reportDish, moved string) string {
 	var now, gone []string
 	for iso, dishes := range after {
 		if dayLabelStr(iso) != day {
@@ -429,6 +435,7 @@ func otherDayCooking(day string, before, after map[string][]reportDish, moved st
 			}
 			if !found && !strings.Contains(moved, food.Quote(w.Dish)+" is now cooked on") {
 				gone = append(gone, "no longer cooks "+food.Quote(w.Dish))
+				in.must.add(mustFact{Kind: factDropped, Day: day, Dish: w.Dish})
 			}
 		}
 	}
@@ -544,6 +551,17 @@ func shorterCooking(in reportInput, touched map[string]bool) []string {
 				gone = append(gone, fmt.Sprintf("the %s is no longer cooked", d))
 			}
 		}
+		var still []string
+		for _, d := range a.dishes {
+			still = append(still, strings.Trim(d, `"`))
+		}
+		var goneDishes []goneDish
+		for _, d := range b.dishes {
+			if !slices.Contains(a.dishes, d) {
+				goneDishes = append(goneDishes, goneDish{Dish: strings.Trim(d, `"`), Leftovers: eaten[d]})
+			}
+		}
+		in.must.add(mustFact{Kind: factShorter, Day: dayLabelStr(date), Meal: slotWord(in.afterSt, slotID), Dishes: still, Gone: goneDishes, Time: duration(a.minutes), WasTime: duration(b.minutes)})
 		out = append(out, fmt.Sprintf("%s at %s you now cook only %s: about %s in all (was %s); %s.", dayLabelStr(date), slotWord(in.afterSt, slotID), strings.Join(a.dishes, ", "), duration(a.minutes), duration(b.minutes), strings.Join(gone, "; ")))
 	}
 	return out
@@ -595,6 +613,7 @@ func smallMealGuests(in reportInput) []string {
 		}
 		if light {
 			out = append(out, fmt.Sprintf("%s %s: now for %s people; it is the small %s (%.0f kcal each).", dayLabel(p.Date), meal, fmtNum(p.Eaters), meal, k))
+			in.must.add(mustFact{Kind: factSmall, Day: dayLabel(p.Date), Meal: meal, N: p.Eaters, Kcal: math.Round(k)})
 		}
 	}
 	return out

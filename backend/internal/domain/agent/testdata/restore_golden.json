@@ -1,0 +1,431 @@
+[
+ {
+  "name": "a2-0b8ca4c/ask-dinner-r1",
+  "reply": "I swapped Thursday's dinner (Thu 26 Nov) from the bean soup to a Greek salad with chickpeas. The Hasselback potatoes and the Greek yogurt stay.\n\n- The dinner drops from 1344 to 1108 kcal, and the day goes from 2010 to 1774 kcal. That is below the good amount for the day (1815–2218 kcal), so you'll get a new warning.\n- Protein for the day drops from 104 g to 90 g, still above the 75 g target.\n- The meat for the week falls from 321 g to 233 g, under the 300 g limit.\n- You cook the salad and the potatoes at dinner on Thu 26 Nov, one cooking time that day.\n\nI can also add 100 g of hummus to Thursday's dinner, which brings the day to 2024 kcal, inside its range. Say so if you want it.",
+  "facts": [
+   {
+    "kind": "day_range",
+    "day": "Thu 26 Nov",
+    "kcal": 1774.0,
+    "side": "below",
+    "lo": 1815.0,
+    "hi": 2218.0
+   }
+  ],
+  "old_added": [
+   "Thu 26 Nov: 1774 kcal, below a good amount for the day (1815–2218 kcal)."
+  ],
+  "want_added": []
+ },
+ {
+  "name": "a2-0b8ca4c/fu-lighter-r1",
+  "reply": "Tuesday's dinner is lighter again: I removed the Greek yogurt, so the dinner is now 1018 kcal, down from 1212. It still isn't a light dinner, which needs under 550 kcal. The main lever left is the salmon itself, and the day can't take much more of a cut.\n\nThe day is now 1655 kcal, below its good range of 1815–2218 kcal, which is a new warning. It is still above the day's minimum of 1650 kcal. Protein also dropped from 90 g to 72 g, short of the 75 g target.\n\nI can add 90 g of ciabatta to Tuesday's dinner, which brings the day to 1888 kcal, inside its range. Say so if you want it.",
+  "facts": [
+   {
+    "kind": "day_range",
+    "day": "Tue 24 Nov",
+    "kcal": 1655.0,
+    "side": "below",
+    "lo": 1815.0,
+    "hi": 2218.0
+   }
+  ],
+  "old_added": [
+   "Tue 24 Nov: 1655 kcal, below a good amount for the day (1815–2218 kcal)."
+  ],
+  "want_added": []
+ },
+ {
+  "name": "a2-0b8ca4c/ragu-thu-r1",
+  "reply": "Thursday lunch is now Beef ragù instead of the tofu stir-fry, eaten from the batch cooked on Wednesday dinner. The lunch goes from 360 to 518 kcal, and Thu 26 Nov comes to 2168 kcal, a good amount for the day (1815–2218 kcal).\n\nThe Wednesday batch grows to 2 portions of Beef ragù, and the tofu stir-fry batch drops to 3 portions, since its Thursday serving is gone.\n\nThe week's meat is now 471 g, over the 300 g limit (it was 321 g before), so that warning got worse. I can also swap Thursday dinner's Serbische Bohnensuppe for the Linsen-Bolognese aus dem Slow Cooker, which brings the week's meat down to 383 g. Say so if you want it.",
+  "facts": [
+   {
+    "kind": "resized",
+    "day": "Wed 25 Nov",
+    "dish": "Beef ragù",
+    "n": 2.0,
+    "was": 1.0
+   },
+   {
+    "kind": "resized",
+    "day": "Wed 25 Nov",
+    "dish": "Tofu stir-fry",
+    "n": 3.0,
+    "was": 4.0
+   },
+   {
+    "kind": "week_meat",
+    "n": 471,
+    "was": 321,
+    "limit": 300
+   }
+  ],
+  "old_added": [
+   "Wed 25 Nov: cook 2 portions of the \"Beef ragù\" (was 1).",
+   "Wed 25 Nov: cook 3 portions of the \"Tofu stir-fry\" (was 4).",
+   "Week: meat is 471 g against a limit of 300 g, 171 g over."
+  ],
+  "want_added": []
+ },
+ {
+  "name": "a2-0b8ca4c/guests-mon-r2",
+  "reply": "Monday lunch is now set for two. The lentil curry with cucumber is 331 kcal each, and the curry batch cooks on Sunday 22 Nov with 4 portions instead of 3, so there's enough for your friend.",
+  "facts": [
+   {
+    "kind": "small_meal",
+    "day": "Mon 23 Nov",
+    "meal": "lunch",
+    "n": 2.0,
+    "kcal": 331.0
+   },
+   {
+    "kind": "resized",
+    "day": "Sun 22 Nov",
+    "dish": "Speedy lentil coconut curry",
+    "n": 4.0,
+    "was": 3.0
+   }
+  ],
+  "old_added": [
+   "Mon 23 Nov lunch: now for 2 people; it is the small lunch (331 kcal each).",
+   "Sun 22 Nov: cook 4 portions of the \"Speedy lentil coconut curry\" (was 3)."
+  ],
+  "want_added": []
+ },
+ {
+  "name": "a2-0b8ca4c/heartier-fri-r1",
+  "reply": "Friday's dinner is now heartier. I raised the Hasselback potatoes from 1 portion to 1.5, so the dinner goes from 1,321 to 1,535 kcal and counts as a filling meal (at least 917 kcal).\n\n- Fri 27 Nov: the day's target moves to 2,200 kcal (it was 2,017) because the dinner is filling.\n- Friday now comes to 2,203 kcal (it was 1,988), a good amount for the day (1,980–2,420 kcal).\n- Friday is one cooking time: the chili con carne and the potatoes are both cooked at dinner.\n- We cook 4.5 portions of the potatoes that day (it was 3).",
+  "facts": [
+   {
+    "kind": "resized",
+    "day": "Fri 27 Nov",
+    "dish": "Hasselback potatoes",
+    "n": 4.5,
+    "was": 3.0
+   }
+  ],
+  "old_added": [
+   "Fri 27 Nov: cook 4.5 portions of the \"Hasselback potatoes\" (was 3)."
+  ],
+  "want_added": []
+ },
+ {
+  "name": "a2-0b8ca4c/de-ask-healthier-r2",
+  "reply": "Ich habe den Mittwochs-Hauptgang (Beef ragù) durch Chili sin carne ersetzt. Das Chili kommt aus dem Batch vom Samstag, es wird also nichts Neues gekocht.\n\n- **Mittwoch, 25. Nov, Abendessen:** Chili sin carne statt Beef ragù. Das sind 1297 statt 1071 kcal. Der Tag liegt jetzt mit 1934 kcal im guten Bereich (1815–2218 kcal). Protein steigt von 81 auf 91 g.\n- **Fleisch in der Woche:** 171 g statt 321 g, also unter dem Limit von 300 g.\n- **Chili sin carne** ist damit an drei Mahlzeiten das Hauptgericht: Samstag und Mittwoch abends sowie Sonntag mittags.\n\nAm Freitag steht noch Chili con carne mit Fleisch. Soll ich das auch ersetzen?",
+  "facts": [
+   {
+    "kind": "keeps",
+    "day": "Wed 25 Nov",
+    "dish": "Chili sin carne",
+    "day2": "Sat 21 Nov",
+    "days": 4,
+    "keep": 4,
+    "last": "Wed 25 Nov"
+   },
+   {
+    "kind": "resized",
+    "day": "Sat 21 Nov",
+    "dish": "Chili sin carne",
+    "n": 3.0,
+    "was": 2.0
+   }
+  ],
+  "old_added": [
+   "Mittwoch, 25. Nov.: „Chili sin carne“ ist 4 Tage im Kühlschrank haltbar, letzter Tag ist Mittwoch, 25. Nov..",
+   "Sa., 21. Nov.: 3 Portionen „Chili sin carne“ kochen (statt 2)."
+  ],
+  "want_added": [
+   "Mittwoch, 25. Nov.: „Chili sin carne“ ist 4 Tage im Kühlschrank haltbar, letzter Tag ist Mittwoch, 25. Nov.",
+   "Samstag, 21. Nov.: 3 Portionen „Chili sin carne“ kochen (statt 2)."
+  ]
+ },
+ {
+  "name": "a2-0b8ca4c/de-ask-healthier-r3",
+  "reply": "Ich habe Mittwoch, 25. Nov., zum Abendessen das Beef ragù durch Chili sin carne ersetzt. Der Chili wird schon am Samstag mitgekocht und reicht bis Mittwoch, es fällt also kein zusätzlicher Kochvorgang an. Der Tag liegt jetzt mit 1934 kcal im guten Bereich. Das Fleisch der Woche liegt bei 171 g statt 321 g, also unter dem Limit von 300 g. Der Chili steht dann dreimal als Hauptgericht auf dem Plan: Samstag und Sonntag mittags und Mittwoch abends.\n\nDonnerstag und Freitag bleiben mit Fleisch (Serbische Bohnensuppe und Chili con carne). Vegetarische Ersatzgerichte dafür würden die Tage unter ihren Mindestbereich drücken, deshalb habe ich sie nicht geändert. Ich kann dir eine vegetarische Alternative mit Linsen-Bolognese oder Griechischem Salat mit Kichererbsen für einen der beiden Tage vorschlagen, dann müsste aber noch etwas dazu, damit der Tag im Bereich bleibt. Sag Bescheid, wenn ich das machen soll.",
+  "facts": [
+   {
+    "kind": "keeps",
+    "day": "Wed 25 Nov",
+    "dish": "Chili sin carne",
+    "day2": "Sat 21 Nov",
+    "days": 4,
+    "keep": 4,
+    "last": "Wed 25 Nov"
+   },
+   {
+    "kind": "resized",
+    "day": "Sat 21 Nov",
+    "dish": "Chili sin carne",
+    "n": 3.0,
+    "was": 2.0
+   }
+  ],
+  "old_added": [
+   "Mittwoch, 25. Nov.: „Chili sin carne“ ist 4 Tage im Kühlschrank haltbar, letzter Tag ist Mittwoch, 25. Nov..",
+   "Sa., 21. Nov.: 3 Portionen „Chili sin carne“ kochen (statt 2)."
+  ],
+  "want_added": [
+   "Mittwoch, 25. Nov.: „Chili sin carne“ ist 4 Tage im Kühlschrank haltbar, letzter Tag ist Mittwoch, 25. Nov.",
+   "Samstag, 21. Nov.: 3 Portionen „Chili sin carne“ kochen (statt 2)."
+  ]
+ },
+ {
+  "name": "a2-0b8ca4c/de-lighter-wed-r1",
+  "reply": "Das Mittagessen am Mittwoch ist größer geworden, und das Abendessen ist leichter.\n\n- **Mittagessen (Mi 25. Nov):** Linsen-Kokos-Curry jetzt 1,5 Portionen, dazu eine Portion Tomatensalat und 90 g Ciabatta. Das Mittagessen hat 1096 kcal.\n- **Abendessen (Mi 25. Nov):** Beef ragù nur noch eine halbe Portion, Tomatensalat drei Viertel, Greek Yogurt weggelassen. Das Abendessen hat 532 kcal und ist jetzt ein leichtes Abendessen.\n- Das Curry für das Mittagessen kommt aus dem Topf vom Sonntag (22. Nov). Es hält drei Tage im Kühlschrank, also bis Mittwoch.\n- **Protein:** Der Mittwoch hat jetzt 70 g statt 81 g. Das Ziel sind 75 g, es fehlen also noch etwa 5 g.\n- **Tag:** Mittwoch hat 1934 kcal und liegt damit gut im Bereich von 1815 bis 2218 kcal.\n- **Kochen:** Der Tomatensalat fürs Mittagessen am Mittwoch wird am Dienstag beim Abendessen mitgekocht. Dienstag dauert das Kochen dadurch etwa 1 h 50 min statt 1 h 15 min. Das Ragù am Mittwoch wird mit 0,5 Portionen gekocht, das Curry am Sonntag mit 3,5 statt 3 Portionen.\n- **Woche:** Das Fleisch der Woche liegt jetzt bei 246 g statt 321 g und damit unter dem Limit von 300 g.\n\nSoll ich für die fehlenden 5 g Protein am Mittwoch eine Option heraussuchen?",
+  "facts": [
+   {
+    "kind": "keeps",
+    "day": "Wed 25 Nov",
+    "dish": "Speedy lentil coconut curry",
+    "day2": "Sun 22 Nov",
+    "days": 3,
+    "keep": 3,
+    "last": "Wed 25 Nov"
+   },
+   {
+    "kind": "resized",
+    "day": "Wed 25 Nov",
+    "dish": "Beef ragù",
+    "n": 0.5,
+    "was": 1.0
+   },
+   {
+    "kind": "resized",
+    "day": "Sun 22 Nov",
+    "dish": "Speedy lentil coconut curry",
+    "n": 3.5,
+    "was": 3.0
+   },
+   {
+    "kind": "resized",
+    "day": "Wed 25 Nov",
+    "dish": "Tomato salad with rocket and parmesan",
+    "n": 0.75,
+    "was": 1.0
+   }
+  ],
+  "old_added": [
+   "Mittwoch, 25. Nov.: „Speedy lentil coconut curry“ ist 3 Tage im Kühlschrank haltbar, letzter Tag ist Mittwoch, 25. Nov..",
+   "Mi., 25. Nov.: 0,75 Portionen „Tomato salad with rocket and parmesan“ kochen (statt 1)."
+  ],
+  "want_added": []
+ },
+ {
+  "name": "hh1-0b8ca4c/nu-de-thu-r1",
+  "reply": "Erledigt: Das Donnerstagsmittagessen (Do 26. Nov) ist jetzt Shakshuka statt Rote-Linsen-Suppe, der Grünen Salat fällt weg. Das Shakshuka wird am Mittwoch (25. Nov) zum Mittagessen mitgekocht, sodass Donnerstag kein zusätzlicher Kochvorgang nötig ist.\n\n- Das Mittagessen wiegt jetzt 486 kcal statt 492 kcal.\n- Eiweiß am Donnerstag: 73 g statt 65 g.\n- Der Donnerstag liegt mit 1202 kcal im guten Tagesbereich (1200–1467 kcal).\n- Am Mittwoch wird das Shakshuka mitgekocht, die rote Linsensuppe entfällt. Der Grüne Salat wird am Mittwoch nur noch für 2 Portionen gekocht (statt 3).\n- Donnerstag kocht weiterhin Tofu-Gemüsepfanne mit Reis fürs Abendessen, das bleibt unverändert.\n- Neue Warnungen: Shakshuka steht jetzt in der Woche dreimal als Hauptgericht (So 22. Nov abends, Mo 23. Nov mittags, Do 26. Nov mittags), und der Wochenanteil Fett liegt mit 36 % über dem Zielbereich von 25–35 %.",
+  "facts": [
+   {
+    "kind": "no_longer_cooked",
+    "day": "Wed 25 Nov",
+    "dish": "Red lentil soup"
+   },
+   {
+    "kind": "resized",
+    "day": "Wed 25 Nov",
+    "dish": "Green salad",
+    "n": 2.0,
+    "was": 3.0
+   }
+  ],
+  "old_added": [
+   "Mittwoch, 25. Nov.: „Red lentil soup“ wird nicht mehr gekocht."
+  ],
+  "want_added": []
+ },
+ {
+  "name": "hh1-0b8ca4c/nu-no-rice-r1",
+  "reply": "I removed the steamed rice from three meals, but not from the other four. Removing it from those would have broken the calorie rules, so they stay in the plan.\n\n**Removed:**\n- Sun 22 Nov lunch: the rice is gone. The meal drops from 850 to 588 kcal.\n- Mon 23 Nov dinner: the rice is gone. The meal drops from 717 to 455 kcal.\n- Tue 24 Nov lunch: the rice is gone. The meal drops from 717 to 455 kcal.\n\n**Still in the plan:**\n- Sat 21 Nov dinner. Removing it would leave Sun 22 Nov with two cooking times.\n- Tue 24 Nov dinner. Removing it would drop Tue 24 Nov to 910 kcal, below the 1000 kcal minimum.\n- Thu 26 Nov dinner. Removing it would leave Fri 27 Nov with two cooking times.\n- Fri 27 Nov lunch. Removing it would drop Fri 27 Nov to 988 kcal, below the 1000 kcal minimum.\n\n**What the removals did to the days:**\n- Sun 22 Nov is at 1166 kcal (protein 53 g). That is below the good amount for the day, 1200–1467 kcal.\n- Mon 23 Nov is at 1033 kcal (protein 62 g). That is also below the range.\n- Tue 24 Nov is at 1172 kcal (protein 66 g). That is also below the range.\n- The week's average is now 91% of the target. The week's range is 95–105%.\n- The rice on Sat 21 Nov is now cooked in a smaller batch, one portion instead of two.\n- Tue 24 Nov dinner now includes about 20 minutes of rice cooking, because the rice is cooked there instead of on Mon 23 Nov.\n\nI can fix the calorie gaps and remove the rest of the rice with these changes:\n- Swap the Fri 27 Nov lunch rice for 100 g of ciabatta.\n- Add 180 g of banana to Sun 22 Nov dinner and to Tue 24 Nov dinner.\n- Add 100 g of hummus to Mon 23 Nov dinner.\n\nWith those changes, every day stays above its minimum and back in its range. The Sat 21 Nov and Thu 26 Nov rice would still need a separate fix. Say if you want me to make these changes.",
+  "facts": [
+   {
+    "kind": "day_range",
+    "day": "Sun 22 Nov",
+    "kcal": 1166.0,
+    "side": "below",
+    "lo": 1200.0,
+    "hi": 1467.0
+   },
+   {
+    "kind": "day_range",
+    "day": "Mon 23 Nov",
+    "kcal": 1033.0,
+    "side": "below",
+    "lo": 1200.0,
+    "hi": 1467.0
+   },
+   {
+    "kind": "day_range",
+    "day": "Tue 24 Nov",
+    "kcal": 1172.0,
+    "side": "below",
+    "lo": 1200.0,
+    "hi": 1467.0
+   },
+   {
+    "kind": "resized",
+    "day": "Sat 21 Nov",
+    "dish": "Steamed rice",
+    "n": 1.0,
+    "was": 2.0
+   },
+   {
+    "kind": "cook_moved",
+    "dish": "Steamed rice",
+    "day": "Tue 24 Nov",
+    "meal": "dinner",
+    "day2": "Mon 23 Nov",
+    "meal2": "dinner"
+   },
+   {
+    "kind": "week_energy",
+    "n": 91,
+    "was": 100,
+    "lo": 95,
+    "hi": 105
+   }
+  ],
+  "old_added": [
+   "Sat 21 Nov: cook 1 portion of the \"Steamed rice\" (was 2)."
+  ],
+  "want_added": []
+ },
+ {
+  "name": "ho1-0b8ca4c/ho-impossible-goulash-r1",
+  "reply": "I changed only Thursday dinner. Beef goulash replaces the bean soup there, with the hasselback potatoes and yogurt kept.\n\nI left Monday, Tuesday and Saturday alone, because each would break a rule:\n- **Monday and Tuesday:** goulash is meat, and the week already has as many meat days as your limit of 3. Adding two more would break that rule.\n- **Saturday:** the goulash would need a second cooking time on Sunday, and you're limited to one cooking time per day.\n\nThursday has side effects:\n- **Thursday's total drops to 1,698 kcal**, below the day's range of 1,815–2,218 kcal. The fix I'd suggest is adding 60 g of salted peanuts to Thursday, which brings it to about 2,050 kcal. Say the word and I'll add them.\n- **The week's meat is now 433 g**, against a limit of 300 g.\n\nIf you want goulash on Monday, Tuesday or Saturday, I'd need to drop another meat dish from the week first. Tell me which one and I'll check the swap.",
+  "facts": [
+   {
+    "kind": "day_range",
+    "day": "Thu 26 Nov",
+    "kcal": 1698.0,
+    "side": "below",
+    "lo": 1815.0,
+    "hi": 2218.0
+   },
+   {
+    "kind": "week_meat",
+    "n": 433,
+    "was": 321,
+    "limit": 300
+   }
+  ],
+  "old_added": [
+   "Thu 26 Nov: 1698 kcal, below a good amount for the day (1815–2218 kcal).",
+   "Week: meat is 433 g against a limit of 300 g, 133 g over."
+  ],
+  "want_added": []
+ },
+ {
+  "name": "a2-0b8ca4c/quicker-wed-r3",
+  "reply": "Wednesday's dinner is now Chili sin carne instead of Beef ragù, with the tomato salad and Greek yogurt kept. It comes from the batch cooked Saturday, so nothing new is cooked for it, and it's quicker than the ragù, which took 110 minutes.\n\n- **Dinner:** 1071 → 1297 kcal.\n- **Day:** Wed 25 Nov is now 1934 kcal, a good amount for the day (1815–2218 kcal).\n- **Protein:** Wed 25 Nov goes from 81 g to 91 g, above the 75 g it needs.\n- **Batch:** the Saturday batch of Chili sin carne is now 3 portions instead of 2, and it's eaten at three meals: Sat 21 Nov dinner, Sun 22 Nov lunch and Wed 25 Nov dinner.\n- **Meat for the week:** down from 321 g to 171 g, under the 300 g limit.",
+  "facts": [
+   {
+    "kind": "keeps",
+    "day": "Wed 25 Nov",
+    "dish": "Chili sin carne",
+    "day2": "Sat 21 Nov",
+    "days": 4,
+    "keep": 4,
+    "last": "Wed 25 Nov"
+   },
+   {
+    "kind": "resized",
+    "day": "Sat 21 Nov",
+    "dish": "Chili sin carne",
+    "n": 3.0,
+    "was": 2.0
+   }
+  ],
+  "old_added": [
+   "Wed 25 Nov: the \"Chili sin carne\" keeps 4 days in the fridge, so Wed 25 Nov is the last day."
+  ],
+  "want_added": [
+   "Wed 25 Nov: the \"Chili sin carne\" keeps 4 days in the fridge, so Wed 25 Nov is the last day."
+  ]
+ },
+ {
+  "name": "a2-0b8ca4c/move-salmon-r1",
+  "reply": "I moved the salmon dinner to Friday 27 Nov. The chili con carne that was there moved to Monday 23 Nov dinner, along with its Hasselback potatoes and Greek yogurt.\n\n- **Mon 23 Nov:** Chili con carne, Hasselback potatoes and Greek yogurt. The day now holds 1958 kcal, a good amount for the day (1815–2218 kcal).\n- **Fri 27 Nov:** Salmon in puff pastry, tomato salad with rocket and parmesan, and Greek yogurt. The day now holds 2196 kcal, a good amount for the day.\n- **Cooking:** Monday dinner now cooks the chili and the Hasselback potatoes, about 2 h 35 min in all. Tuesday dinner cooks the salmon and the potatoes, about 1 h 55 min. Friday dinner cooks its own salmon, because the batch from Tuesday would be too old by then, and the tomato salad.\n- **Warning:** the salmon is now the main on Tue 24 Nov and Fri 27 Nov, so the dish repeats this week.\n\nI can also swap Friday's salmon for tuna pasta with tomatoes and add 120 g of banana to that dinner, which removes the repeat and keeps Friday inside its range (1899 kcal). Say so if you want it.",
+  "facts": [
+   {
+    "kind": "too_old",
+    "day": "Fri 27 Nov",
+    "dish": "Lachs im Blätterteig mit Frischkäse und Spinat",
+    "keep": 1
+   },
+   {
+    "kind": "cook_moved",
+    "dish": "Chili con carne",
+    "day": "Mon 23 Nov",
+    "meal": "dinner",
+    "day2": "Fri 27 Nov",
+    "meal2": "dinner"
+   },
+   {
+    "kind": "cook_moved",
+    "dish": "Hasselback potatoes",
+    "day": "Mon 23 Nov",
+    "meal": "dinner",
+    "day2": "Fri 27 Nov",
+    "meal2": "dinner"
+   },
+   {
+    "kind": "cook_moved",
+    "dish": "Lachs im Blätterteig mit Frischkäse und Spinat",
+    "day": "Tue 24 Nov",
+    "meal": "dinner",
+    "day2": "Mon 23 Nov",
+    "meal2": "dinner"
+   },
+   {
+    "kind": "cook_moved",
+    "dish": "Tomato salad with rocket and parmesan",
+    "day": "Fri 27 Nov",
+    "meal": "dinner",
+    "day2": "Mon 23 Nov",
+    "meal2": "dinner"
+   }
+  ],
+  "old_added": [
+   "Fri 27 Nov: the \"Lachs im Blätterteig mit Frischkäse und Spinat\" would be too old by then; it keeps 1 days in the fridge."
+  ],
+  "want_added": [
+   "Fri 27 Nov: the \"Lachs im Blätterteig mit Frischkäse und Spinat\" would be too old by then; it keeps 1 day in the fridge."
+  ]
+ },
+ {
+  "name": "a2-0b8ca4c/lighter-tue-r3",
+  "reply": "Tuesday's dinner is now a proper light dinner. I halved the salmon pastry, left out the Greek yogurt, and swapped the potatoes for a cucumber yogurt salad. Dinner holds 544 kcal, within the light-meal limit.\n\nTo balance the day, lunch is bigger: the lentil curry goes from 1 to 1.5 portions, with a tomato salad and 60 g of ciabatta added. Lunch now holds 1019 kcal, up from 331.\n\nTue 24 Nov now holds 1868 kcal, a good amount for the day (1815–2218 kcal).\n\nProtein for the day drops from 90 g to 71 g, which is below the 75 g target.\n\nThe steamed broccoli is no longer cooked that day. The lentil curry is cooked on Sunday, the salmon and tomato salad on Monday, and the cucumber yogurt salad on Tuesday.",
+  "facts": [
+   {
+    "kind": "resized",
+    "day": "Mon 23 Nov",
+    "dish": "Lachs im Blätterteig mit Frischkäse und Spinat",
+    "n": 1.5,
+    "was": 2.0
+   },
+   {
+    "kind": "resized",
+    "day": "Sun 22 Nov",
+    "dish": "Speedy lentil coconut curry",
+    "n": 3.5,
+    "was": 3.0
+   },
+   {
+    "kind": "resized",
+    "day": "Mon 23 Nov",
+    "dish": "Tomato salad with rocket and parmesan",
+    "n": 2.0,
+    "was": 1.0
+   }
+  ],
+  "old_added": [
+   "Mon 23 Nov: cook 1.5 portions of the \"Lachs im Blätterteig mit Frischkäse und Spinat\" (was 2).",
+   "Sun 22 Nov: cook 3.5 portions of the \"Speedy lentil coconut curry\" (was 3).",
+   "Mon 23 Nov: cook 2 portions of the \"Tomato salad with rocket and parmesan\" (was 1)."
+  ],
+  "want_added": [
+   "Mon 23 Nov: cook 1.5 portions of the \"Lachs im Blätterteig mit Frischkäse und Spinat\" (was 2).",
+   "Sun 22 Nov: cook 3.5 portions of the \"Speedy lentil coconut curry\" (was 3).",
+   "Mon 23 Nov: cook 2 portions of the \"Tomato salad with rocket and parmesan\" (was 1)."
+  ]
+ }
+]

@@ -43,6 +43,9 @@ type changeReport struct {
 	// Tell is the ordered list of plain sentences the reply must convey,
 	// computed from the saved plan (see buildTell).
 	Tell []string `json:"tell,omitempty"`
+	// Must is the typed form of the tell items the reply must carry; the code
+	// reads it (see restoreMust), the model does not (see withoutMust).
+	Must []mustFact `json:"must,omitempty"`
 	// Neutral is the one line for a week figure that only moved because a day
 	// went away (the week is counted over fewer days).
 	Neutral string `json:"-"`
@@ -91,6 +94,8 @@ type reportInput struct {
 	beforeSt, afterSt planning.State
 	before, after     planning.Evaluation
 	applied           []map[string]any
+	// must collects the facts the reply must carry (see mustFact); nil drops them.
+	must *mustSink
 }
 
 func dayLabel(d time.Time) string { return d.Format("Mon 2 Jan") }
@@ -290,11 +295,13 @@ func buildReport(in reportInput) changeReport {
 		r.Cooking = append(r.Cooking, rc)
 	}
 
-	r.Leftovers = leftovers(bs, as)
-	r.AlsoChanged = alsoChanged(as, in.applied)
+	in.must = &mustSink{}
+	r.Leftovers = leftovers(bs, as, in.must)
+	r.AlsoChanged = alsoChanged(as, in.applied, in.must)
 	r.Week = weekFacts(in, bs, as)
 	r.NewWarnings, r.Worse, r.EarlierWarnings, r.Neutral = warnings(in, as, awayOnly(r.Changed))
 	r.Tell = buildTell(in, r)
+	r.Must = in.must.sorted()
 	return r
 }
 
@@ -404,7 +411,7 @@ func portionWord(v float64) string {
 // leftovers says what the change did to a cooking that exists in the saved
 // plan: cooked portions nobody eats, meals beyond the portions, a resize. A
 // cooking the saved plan no longer has is said as "no longer cooked".
-func leftovers(bs, as planning.State) []string {
+func leftovers(bs, as planning.State, must *mustSink) []string {
 	b, a := batchesOf(bs), batchesOf(as)
 	keys := make([]string, 0, len(a)+len(b))
 	for k := range a {
@@ -417,10 +424,10 @@ func leftovers(bs, as planning.State) []string {
 	}
 	slices.Sort(keys)
 	// A dish whose cooking is gone from one day and new on another moved.
-	movedTo := map[string]string{}
+	movedTo := map[string]batchFacts{}
 	for k, v := range a {
 		if _, ok := b[k]; !ok {
-			movedTo[v.dish] = v.cooked.Format("Mon 2 Jan") + " at " + v.cookedAt
+			movedTo[v.dish] = v
 		}
 	}
 	var out []string
@@ -431,7 +438,8 @@ func leftovers(bs, as planning.State) []string {
 		case wasOK && !nowOK:
 			if was.eaten > 0.005 {
 				if to, ok := movedTo[was.dish]; ok {
-					out = append(out, fmt.Sprintf("The %s is now cooked on %s instead of %s at %s.", food.Quote(was.dish), to, was.cooked.Format("Mon 2 Jan"), was.cookedAt))
+					out = append(out, fmt.Sprintf("The %s is now cooked on %s at %s instead of %s at %s.", food.Quote(was.dish), to.cooked.Format("Mon 2 Jan"), to.cookedAt, was.cooked.Format("Mon 2 Jan"), was.cookedAt))
+					must.add(mustFact{Kind: factMoved, Dish: was.dish, Day: to.cooked.Format("Mon 2 Jan"), Meal: to.cookedAt, Day2: was.cooked.Format("Mon 2 Jan"), Meal2: was.cookedAt})
 				} else {
 					out = append(out, fmt.Sprintf("The %s cooked on %s is no longer cooked.", food.Quote(was.dish), was.cooked.Format("Mon 2 Jan")))
 				}
@@ -454,6 +462,7 @@ func leftovers(bs, as planning.State) []string {
 			switch {
 			case math.Abs(free) <= 0.005 && math.Abs(was.portions-now.portions) >= 0.005:
 				out = append(out, fmt.Sprintf("%s: cook %s of the %s (was %s).", day, portionWord(now.portions), food.Quote(now.dish), fmtNum(was.portions)))
+				must.add(mustFact{Kind: factResize, Day: day, Dish: now.dish, N: now.portions, Was: was.portions})
 			case free > 0.005:
 				out = append(out, fmt.Sprintf("%s of the %s cooked on %s is now left over (it is cooked for %s%s, the meals eat %s). %s", portionWord(free), food.Quote(now.dish), day, portionWord(now.portions), frozen, fmtNum(now.eaten), resized))
 			case free < -0.005:
@@ -499,7 +508,7 @@ func sessionDish(st planning.State, id int64) string {
 
 // alsoChanged says each knock-on change the operations reported: moved cooks,
 // meals that now cook fresh, resized batches and the automatic fixes.
-func alsoChanged(st planning.State, applied []map[string]any) []string {
+func alsoChanged(st planning.State, applied []map[string]any, must *mustSink) []string {
 	var out []string
 	cell := func(m map[string]any, dk, sk string) string {
 		if d, ok := asDate(m[dk]); ok {
@@ -531,6 +540,9 @@ func alsoChanged(st planning.State, applied []map[string]any) []string {
 					if why != "" {
 						if m["why"] == "past_keep_days" {
 							why += keepTooOld(st, asInt64(m["session_id"]))
+							if d, ok := asDate(m["date"]); ok {
+								must.add(mustFact{Kind: factTooOld, Day: dayLabel(d), Dish: strings.Trim(dish, `"`), Keep: keepDaysOf(st, asInt64(m["session_id"]))})
+							}
 						}
 						s += " (" + why + ")"
 					}
@@ -589,11 +601,18 @@ func weekFacts(in reportInput, bs, as planning.State) []string {
 				s = fmt.Sprintf("meat is %.0f g (was %.0f g, limit for the %d days you are home: %.0f g)", aw.MeatG, bw.MeatG, aw.Days, limit)
 			}
 			out = append(out, s)
+			if now, was := int(math.Round(aw.MeatG)), int(math.Round(bw.MeatG)); now > int(math.Round(limit)) || now > was {
+				in.must.add(mustFact{Kind: factMeat, N: float64(now), Was: float64(was), Limit: math.Round(limit)})
+			}
 		}
 		pol := planning.PolicyOf(as.Profile)
 		inWeek := func(p float64) bool { return p >= pol.WeekLow*100-0.5 && p <= pol.WeekHigh*100+0.5 }
 		if math.Abs(aw.Pct-bw.Pct) >= 3 || inWeek(aw.Pct) != inWeek(bw.Pct) {
 			out = append(out, fmt.Sprintf("average energy is %.0f%% of the target (was %.0f%%); the week's range is %.0f–%.0f%%", aw.Pct, bw.Pct, pol.WeekLow*100, pol.WeekHigh*100))
+			now, was, lo, hi := math.Round(aw.Pct), math.Round(bw.Pct), math.Round(pol.WeekLow*100), math.Round(pol.WeekHigh*100)
+			if now < was || now < lo || now > hi {
+				in.must.add(mustFact{Kind: factEnergy, N: now, Was: was, Lo: lo, Hi: hi})
+			}
 		}
 		if aw.TargetProteinG > 0 && math.Abs(aw.AvgProteinG-bw.AvgProteinG) >= 5 {
 			out = append(out, fmt.Sprintf("protein averages %.0f g a day against %.0f g wanted (was %.0f g)", aw.AvgProteinG, aw.TargetProteinG, bw.AvgProteinG))
@@ -649,10 +668,20 @@ func warnings(in reportInput, as planning.State, away bool) (out, worse []string
 			unaffected++
 			if neutral == "" || is.Code == planning.CodeWeekMeatAboveDGE {
 				neutral = awayNeutral(in, as, is)
+				if is.Code == planning.CodeWeekMeatAboveDGE && paramNum(is, "meat_g") > paramNum(is, "max_g") {
+					in.must.add(mustFact{Kind: factAwayMeat, N: math.Round(paramNum(is, "meat_g")), Limit: math.Round(paramNum(is, "max_g"))})
+				}
 			}
 		case worsened(b, is):
 			bb, _ := badness(b)
 			ab, _ := badness(is)
+			if is.Code == planning.CodeWeekFatRange || is.Code == planning.CodeWeekCarbsRange {
+				share := "fat"
+				if is.Code == planning.CodeWeekCarbsRange {
+					share = "carbs"
+				}
+				in.must.add(mustFact{Kind: factShare, Share: share, N: math.Round(paramNum(is, "pct")), Lo: math.Round(paramNum(is, "range_low_pct")), Hi: math.Round(paramNum(is, "range_high_pct"))})
+			}
 			worse = append(worse, fmt.Sprintf("%s It was already open and got worse: %s beyond its limit before, %s now.", issueSentence(is, as), badnessWords(is.Code, bb), badnessWords(is.Code, ab)))
 		default:
 			unaffected++
@@ -891,7 +920,18 @@ func withReport(svc Services, h ToolHandler, undo bool) ToolHandler {
 			for i := range r.Days {
 				r.Days[i].Status = ""
 			}
-			r.Tell = buildTell(reportInput{beforeSt: beforeSt, afterSt: afterSt, before: beforeEv, after: afterEv}, r)
+			in := reportInput{beforeSt: beforeSt, afterSt: afterSt, before: beforeEv, after: afterEv, must: &mustSink{}}
+			r.Tell = buildTell(in, r)
+			// The facts of the week and of the batches stay; the days and
+			// the cooking are told again, and no warning is new.
+			var kept []mustFact
+			for _, f := range r.Must {
+				if slices.Contains([]string{factResize, factMoved, factTooOld, factMeat, factEnergy, factAwayMeat}, f.Kind) {
+					kept = append(kept, f)
+				}
+			}
+			in.must.facts = append(kept, in.must.facts...)
+			r.Must = in.must.sorted()
 		}
 		if len(r.Changed) > 0 || len(r.Cooking) > 0 {
 			obj["report"] = mustJSON(r)

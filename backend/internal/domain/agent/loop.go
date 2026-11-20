@@ -107,7 +107,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 	}
 
 	requests, turns, conts, continuation, wrapUp := 0, 0, 0, false, false
-	var resizes []string // the must-say tell items of the newest saved change
+	var resizes []mustFact // the must-say facts of the newest saved change
 	for {
 		if requests++; requests > MaxRequests {
 			break
@@ -327,9 +327,12 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			}
 
 			view := modelView(output)
-			if r, saved := mustTold(view); saved {
-				resizes = r
+			// The facts come from the result itself, not from the model's
+			// view, which rewrites words.
+			if _, saved := mustTold(view); saved {
+				resizes, _ = mustTold(output)
 			}
+			view = withoutMust(view)
 			resultBlocks = append(resultBlocks, llm.ContentBlock{
 				Type:              llm.ContentTypeToolResult,
 				ToolResultID:      call.ToolUseID,
