@@ -344,7 +344,7 @@ func sideClashOffer(ctx context.Context, svc Services, w window.Window, in apply
 		effect["day_kcal_after"] = f.DayKcal
 	}
 	return map[string]any{
-		"what": clash["what"], "ops": offerOps, "clash": clash["clash"],
+		"what": clash["what"], "what_de": clash["what_de"], "ops": offerOps, "clash": clash["clash"],
 		"recommended": true, "recommended_because": "one starch on the plate, the change you asked for stays as it is",
 		"effect": effect,
 	}

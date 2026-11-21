@@ -640,31 +640,20 @@ func cookFacts(in reportInput, r changeReport) {
 			continue
 		}
 		day, meal := dayLabelStr(a.date), slotWord(in.afterSt, a.slot)
-		// One line per cooking time: its dishes, the meals they feed (once each),
-		// where a moved dish was cooked before, the longest recipe's minutes.
-		var names, namesDE, feeds, froms []string
+		// One line per cooking time: each dish with the meals it feeds and, for a
+		// moved dish, where it was cooked before; then the longest recipe's minutes.
+		var en, de []string
 		for _, d := range a.dishes {
-			names = append(names, food.Quote(d.name))
-			namesDE = append(namesDE, deQuote(d.name))
-			for _, f := range d.feeds {
-				if !slices.Contains(feeds, f) {
-					feeds = append(feeds, f)
-				}
+			e := fmt.Sprintf("%s for %s", food.Quote(d.name), feedsList(d.feeds, false))
+			g := fmt.Sprintf("%s für %s", deQuote(d.name), feedsList(d.feeds, true))
+			if was, ok := wasAt[d.name]; ok && was != day+" "+meal {
+				e += fmt.Sprintf(" (cooked %s before)", was)
+				g += fmt.Sprintf(" (vorher %s gekocht)", deCell(was))
 			}
-			if was, ok := wasAt[d.name]; ok && was != day+" "+meal && !slices.Contains(froms, was) {
-				froms = append(froms, was)
-			}
+			en, de = append(en, e), append(de, g)
 		}
-		enLine := fmt.Sprintf("%s at %s you cook %s for %s", day, meal, strings.Join(names, ", "), feedsList(feeds, false))
-		deLine := fmt.Sprintf("%s (%s) kochst du %s für %s", deDay(day), deSlot(meal), strings.Join(namesDE, ", "), feedsList(feeds, true))
-		if len(froms) > 0 {
-			de := make([]string, len(froms))
-			for i, f := range froms {
-				de[i] = deCell(f)
-			}
-			enLine += fmt.Sprintf(" (cooked %s before)", strings.Join(froms, " and "))
-			deLine += fmt.Sprintf(" (vorher %s gekocht)", strings.Join(de, " und "))
-		}
+		enLine := fmt.Sprintf("%s at %s you cook %s", day, meal, strings.Join(en, "; "))
+		deLine := fmt.Sprintf("%s (%s) kochst du %s", deDay(day), deSlot(meal), strings.Join(de, "; "))
 		if a.maxMins > 0 {
 			enLine += fmt.Sprintf("; the longest recipe takes about %s", duration(a.maxMins))
 			deLine += fmt.Sprintf("; das längste Rezept braucht etwa %s", deDuration(a.maxMins))

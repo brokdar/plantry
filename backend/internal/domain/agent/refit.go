@@ -105,14 +105,16 @@ func sideClash(ctx context.Context, svc Services, plateID int64) map[string]any 
 			name = food.Quote(st.Foods[c.FoodID].Name)
 		}
 	}
-	what := "leave out " + name
+	what, whatDE := "leave out "+name, deQuoted(name)+" weglassen"
 	if to != "" {
 		what = fmt.Sprintf("swap %s for %s", name, to)
+		whatDE = fmt.Sprintf("%s durch %s ersetzen", deQuoted(name), deQuoted(to))
 	}
 	return map[string]any{
 		"plate_id": plateID, "date": p.Date.Format(time.DateOnly), "side": name, "ops": ops,
-		"clash": name + " stays on the plate and does not fit the new main (a pasta, rice or potato main takes one starch, not two)",
-		"what":  what + " so the plate fits the new main",
+		"clash":   name + " stays on the plate and does not fit the new main (a pasta, rice or potato main takes one starch, not two)",
+		"what":    what + " so the plate fits the new main",
+		"what_de": whatDE + ", damit der Teller zum neuen Hauptgericht passt",
 	}
 }
 
