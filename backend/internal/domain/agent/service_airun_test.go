@@ -278,14 +278,14 @@ func TestChat_RecordsPlanEvaluationOnCancel(t *testing.T) {
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{{
 		StopReason: "end_turn",
 		Events: []fake.ScriptedEvent{
-			{Type: string(llm.EventAssistantDelta), Payload: json.RawMessage(`{"text":"early"}`)},
+			{Type: string(llm.EventMessageStart), Payload: json.RawMessage(`{"model":"fake"}`)},
 			{DelayMs: 10_000, Type: string(llm.EventAssistantDelta), Payload: json.RawMessage(`{"text":"late"}`)},
 		},
 	}}})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	_, err := chat(ctx, svc, "hi", func(e llm.Event) {
-		if e.Type == llm.EventAssistantDelta {
+		if e.Type == llm.EventMessageStart {
 			cancel()
 		}
 	})
@@ -341,12 +341,12 @@ func TestChat_ErrorStatusAndKey(t *testing.T) {
 
 func TestChat_CancelledStatus(t *testing.T) {
 	t.Parallel()
-	// The test cancels on the first delta, once the loop (and so the run) has
+	// The test cancels on the first event (message start; the model's text is held back and shown once), once the loop (and so the run) has
 	// started; the second scripted event waits long enough for that.
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{{
 		StopReason: "end_turn",
 		Events: []fake.ScriptedEvent{
-			{Type: string(llm.EventAssistantDelta), Payload: json.RawMessage(`{"text":"early"}`)},
+			{Type: string(llm.EventMessageStart), Payload: json.RawMessage(`{"model":"fake"}`)},
 			{DelayMs: 10_000, Type: string(llm.EventAssistantDelta), Payload: json.RawMessage(`{"text":"late"}`)},
 		},
 	}}})
@@ -354,7 +354,7 @@ func TestChat_CancelledStatus(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	_, err := chat(ctx, svc, "hi", func(e llm.Event) {
-		if e.Type == llm.EventAssistantDelta {
+		if e.Type == llm.EventMessageStart {
 			cancel()
 		}
 	})

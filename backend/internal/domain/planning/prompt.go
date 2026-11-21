@@ -20,7 +20,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p27"
+const PromptVersion = "p28"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -365,7 +365,7 @@ How a plan works:
 - Cooking occasions: every cook cell of a session counts, and so does every component without a session_key/session_id (it is cooked fresh on its own cell). Several sessions cooked on the same cell are one occasion, so cook a side on the same cell as its main, and let other plates eat from a session.
 - Every lunch and dinner plate needs a main (role main, suits lunch_dinner in the candidate table); a side alone is not a meal. Recipes that suit breakfast (standalone: oats, yoghurt) are for breakfast cells only, never a lunch or dinner. Pair mains with a side where it suits.
 - Submit the COMPLETE plan in your first call: a plate for every fill cell (the task lists them with their count) and every session they need. The checker allows only two repairs; do not use them to find missing cells. notes describe only what is in the plan.
-- Soft rules (reported by evaluate_plan, never block saving, aim to satisfy them): the ones only you decide: S1 at most the meat-day limit of days with an omnivore recipe on a plate (the meat column; a cook day without an eating plate is not a meat day); S6 a meal named light is lighter than its share; S7 the DGE food rules, judged on 5 or more complete days (meat at most 300 g per person per week, prorated by week.days, see the week meat budget; a fish meal and a legume meal, at least 50 g each per person, at least once a week; priority 5, never at the user's wishes: when evaluate_plan lists options on week_meat_above_dge or week_fish_below_dge take them, with no_fix_found leave them); S8 a recipe is the main of at most the user's limit of lunches and dinners, and H8 variety (last_eaten). Quantities are Go's, not yours: day energy (S2), protein (S3), the week (S4), carbs and fat (S5) and add-ons (S9). An H9 issue lists computed options; take one instead of computing by hand.
+- Soft rules (reported by evaluate_plan, never block saving, aim to satisfy them): the ones only you decide: S1 at most the meat-day limit of days with an omnivore recipe on a plate (the meat column; a cook day without an eating plate is not a meat day); S6 a meal named light is lighter than its share; S7 the DGE food rules, judged on 5 or more complete days (no more than 300 g of meat per person per week, prorated by week.days, see the week meat budget; a fish meal and a legume meal, at least 50 g each per person, at least once a week; priority 5, never at the user's wishes: when evaluate_plan lists options on week_meat_above_dge or week_fish_below_dge take them, with no_fix_found leave them); S8 a recipe is the main of at most the user's limit of lunches and dinners, and H8 variety (last_eaten). Quantities are Go's, not yours: day energy (S2), protein (S3), the week (S4), carbs and fat (S5) and add-ons (S9). An H9 issue lists computed options; take one instead of computing by hand.
 - When a code execution tool is offered: for fan-out or comparing variants, write code that calls evaluate_plan on several drafts and prints only what you need (the cheapest plan that clears the hard rules); call submit_plan yourself, directly, with the plan you chose.
 - Evaluate before you submit: write the draft, call evaluate_plan with it, read days (kcal, protein, cook occasions, meat) and issues, change the plan, evaluate again. Do not simulate the checker in your head. Do not add up kcal, protein, meat days or keep windows in your reasoning: write a draft and call evaluate_plan, which computes them, then fix what it reports.
 - Sides and add-ons (foods eaten as they are) are added by Go after you submit: do not plan them. Every component of your plan is a candidate recipe with portions per eater (never grams, never a single food). Fill every meal: a plate for every fill cell.
@@ -518,9 +518,23 @@ func writeProfile(b *strings.Builder, p Profile) {
 	if len(p.Restrictions) > 0 {
 		fmt.Fprintf(b, "- dietary restrictions: %s\n", strings.Join(p.Restrictions, ", "))
 	}
-	if n := strings.TrimSpace(p.Notes); n != "" {
+	n := strings.TrimSpace(p.Notes)
+	if p.MeatDaysPerWeekMax != nil {
+		n = dropMeatLimit(n)
+	}
+	if n != "" {
 		fmt.Fprintf(b, "- the user's notes to the assistant (preferences; they don't override the rules): %s\n", oneLine(n))
 	}
+}
+
+// meatLimitNote matches the clause of a user's notes that restates the meat limit
+// ("meat at most 2-3 days a week", "meat max 2.5 days"), up to the next comma,
+// semicolon, line end or sentence end: the profile's structured limit says it
+// once (spec NU3), and the rest of the notes stays.
+var meatLimitNote = regexp.MustCompile(`(?i)\bmeat (?:days )?(?:at most|max)\b(?:[^,;.\n]|\.\d)*[,;.]?`)
+
+func dropMeatLimit(notes string) string {
+	return strings.Join(strings.Fields(meatLimitNote.ReplaceAllString(notes, "")), " ")
 }
 
 // writeCells lists every cell: fill (empty, in scope), the plates already

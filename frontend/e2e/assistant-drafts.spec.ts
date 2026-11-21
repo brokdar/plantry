@@ -108,8 +108,7 @@ async function send(page: Page, text: string) {
 const weekday = (iso: string) =>
   new Date(`${iso}T12:00:00`).toLocaleDateString("en", { weekday: "long" })
 
-// Pre-existing failure (ledger V7): unlock card not visible after reload; rewrite in M2.
-test.fixme("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, accepted runs", async ({
+test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, accepted runs", async ({
   page,
 }) => {
   test.setTimeout(180_000)
@@ -351,7 +350,7 @@ test.fixme("AC-1 to AC-4.1: portions and freezing, a different side, the unlock 
     expect(detail1).toMatchObject({
       kind: "chat",
       status: "ok",
-      prompt_version: "v37",
+      prompt_version: "v40",
     })
     expect(detail1.instruction).toBe("Make the chili 6 portions and freeze 2")
     expect(detail1.steps.map((s) => s.name)).toEqual(
@@ -546,20 +545,24 @@ test.fixme("AC-1 to AC-4.1: portions and freezing, a different side, the unlock 
     ).steps.find((x) => x.name === "apply_changes")!
     expect(failed.is_error).toBe(true)
     expect(failed.result).toContain("confirmed")
-    // The stored conversation keeps the failed result's message key.
-    const latest = (
+    // The stored conversation keeps the failed result's message key (looked for
+    // in the newest conversations: two created in one second are not ordered).
+    const recent = (
       await getJSON<{ items: { id: number }[] }>(
         ctx,
-        "/api/ai/conversations?limit=1"
+        "/api/ai/conversations?limit=10"
       )
-    ).items[0]
-    const latestDetail = await getJSON<{ messages: unknown[] }>(
-      ctx,
-      `/api/ai/conversations/${latest.id}`
-    )
-    expect(JSON.stringify(latestDetail.messages)).toContain(
-      "error.plan.row_confirmed"
-    )
+    ).items
+    let keptKey = false
+    for (const c of recent) {
+      const detail = await getJSON<{ messages: unknown[] }>(
+        ctx,
+        `/api/ai/conversations/${c.id}`
+      )
+      if (JSON.stringify(detail.messages).includes("error.plan.row_confirmed"))
+        keptKey = true
+    }
+    expect(keptKey, "a conversation keeps error.plan.row_confirmed").toBe(true)
     let mon = (await plan()).cells.find(
       (c) => c.date === monday && c.slot_id === dinner.id
     )!.plate!

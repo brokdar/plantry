@@ -3,6 +3,7 @@ package agent_test
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -18,6 +19,7 @@ import (
 // ways[0] has that option in the result (it never promises one that is absent).
 func assertNextKeepsItsPromise(t *testing.T, res map[string]any, where string) {
 	t.Helper()
+	assertGermanMatches(t, res, where)
 	next, _ := res["next"].(string)
 	for name, key := range map[string]string{"offers[0]": "offers", "offer[0]": "offer", "ways[0]": "ways"} {
 		if !strings.Contains(next, name) {
@@ -244,4 +246,42 @@ func TestFindWays_NextNeverNamesAnAbsentOption(t *testing.T) {
 		}
 	})
 	assert.Positive(t, n.Load())
+}
+
+var (
+	quotedNameRe = regexp.MustCompile(`"([^"]+)"`)
+	numberRe     = regexp.MustCompile(`\d+(?:\.\d+)?`)
+)
+
+// assertGermanMatches: every offer's German text carries the dishes and numbers of
+// its English text (RP8), and every refused part names what and why in both
+// languages (SF2).
+func assertGermanMatches(t *testing.T, res map[string]any, where string) {
+	t.Helper()
+	offers, _ := res["offers"].([]any)
+	for _, o := range offers {
+		m, _ := o.(map[string]any)
+		what, _ := m["what"].(string)
+		de, _ := m["what_de"].(string)
+		require.NotEmpty(t, de, "%s: no German offer for %q", where, what)
+		for _, q := range quotedNameRe.FindAllStringSubmatch(what, -1) {
+			assert.Contains(t, de, q[1], "%s: the German offer names %q", where, q[1])
+		}
+		for _, n := range numberRe.FindAllString(what, -1) {
+			assert.Contains(t, de, strings.Replace(n, ".", ",", 1), "%s: the German offer has %s", where, n)
+		}
+	}
+	skipped, _ := res["skipped"].([]any)
+	for _, s := range skipped {
+		m, _ := s.(map[string]any)
+		en, _ := m["en"].(string)
+		de, _ := m["de"].(string)
+		for lang, line := range map[string]string{"en": en, "de": de} {
+			assert.Regexp(t, `^(Left out|Weggelassen): .+ \(.+\)\.$`, line, "%s %s: what and why", where, lang)
+			assert.NotRegexp(t, `^(Left out|Weggelassen): (remove|add|swap|move|set_\w+) \(`, line, "%s %s: not a bare op", where, lang)
+		}
+		for _, n := range numberRe.FindAllString(en, -1) {
+			assert.Contains(t, de, n, "%s: the German refusal has %s", where, n)
+		}
+	}
 }

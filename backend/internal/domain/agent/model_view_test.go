@@ -126,31 +126,39 @@ func TestModelView_FillingLevel(t *testing.T) {
 	assert.Contains(t, out, `"light":[{"date":"2026-11-25","level":"filling"}]`, "a light entry the model passes back says filling")
 }
 
-// E036: the offer is the last item of tell, as a ready statement, or nothing.
-func TestAddDerived_OfferIsTheLastTellItem(t *testing.T) {
+// G3: the one offer is rendered by code in the report (report.offer, English and
+// German, a fixed marker, never in the tell), or there is none.
+func TestAddDerived_OfferIsRenderedByCode(t *testing.T) {
 	t.Parallel()
-	run := func(in string) []any {
+	run := func(in string) (tell []any, offer map[string]any) {
 		var res struct {
 			Report struct {
-				Tell []any `json:"tell"`
+				Tell  []any          `json:"tell"`
+				Offer map[string]any `json:"offer"`
 			} `json:"report"`
 		}
 		require.NoError(t, json.Unmarshal(agent.AddDerived("apply_changes", json.RawMessage(in)), &res))
-		return res.Report.Tell
+		return res.Report.Tell, res.Report.Offer
 	}
 	t.Run("an offer of the result", func(t *testing.T) {
-		tell := run(`{"dry_run":false,"report":{"tell":["Thu 26 Nov dinner: A replaced by B."]},"offers":[{"what":"swap Mon dinner's Salmon for Tofu","effect":{"day":"Mon 23 Nov","day_kcal_after":1958}}]}`)
-		assert.Equal(t, "I can also swap Mon dinner's Salmon for Tofu (Mon 23 Nov would then hold 1958 kcal): say so if you want it.", tell[len(tell)-1])
+		tell, offer := run(`{"dry_run":false,"report":{"tell":["Thu 26 Nov dinner: A replaced by B."]},"offers":[{"what":"swap Mon dinner's \"Salmon\" for \"Tofu\"","effect":{"day":"Mon 23 Nov","day_kcal_after":1958}}]}`)
+		assert.Equal(t, []any{"Thu 26 Nov dinner: A replaced by B."}, tell, "the offer is not a tell item")
+		assert.Equal(t, `I can also swap Mon dinner's "Salmon" for "Tofu" (Mon 23 Nov would then hold 1958 kcal): say so if you want it.`, offer["en"])
+		assert.Equal(t, `Ich kann auch bei Mon dinner „Salmon“ durch „Tofu“ ersetzen (Montag, 23. Nov. hätte dann 1958 kcal): sag Bescheid, wenn du das möchtest.`, offer["de"])
 	})
 	t.Run("the first option of a new issue", func(t *testing.T) {
-		tell := run(`{"dry_run":false,"report":{"tell":["x"]},"after":{"issues":{"new":[{"options":[{"action":"add","name":"Ciabatta","grams":120,"date":"2026-11-26","day_kcal":2047}]}]}}}`)
-		assert.Equal(t, "I can also add 120 g of Ciabatta on Thu 26 Nov (the day would then hold 2047 kcal): say so if you want it.", tell[len(tell)-1])
+		_, offer := run(`{"dry_run":false,"report":{"tell":["x"]},"after":{"issues":{"new":[{"options":[{"action":"add","name":"Ciabatta","grams":120,"date":"2026-11-26","day_kcal":2047}]}]}}}`)
+		assert.Equal(t, "I can also add 120 g of Ciabatta on Thu 26 Nov (the day would then hold 2047 kcal): say so if you want it.", offer["en"])
+		assert.Equal(t, `Ich kann auch 120 g „Ciabatta“ hinzufügen am Donnerstag, 26. Nov. (der Tag hätte dann 2047 kcal): sag Bescheid, wenn du das möchtest.`, offer["de"])
 	})
 	t.Run("none, none", func(t *testing.T) {
-		assert.Equal(t, []any{"x"}, run(`{"dry_run":false,"report":{"tell":["x"]},"after":{"issues":{"new":[]}}}`))
+		tell, offer := run(`{"dry_run":false,"report":{"tell":["x"]},"after":{"issues":{"new":[]}}}`)
+		assert.Equal(t, []any{"x"}, tell)
+		assert.Nil(t, offer)
 	})
 	t.Run("a check offers nothing", func(t *testing.T) {
-		assert.Equal(t, []any{"x"}, run(`{"dry_run":true,"report":{"tell":["x"]},"offers":[{"what":"y"}]}`))
+		_, offer := run(`{"dry_run":true,"report":{"tell":["x"]},"offers":[{"what":"y"}]}`)
+		assert.Nil(t, offer)
 	})
 }
 
@@ -164,26 +172,6 @@ func TestDropAfterWeek_DropsMeatDays(t *testing.T) {
 	assert.Contains(t, out, `"days":[]`)
 }
 
-// E036b: the moved cooking of an away call is told in at most three items,
-// and the per-dish lines of the same moves are gone.
-func TestAddDerived_CookingMovedIsTold(t *testing.T) {
-	t.Parallel()
-	in := `{"dry_run":false,"report":{"tell":["Sun 22 Nov is away: the day is not counted.","Mon 23 Nov you cook (1 cooking time): \"A\" at lunch for x.","The \"A\" is now cooked on Mon 23 Nov at lunch instead of Sun 22 Nov at dinner.","To keep one cooking time a day, \"A\" is now cooked at Mon 23 Nov lunch instead of Sun dinner.","Weekly energy: 1935 kcal a day."]},
-		"cooking_moved":{"cooked_now":[{"day":"Mon 23 Nov","cooking_time":"lunch","dishes":[{"dish":"\"A\"","feeds":["Mon 23 Nov lunch","Tue 24 Nov lunch"]},{"dish":"\"B\"","feeds":["Mon 23 Nov dinner"]}]}],"nothing_else_changed":true}}`
-	var res struct {
-		Report struct {
-			Tell []string `json:"tell"`
-		} `json:"report"`
-	}
-	require.NoError(t, json.Unmarshal(agent.AddDerived("apply_changes", json.RawMessage(in)), &res))
-	assert.Equal(t, []string{
-		"Sun 22 Nov is away: the day is not counted.",
-		`Everything that moved is now cooked together on Mon 23 Nov at lunch, one cooking time: "A" for Mon 23 Nov lunch, Tue 24 Nov lunch; "B" for Mon 23 Nov dinner.`,
-		"No other meal changed.",
-		"Weekly energy: 1935 kcal a day.",
-	}, res.Report.Tell)
-}
-
 // E036b: find_ways gets a ready closing sentence for its first offer.
 func TestAddDerived_WaysClosing(t *testing.T) {
 	t.Parallel()
@@ -195,4 +183,13 @@ func TestAddDerived_WaysClosing(t *testing.T) {
 	out = agent.AddDerived("find_ways", json.RawMessage(`{"ways":[]}`))
 	require.NoError(t, json.Unmarshal(out, &none))
 	assert.NotContains(t, none, "closing")
+}
+
+// An unlock preview keeps ISO dates in the stored conversation: the panel
+// rebuilds its unlock card from it after a reload and parses them.
+func TestModelView_UnlockPreviewRowsKeepISODates(t *testing.T) {
+	t.Parallel()
+	out := string(agent.ModelView(json.RawMessage(`{"status":"needs_user_confirmation","rows":[{"date":"2026-11-09","slot_id":3,"names":["Chili"]}],"other":"2026-11-09"}`)))
+	assert.Contains(t, out, `"date":"2026-11-09"`)
+	assert.Contains(t, out, `"other":"Mon 9 Nov"`)
 }

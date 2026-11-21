@@ -120,7 +120,7 @@ func TestRecipeText_TagsAreLabelsNamesAreFields(t *testing.T) {
 					assert.Contains(t, []string{"name", "food", "to", "item", "foods", "plates", "label", "dish"}, key, "%s: the name sits in field %q", where, key)
 					return
 				}
-				assert.NotContains(t, strings.ReplaceAll(x, `"`+plantedName+`"`, ""), plantedName, "%s: %q names a dish unquoted in %q", where, key, x)
+				assert.NotContains(t, strings.ReplaceAll(strings.ReplaceAll(x, `"`+plantedName+`"`, ""), "„"+plantedName+"“", ""), plantedName, "%s: %q names a dish unquoted in %q", where, key, x)
 			}
 		}
 		walk(v, key)

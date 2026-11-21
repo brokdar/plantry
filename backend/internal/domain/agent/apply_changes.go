@@ -342,7 +342,7 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 				return err
 			}
 		}
-		rep = reportOf(ctx, svc, w, beforeSt, beforeErr, before, afterEv, applied)
+		rep = reportOf(ctx, svc, w, beforeSt, beforeErr, before, afterEv, applied, in.Goal != nil || len(light) > 0)
 		if in.Goal != nil {
 			if request, err = judgeGoal(ctx, svc, w, *in.Goal, light, before, afterEv); err != nil {
 				return err
@@ -384,7 +384,8 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 			offers = append([]map[string]any{o}, offers...)
 			next = clashNext(next, o, in.DryRun)
 			if rep != nil {
-				rep.Tell = append(rep.Tell, fmt.Sprint(o["clash"])+"; offer: "+fmt.Sprint(o["what"])+", only if the user says yes")
+				rep.Facts = selectBlock(append(rep.Facts, fact{Class: classMoved, Kind: kindMeal, Status: statusOK, EN: fmt.Sprint(o["clash"]) + ".", DE: "Diese Beilage passt nicht zum Hauptgericht; sie bleibt, wie gewünscht."}))
+				rep.Tell = tellOf(rep.Facts)
 			}
 		}
 		if next != "" {
