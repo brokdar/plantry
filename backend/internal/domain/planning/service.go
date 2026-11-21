@@ -438,6 +438,15 @@ func isHeuristic(c Chooser) bool {
 }
 
 // openHard are the hard issues a plan still holds, empty cells included.
+// hardKey identifies a hard issue across two evaluations of one plan.
+func hardKey(is Issue) string {
+	slot := int64(0)
+	if is.SlotID != nil {
+		slot = *is.SlotID
+	}
+	return fmt.Sprintf("%s|%s|%s|%d", is.Rule, is.Code, is.Date, slot)
+}
+
 func openHard(merged State, t Target) []Issue { return violationsOf(Check(merged, t)) }
 
 // ready reports whether a chooser can run now: one with a Ready method (the
@@ -895,6 +904,9 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	s.logStage(ctx, runID, started, StageResolving)
 	var routine []plate.SnapshotPlate
 	var stored []LightIntent
+	// sideOpen are the hard issues a side swap's plan already had (PL1): only a
+	// new one stops the swap.
+	sideOpen := map[string]bool{}
 	build := func(ctx context.Context) error {
 		st, err := s.d.Builder.Build(ctx, j.w, j.today, j.from, j.to)
 		if err != nil {
@@ -902,6 +914,11 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		}
 		stored = st.Light
 		st.Light = MergeLight(stored, j.light)
+		if j.side != nil {
+			for _, is := range openHard(st, j.target) {
+				sideOpen[hardKey(is)] = true
+			}
+		}
 		base = Merge(st, j.target, Proposal{})
 		routine, err = s.d.Builder.ApplyRoutines(ctx, &base, j.target, func(d time.Time) float64 {
 			if n := j.eaters[d.Format(time.DateOnly)]; n > 0 {
@@ -1066,7 +1083,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	// floor no recipe reaches (partial, the notes say so).
 	if still := slices.DeleteFunc(openHard(Merge(base, j.target, prop), j.target), func(is Issue) bool {
 		return is.Code == CodeMissingPlate || (is.Code == CodeKcalBelowFloor && isHeuristic(j.chooser))
-	}); j.side == nil && len(still) > 0 {
+	}); len(still) > 0 && (j.side == nil || slices.ContainsFunc(still, func(is Issue) bool { return !sideOpen[hardKey(is)] })) {
 		closeStatus, closeStage = "error", "checking"
 		return RunEnd{
 			Status: airun.StatusError, ErrorKey: keyHardRuleOpen,
