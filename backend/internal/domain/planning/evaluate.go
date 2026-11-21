@@ -281,8 +281,10 @@ func evaluateWith(s State, t Target, weekOpts, noOptions bool) Evaluation {
 			if dk.Adjusted != dk.Scaled {
 				de.NormalTargetKcal = dk.Scaled
 			}
-			de.BandLow, de.BandHigh = math.Round(sc*x.pol.DayLow), math.Round(sc*x.pol.DayHigh)
 			de.FloorKcal = math.Round(dk.Floor(x.pol))
+			// The floor is hard and never lowered: a range never starts under it
+			// (a day target the floor lifted has a band whose low end would).
+			de.BandLow, de.BandHigh = max(math.Round(sc*x.pol.DayLow), de.FloorKcal), math.Round(sc*x.pol.DayHigh)
 			if dk.AwayShare > 1e-9 {
 				de.AwayKcal = math.Round(dk.Target * dk.AwayShare)
 				de.PlannedTargetKcal = math.Round(dk.Target) - de.AwayKcal

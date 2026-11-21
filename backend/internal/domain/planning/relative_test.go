@@ -488,3 +488,14 @@ func TestWays_ComparativeJudgesTheDayByTheUnmarkedRange(t *testing.T) {
 		})
 	}
 }
+
+// B-1 (v1.2, R1): a number named under the day's minimum is refused (C-11) and
+// the floor is unchanged: the range the result shows never starts under it.
+func TestWays_NamedNumberUnderTheFloorShowsARangeAboveIt(t *testing.T) {
+	res := ways(t, relState(false), planning.WayRequest{Date: sat, Goal: planning.GoalLowerDay, TargetKcal: 100, Limit: 8})
+	require.True(t, res.Impossible, "a number under the minimum cannot be met")
+	require.Positive(t, res.FloorKcal)
+	assert.GreaterOrEqual(t, res.BandLow, res.FloorKcal, "range low")
+	assert.GreaterOrEqual(t, res.MinKcal, res.FloorKcal, "min kcal")
+	assert.Greater(t, res.BandHigh, res.BandLow)
+}
