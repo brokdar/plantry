@@ -324,7 +324,8 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 			}
 		}
 		for _, w := range weekdayRe.FindAllString(text, -1) {
-			if k := weekdayKey(w); k == "" || !namesWeekday(blockText, k) {
+			// A day the block names, or one the user named (v1.3, P-6).
+			if k := weekdayKey(w); k == "" || (!namesWeekday(blockText, k) && !namesWeekday(t.user, k)) {
 				return "weekday"
 			}
 		}
@@ -369,9 +370,9 @@ func composeReply(model string, t replyTurn) string {
 			text = strings.Join(ss[:2], " ")
 		}
 	}
-	if !t.write && lintModelText(text, t, lg) != "" {
-		// A read turn's answer keeps every sentence the lint passes: one figure
-		// the tools do not back costs that sentence, not the answer (RP4).
+	if lintModelText(text, t, lg) != "" {
+		// The text keeps every sentence the lint passes: a sentence that breaks it
+		// is dropped, not the whole text (G4 lint per sentence, v1.3 P-6; RP4).
 		var kept []string
 		for _, s := range sentences(text) {
 			if lintModelText(s, t, lg) == "" {
