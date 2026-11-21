@@ -16,7 +16,7 @@ type AppSettingsRepo struct {
 
 // NewAppSettingsRepo creates a SQLite-backed repo.
 func NewAppSettingsRepo(db *sql.DB) *AppSettingsRepo {
-	return &AppSettingsRepo{conn: conn{db: db}}
+	return &AppSettingsRepo{conn: newConn(db)}
 }
 
 func (r *AppSettingsRepo) Get(ctx context.Context, key string) (settings.Row, bool, error) {

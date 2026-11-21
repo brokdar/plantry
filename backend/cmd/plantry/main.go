@@ -245,6 +245,7 @@ func run() error {
 		Foods: foodSvc, FoodRows: foodRepo, Nutrition: nutritionResolver, Cells: availabilitySvc,
 		Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
 		Settings: settingsSvc, Profile: profileSvc, Corrections: sqlite.NewPlateEventRepo(conn),
+		Version: sqlite.NewDataVersion(conn),
 	})
 	planningSvc := planning.NewService(planning.Deps{
 		Builder: planBuilder,

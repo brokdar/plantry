@@ -17,13 +17,15 @@ go test -run TestName ./path/...      # single test
 go vet ./...                          # vet
 golangci-lint run                     # lint
 sqlc generate                         # regenerate from queries + schema
-go test -race ./...                   # race detector — run before feature complete
+go test ./pkg -run TestName           # the edit loop: no race, test cache on (never -count=1)
 scripts/check-sqlc-usage.sh           # every sqlc query needs a non-test caller
 go tool deadcode -test ./...          # unreachable functions (pinned x/tools); the gate ignores sqlcgen/
 go run ./cmd/plantry backup -out F    # consistent copy of the database + secret.key (see Backup)
 ```
 
 `go tool deadcode -test ./...` must report nothing outside `internal/adapters/sqlite/sqlcgen/`; `scripts/gate.sh` and `backend.yml` run it, with the tool version pinned in `go.mod`. Remove the dead function instead of keeping it. The gate also cross-builds `GOOS=linux GOARCH=arm64` and `GOARCH=arm GOARM=7` (`CGO_ENABLED=0`), so a CGO or arch-specific dependency fails there.
+
+The race detector runs once per PR in the repo-root `scripts/gate.sh` (`go test -race -short -gcflags=modernc.org/sqlite/...=-race=false ./...`) and in CI; see "Test speed contract" in the root `CLAUDE.md`. **Test databases** come from `testhelper.NewTestDB` (a copy of a migrated template), `NewTestDBFrom(t, testhelper.SnapshotDB(t, db))` for a fixture built once per process, or `DSN`/`DSNWith` for a test that opens its own file: they turn fsync off. A test that is slow by nature calls `testhelper.Slow(t, reason)` and is listed in `test-budget.json`.
 
 `scripts/check-sqlc-usage.sh` fails when a `-- name: X` in `internal/adapters/sqlite/queries/*.sql` has no `.X(` in a non-test `.go` file outside `sqlcgen/`. It runs in CI and in the repo-root `scripts/gate.sh`; delete the query instead of keeping it unused.
 
@@ -120,6 +122,10 @@ Package `domain/planview` builds the read models; it never writes and takes its 
 ## Unit of work
 
 `domain.Transactor` (`domain/transactor.go`, D21) is the port; `sqlite.TxRunner` (`adapters/sqlite/tx.go`) implements it. `InTx(ctx, fn)` runs `fn` in one transaction whose `*sql.Tx` travels in `fn`'s ctx, and every repository called with that ctx joins it. A nested `InTx` joins the outer one: there are no savepoints, so a failed nested call leaves its partial writes in the outer transaction and the caller must return the error. Multi-write operations (plate mutations, availability `none` with `remove_plate`, preset apply) run inside one `InTx`, and so do the `/api/plan` and `/api/today` read models, so a concurrent write cannot tear them.
+
+**Statement cache.** Every repository resolves its queries through `conn.dbtx` (`tx.go`): outside a transaction a per-repository cache of statements prepared on the pool (`stmts`), inside one the unit of work's own statements, prepared once per transaction (from the pool statement through `Tx.StmtContext` when there is one, else on the transaction; never on the pool, whose only connection the transaction holds). Multi-statement strings and more than 256 texts run unprepared. Parsing the same SQL again on every call was 18% of the agent's CPU.
+
+**State memo.** `planning.Builder` with `BuilderDeps.Version` (`sqlite.DataVersion`, wired in `main.go`, `testsvc` and the eval env) returns a deep copy (`deepCopy`, reflection, so new fields are copied too) of the last `State` it built for the same arguments while the data version is unchanged: the connection's `total_changes()`, `PRAGMA data_version`, a random per-connection id in a temp table, and the unit of work (a rolled-back write does not move `total_changes()` back, so a State built inside a transaction never matches outside it). With more than one open connection allowed there is no token and Build always builds. A chat tool call read the full state about ten times. `DataVersion` is hand-written SQL (sqlc cannot parse `PRAGMA` or temp tables), like `ChatRuns`. Pinned by `TestBuild_MemoCopiesShareNothing`, `TestBuild_MemoSeesEveryWrite`, `TestDataVersion_*`.
 
 Every domain sentinel's i18n message key lives in `domain.MessageKey` (`domain/errors.go`; the plate quantity sentinels in `plate.MessageKey`); the HTTP error map adds only the status, and the agent's tool errors use the same keys. A test fails when a sentinel in `errors.go` has no key or no status.
 

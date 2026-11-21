@@ -84,7 +84,7 @@ func paramF(is Issue, key string) float64 {
 // gone reports whether next, re-evaluated, adds no hard issue that base
 // lacked and no longer holds the issue is. It returns that evaluation.
 func gone(next State, t Target, base Evaluation, is Issue) (Evaluation, bool) {
-	ev := Evaluate(next, t)
+	ev := evaluateWith(next, t, false, true) // open issues only, no options
 	hard, id := hardKeys(base.Issues), issueID(is)
 	for _, e := range ev.Issues {
 		if issueID(e) == id || (e.Severity == SeverityViolation && !hard[issueID(e)]) {

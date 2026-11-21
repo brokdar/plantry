@@ -133,3 +133,40 @@ func TestStateParity_BoardLedger(t *testing.T) {
 	assert.Equal(t, "day", marks[mon])
 	assert.Equal(t, "meal", marks[wed])
 }
+
+// The candidate checks (tryAlt, the way search, chat options) evaluate
+// without options, as they only read which issues are open. That must not
+// change any verdict: with the options blanked, both evaluations are equal.
+func TestEvaluateNoOptions_SameVerdicts(t *testing.T) {
+	e := newSvcEnv(t)
+	e.exec(`UPDATE user_profile SET kcal_target = 2200, weight_kg = 75 WHERE id = 1`)
+	e.generate(e.req()) // partial: H9 stays a violation, so issues carry options
+	e.exec(`INSERT INTO plan_light (date, scope, slot) VALUES (?, 'day', '')`, mon)
+	e.exec(`INSERT INTO plan_light (date, scope, slot) VALUES (?, 'meal', 'dinner')`, wed)
+
+	start, today := day(sat), day(svcToday)
+	board, err := testsvc.PlanView(e.db).Plan(e.ctx, &start, today)
+	require.NoError(t, err)
+	var st planning.State
+	require.NoError(t, e.deps.Tx.InTx(e.ctx, func(ctx context.Context) error {
+		st, err = e.deps.Builder.Build(ctx, board.Window, today, board.Window.Start, board.Window.End)
+		return err
+	}))
+
+	blank := func(ev planning.Evaluation) planning.Evaluation {
+		for i := range ev.Issues {
+			ev.Issues[i].Options = nil
+		}
+		return ev
+	}
+	tgt := planning.WindowTarget(st)
+	full := planning.Evaluate(st, tgt)
+	withOpts := 0
+	for _, is := range full.Issues {
+		if len(is.Options) > 0 {
+			withOpts++
+		}
+	}
+	require.Positive(t, withOpts, "the fixture week has issues with options")
+	assert.Equal(t, blank(full), blank(planning.EvaluateNoOptions(st, tgt)))
+}

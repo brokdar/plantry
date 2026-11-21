@@ -21,7 +21,7 @@ type PlateRepo struct {
 
 // NewPlateRepo creates a SQLite-backed plate repository.
 func NewPlateRepo(db *sql.DB) *PlateRepo {
-	return &PlateRepo{conn: conn{db: db}}
+	return &PlateRepo{conn: newConn(db)}
 }
 
 // Create inserts the plate and its components atomically.

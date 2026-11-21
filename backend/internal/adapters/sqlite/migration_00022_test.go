@@ -43,7 +43,7 @@ func TestMigration00022_AddsColumns(t *testing.T) {
 // TestMigration00022_UpDownUp verifies the migration is reversible.
 func TestMigration00022_UpDownUp(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "food-source-roundtrip.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
+	conn, err := sql.Open("sqlite", testhelper.DSNWith(path, "_pragma=foreign_keys(1)"))
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 

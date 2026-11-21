@@ -37,13 +37,17 @@ func TestCompareGolden(t *testing.T) {
 	dir := t.TempDir()
 	a, b := filepath.Join(dir, "a.jsonl"), filepath.Join(dir, "b.jsonl")
 
-	// PL1b: the two floor scenarios end in error in scripted LLM mode (the
-	// model and the heuristic both leave the floor open, nothing is saved), so
-	// the CLI reports those two runs; the reports are still written.
-	const floorFailures = "2 of 23 runs failed expectations"
-	_, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-parallel", "24", "-prompt-version", "p1-a", "-out", a)
+	// The diff format is what is under test, so three scenarios cover it: a
+	// plain week, a re-plan and a floor scenario. The whole sweep runs in
+	// internal/eval (TestScriptedLLMPromptHasScenarioDates).
+	// PL1b: the floor scenario ends in error in scripted LLM mode (the model
+	// and the heuristic both leave the floor open, nothing is saved), so the
+	// CLI reports that run; the reports are still written.
+	const scenarios = "family_daily,away_thu_fri,unreachable_floor"
+	const floorFailures = "1 of 3 runs failed expectations"
+	_, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-parallel", "3", "-scenarios", scenarios, "-prompt-version", "p1-a", "-out", a)
 	require.ErrorContains(t, err, floorFailures)
-	out, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-parallel", "24", "-prompt-version", "p1-b", "-out", b, "-compare", a)
+	out, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-parallel", "3", "-scenarios", scenarios, "-prompt-version", "p1-b", "-out", b, "-compare", a)
 	require.ErrorContains(t, err, floorFailures)
 
 	for path, label := range map[string]string{a: "p1-a", b: "p1-b"} {
@@ -52,7 +56,7 @@ func TestCompareGolden(t *testing.T) {
 		recs, err := eval.ReadJSONL(f)
 		require.NoError(t, f.Close())
 		require.NoError(t, err)
-		require.Len(t, recs, 23)
+		require.Len(t, recs, 3)
 		for _, r := range recs {
 			assert.Equal(t, label, r.PromptVersion)
 			assert.Equal(t, "0123456789ab", r.GitSHA)

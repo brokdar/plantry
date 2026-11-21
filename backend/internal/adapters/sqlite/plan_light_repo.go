@@ -17,7 +17,7 @@ type PlanLightRepo struct {
 
 // NewPlanLightRepo creates a SQLite-backed light store.
 func NewPlanLightRepo(db *sql.DB) *PlanLightRepo {
-	return &PlanLightRepo{conn: conn{db: db}}
+	return &PlanLightRepo{conn: newConn(db)}
 }
 
 var _ planning.LightStore = (*PlanLightRepo)(nil)

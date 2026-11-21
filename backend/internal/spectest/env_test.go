@@ -32,6 +32,8 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // households are the four start databases (the dev household and the three
@@ -73,7 +75,7 @@ func newEnv(t *testing.T, dbName string, start time.Time) *env {
 	require.NoError(t, err)
 	path := filepath.Join(t.TempDir(), "r.db")
 	require.NoError(t, os.WriteFile(path, data, 0o600))
-	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	db, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })

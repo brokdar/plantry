@@ -156,11 +156,12 @@ It writes `plantry-eval.jsonl` (gitignored), prints a summary and exits non-zero
 ### Merge gate
 
 ```bash
-scripts/gate.sh             # go test -race, vet, golangci-lint, ARM cross builds, sqlc and deadcode checks,
-                            # bun run check + build, then the full Playwright suite
+scripts/gate.sh --fast      # per change: cheap checks, go test (cached), changed unit tests (~1 min)
+scripts/gate.sh             # per PR: cheap checks, then go test + race, vitest + build and the full
+                            # Playwright suite in parallel, then the time budgets (~2.5 min)
 ```
 
-`E2E_LANE=N` gives a worktree its own ports and database; `GATE_SKIP_BACKEND`, `GATE_SKIP_FRONTEND` and `GATE_SKIP_E2E` skip a part. The e2e suite never calls a real AI provider or the web: it runs the `fake` provider and a local fixture site for discovery (`frontend/e2e/fixtures/discovery-site`).
+Tests may get slower only in proportion to the tests added (`test-budget.json`, see "Test speed contract" in `CLAUDE.md`). `E2E_LANE=N` gives a worktree its own ports and database; `GATE_SKIP_BACKEND`, `GATE_SKIP_FRONTEND` and `GATE_SKIP_E2E` skip a part. The e2e suite never calls a real AI provider or the web: it runs the `fake` provider and a local fixture site for discovery (`frontend/e2e/fixtures/discovery-site`).
 
 ### Docker
 

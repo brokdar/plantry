@@ -12,13 +12,15 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/db"
 	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // 00044 rebuilds ai_run_steps for the code_execution type: existing steps
 // survive, new columns are NULL, and the down migration restores the CHECK.
 func TestMigration00044_StepsRebuiltForCodeExecution(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "migration44.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })

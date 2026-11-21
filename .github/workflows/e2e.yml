@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'frontend/**'
+      - 'scripts/**'
+      - 'test-budget.json'
+      - '.github/workflows/e2e.yml'
 
 concurrency:
   group: e2e-${{ github.ref }}
@@ -17,6 +20,7 @@ jobs:
   e2e:
     name: Playwright e2e
     runs-on: ubuntu-24.04 # Playwright 1.60 has no chromium deps for ubuntu 26.04
+    timeout-minutes: 10 # a tripwire, frozen in test-budget.json
     defaults:
       run:
         working-directory: frontend
@@ -27,10 +31,30 @@ jobs:
           bun-version: latest
       - name: Install deps
         run: bun install --frozen-lockfile
+      - uses: actions/setup-go@v5 # the e2e backend is `go run ./cmd/plantry`
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: backend/go.sum
+      - name: Playwright version
+        id: pw
+        run: echo "version=$(bunx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - name: Install Playwright chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
         run: bunx playwright install --with-deps chromium
+      - name: Install Playwright system deps
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: bunx playwright install-deps chromium
       - name: Run e2e tests
-        run: bun run e2e
+        run: PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/e2e.json bun run e2e -- --reporter=list,json
+      - name: Wall budget
+        run: python3 ../scripts/test-budget.py e2e /tmp/e2e.json
       - name: Upload test results
         if: failure()
         uses: actions/upload-artifact@v4

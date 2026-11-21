@@ -10,6 +10,8 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/jaltszeimer/plantry/backend/db"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // TestMigration00009_UpDownUp verifies that the plate_feedback migration is
@@ -17,7 +19,7 @@ import (
 // error.
 func TestMigration00009_UpDownUp(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "feedback-roundtrip.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
+	conn, err := sql.Open("sqlite", testhelper.DSNWith(path, "_pragma=foreign_keys(1)"))
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 

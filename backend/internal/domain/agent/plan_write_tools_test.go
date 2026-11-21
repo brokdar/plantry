@@ -56,17 +56,46 @@ type planToolEnv struct {
 	changes *agent.Changes
 }
 
+// planFixture is the seeded and generated week every planToolEnv starts
+// from. Building it (settings, foods, a heuristic plan) cost 12% of the
+// package's CPU when every test and subtest built its own; now the first
+// caller builds it and the others copy the database file.
+var planFixture struct {
+	once  sync.Once
+	db    []byte
+	sides []int64
+}
+
 func newPlanToolEnv(t *testing.T) *planToolEnv {
 	t.Helper()
-	ctx := context.Background()
-	db := testhelper.NewTestDB(t)
-	e := &planToolEnv{t: t, db: db}
-	set := testsvc.Settings(db)
+	var built *planToolEnv
+	planFixture.once.Do(func() {
+		built = &planToolEnv{t: t, db: testhelper.NewTestDB(t)}
+		built.seed()
+		built.wire()
+		built.generate()
+		planFixture.db, planFixture.sides = testhelper.SnapshotDB(t, built.db), built.sides
+	})
+	if built != nil {
+		return built
+	}
+	if planFixture.db == nil {
+		t.Fatal("the plan fixture failed to build in the test that built it")
+	}
+	e := &planToolEnv{t: t, db: testhelper.NewTestDBFrom(t, planFixture.db), sides: slices.Clone(planFixture.sides)}
+	e.wire()
+	return e
+}
+
+// seed writes the fixture's settings, slots and foods.
+func (e *planToolEnv) seed() {
+	t := e.t
+	set := testsvc.Settings(e.db)
 	for k, v := range map[string]string{
 		"plan.shopping_day": "5", "plan.batch_cooking": "true", "plan.default_keep_days": "3",
 		"plan.max_cook_occasions_per_day": "3", "plan.variety_weeks": "3", "plan.freezing_enabled": "true",
 	} {
-		require.NoError(t, set.Set(ctx, k, v))
+		require.NoError(t, set.Set(context.Background(), k, v))
 	}
 	e.sql(`UPDATE user_profile SET household_portions = 1, diet_type = 'omnivore' WHERE id = 1`)
 	for i, name := range []string{"breakfast", "lunch", "dinner"} {
@@ -86,7 +115,12 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 		e.sql(`INSERT INTO food_components (parent_id, child_id, amount, unit, grams) VALUES (?, ?, 400, 'g', 400)`, id, beans)
 		e.sides = append(e.sides, id)
 	}
+}
 
+// wire builds the services and the tool set over e.db.
+func (e *planToolEnv) wire() {
+	t, db := e.t, e.db
+	set := testsvc.Settings(db)
 	e.deps = testsvc.PlanningDeps(db)
 	e.rec = airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)
 	e.deps.RunLog, e.deps.Runs = planning.RecorderLog{Recorder: e.rec}, sqlite.NewAIRunRepo(db)
@@ -106,14 +140,17 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 		State:   testsvc.PlanState(db), Tx: sqlite.NewTxRunner(db), Light: sqlite.NewPlanLightRepo(db), Undo: e.changes,
 	})
 	require.NoError(t, err)
-	e.ctx = agent.WithWindow(agent.WithToday(ctx, planToday), window.Window{Start: planStart, End: planStart.AddDate(0, 0, 6)})
+	e.ctx = agent.WithWindow(agent.WithToday(context.Background(), planToday), window.Window{Start: planStart, End: planStart.AddDate(0, 0, 6)})
+}
 
+// generate plans the fixture week with the heuristic.
+func (e *planToolEnv) generate() {
+	t, ctx := e.t, context.Background()
 	id, err := e.planner.Generate(ctx, planning.Request{Start: planStart, Today: planToday, Chooser: airun.ChooserHeuristic})
 	require.NoError(t, err)
 	v, err := e.planner.Run(ctx, id)
 	require.NoError(t, err)
 	require.Equal(t, airun.StatusOK, v.Status, v.ErrorKey)
-	return e
 }
 
 func (e *planToolEnv) insert(q string, args ...any) int64 {

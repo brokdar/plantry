@@ -11,6 +11,8 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/jaltszeimer/plantry/backend/db"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // TestMigration00018_PlateComponentQuantity verifies that the kind-aware
@@ -151,7 +153,7 @@ func TestMigration00018_PlateComponentQuantity(t *testing.T) {
 func openMigration18DB(t *testing.T) *sql.DB {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "migration-00018.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })
