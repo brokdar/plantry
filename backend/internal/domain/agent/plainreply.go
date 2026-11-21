@@ -27,6 +27,8 @@ func plainReply(s string) string { return plainwords.Reply(s) }
 type replyBlock struct {
 	facts []fact // class 1 first, then the block
 	offer *offerLine
+	// nothingSaved: the call (or, merged, every call) of the turn saved nothing.
+	nothingSaved bool
 }
 
 func (b *replyBlock) empty() bool { return b == nil || (len(b.facts) == 0 && b.offer == nil) }
@@ -53,6 +55,9 @@ func blockOf(output json.RawMessage) (b *replyBlock, check bool) {
 			}
 		}
 	}
+	// Nothing of the call was saved: composeReply says so first, in code (G4.1, SF2),
+	// so the reply is honest even when the lint drops the model's text.
+	b.nothingSaved = obj["saved"] == false && len(b.facts) > 0
 	rep, _ := obj["report"].(map[string]any)
 	if rep != nil {
 		raw, _ := json.Marshal(rep["facts"])
@@ -77,6 +82,12 @@ func blockOf(output json.RawMessage) (b *replyBlock, check bool) {
 	}
 	return b, false
 }
+
+// The first line of a reply whose calls all saved nothing.
+const (
+	nothingChangedEN = "Nothing changed: the plan is as it was."
+	nothingChangedDE = "Nichts geändert: der Plan bleibt, wie er war."
+)
 
 // withoutFacts removes the facts and the offer from a result's reports: the
 // model reads the tell to frame its sentence, the code puts the block into the
@@ -151,7 +162,7 @@ func mergeBlock(a, b *replyBlock) *replyBlock {
 	case b == nil:
 		return a
 	}
-	out := &replyBlock{facts: selectBlock(append(slices.Clone(a.facts), b.facts...)), offer: a.offer}
+	out := &replyBlock{facts: selectBlock(append(slices.Clone(a.facts), b.facts...)), offer: a.offer, nothingSaved: a.nothingSaved && b.nothingSaved}
 	if b.offer != nil {
 		out.offer = b.offer
 	}
@@ -358,6 +369,23 @@ func composeReply(model string, t replyTurn) string {
 			text = strings.Join(ss[:2], " ")
 		}
 	}
+	if !t.write && lintModelText(text, t, lg) != "" {
+		// A read turn's answer keeps every sentence the lint passes: one figure
+		// the tools do not back costs that sentence, not the answer (RP4).
+		var kept []string
+		for _, s := range sentences(text) {
+			if lintModelText(s, t, lg) == "" {
+				kept = append(kept, s)
+			}
+		}
+		text = strings.Join(kept, " ")
+	}
+	if text == "" && strings.TrimSpace(model) != "" && !t.write && t.block == nil {
+		if lg == langDE {
+			return fallbackDE
+		}
+		return fallbackEN
+	}
 	if lintModelText(text, t, lg) != "" {
 		text = ""
 		if t.block == nil {
@@ -375,6 +403,13 @@ func composeReply(model string, t replyTurn) string {
 		parts = append(parts, text)
 	}
 	var lines []string
+	if t.block.nothingSaved {
+		if lg == langDE {
+			lines = append(lines, "- "+nothingChangedDE)
+		} else {
+			lines = append(lines, "- "+nothingChangedEN)
+		}
+	}
 	for _, f := range t.block.facts {
 		lines = append(lines, "- "+f.line(lg))
 	}

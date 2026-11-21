@@ -54,6 +54,7 @@ var replyRules = []replyRule{
 	{regexp.MustCompile(`(?i)\b(sessions|batches)\b`), "cookings", true},
 	{regexp.MustCompile(`(?i)\b(session|batch)\b`), "cooking", true},
 	{regexp.MustCompile(`(?i)\beaters\b`), "people", false},
+	{regexp.MustCompile(`(?i)\bper eater\b`), "per person", false},
 	{regexp.MustCompile(`(?i)\blight days\b`), "days you eat less", true},
 	{regexp.MustCompile(`(?i)\blight day\b`), "day you eat less", true},
 	{regexp.MustCompile(`(?i)\bhard issues\b`), "problems", true},
