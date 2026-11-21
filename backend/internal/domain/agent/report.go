@@ -91,6 +91,9 @@ type reportInput struct {
 	dayKcal bool
 	// undo is set for an undo: no warning is new or worse.
 	undo bool
+	// light is the call's own light marks: saved with the write, so the plan after
+	// holds them (the state read inside the call has the stored ones only).
+	light []planning.LightIntent
 }
 
 func dayLabel(d time.Time) string { return d.Format("Mon 2 Jan") }
@@ -305,6 +308,9 @@ func buildReport(in reportInput) changeReport {
 		touched[d] = true
 	}
 	for d := range cookDates {
+		touched[d] = true
+	}
+	for _, d := range changedDays(in) {
 		touched[d] = true
 	}
 	r.Check = checkOf(in, sortedKeys(touched))
@@ -964,7 +970,7 @@ func reportOf(ctx context.Context, svc Services, w window.Window, beforeSt plann
 	if err != nil {
 		return &changeReport{NotCovered: []string{"the plan after the change could not be read"}}
 	}
-	r := buildReport(reportInput{beforeSt: beforeSt, afterSt: afterSt, before: before, after: after, applied: applied, dayKcal: dayKcal})
+	r := buildReport(reportInput{beforeSt: beforeSt, afterSt: afterSt, before: before, after: after, applied: applied, dayKcal: dayKcal, light: lightFrom(ctx)})
 	return &r
 }
 

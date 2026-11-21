@@ -94,7 +94,46 @@ func snapDays(st planning.State, dates []string) []daySnap {
 	return out
 }
 
+// changedDays are the dates of the call's own light marks, of the plates whose
+// eaters changed and of the batches whose size or cook cell changed: a change the meal lines do not show
+// (a guest joins) still touches its day.
+func changedDays(in reportInput) []string {
+	var out []string
+	add := func(t time.Time) {
+		if d := t.Format(time.DateOnly); !slices.Contains(out, d) {
+			out = append(out, d)
+		}
+	}
+	for _, d := range planning.LightDates(in.light) {
+		if !slices.Contains(out, d) {
+			out = append(out, d)
+		}
+	}
+	was := map[int64]planning.Plate{}
+	for _, p := range in.beforeSt.Plates {
+		was[p.ID] = p
+	}
+	for _, p := range in.afterSt.Plates {
+		if b, ok := was[p.ID]; ok && b.Eaters != p.Eaters {
+			add(p.Date)
+		}
+	}
+	ws := map[int64]planning.Session{}
+	for _, s := range in.beforeSt.Sessions {
+		ws[s.ID] = s
+	}
+	for _, s := range in.afterSt.Sessions {
+		if b, ok := ws[s.ID]; ok && (b.Portions != s.Portions || b.FrozenPortions != s.FrozenPortions || !b.CookDate.Equal(s.CookDate) || b.CookSlotID != s.CookSlotID) {
+			add(s.CookDate)
+			add(b.CookDate)
+		}
+	}
+	return out
+}
+
 // checkOf is the snapshot of the touched days before and after the change.
 func checkOf(in reportInput, dates []string) *reportCheck {
-	return &reportCheck{BeforeDays: snapDays(in.beforeSt, dates), AfterDays: snapDays(in.afterSt, dates)}
+	after := in.afterSt
+	after.Light = planning.MergeLight(after.Light, in.light)
+	return &reportCheck{BeforeDays: snapDays(in.beforeSt, dates), AfterDays: snapDays(after, dates)}
 }
