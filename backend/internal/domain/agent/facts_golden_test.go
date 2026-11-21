@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -157,6 +158,7 @@ func TestFactsGolden_CoreRequestTypes(t *testing.T) {
 		},
 	}
 	got := map[string]string{}
+	var mu sync.Mutex
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -178,7 +180,9 @@ func TestFactsGolden_CoreRequestTypes(t *testing.T) {
 				assert.NotEmpty(t, reply[i])
 			}
 			assert.NotEqual(t, reply[0], reply[1], "the two languages are not the same text")
+			mu.Lock()
 			got[c.name] = reply[0] + "\n--- de ---\n" + reply[1]
+			mu.Unlock()
 		})
 	}
 	t.Cleanup(func() {
