@@ -158,6 +158,8 @@ func TestBuildReport_Items(t *testing.T) {
 			}
 			r := buildReport(reportInput{beforeSt: before, afterSt: tt.after, before: b, after: tt.aev})
 			tt.check(t, r)
+			// the check snapshot (ids and ISO dates, for the code) is not what the model reads
+			r.Check = nil
 			raw, err := json.Marshal(r)
 			require.NoError(t, err)
 			assert.NotRegexp(t, reportRuleToken, string(raw), "no rule code")

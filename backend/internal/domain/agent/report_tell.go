@@ -227,7 +227,7 @@ func proteinFacts(in reportInput, r changeReport) {
 				if a.ProteinG < a.ProteinTargetG {
 					st = statusUnder
 				}
-				in.facts.add(classChanged, kindProtein, st,
+				in.facts.addKey("protein:"+day, classChanged, kindProtein, st,
 					fmt.Sprintf("%s: protein %.0f g → %.0f g (it needs %.0f g).", day, b.ProteinG, a.ProteinG, a.ProteinTargetG),
 					fmt.Sprintf("%s: Eiweiß %.0f g → %.0f g (nötig sind %.0f g).", deDay(day), b.ProteinG, a.ProteinG, a.ProteinTargetG))
 			default:
@@ -336,7 +336,7 @@ func dayFacts(in reportInput, r changeReport) {
 		if class == classChanged && !in.dayKcal && !in.undo {
 			continue
 		}
-		in.facts.add(class, kindDay, status, dot(en), dot(de))
+		in.facts.addKey("day:"+d.Day, class, kindDay, status, dot(en), dot(de))
 	}
 }
 
@@ -586,12 +586,12 @@ func duration(min int) string {
 	return fmt.Sprintf("%d h %d min", min/60, min%60)
 }
 
-// feedsList names the meals a dish feeds, at most three.
+// feedsList names the meals a cooking feeds, at most five.
 func feedsList(feeds []string, de bool) string {
 	show := feeds
 	more := 0
-	if len(show) > 3 {
-		show, more = feeds[:3], len(feeds)-3
+	if len(show) > 5 {
+		show, more = feeds[:5], len(feeds)-5
 	}
 	out := make([]string, len(show))
 	for i, f := range show {
@@ -640,18 +640,31 @@ func cookFacts(in reportInput, r changeReport) {
 			continue
 		}
 		day, meal := dayLabelStr(a.date), slotWord(in.afterSt, a.slot)
-		var en, de []string
+		// One line per cooking time: its dishes, the meals they feed (once each),
+		// where a moved dish was cooked before, the longest recipe's minutes.
+		var names, namesDE, feeds, froms []string
 		for _, d := range a.dishes {
-			e := fmt.Sprintf("%s for %s", food.Quote(d.name), feedsList(d.feeds, false))
-			g := fmt.Sprintf("%s für %s", deQuote(d.name), feedsList(d.feeds, true))
-			if was, ok := wasAt[d.name]; ok && was != day+" "+meal {
-				e += fmt.Sprintf(" (cooked %s before)", was)
-				g += fmt.Sprintf(" (vorher %s gekocht)", deCell(was))
+			names = append(names, food.Quote(d.name))
+			namesDE = append(namesDE, deQuote(d.name))
+			for _, f := range d.feeds {
+				if !slices.Contains(feeds, f) {
+					feeds = append(feeds, f)
+				}
 			}
-			en, de = append(en, e), append(de, g)
+			if was, ok := wasAt[d.name]; ok && was != day+" "+meal && !slices.Contains(froms, was) {
+				froms = append(froms, was)
+			}
 		}
-		enLine := fmt.Sprintf("%s at %s you cook %s", day, meal, strings.Join(en, "; "))
-		deLine := fmt.Sprintf("%s (%s) kochst du %s", deDay(day), deSlot(meal), strings.Join(de, "; "))
+		enLine := fmt.Sprintf("%s at %s you cook %s for %s", day, meal, strings.Join(names, ", "), feedsList(feeds, false))
+		deLine := fmt.Sprintf("%s (%s) kochst du %s für %s", deDay(day), deSlot(meal), strings.Join(namesDE, ", "), feedsList(feeds, true))
+		if len(froms) > 0 {
+			de := make([]string, len(froms))
+			for i, f := range froms {
+				de[i] = deCell(f)
+			}
+			enLine += fmt.Sprintf(" (cooked %s before)", strings.Join(froms, " and "))
+			deLine += fmt.Sprintf(" (vorher %s gekocht)", strings.Join(de, " und "))
+		}
 		if a.maxMins > 0 {
 			enLine += fmt.Sprintf("; the longest recipe takes about %s", duration(a.maxMins))
 			deLine += fmt.Sprintf("; das längste Rezept braucht etwa %s", deDuration(a.maxMins))
@@ -687,8 +700,9 @@ func guestFacts(in reportInput) {
 				break
 			}
 		}
-		en := fmt.Sprintf("%s %s: now for %s people%s.", day, meal, fmtNum(p.Eaters), dishEN)
-		de := fmt.Sprintf("%s %s: jetzt für %s Personen%s.", deDay(day), deSlot(meal), fmtComma(p.Eaters), dishDE)
+		peopleEN, peopleDE := peopleWords(p.Eaters)
+		en := fmt.Sprintf("%s %s: now for %s%s.", day, meal, peopleEN, dishEN)
+		de := fmt.Sprintf("%s %s: jetzt für %s%s.", deDay(day), deSlot(meal), peopleDE, dishDE)
 		if k, has := kcal[p.ID]; has && p.Eaters > b {
 			iso := p.Date.Format("2006-01-02")
 			for _, d := range in.after.Days {
@@ -697,8 +711,8 @@ func guestFacts(in reportInput) {
 				}
 				for _, lm := range d.LightMeals {
 					if plainWords(lm) == "light "+meal {
-						en = fmt.Sprintf("%s %s: now for %s people%s; it is the small %s (%.0f kcal each).", day, meal, fmtNum(p.Eaters), dishEN, meal, k)
-						de = fmt.Sprintf("%s %s: jetzt für %s Personen%s; es ist das kleine %s (%.0f kcal pro Person).", deDay(day), deSlot(meal), fmtComma(p.Eaters), dishDE, deSlot(meal), k)
+						en = fmt.Sprintf("%s %s: now for %s%s; it is the small %s (%.0f kcal each).", day, meal, peopleEN, dishEN, meal, k)
+						de = fmt.Sprintf("%s %s: jetzt für %s%s; es ist das kleine %s (%.0f kcal pro Person).", deDay(day), deSlot(meal), peopleDE, dishDE, deSlot(meal), k)
 					}
 				}
 			}
@@ -708,3 +722,11 @@ func guestFacts(in reportInput) {
 }
 
 func atoi(s string) int { n, _ := strconv.Atoi(s); return n }
+
+// peopleWords says how many people eat a plate: "1 person", "2 people".
+func peopleWords(n float64) (en, de string) {
+	if n > 0.995 && n < 1.005 {
+		return "1 person", "1 Person"
+	}
+	return fmtNum(n) + " people", fmtComma(n) + " Personen"
+}

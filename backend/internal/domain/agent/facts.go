@@ -65,6 +65,9 @@ type fact struct {
 	Status string `json:"status"`
 	EN     string `json:"en"`
 	DE     string `json:"de"`
+	// Key names the figure the line states ("day:Sat 21 Nov", "week:meat"): two
+	// lines of one key are one fact, told once, in the earlier class.
+	Key string `json:"key,omitempty"`
 }
 
 // lang is the language of a reply.
@@ -87,6 +90,11 @@ func (f fact) line(l lang) string {
 type factSink struct{ items []fact }
 
 func (s *factSink) add(class int, kind, status, en, de string) {
+	s.addKey("", class, kind, status, en, de)
+}
+
+// addKey adds a fact that states the figure key.
+func (s *factSink) addKey(key string, class int, kind, status, en, de string) {
 	if s == nil {
 		return
 	}
@@ -94,37 +102,45 @@ func (s *factSink) add(class int, kind, status, en, de string) {
 	if en == "" || de == "" {
 		return
 	}
-	s.items = append(s.items, fact{Class: class, Kind: kind, Status: status, EN: en, DE: de})
+	s.items = append(s.items, fact{Class: class, Kind: kind, Status: status, EN: en, DE: de, Key: key})
 }
 
 // emptyFact matches a line with nothing after its label ("Thu 26 Nov breakfast: ").
 var emptyFact = regexp.MustCompile(`^([^:]*:)?\s*[.;,]*\s*$`)
 
-// maxFactText cuts a line that runs on.
-const maxFactText = 280
-
-// selectBlock is the facts a reply shows: no empty line, no line twice, and of
+// selectBlock is the facts a reply shows (a line is never cut: a fact is told whole or not at all): no empty line, no line twice, and of
 // classes 2 to 5 at most maxBlock. When more were found the ones that got worse
 // or are new warnings stay first, then the changed meals, then what moved; the
 // result is in class order. Class 1 is never cut and comes first.
 func selectBlock(all []fact) []fact {
 	var refused, rest []fact
 	seen := map[string]bool{}
+	// One fact per figure: of several lines with one key the one of the earliest class stays.
+	best := map[string]int{}
+	for _, f := range all {
+		if f.Key == "" {
+			continue
+		}
+		if c, ok := best[f.Key]; !ok || f.Class < c {
+			best[f.Key] = f.Class
+		}
+	}
+	keyed := map[string]bool{}
 	for _, f := range all {
 		if emptyFact.MatchString(f.EN) || emptyFact.MatchString(f.DE) {
 			continue
-		}
-		if r := []rune(f.EN); len(r) > maxFactText {
-			f.EN = string(r[:maxFactText]) + "…"
-		}
-		if r := []rune(f.DE); len(r) > maxFactText {
-			f.DE = string(r[:maxFactText]) + "…"
 		}
 		key := strings.ToLower(f.EN)
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
+		if f.Key != "" {
+			if f.Class != best[f.Key] || keyed[f.Key] {
+				continue
+			}
+			keyed[f.Key] = true
+		}
 		if f.Class == classRefused {
 			refused = append(refused, f)
 		} else {

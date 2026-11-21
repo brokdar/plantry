@@ -77,7 +77,7 @@ func blockOf(output json.RawMessage) (b *replyBlock, check bool) {
 // model reads the tell to frame its sentence, the code puts the block into the
 // reply.
 func withoutFacts(view json.RawMessage) json.RawMessage {
-	if !strings.Contains(string(view), `"facts"`) && !strings.Contains(string(view), `"offer"`) {
+	if !strings.Contains(string(view), `"facts"`) && !strings.Contains(string(view), `"offer"`) && !strings.Contains(string(view), `"check"`) {
 		return view
 	}
 	var obj map[string]json.RawMessage
@@ -90,7 +90,7 @@ func withoutFacts(view json.RawMessage) json.RawMessage {
 		if json.Unmarshal(obj[key], &rep) != nil || rep == nil {
 			continue
 		}
-		for _, k := range []string{"facts", "offer"} {
+		for _, k := range []string{"facts", "offer", "check"} {
 			if _, ok := rep[k]; ok {
 				delete(rep, k)
 				changed = true

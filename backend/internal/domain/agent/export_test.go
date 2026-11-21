@@ -88,6 +88,10 @@ func RefusalTell(err error) []string {
 // MarkChange exposes the cause sentence of a day target that moved.
 func MarkChange(before, after []string) string { return markChange(before, after, langEN) }
 
+// WithoutFacts is a tool result as the model reads it, without the block, the
+// offer and the check snapshot of the report.
+func WithoutFacts(raw json.RawMessage) json.RawMessage { return withoutFacts(raw) }
+
 // ComposeReply is the reply a household reads for a turn whose last write
 // returned output (nil: no write), with the model's text.
 func ComposeReply(model, user string, write bool, output json.RawMessage) string {

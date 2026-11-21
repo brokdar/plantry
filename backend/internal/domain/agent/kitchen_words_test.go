@@ -56,6 +56,7 @@ func TestChatModelReadsKitchenWords(t *testing.T) {
 			texts["error of "+name] = err.Error()
 			continue
 		}
+		out = agent.WithoutFacts(out) // the block and the check are the code's, not read by the model
 		texts["result of "+name] = string(out)
 		var m map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal(out, &m))
@@ -68,7 +69,7 @@ func TestChatModelReadsKitchenWords(t *testing.T) {
 	res := e.undoLast(ctx, conv, `{}`)
 	raw, err := json.Marshal(res)
 	require.NoError(t, err)
-	texts["result of undo_last_change"] = string(raw)
+	texts["result of undo_last_change"] = string(agent.WithoutFacts(raw))
 	require.Contains(t, res, "report", "an undo carries a report")
 	for name, text := range texts {
 		assert.Empty(t, plannerWord.FindAllString(text, -1), name)

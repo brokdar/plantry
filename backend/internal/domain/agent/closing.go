@@ -104,9 +104,10 @@ func replaceAlternative(ctx context.Context, svc Services, w window.Window, st p
 		return nil
 	}
 	return map[string]any{
-		"what":   fmt.Sprintf("use %s instead of %s on %s: the dish you asked for cannot go there", food.Quote(a.Name), food.Quote(res.Current.Name), mealName(st, p)),
-		"ops":    a.Ops,
-		"effect": map[string]any{"day": dayLabel(p.Date), "day_kcal_after": a.DayKcal},
+		"what":    fmt.Sprintf("use %s instead of %s on %s: the dish you asked for cannot go there", food.Quote(a.Name), food.Quote(res.Current.Name), mealName(st, p)),
+		"what_de": fmt.Sprintf("%s statt %s bei %s verwenden: das gewünschte Gericht kann dort nicht hin", deQuote(a.Name), deQuote(res.Current.Name), deCell(mealName(st, p))),
+		"ops":     a.Ops,
+		"effect":  map[string]any{"day": dayLabel(p.Date), "day_kcal_after": a.DayKcal},
 	}
 }
 
@@ -127,8 +128,9 @@ func smallerStep(ctx context.Context, svc Services, w window.Window, st planning
 		ops := []planning.OptionOp{{Op: "set_quantity", PlateComponentID: &id, Portions: &q}}
 		if offerIsClean(ctx, svc, w, ops) {
 			return map[string]any{
-				"what": fmt.Sprintf("set %s on %s to %s portions instead of %s: the whole step cannot go through", food.Quote(foodNameOf(st, c.FoodID)), mealName(st, p), fmtNum(q), fmtNum(req)),
-				"ops":  ops,
+				"what":    fmt.Sprintf("set %s on %s to %s portions instead of %s: the whole step cannot go through", food.Quote(foodNameOf(st, c.FoodID)), mealName(st, p), fmtNum(q), fmtNum(req)),
+				"what_de": fmt.Sprintf("%s bei %s auf %s Portionen statt %s setzen: der ganze Schritt geht nicht durch", deQuote(foodNameOf(st, c.FoodID)), deCell(mealName(st, p)), fmtComma(q), fmtComma(req)),
+				"ops":     ops,
 			}
 		}
 	}
@@ -181,8 +183,9 @@ func mainSwap(ctx context.Context, svc Services, w window.Window, st planning.St
 		return nil
 	}
 	return map[string]any{
-		"what": fmt.Sprintf("swap the main dishes of %s and %s (%s and %s) and leave the sides where they are: moving the whole meals cannot go through", mealName(st, a), mealName(st, b), food.Quote(foodNameOf(st, ca.FoodID)), food.Quote(foodNameOf(st, cb.FoodID))),
-		"ops":  ops,
+		"what_de": fmt.Sprintf("die Hauptgerichte von %s und %s (%s und %s) tauschen und die Beilagen lassen, wo sie sind: die ganzen Mahlzeiten zu verschieben geht nicht", deCell(mealName(st, a)), deCell(mealName(st, b)), deQuote(foodNameOf(st, ca.FoodID)), deQuote(foodNameOf(st, cb.FoodID))),
+		"what":    fmt.Sprintf("swap the main dishes of %s and %s (%s and %s) and leave the sides where they are: moving the whole meals cannot go through", mealName(st, a), mealName(st, b), food.Quote(foodNameOf(st, ca.FoodID)), food.Quote(foodNameOf(st, cb.FoodID))),
+		"ops":     ops,
 	}
 }
 
@@ -219,7 +222,7 @@ func floorFixOffer(ctx context.Context, svc Services, w window.Window, is planni
 		return []planning.OptionOp{o.Op}
 	}
 	var ops []planning.OptionOp
-	var names []string
+	var names, namesDE []string
 	var used []string
 	gain := 0.0
 	for _, o := range opts {
@@ -230,6 +233,7 @@ func floorFixOffer(ctx context.Context, svc Services, w window.Window, is planni
 		used = append(used, key)
 		ops = append(ops, opOf(o)...)
 		names = append(names, optionWords(o))
+		namesDE = append(namesDE, optionWordsDE(o))
 		if gain += o.KcalDelta; kcal+gain >= floor || len(names) == 3 {
 			break
 		}
@@ -239,6 +243,7 @@ func floorFixOffer(ctx context.Context, svc Services, w window.Window, is planni
 	}
 	return map[string]any{
 		"what":                strings.Join(names, " and ") + fmt.Sprintf(" so %s reaches its minimum of %.0f kcal", dayLabelStr(is.Date), floor),
+		"what_de":             strings.Join(namesDE, " und ") + fmt.Sprintf(", damit %s seinen Mindestwert von %.0f kcal erreicht", deDay(dayLabelStr(is.Date)), floor),
 		"ops":                 ops,
 		"recommended":         true,
 		"recommended_because": "brings the day above its minimum, no new warning",
@@ -261,6 +266,27 @@ func optionWords(o planning.Option) string {
 		return fmt.Sprintf("raise %s to %s on %s", food.Quote(o.Name), amount, where)
 	}
 	return fmt.Sprintf("add %s of %s to %s", amount, food.Quote(o.Name), where)
+}
+
+// optionWordsDE is optionWords in German.
+func optionWordsDE(o planning.Option) string {
+	amount := ""
+	switch {
+	case o.Grams != nil:
+		amount = fmt.Sprintf("%.0f g", math.Round(*o.Grams))
+	case o.Portions != nil:
+		amount = dePortions(*o.Portions)
+	}
+	where := strings.TrimSpace(dayLabelStr(o.Date) + " " + o.Slot)
+	if len(strings.Fields(where)) == 3 {
+		where = deDay(where)
+	} else {
+		where = deCell(where)
+	}
+	if o.Action == "raise" {
+		return fmt.Sprintf("%s am %s auf %s erhöhen", deQuote(o.Name), where, amount)
+	}
+	return fmt.Sprintf("%s %s zu %s hinzufügen", amount, deQuote(o.Name), where)
 }
 
 // unLightOffer is RL9: when no unmarked planned meal of a day left under its
@@ -305,6 +331,7 @@ func unLightOffer(ctx context.Context, svc Services, w window.Window, is plannin
 	meal := mealName(st, *best)
 	return map[string]any{
 		"what":                fmt.Sprintf("remove the light mark of %s, so it can take the food the day is missing; I add it only after you say yes", meal),
+		"what_de":             fmt.Sprintf("die Leicht-Markierung von %s entfernen, damit es das fehlende Essen des Tages aufnehmen kann; ich füge es erst nach deinem Ja hinzu", deCell(meal)),
 		"light":               []planning.LightIntent{mark},
 		"recommended":         true,
 		"recommended_because": "no other planned meal of the day can take more food while it is marked light",
@@ -367,6 +394,9 @@ func offerOf(obj map[string]any) *offerLine {
 		if o, ok := list[0].(map[string]any); ok {
 			if what, _ := o["what"].(string); what != "" {
 				en, de := what, deWhat(what)
+				if w, _ := o["what_de"].(string); w != "" {
+					de = w
+				}
 				if eff, _ := o["effect"].(map[string]any); eff != nil {
 					day, _ := eff["day"].(string)
 					if k := num(eff["day_kcal_after"]); day != "" && k > 0 {

@@ -143,6 +143,7 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 		if a, ok := firstClean(res.Alternatives, func(ops []planning.OptionOp) bool { return offerIsClean(ctx, svc, w, ops) }); ok {
 			offers = append(offers, map[string]any{
 				"what": fmt.Sprintf("swap %s's %s for %s", meal, food.Quote(res.Current.Name), food.Quote(a.Name)), "ops": a.Ops,
+				"what_de":     fmt.Sprintf("bei %s %s durch %s ersetzen", deCell(meal), deQuote(res.Current.Name), deQuote(a.Name)),
 				"recommended": len(offers) == 0, "recommended_because": "removes the repeat, no new warning",
 				"effect": map[string]any{"day": dayLabelStr(is.Date), "day_kcal_after": a.DayKcal},
 			})
@@ -296,8 +297,9 @@ func meatBalanceOffer(ctx context.Context, svc Services, w window.Window, touche
 			if len(a.NewIssues) == 0 && len(a.Ops) > 0 && a.WeekMeatG < bestMeat && offerIsClean(ctx, svc, w, a.Ops) {
 				bestMeat = a.WeekMeatG
 				best = map[string]any{
-					"what": fmt.Sprintf("swap %s's %s for %s: the week's meat falls from %.0f to %.0f g", mealName(st, p), food.Quote(res.Current.Name), food.Quote(a.Name), now, a.WeekMeatG),
-					"ops":  a.Ops, "recommended": true, "recommended_because": "takes the most meat off the week, no new warning",
+					"what":    fmt.Sprintf("swap %s's %s for %s: the week's meat falls from %.0f to %.0f g", mealName(st, p), food.Quote(res.Current.Name), food.Quote(a.Name), now, a.WeekMeatG),
+					"what_de": fmt.Sprintf("bei %s %s durch %s ersetzen: das Fleisch der Woche sinkt von %.0f auf %.0f g", deCell(mealName(st, p)), deQuote(res.Current.Name), deQuote(a.Name), now, a.WeekMeatG),
+					"ops":     a.Ops, "recommended": true, "recommended_because": "takes the most meat off the week, no new warning",
 					"effect": map[string]any{"week_meat_g_now": math.Round(now), "week_meat_g_after": math.Round(a.WeekMeatG), "week_meat_limit_g": limit},
 				}
 			}
@@ -415,8 +417,9 @@ func replaceAndFixOffer(ctx context.Context, svc Services, w window.Window, st p
 					fix.Portions = *o.Portions
 				}
 				return map[string]any{
-					"what": fmt.Sprintf("swap %s's %s for %s and, so the day stays inside its range, %s", meal, food.Quote(res.Current.Name), food.Quote(a.Name), fixWords(st, &fix)),
-					"ops":  both, "recommended_because": "removes the repeat and keeps the day inside its range, no new warning",
+					"what":    fmt.Sprintf("swap %s's %s for %s and, so the day stays inside its range, %s", meal, food.Quote(res.Current.Name), food.Quote(a.Name), fixWords(st, &fix)),
+					"what_de": fmt.Sprintf("bei %s %s durch %s ersetzen und, damit der Tag im Bereich bleibt, %s", deCell(meal), deQuote(res.Current.Name), deQuote(a.Name), fixWordsDE(st, &fix)),
+					"ops":     both, "recommended_because": "removes the repeat and keeps the day inside its range, no new warning",
 					"effect": map[string]any{"day": dayLabelStr(date), "day_kcal_after": planning.FiguresOf(rb.after, 0, date).DayKcal},
 				}
 			}

@@ -311,6 +311,27 @@ func fixWords(st planning.State, f *planning.WayFix) string {
 	return fmt.Sprintf("add %s of %s to %s", amount, f.Name, where)
 }
 
+// fixWordsDE is fixWords in German.
+func fixWordsDE(st planning.State, f *planning.WayFix) string {
+	where := dayLabelStr(f.Date)
+	if n := strings.TrimPrefix(st.SlotNames[f.SlotID], "slot."); n != "" {
+		where = deCell(where + " " + n)
+	} else {
+		where = deDay(where)
+	}
+	amount := ""
+	switch {
+	case f.Grams > 0:
+		amount = fmt.Sprintf("%.0f g", math.Round(f.Grams))
+	case f.Portions > 0:
+		amount = dePortions(f.Portions)
+	}
+	if f.Action == "raise" {
+		return fmt.Sprintf("%s bei %s auf %s erhöhen", deQuote(f.Name), where, amount)
+	}
+	return fmt.Sprintf("%s %s zu %s hinzufügen", amount, deQuote(f.Name), where)
+}
+
 // fixNote is the sentence that tells what to do about a day the applied way
 // leaves under its range: say it plainly and offer the one verified fix, never
 // apply it unasked; "" when the day is in range or no fix exists.

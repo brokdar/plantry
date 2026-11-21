@@ -36,6 +36,9 @@ type changeReport struct {
 	Tell []string `json:"tell,omitempty"`
 	// Offer is the one offer of the reply, rendered by code, or nil.
 	Offer *offerLine `json:"offer,omitempty"`
+	// Check is the touched days of the plan before and after, for checking the
+	// facts against the stored plan; the model does not read it.
+	Check *reportCheck `json:"check,omitempty"`
 	// Note is set by an undo: the plan is back as it was before the change.
 	Note string `json:"note,omitempty"`
 	// NotCovered says what the report could not compute.
@@ -297,6 +300,14 @@ func buildReport(in reportInput) changeReport {
 	buildFacts(in, r)
 	r.Facts = selectBlock(in.facts.items)
 	r.Tell = tellOf(r.Facts)
+	touched := map[string]bool{}
+	for d := range dates {
+		touched[d] = true
+	}
+	for d := range cookDates {
+		touched[d] = true
+	}
+	r.Check = checkOf(in, sortedKeys(touched))
 	return r
 }
 
@@ -560,8 +571,8 @@ func weekFacts(in reportInput, bs, as planning.State) {
 	if in.undo {
 		return
 	}
-	add := func(status, en, de string) {
-		in.facts.add(classWorse, kindWeek, status, "For the week: "+en+".", "Für die Woche: "+de+".")
+	add := func(key, status, en, de string) {
+		in.facts.addKey("week:"+key, classWorse, kindWeek, status, "For the week: "+en+".", "Für die Woche: "+de+".")
 	}
 	if bw != nil && aw != nil {
 		limit := 300 * float64(aw.Days) / 7
@@ -573,7 +584,7 @@ func weekFacts(in reportInput, bs, as planning.State) {
 				en = fmt.Sprintf("meat is %.0f g (was %.0f g, limit for the %d days you are home: %.0f g)", aw.MeatG, bw.MeatG, aw.Days, limit)
 				de = fmt.Sprintf("Fleisch %.0f g (vorher %.0f g, Grenze für die %d Tage, an denen du da bist: %.0f g)", aw.MeatG, bw.MeatG, aw.Days, limit)
 			}
-			add(statusOver, en, de)
+			add("meat", statusOver, en, de)
 		}
 		pol := planning.PolicyOf(as.Profile)
 		lo, hi := pol.WeekLow*100, pol.WeekHigh*100
@@ -583,24 +594,24 @@ func weekFacts(in reportInput, bs, as planning.State) {
 			if aw.Pct > hi {
 				st = statusOver
 			}
-			add(st, fmt.Sprintf("average energy is %.0f%% of the target (was %.0f%%); the week's range is %.0f–%.0f%%", aw.Pct, bw.Pct, lo, hi),
+			add("energy", st, fmt.Sprintf("average energy is %.0f%% of the target (was %.0f%%); the week's range is %.0f–%.0f%%", aw.Pct, bw.Pct, lo, hi),
 				fmt.Sprintf("durchschnittliche Energie %.0f %% des Ziels (vorher %.0f %%); der Bereich der Woche liegt bei %.0f–%.0f %%", aw.Pct, bw.Pct, lo, hi))
 		}
 		if aw.TargetProteinG > 0 && aw.AvgProteinG < aw.TargetProteinG && aw.AvgProteinG <= bw.AvgProteinG-5 {
-			add(statusUnder, fmt.Sprintf("protein averages %.0f g a day against %.0f g wanted (was %.0f g)", aw.AvgProteinG, aw.TargetProteinG, bw.AvgProteinG),
+			add("protein", statusUnder, fmt.Sprintf("protein averages %.0f g a day against %.0f g wanted (was %.0f g)", aw.AvgProteinG, aw.TargetProteinG, bw.AvgProteinG),
 				fmt.Sprintf("Eiweiß liegt im Schnitt bei %.0f g pro Tag, gewünscht sind %.0f g (vorher %.0f g)", aw.AvgProteinG, aw.TargetProteinG, bw.AvgProteinG))
 		}
 		if aw.FishMeals == 0 && bw.FishMeals != 0 {
-			add(statusUnder, fmt.Sprintf("fish is on the plan %s (was %s)", timesWord(aw.FishMeals), timesWord(bw.FishMeals)),
+			add("fish", statusUnder, fmt.Sprintf("fish is on the plan %s (was %s)", timesWord(aw.FishMeals), timesWord(bw.FishMeals)),
 				fmt.Sprintf("Fisch steht %s auf dem Plan (vorher %s)", deTimes(aw.FishMeals), deTimes(bw.FishMeals)))
 		}
 		if aw.LegumeMeals == 0 && bw.LegumeMeals != 0 {
-			add(statusUnder, fmt.Sprintf("beans or lentils are on the plan %s (was %s)", timesWord(aw.LegumeMeals), timesWord(bw.LegumeMeals)),
+			add("legumes", statusUnder, fmt.Sprintf("beans or lentils are on the plan %s (was %s)", timesWord(aw.LegumeMeals), timesWord(bw.LegumeMeals)),
 				fmt.Sprintf("Bohnen oder Linsen stehen %s auf dem Plan (vorher %s)", deTimes(aw.LegumeMeals), deTimes(bw.LegumeMeals)))
 		}
 	}
 	if in.after.MeatDaysMax != nil && in.after.MeatDays > *in.after.MeatDaysMax && in.before.MeatDays <= *in.after.MeatDaysMax {
-		add(statusOver, fmt.Sprintf("meat is on %d days (was %d, at most %d)", in.after.MeatDays, in.before.MeatDays, *in.after.MeatDaysMax),
+		add("meatdays", statusOver, fmt.Sprintf("meat is on %d days (was %d, at most %d)", in.after.MeatDays, in.before.MeatDays, *in.after.MeatDaysMax),
 			fmt.Sprintf("Fleisch steht an %d Tagen auf dem Plan (vorher %d, höchstens %d)", in.after.MeatDays, in.before.MeatDays, *in.after.MeatDaysMax))
 	}
 }
@@ -613,6 +624,34 @@ func timesWord(n int) string {
 		return "once"
 	}
 	return fmt.Sprintf("%d times", n)
+}
+
+// issueFigure names the figure an issue states, so a fact of the change and a
+// warning about the same figure are told once ("day:Sat 21 Nov", "week:meat").
+func issueFigure(is planning.Issue) string {
+	day := ""
+	if is.Date != "" {
+		day = dayLabelStr(is.Date)
+	}
+	switch is.Code {
+	case planning.CodeKcalBelowBand, planning.CodeKcalAboveBand, planning.CodeKcalBelowFloor:
+		return "day:" + day
+	case planning.CodeProteinLow:
+		return "protein:" + day
+	case planning.CodeWeekMeatAboveDGE:
+		return "week:meat"
+	case planning.CodeWeekKcalBelowBand, planning.CodeWeekKcalAboveBand:
+		return "week:energy"
+	case planning.CodeWeekProteinLow:
+		return "week:protein"
+	case planning.CodeWeekFishBelowDGE:
+		return "week:fish"
+	case planning.CodeWeekLegumesBelow:
+		return "week:legumes"
+	case planning.CodeMeatDaysExceeded:
+		return "week:meatdays"
+	}
+	return ""
 }
 
 // statusOfIssue says on which side of its limit an issue is.
@@ -653,21 +692,21 @@ func warnings(in reportInput, as planning.State, away bool, days []reportDay) (u
 		switch {
 		case !ok:
 			en, de := issueSentence(is, as)
-			in.facts.add(classWarn, kindWarn, statusOfIssue(is.Code), "New warning: "+en, "Neue Warnung: "+de)
+			in.facts.addKey(issueFigure(is), classWarn, kindWarn, statusOfIssue(is.Code), "New warning: "+en, "Neue Warnung: "+de)
 		case worsened(b, is) && away && is.Date == "" && is.Code != planning.CodeWeekFatRange && is.Code != planning.CodeWeekCarbsRange:
 			// Only the day count changed: the remaining days eat what they ate.
 			unaffected++
 			if is.Code == planning.CodeWeekMeatAboveDGE && paramNum(is, "meat_g") > paramNum(is, "max_g") {
 				en, de := awayNeutral(in, is)
-				in.facts.add(classWorse, kindWeek, statusOver, en, de)
+				in.facts.addKey("week:meat", classWorse, kindWeek, statusOver, en, de)
 			}
 		case worsened(b, is):
 			bb, _ := badness(b)
 			ab, _ := badness(is)
 			en, de := issueSentence(is, as)
-			in.facts.add(classWorse, kindWarn, statusOfIssue(is.Code),
+			in.facts.addKey(issueFigure(is), classWorse, kindWarn, statusOfIssue(is.Code),
 				fmt.Sprintf("Worse: %s It was already open and got worse: %s beyond its limit before, %s now.", en, badnessWords(is.Code, bb), badnessWords(is.Code, ab)),
-				fmt.Sprintf("Schlimmer: %s Es war schon offen und ist schlimmer geworden: vorher %s über der Grenze, jetzt %s.", de, strings.ReplaceAll(badnessWords(is.Code, bb), " points", " Punkte"), strings.ReplaceAll(badnessWords(is.Code, ab), " points", " Punkte")))
+				fmt.Sprintf("Schlimmer: %s Es war schon offen und ist schlimmer geworden: vorher %s über der Grenze, jetzt %s.", de, badnessWordsL(is.Code, bb, langDE), badnessWordsL(is.Code, ab, langDE)))
 		default:
 			unaffected++
 		}
@@ -739,14 +778,23 @@ func overByDE(g float64) string {
 }
 
 // badnessWords says a badness value with its unit.
-func badnessWords(code string, v float64) string {
+func badnessWords(code string, v float64) string { return badnessWordsL(code, v, langEN) }
+
+// badnessWordsL says a badness value with its unit in one language.
+func badnessWordsL(code string, v float64, lg lang) string {
 	switch code {
 	case planning.CodeKcalBelowBand, planning.CodeKcalAboveBand, planning.CodeKcalBelowFloor, planning.CodeMealNotLight, planning.CodeMealNotHearty:
 		return fmtNum(math.Round(v)) + " kcal"
 	case planning.CodeProteinLow, planning.CodeWeekProteinLow, planning.CodeWeekMeatAboveDGE:
 		return fmtNum(math.Round(v)) + " g"
 	case planning.CodeWeekKcalBelowBand, planning.CodeWeekKcalAboveBand, planning.CodeWeekCarbsRange, planning.CodeWeekFatRange:
+		if lg == langDE {
+			return fmtComma(math.Round(v*10)/10) + " Punkte"
+		}
 		return fmtNum(math.Round(v*10)/10) + " points"
+	}
+	if lg == langDE {
+		return fmtComma(v)
 	}
 	return fmtNum(v)
 }
