@@ -21,7 +21,7 @@ type RecipeSuggestionRepo struct {
 
 // NewRecipeSuggestionRepo creates a SQLite-backed suggestion repository.
 func NewRecipeSuggestionRepo(db *sql.DB) *RecipeSuggestionRepo {
-	return &RecipeSuggestionRepo{conn: conn{db: db}}
+	return &RecipeSuggestionRepo{conn: newConn(db)}
 }
 
 var _ discovery.Repository = (*RecipeSuggestionRepo)(nil)

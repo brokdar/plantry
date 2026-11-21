@@ -19,7 +19,7 @@ type AvailabilityRepo struct {
 
 // NewAvailabilityRepo creates a SQLite-backed availability repository.
 func NewAvailabilityRepo(db *sql.DB) *AvailabilityRepo {
-	return &AvailabilityRepo{conn: conn{db: db}}
+	return &AvailabilityRepo{conn: newConn(db)}
 }
 
 func (r *AvailabilityRepo) ActiveSlotIDs(ctx context.Context) ([]int64, error) {

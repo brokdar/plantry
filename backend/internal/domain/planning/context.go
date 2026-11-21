@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -49,10 +50,36 @@ type BuilderDeps struct {
 	Corrections Corrections
 	// Light reads the stored light requests of the window.
 	Light LightStore
+	// Version, when set, lets Build reuse the State it built last for the
+	// same arguments while the data has not changed (see Versioner).
+	Version Versioner
+}
+
+// Versioner reports a token that changes whenever the rows a State is built
+// from may have changed: sqlite's per-connection change count and the
+// file's data version. ok is false when it cannot tell; Build then builds
+// afresh.
+type Versioner interface {
+	DataVersion(ctx context.Context) (token string, ok bool)
 }
 
 // Builder reads the State of a window.
-type Builder struct{ d BuilderDeps }
+type Builder struct {
+	d    BuilderDeps
+	mu   sync.Mutex
+	memo []builtState // the last few States built, newest last
+}
+
+// builtState is a State Build returned, with the arguments and data version
+// it was built for.
+type builtState struct {
+	key string
+	s   State
+}
+
+// memoSize bounds the States kept: a chat tool call reads the state of one
+// window about ten times, the planner the same window and its neighbours.
+const memoSize = 4
 
 // NewBuilder returns a context builder.
 func NewBuilder(d BuilderDeps) *Builder { return &Builder{d: d} }
@@ -64,7 +91,43 @@ func NewBuilder(d BuilderDeps) *Builder { return &Builder{d: d} }
 // plates of the 4 weeks before the window. Reads: settings, profile, slots,
 // availability, one plate range, one session range, the recipe list with
 // its history, one header lookup and one nutrition batch.
+//
+// With a Versioner it returns a copy of the State it built for the same
+// arguments when no row changed since: a chat tool call read the full state
+// about ten times (12 000 builds for 1 230 tool calls in the agent tests, a
+// third of their CPU).
 func (b *Builder) Build(ctx context.Context, w window.Window, today, from, to time.Time) (State, error) {
+	if b.d.Version == nil {
+		return b.build(ctx, w, today, from, to)
+	}
+	v, ok := b.d.Version.DataVersion(ctx)
+	if !ok {
+		return b.build(ctx, w, today, from, to)
+	}
+	key := fmt.Sprintf("%s|%s|%s|%s|%s|%s", v, w.Start, w.End, today, from, to)
+	b.mu.Lock()
+	for _, m := range b.memo {
+		if m.key == key {
+			s := deepCopy(m.s)
+			b.mu.Unlock()
+			return s, nil
+		}
+	}
+	b.mu.Unlock()
+	s, err := b.build(ctx, w, today, from, to)
+	if err != nil {
+		return State{}, err
+	}
+	b.mu.Lock()
+	b.memo = append(b.memo, builtState{key: key, s: deepCopy(s)})
+	if len(b.memo) > memoSize {
+		b.memo = b.memo[1:]
+	}
+	b.mu.Unlock()
+	return s, nil
+}
+
+func (b *Builder) build(ctx context.Context, w window.Window, today, from, to time.Time) (State, error) {
 	s := State{Window: w, Today: today}
 	var err error
 	if s.Settings, err = ReadSettings(ctx, b.d.Settings); err != nil {

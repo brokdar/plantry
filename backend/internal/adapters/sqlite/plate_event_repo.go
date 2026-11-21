@@ -19,7 +19,7 @@ type PlateEventRepo struct {
 
 // NewPlateEventRepo creates a SQLite-backed plate event log.
 func NewPlateEventRepo(db *sql.DB) *PlateEventRepo {
-	return &PlateEventRepo{conn: conn{db: db}}
+	return &PlateEventRepo{conn: newConn(db)}
 }
 
 var _ plate.EventLog = (*PlateEventRepo)(nil)

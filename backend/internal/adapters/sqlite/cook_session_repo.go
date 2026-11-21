@@ -19,7 +19,7 @@ type CookSessionRepo struct {
 
 // NewCookSessionRepo creates a SQLite-backed cook session repository.
 func NewCookSessionRepo(db *sql.DB) *CookSessionRepo {
-	return &CookSessionRepo{conn: conn{db: db}}
+	return &CookSessionRepo{conn: newConn(db)}
 }
 
 func (r *CookSessionRepo) CreateSession(ctx context.Context, s *plate.CookSession) error {

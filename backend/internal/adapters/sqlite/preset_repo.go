@@ -22,7 +22,7 @@ type PresetRepo struct {
 
 // NewPresetRepo creates a SQLite-backed preset repository.
 func NewPresetRepo(db *sql.DB) *PresetRepo {
-	return &PresetRepo{conn: conn{db: db}}
+	return &PresetRepo{conn: newConn(db)}
 }
 
 func (r *PresetRepo) Create(ctx context.Context, p *preset.Preset) error {

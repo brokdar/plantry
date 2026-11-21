@@ -18,7 +18,7 @@ type ShoppingRepo struct {
 
 // NewShoppingRepo constructs a ShoppingRepo.
 func NewShoppingRepo(db *sql.DB) *ShoppingRepo {
-	return &ShoppingRepo{conn: conn{db: db}}
+	return &ShoppingRepo{conn: newConn(db)}
 }
 
 // SessionsCooking returns the sessions with cook_date in [from, to].
