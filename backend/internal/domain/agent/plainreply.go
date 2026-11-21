@@ -2,7 +2,10 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -45,7 +48,7 @@ func blockOf(output json.RawMessage) (b *replyBlock, check bool) {
 			m, _ := e.(map[string]any)
 			en, _ := m["en"].(string)
 			de, _ := m["de"].(string)
-			if en != "" && de != "" {
+			if en != "" && de != "" && !slices.ContainsFunc(b.facts, func(f fact) bool { return f.EN == en && f.Class == classRefused }) {
 				b.facts = append(b.facts, fact{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: en, DE: de})
 			}
 		}
@@ -54,7 +57,9 @@ func blockOf(output json.RawMessage) (b *replyBlock, check bool) {
 	if rep != nil {
 		raw, _ := json.Marshal(rep["facts"])
 		var fs []fact
-		_ = json.Unmarshal(raw, &fs)
+		if err := json.Unmarshal(raw, &fs); err != nil {
+			slog.Warn("agent.reply.facts unreadable", "error", err)
+		}
 		b.facts = append(b.facts, fs...)
 		if o, ok := rep["offer"].(map[string]any); ok {
 			en, _ := o["en"].(string)
@@ -112,9 +117,45 @@ func withoutFacts(view json.RawMessage) json.RawMessage {
 // replyTurn is what the reply of a turn is judged against.
 type replyTurn struct {
 	user    string          // the user's message, for the language and its numbers
-	numbers map[string]bool // numbers the turn's tool results and prompt hold
+	earlier []string        // the earlier user messages, newest first: the language when this one has no marker word
+	locale  string          // the profile's locale, the last word on the language
+	numbers map[string]bool // numbers the turn's tool results hold (see toolNumbers)
+	foods   []string        // the names of the foods of the plan: a write's text names none the block does not
 	write   bool            // a plan-writing tool was called (also as a check)
-	block   *replyBlock     // the newest saved change's block
+	block   *replyBlock     // the facts and the offer of the turn's writes
+}
+
+// lang is the language of the reply: the user's message, else the earlier
+// ones, else the profile's locale, else the model's own text, else English.
+func (t replyTurn) lang(model string) lang {
+	texts := append([]string{t.user}, t.earlier...)
+	if l, ok := replyLangOf(texts...); ok {
+		return l
+	}
+	switch strings.ToLower(strings.TrimSpace(t.locale)) {
+	case "de":
+		return langDE
+	case "en":
+		return langEN
+	}
+	l, _ := replyLangOf(model)
+	return l
+}
+
+// mergeBlock adds the block of a later write to the earlier ones: every write's
+// facts reach the reply (the block is cut again to its cap), the newest offer stays.
+func mergeBlock(a, b *replyBlock) *replyBlock {
+	switch {
+	case a == nil:
+		return b
+	case b == nil:
+		return a
+	}
+	out := &replyBlock{facts: selectBlock(append(slices.Clone(a.facts), b.facts...)), offer: a.offer}
+	if b.offer != nil {
+		out.offer = b.offer
+	}
+	return out
 }
 
 var writeTools = map[string]bool{"apply_changes": true, "undo_last_change": true, "regenerate": true, "apply_preset": true}
@@ -125,11 +166,13 @@ const (
 )
 
 var (
-	numberRe  = regexp.MustCompile(`\d[\d.,]*\d|\d`)
-	thousand  = regexp.MustCompile(`^(\d{1,3})([.,]\d{3})+$`)
-	banned    = regexp.MustCompile(`(?i)\b(batch(es)?|eaters?|light days?|hearty minimum|cap|caps|band|bands|floor|soft|drafts?|extras?)\b|\b[HS]\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b|the tool only allows`)
-	quotedRe  = regexp.MustCompile(`"[^"\n]*"|„[^“\n]*“|“[^”\n]*”`)
-	weekdayRe = regexp.MustCompile(`(?i)\b(mon|tues?|wed(nes)?|thu(rs)?|fri|sat(ur)?|sun)(day)?\b|\b(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b`)
+	numberRe    = regexp.MustCompile(`\d[\d.,]*\d|\d`)
+	digitRe     = regexp.MustCompile(`\p{N}`)
+	isoAnywhere = regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)
+	thousand    = regexp.MustCompile(`^(\d{1,3})([.,]\d{3})+$`)
+	banned      = regexp.MustCompile(`(?i)\b(batch(es)?|eaters?|light days?|hearty minimum|cap|caps|band|bands|floor|soft|drafts?|extras?)\b|\b[HS]\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b|the tool only allows`)
+	quotedRe    = regexp.MustCompile(`"[^"\n]*"|„[^“\n]*“|“[^”\n]*”`)
+	weekdayRe   = regexp.MustCompile(`(?i)\b(mon|tues?|wed(nes)?|thu(rs)?|fri|sat(ur)?|sun)(day)?\b|\b(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b`)
 )
 
 // normNumber is a number in one form: no thousands separator, a dot for the decimal mark.
@@ -227,12 +270,12 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 	if text == "" {
 		return ""
 	}
-	if banned.MatchString(quotedRe.ReplaceAllString(text, "")) {
-		return "planner_word"
-	}
 	withBlock := t.write && t.block != nil
 	if withBlock {
-		if numberRe.MatchString(text) {
+		if banned.MatchString(text) {
+			return "planner_word"
+		}
+		if digitRe.MatchString(text) {
 			return "digit"
 		}
 		blockText := ""
@@ -241,6 +284,19 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 		}
 		if t.block.offer != nil {
 			blockText += " " + t.block.offer.EN + " " + t.block.offer.DE
+		}
+		lower := strings.ToLower(blockText)
+		// A dish is named in the block or not at all: a quoted span, or the
+		// name of a food of the plan.
+		for _, m := range quotedRe.FindAllString(text, -1) {
+			if !strings.Contains(lower, strings.ToLower(strings.Trim(m, `"„“”`))) {
+				return "dish"
+			}
+		}
+		for _, name := range t.foods {
+			if namesFood(text, name) && !namesFood(blockText, name) {
+				return "dish"
+			}
 		}
 		for _, w := range weekdayRe.FindAllString(text, -1) {
 			if k := weekdayKey(w); k == "" || !namesWeekday(blockText, k) {
@@ -251,6 +307,9 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 			return "contradiction"
 		}
 		return ""
+	}
+	if banned.MatchString(quotedRe.ReplaceAllString(text, "")) {
+		return "planner_word"
 	}
 	have := map[string]bool{}
 	numbersIn(t.user, have)
@@ -268,7 +327,7 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 // both rendered by code in the language of the request.
 func composeReply(model string, t replyTurn) string {
 	text := strings.TrimSpace(plainReply(model))
-	lg := replyLang(t.user, text)
+	lg := t.lang(text)
 	if t.write {
 		// A write turn ends on the block or the offer, never on a question.
 		ss := sentences(text)
@@ -359,15 +418,6 @@ func finalizeMessage(m *llm.Message, t replyTurn) {
 	m.Content = out
 }
 
-// plainReplyMessage rewrites the text blocks of a message that still calls tools.
-func plainReplyMessage(m *llm.Message) {
-	for i := range m.Content {
-		if m.Content[i].Type == llm.ContentTypeText {
-			m.Content[i].Text = plainReply(m.Content[i].Text)
-		}
-	}
-}
-
 // weekdayKey is the English short name of a weekday word in either language.
 func weekdayKey(w string) string {
 	w = strings.ToLower(w)
@@ -389,4 +439,166 @@ func namesWeekday(text, key string) bool {
 	de := strings.ToLower(deWeekday[key][0])
 	re := regexp.MustCompile(`(?i)\b` + en + `\w*|\b` + de + `\b|\b` + strings.TrimSuffix(strings.ToLower(deWeekday[key][1]), ".") + `\.`)
 	return re.MatchString(text)
+}
+
+// namesFood reports a text that names the food (a name of four letters or more,
+// as a whole word run, case aside).
+func namesFood(text, name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if len([]rune(name)) < 4 {
+		return false
+	}
+	t := strings.ToLower(text)
+	for from := 0; ; {
+		i := strings.Index(t[from:], name)
+		if i < 0 {
+			return false
+		}
+		i += from
+		end := i + len(name)
+		before := i == 0 || !isLetter(t[:i])
+		after := end == len(t) || !startsWithLetter(t[end:])
+		if before && after {
+			return true
+		}
+		from = i + 1
+	}
+}
+
+func isLetter(prefix string) bool {
+	r := []rune(prefix)
+	return unicode.IsLetter(r[len(r)-1]) || unicode.IsDigit(r[len(r)-1])
+}
+
+func startsWithLetter(s string) bool {
+	for _, r := range s {
+		return unicode.IsLetter(r) || unicode.IsDigit(r)
+	}
+	return false
+}
+
+// toolNumbers collects the figures a tool result holds into set: its numbers and
+// the numbers inside its sentences and day labels, but not the ids and not ISO
+// dates, which are no figures anyone told.
+func toolNumbers(raw []byte, set map[string]bool) {
+	var v any
+	dec := json.NewDecoder(strings.NewReader(string(raw)))
+	dec.UseNumber()
+	if dec.Decode(&v) != nil {
+		return
+	}
+	var walk func(v any, key string)
+	walk = func(v any, key string) {
+		switch x := v.(type) {
+		case map[string]any:
+			for k, e := range x {
+				walk(e, k)
+			}
+		case []any:
+			for _, e := range x {
+				walk(e, key)
+			}
+		case json.Number:
+			if key == "id" || strings.HasSuffix(key, "_id") || strings.HasSuffix(key, "_ids") {
+				return
+			}
+			set[normNumber(x.String())] = true
+		case string:
+			if key == "id" || strings.HasSuffix(key, "_id") {
+				return
+			}
+			numbersIn(isoAnywhere.ReplaceAllString(x, " "), set)
+		}
+	}
+	walk(v, "")
+}
+
+// messageText is the text blocks of a message, joined.
+func messageText(m llm.Message) string {
+	var parts []string
+	for _, c := range m.Content {
+		if c.Type == llm.ContentTypeText && strings.TrimSpace(c.Text) != "" {
+			parts = append(parts, c.Text)
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// earlierUserTexts are the user's messages before this turn's, newest first.
+func earlierUserTexts(history []llm.Message) []string {
+	var out []string
+	for i := len(history) - 1; i >= 0; i-- {
+		if history[i].Role != llm.RoleUser {
+			continue
+		}
+		if t := messageText(history[i]); t != "" {
+			out = append(out, t)
+		}
+	}
+	if len(out) > 0 {
+		out = out[1:] // the newest is this turn's own message
+	}
+	return out
+}
+
+// sanitizeToolMessage keeps, of the text a model writes before a tool call, only
+// what a write's reply may say: a text that breaks the rules (a digit, a weekday
+// or a dish the block does not name, a planner word) is dropped, never stored
+// nor shown.
+func sanitizeToolMessage(m *llm.Message, t replyTurn) {
+	strict := t
+	strict.write, strict.block = true, &replyBlock{}
+	out := m.Content[:0:0]
+	for _, c := range m.Content {
+		if c.Type == llm.ContentTypeText {
+			c.Text = plainReply(c.Text)
+			if strings.TrimSpace(c.Text) == "" || lintModelText(c.Text, strict, t.lang(c.Text)) != "" {
+				continue
+			}
+		}
+		out = append(out, c)
+	}
+	m.Content = out
+}
+
+// savedBlock is the block of a write whose result carries no report of its own
+// (a routine applied, an undo or a regenerate that changed no meal, a plan that
+// could not be read): every write is told, with what is known, in both languages.
+func savedBlock(tool string, output json.RawMessage) *replyBlock {
+	var obj map[string]any
+	_ = json.Unmarshal(output, &obj)
+	rep, _ := obj["report"].(map[string]any)
+	if nc, _ := rep["not_covered"].([]any); len(nc) > 0 {
+		return &replyBlock{facts: []fact{{
+			Class: classChanged, Kind: kindMeal, Status: statusUnknown,
+			EN: "Saved, but I could not read the plan before or after the change, so I cannot list what else moved.",
+			DE: "Gespeichert, aber ich konnte den Plan vor oder nach der Änderung nicht lesen und kann deshalb nicht sagen, was sich sonst verschoben hat.",
+		}}}
+	}
+	en, de := "Saved; no other meal changed.", "Gespeichert; keine andere Mahlzeit hat sich geändert."
+	switch tool {
+	case "undo_last_change":
+		en, de = "Undone; the plan is as it was before that change.", "Rückgängig gemacht; der Plan ist wie vor dieser Änderung."
+	case "apply_preset":
+		en, de = "The routine is applied.", "Die Routine ist angewendet."
+		var skipped []string
+		var skippedDE []string
+		for _, k := range []struct{ key, en, de string }{
+			{"skipped_occupied", "already had a meal", "hatten schon ein Essen"},
+			{"skipped_unavailable", "were marked as away", "waren als abwesend markiert"},
+			{"skipped_no_slot", "had no meal slot", "hatten keine Mahlzeit"},
+		} {
+			if l, _ := obj[k.key].([]any); len(l) > 0 {
+				skipped = append(skipped, fmt.Sprintf("%d %s", len(l), k.en))
+				skippedDE = append(skippedDE, fmt.Sprintf("%d %s", len(l), k.de))
+			}
+		}
+		if len(skipped) > 0 {
+			en += " Skipped cells: " + strings.Join(skipped, ", ") + "."
+			de += " Übersprungene Zellen: " + strings.Join(skippedDE, ", ") + "."
+		}
+	case "regenerate":
+		en, de = "The plan was made again.", "Der Plan wurde neu gemacht."
+	}
+	return &replyBlock{facts: []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: en, DE: de}}}
 }

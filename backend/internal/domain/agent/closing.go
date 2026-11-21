@@ -330,8 +330,8 @@ func unLightOffer(ctx context.Context, svc Services, w window.Window, is plannin
 	}
 	meal := mealName(st, *best)
 	return map[string]any{
-		"what":                fmt.Sprintf("remove the light mark of %s, so it can take the food the day is missing; I add it only after you say yes", meal),
-		"what_de":             fmt.Sprintf("die Leicht-Markierung von %s entfernen, damit es das fehlende Essen des Tages aufnehmen kann; ich füge es erst nach deinem Ja hinzu", deCell(meal)),
+		"what":                fmt.Sprintf("remove the light mark of %s, so it can take the food the day is missing", meal),
+		"what_de":             fmt.Sprintf("die Leicht-Markierung von %s entfernen, damit es das fehlende Essen des Tages aufnehmen kann", deCell(meal)),
 		"light":               []planning.LightIntent{mark},
 		"recommended":         true,
 		"recommended_because": "no other planned meal of the day can take more food while it is marked light",

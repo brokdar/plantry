@@ -79,7 +79,7 @@ Cooking times per day are the distinct cells where something is cooked that day:
 The plan window below is current as of this message; get_plan (optionally from/to) reads it again.
 
 When the user asks for a change:
-1. Read the plan below; get_plan only for a missing figure.
+1. Read the plan below; any figure you tell the user comes from a tool result, so call get_plan for it.
 2. Find candidates: find_alternatives (replace on a plate) or find_foods (library).
 3. Do an explicit request at once with one apply_changes call holding all its ops, without a check first and without asking "should I save?". Several fitting options: apply the recommended one, name another. dry_run true only for a what-if question.
 

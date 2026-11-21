@@ -527,13 +527,14 @@ func writeProfile(b *strings.Builder, p Profile) {
 	}
 }
 
-// meatLimitNote matches the sentence of a user's notes that restates the meat
-// limit ("meat at most 2-3 days a week"): the profile's structured limit says it
-// once (spec NU3).
-var meatLimitNote = regexp.MustCompile(`(?i)\bmeat (days )?(at most|max)\b[^.;\n]*[.;]?`)
+// meatLimitNote matches the clause of a user's notes that restates the meat limit
+// ("meat at most 2-3 days a week", "meat max 2.5 days"), up to the next comma,
+// semicolon, line end or sentence end: the profile's structured limit says it
+// once (spec NU3), and the rest of the notes stays.
+var meatLimitNote = regexp.MustCompile(`(?i)\bmeat (?:days )?(?:at most|max)\b(?:[^,;.\n]|\.\d)*[,;.]?`)
 
 func dropMeatLimit(notes string) string {
-	return strings.TrimSpace(meatLimitNote.ReplaceAllString(notes, ""))
+	return strings.Join(strings.Fields(meatLimitNote.ReplaceAllString(notes, "")), " ")
 }
 
 // writeCells lists every cell: fill (empty, in scope), the plates already

@@ -33,7 +33,7 @@ const chatProgrammatic = false
 
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v38"
+const PromptVersion = "v39"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
@@ -208,6 +208,8 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		Model:          model,
 		SystemPrompt:   prompt,
 		UserText:       req.UserText,
+		Locale:         st.Profile.Locale,
+		FoodNames:      foodNamesOf(st),
 		History:        history,
 		Tools:          s.tools.Describe(),
 		Effort:         s.effort(ctx),
@@ -402,4 +404,15 @@ func (s *Service) DebugSystemPrompt(ctx context.Context, req ChatRequest) (strin
 	}
 	prompt, _, _, err := s.buildSystemPrompt(ctx, req, w)
 	return prompt, err
+}
+
+// foodNamesOf are the names of the plan's foods, for the reply lint.
+func foodNamesOf(st planning.State) []string {
+	out := make([]string, 0, len(st.Foods))
+	for _, f := range st.Foods {
+		if f.Name != "" {
+			out = append(out, f.Name)
+		}
+	}
+	return out
 }

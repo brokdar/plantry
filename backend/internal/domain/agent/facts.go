@@ -180,21 +180,23 @@ func tellOf(block []fact) []string {
 // Language of a reply: the language of the user's message. EN and DE only; a
 // text that is neither (or a tie) is English.
 var (
-	englishWord = regexp.MustCompile(`(?i)\b(the|and|is|are|now|with|please|can|you|my|move|dinner|lunch|to)\b`)
-	germanWord  = regexp.MustCompile(`(?i)\b(der|die|das|und|ist|wird|werden|mit|nicht|für|jetzt|auf|dem|den|bitte|kannst|du|ich|mein|meine|zum|zur|abendessen|mittagessen|frühstück|verschieb\w*|tausch\w*|leichter|mehr|weniger)\b|[äöüß]`)
+	englishWord = regexp.MustCompile(`(?i)\b(the|and|is|are|now|with|please|can|you|my|move|dinner|lunch|to|yes|no|instead|of|on|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b`)
+	germanWord  = regexp.MustCompile(`(?i)\b(der|die|das|und|ist|wird|werden|mit|nicht|für|jetzt|auf|dem|den|bitte|kannst|du|ich|mein|meine|zum|zur|abendessen|mittagessen|frühstück|verschieb\w*|tausch\w*|leichter|mehr|weniger|ja|nein|statt|am|im|ein|eine|einen|nur|auch|noch|kein|keine|tag|woche|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b|[äöüß]`)
 )
 
-func replyLang(texts ...string) lang {
+// replyLangOf is the language of the first text that has more marker words of
+// one language than of the other; false when none does (English then).
+func replyLangOf(texts ...string) (lang, bool) {
 	for _, t := range texts {
 		en, de := len(englishWord.FindAllString(t, -1)), len(germanWord.FindAllString(t, -1))
 		switch {
 		case de > en:
-			return langDE
+			return langDE, true
 		case en > de:
-			return langEN
+			return langEN, true
 		}
 	}
-	return langEN
+	return langEN, false
 }
 
 // German words and dates for the lines the code renders.

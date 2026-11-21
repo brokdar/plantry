@@ -43,8 +43,13 @@ func hardWhyL(is planning.Issue) (en, de string) {
 	if !ok {
 		labelDE = "eine Regel wäre verletzt"
 	}
-	return fmt.Sprintf("it would create a problem on %s: %s", dayLabelStr(is.Date), planning.PlainText(is.Code).Label),
-		fmt.Sprintf("es würde am %s ein Problem entstehen: %s", deDay(dayLabelStr(is.Date)), labelDE)
+	figEN, figDE := hardFigures(is)
+	on, onDE := "", ""
+	if is.Date != "" {
+		on, onDE = " on "+dayLabelStr(is.Date), " am "+deDay(dayLabelStr(is.Date))
+	}
+	return fmt.Sprintf("it would create a problem%s: %s%s", on, planning.PlainText(is.Code).Label, figEN),
+		fmt.Sprintf("es würde%s ein Problem entstehen: %s%s", onDE, labelDE, figDE)
 }
 
 // hardLabelDE is the plain label of a hard issue in German.
@@ -532,4 +537,32 @@ func withBackToRange(ctx context.Context, svc Services, w window.Window, res app
 		return offers
 	}
 	return []map[string]any{{"what": what, "what_de": whatDE, "ops": ops, "recommended": true, "recommended_because": "brings those days back into their range, no new warning", "effect": effect}}
+}
+
+// hardFigures are the numbers of a hard issue, ", N days with meat, at most M":
+// the reason of a refusal carries its figures.
+func hardFigures(is planning.Issue) (en, de string) {
+	n := func(k string) float64 { return paramNum(is, k) }
+	switch is.Code {
+	case planning.CodeMeatDaysExceeded:
+		return fmt.Sprintf(" (%.0f days with meat, at most %.0f)", n("days"), n("max")), fmt.Sprintf(" (%.0f Tage mit Fleisch, höchstens %.0f)", n("days"), n("max"))
+	case planning.CodeTooManyCookOccasions:
+		return fmt.Sprintf(" (%.0f cooking times, at most %.0f)", n("count"), n("max")), fmt.Sprintf(" (%.0f Kochzeiten, höchstens %.0f)", n("count"), n("max"))
+	}
+	keys := make([]string, 0, len(is.Params))
+	for k := range is.Params {
+		if k != "id" && !strings.HasSuffix(k, "_id") && paramNum(is, k) != 0 {
+			keys = append(keys, k)
+		}
+	}
+	slices.Sort(keys)
+	var parts, partsDE []string
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s %s", strings.ReplaceAll(k, "_", " "), fmtNum(n(k))))
+		partsDE = append(partsDE, fmt.Sprintf("%s %s", strings.ReplaceAll(k, "_", " "), fmtComma(n(k))))
+	}
+	if len(parts) == 0 {
+		return "", ""
+	}
+	return " (" + strings.Join(parts, ", ") + ")", " (" + strings.Join(partsDE, ", ") + ")"
 }

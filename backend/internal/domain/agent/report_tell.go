@@ -41,36 +41,54 @@ func mealChange(m reportMeal) string { return mealChangeL(m, langEN) }
 // mealChangeL is mealChange in one language.
 func mealChangeL(m reportMeal, lg lang) string {
 	de := lg == langDE
+	q := func(name string) string {
+		if de {
+			return deQuote(name)
+		}
+		return food.Quote(name)
+	}
 	where := m.Day + " " + m.Meal
 	if de {
 		where = deCell(where)
 	}
-	before, after := map[string]string{}, map[string]string{}
-	var bn, an []string
-	for _, s := range m.Before {
-		n, q := splitQty(s)
-		before[n] = q
-		bn = append(bn, n)
+	// Components are keyed by name and their place among the same-named ones, so
+	// two components of one name stay two.
+	type comp struct{ key, name, qty string }
+	read := func(list []string) (out []comp) {
+		seen := map[string]int{}
+		for _, s := range list {
+			n, q := splitQty(s)
+			seen[n]++
+			out = append(out, comp{key: fmt.Sprintf("%s#%d", n, seen[n]), name: n, qty: q})
+		}
+		return out
 	}
-	for _, s := range m.After {
-		n, q := splitQty(s)
-		after[n] = q
-		an = append(an, n)
+	bc, ac := read(m.Before), read(m.After)
+	before, after := map[string]comp{}, map[string]comp{}
+	var bn []string
+	for _, c := range bc {
+		before[c.key] = c
+		bn = append(bn, q(c.name))
+	}
+	for _, c := range ac {
+		after[c.key] = c
 	}
 	var removed, added, resized []string
-	for _, n := range bn {
-		if _, ok := after[n]; !ok {
-			removed = append(removed, n)
+	for _, c := range bc {
+		if _, ok := after[c.key]; !ok {
+			removed = append(removed, q(c.name))
 		}
 	}
-	for _, n := range an {
-		if _, ok := before[n]; !ok {
-			added = append(added, n)
-		} else if before[n] != after[n] && before[n] != "" && after[n] != "" {
+	for _, c := range ac {
+		b, ok := before[c.key]
+		switch {
+		case !ok:
+			added = append(added, q(c.name))
+		case b.qty != c.qty && b.qty != "" && c.qty != "":
 			if de {
-				resized = append(resized, fmt.Sprintf("%s von %s auf %s%s", n, deQty(before[n]), deQty(after[n]), qtyDeltaL(before[n], after[n], lg)))
+				resized = append(resized, fmt.Sprintf("%s von %s auf %s%s", q(c.name), deQty(b.qty), deQty(c.qty), qtyDeltaL(b.qty, c.qty, lg)))
 			} else {
-				resized = append(resized, fmt.Sprintf("%s from %s to %s%s", n, before[n], after[n], qtyDeltaL(before[n], after[n], lg)))
+				resized = append(resized, fmt.Sprintf("%s from %s to %s%s", q(c.name), b.qty, c.qty, qtyDeltaL(b.qty, c.qty, lg)))
 			}
 		}
 	}
@@ -264,13 +282,17 @@ func meatLeaves(in reportInput, r changeReport) {
 		var gone []string
 		for _, f := range bd[date] {
 			if !slices.Contains(ad[date], f) {
-				gone = append(gone, food.Data(f))
+				gone = append(gone, f)
 			}
 		}
 		if len(gone) > 0 {
+			en, de := make([]string, len(gone)), make([]string, len(gone))
+			for i, g := range gone {
+				en[i], de[i] = food.Quote(g), deQuote(g)
+			}
 			in.facts.add(classMoved, kindMeat, statusOK,
-				fmt.Sprintf("Meat that leaves %s with this change: %s.", m.Day, strings.Join(gone, ", ")),
-				fmt.Sprintf("Fleisch, das %s mit dieser Änderung wegfällt: %s.", deDay(m.Day), strings.Join(gone, ", ")))
+				fmt.Sprintf("Meat that leaves %s with this change: %s.", m.Day, strings.Join(en, ", ")),
+				fmt.Sprintf("Fleisch, das %s mit dieser Änderung wegfällt: %s.", deDay(m.Day), strings.Join(de, ", ")))
 		}
 	}
 }
@@ -386,6 +408,9 @@ func qtyDeltaL(from, to string, lg lang) string {
 		}
 	}
 	amount := fmtNum(d) + " g"
+	if de {
+		amount = fmtComma(d) + " g"
+	}
 	if strings.HasPrefix(ua, "portion") {
 		switch {
 		case d == 0.25 && de:

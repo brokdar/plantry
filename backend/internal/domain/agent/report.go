@@ -128,7 +128,7 @@ func foodName(st planning.State, id int64) string {
 func componentWords(st planning.State, p planning.Plate) []string {
 	out := make([]string, 0, len(p.Components))
 	for _, c := range p.Components {
-		s := foodName(st, c.FoodID)
+		s := food.Data(foodName(st, c.FoodID))
 		switch {
 		case c.Portions != nil:
 			s += " " + fmtNum(*c.Portions) + " portion"
