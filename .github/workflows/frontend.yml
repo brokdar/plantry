@@ -1,10 +1,15 @@
 name: Frontend
 
+# Checks and unit tests run as parallel jobs. Timeouts are frozen tripwires
+# (test-budget.json), never the fix for slow tests.
 on:
   pull_request:
     branches: [main]
     paths:
       - 'frontend/**'
+      - 'scripts/**'
+      - 'test-budget.json'
+      - '.github/workflows/frontend.yml'
 
 concurrency:
   group: frontend-${{ github.ref }}
@@ -14,9 +19,10 @@ permissions:
   contents: read
 
 jobs:
-  frontend:
-    name: Lint, typecheck, unit tests
+  checks:
+    name: Lint, typecheck, knip
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: frontend
@@ -27,5 +33,28 @@ jobs:
           bun-version: latest
       - name: Install deps
         run: bun install --frozen-lockfile
-      - name: Check (lint + typecheck + test)
-        run: bun run check
+      - name: Lint
+        run: bun run lint
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Knip and legacy patterns
+        run: bun run knip && bun run check:legacy
+
+  test:
+    name: Unit tests (wall budget)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install deps
+        run: bun install --frozen-lockfile
+      - name: Vitest
+        run: bunx vitest run --reporter=default --reporter=json --outputFile.json=/tmp/vitest.json
+      - name: Wall budget
+        run: python3 ../scripts/test-budget.py vitest /tmp/vitest.json
