@@ -85,7 +85,28 @@ jobs:
         run: GO_TEST_CPU_LOG=/tmp/cpu.jsonl go test -count=1 -json -exec "$PWD/../scripts/cpu-exec.py" ./... > /tmp/go-test.json
       - name: Failures
         if: failure()
-        run: grep -E '"Action":"(fail|output)"' /tmp/go-test.json | grep -E 'FAIL|Error|panic' | head -60
+        run: |
+          python3 - /tmp/go-test.json <<'PY'
+          import json, sys
+          out = []
+          for line in open(sys.argv[1]):
+              try:
+                  e = json.loads(line)
+              except ValueError:
+                  out.append(line.rstrip())  # build errors are not JSON
+                  continue
+              o, t = e.get("Output", ""), e.get("Test", "")
+              if e.get("Action") == "fail" or any(k in o for k in ("--- FAIL", "panic:", "DATA RACE", "test timed out", "Error Trace", "Error:")):
+                  out.append(f"{e.get('Package', '').split('backend/')[-1]} {t} {e.get('Action')} {o.rstrip()}")
+          print("\n".join(out[:200]))
+          PY
+      - name: Upload test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-test-json
+          path: /tmp/go-test.json
+          retention-days: 7
       - name: CPU budget (tests may get slower only with the tests added)
         run: python3 ../scripts/test-budget.py go /tmp/go-test.json /tmp/cpu.jsonl
 
@@ -111,6 +132,27 @@ jobs:
         run: GO_TEST_CPU_LOG=/tmp/cpu.jsonl go test -race -short -gcflags='modernc.org/sqlite/...=-race=false' -timeout 5m -count=1 -json -exec "$PWD/../scripts/cpu-exec.py" ./... > /tmp/go-race.json
       - name: Failures
         if: failure()
-        run: grep -E '"Action":"(fail|output)"' /tmp/go-race.json | grep -E 'FAIL|Error|panic|DATA RACE' | head -60
+        run: |
+          python3 - /tmp/go-race.json <<'PY'
+          import json, sys
+          out = []
+          for line in open(sys.argv[1]):
+              try:
+                  e = json.loads(line)
+              except ValueError:
+                  out.append(line.rstrip())  # build errors are not JSON
+                  continue
+              o, t = e.get("Output", ""), e.get("Test", "")
+              if e.get("Action") == "fail" or any(k in o for k in ("--- FAIL", "panic:", "DATA RACE", "test timed out", "Error Trace", "Error:")):
+                  out.append(f"{e.get('Package', '').split('backend/')[-1]} {t} {e.get('Action')} {o.rstrip()}")
+          print("\n".join(out[:200]))
+          PY
+      - name: Upload test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-race-json
+          path: /tmp/go-race.json
+          retention-days: 7
       - name: CPU budget
         run: python3 ../scripts/test-budget.py race /tmp/go-race.json /tmp/cpu.jsonl
