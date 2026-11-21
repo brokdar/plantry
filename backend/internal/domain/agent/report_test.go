@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -76,6 +77,11 @@ func TestBuildReport_Items(t *testing.T) {
 				assert.Equal(t, 400, *m.KcalTo)
 				require.Len(t, r.Days, 1)
 				assert.Equal(t, reportDay{Day: "Sat 21 Nov", KcalBefore: 2000, KcalAfter: 1600, Range: "1800-2200 kcal", Status: "under its range"}, r.Days[0])
+				assert.Equal(t, []string{
+					`2|meal|ok|Sat 21 Nov dinner: "Salmon" from 1 portion to 0.5 portions (half a portion less) (800 → 400 kcal).`,
+					`3|leftover|ok|Sat 21 Nov: cook 1.5 portions of the "Salmon" (was 2).`,
+					`4|day|under|Sat 21 Nov holds 1600 kcal (was 2000), below a good amount for the day (1800-2200 kcal).`,
+				}, brief(r.Facts))
 			},
 		},
 		{
@@ -88,29 +94,41 @@ func TestBuildReport_Items(t *testing.T) {
 				assert.Equal(t, "Sat 21 Nov", c.Day)
 				assert.Equal(t, 1, c.CookingTimes)
 				assert.Equal(t, []reportDish{{At: "dinner", Dish: "Salmon", Eaten: []string{"Sat 21 Nov dinner", "Sun 22 Nov dinner"}}}, c.Cooked)
+				// the dish is cooked where it was: no cooking-time fact
+				assert.Equal(t, []string{
+					`2|meal|ok|Sat 21 Nov dinner: "Salmon" from 1 portion to 0.5 portions (half a portion less).`,
+					`3|leftover|ok|Sat 21 Nov: cook 1.5 portions of the "Salmon" (was 2).`,
+				}, brief(r.Facts))
 			},
 		},
 		{
 			name:  "leftovers: a half portion is left and the batch was not resized",
 			after: reportState(2, 0.5, 1),
 			check: func(t *testing.T, r changeReport) {
-				tell := strings.Join(r.Tell, "\n")
-				assert.Contains(t, tell, `0.5 portions of the "Salmon" cooked on Sat 21 Nov`)
-				assert.Contains(t, tell, "It was not resized.")
+				assert.Equal(t, []string{
+					`2|meal|ok|Sat 21 Nov dinner: "Salmon" from 1 portion to 0.5 portions (half a portion less).`,
+					`3|leftover|ok|0.5 portions of the "Salmon" cooked on Sat 21 Nov is now left over (it is cooked for 2 portions, the meals eat 1.5). It was not resized.`,
+				}, brief(r.Facts))
 			},
 		},
 		{
 			name:  "leftovers: a batch resized to the meals leaves nothing over and says so",
 			after: reportState(1.5, 0.5, 1),
 			check: func(t *testing.T, r changeReport) {
-				assert.Contains(t, strings.Join(r.Tell, "\n"), "cook 1.5 portions of the \"Salmon\" (was 2)")
+				assert.Equal(t, []string{
+					`2|meal|ok|Sat 21 Nov dinner: "Salmon" from 1 portion to 0.5 portions (half a portion less).`,
+					`3|leftover|ok|Sat 21 Nov: cook 1.5 portions of the "Salmon" (was 2).`,
+				}, brief(r.Facts))
 			},
 		},
 		{
 			name:  "leftovers: meals that need more than the batch holds",
 			after: reportState(2, 1.5, 1),
 			check: func(t *testing.T, r changeReport) {
-				assert.Contains(t, strings.Join(r.Tell, "\n"), `need 0.5 portions more of the "Salmon"`)
+				assert.Equal(t, []string{
+					`2|meal|ok|Sat 21 Nov dinner: "Salmon" from 1 portion to 1.5 portions (half a portion more).`,
+					`3|leftover|under|The meals need 0.5 portions more of the "Salmon" cooked on Sat 21 Nov than it holds (2 portions). It was not resized.`,
+				}, brief(r.Facts))
 			},
 		},
 		{
@@ -122,8 +140,12 @@ func TestBuildReport_Items(t *testing.T) {
 			}(),
 			check: func(t *testing.T, r changeReport) {
 				// the meals that went explain it: no meal any more, nothing cooked
-				assert.Contains(t, strings.Join(r.Tell, "\n"), "no meal any more")
-				assert.Contains(t, strings.Join(r.Tell, "\n"), "nothing is cooked")
+				assert.Equal(t, []string{
+					`2|meal|ok|Sat 21 Nov dinner: no meal any more.`,
+					`2|meal|ok|Sun 22 Nov dinner: no meal any more.`,
+					`3|cook|ok|Sat 21 Nov: nothing is cooked.`,
+					`3|cook|ok|Sun 22 Nov: nothing is cooked.`,
+				}, brief(r.Facts))
 			},
 		},
 		{
@@ -131,7 +153,7 @@ func TestBuildReport_Items(t *testing.T) {
 			after: reportState(2, 1, 1),
 			aev:   planning.Evaluation{Week: &planning.WeekEval{Days: 7, MeatG: 546, Pct: 100}},
 			check: func(t *testing.T, r changeReport) {
-				assert.Contains(t, strings.Join(r.Tell, "\n"), "meat is 546 g (was 321 g, limit 300 g)")
+				assert.Equal(t, []string{`4|week|over|For the week: meat is 546 g (was 321 g, limit 300 g).`}, brief(r.Facts))
 			},
 		},
 		{
@@ -143,9 +165,10 @@ func TestBuildReport_Items(t *testing.T) {
 				{Rule: "S2", Code: planning.CodeKcalBelowBand, Severity: planning.SeveritySoft, Date: "2026-11-21", Params: map[string]any{"kcal": 1600.0, "band_low_kcal": 1800.0, "band_high_kcal": 2200.0}},
 			}},
 			check: func(t *testing.T, r changeReport) {
-				tell := strings.Join(r.Tell, "\n")
-				assert.Contains(t, tell, "New warning: Sat 21 Nov holds 1600 kcal, below a good amount for the day (1800–2200 kcal).")
-				assert.Contains(t, tell, "New warning: Sun 22 Nov holds only 1100 kcal, under the day's minimum of 1500 kcal.")
+				assert.Equal(t, []string{
+					`5|warning|under|New warning: Sat 21 Nov holds 1600 kcal, below a good amount for the day (1800–2200 kcal).`,
+					`5|warning|under|New warning: Sun 22 Nov holds only 1100 kcal, under the day's minimum of 1500 kcal.`,
+				}, brief(r.Facts), "the earlier meat warning is counted, not listed")
 				assert.Equal(t, 1, r.EarlierWarnings)
 			},
 		},
@@ -158,10 +181,12 @@ func TestBuildReport_Items(t *testing.T) {
 			}
 			r := buildReport(reportInput{beforeSt: before, afterSt: tt.after, before: b, after: tt.aev})
 			tt.check(t, r)
-			// the check snapshot (ids and ISO dates, for the code) is not what the model reads
-			r.Check = nil
-			raw, err := json.Marshal(r)
+			// the model reads the report without the block, the offer and the check
+			// snapshot (ids and ISO dates, for the code; see TestBuildReport_Check…)
+			require.NotNil(t, r.Check)
+			full, err := json.Marshal(map[string]any{"report": r})
 			require.NoError(t, err)
+			raw := withoutFacts(full)
 			assert.NotRegexp(t, reportRuleToken, string(raw), "no rule code")
 			assert.NotRegexp(t, reportISODate, string(raw), "no ISO date")
 			assert.NotContains(t, string(raw), "_id\"", "no ids")
@@ -248,4 +273,13 @@ func TestWeekEffect_SaysWhyNoMeatFits(t *testing.T) {
 	assert.Contains(t, w.MeatNote, "holds 233 g of meat per person against a limit of 300 g: 67 g is left")
 	w = weekEffect(&planning.WeekEffect{MeatG: 100, LimitG: 300}, &planning.WeekEffect{MeatG: 120, LimitG: 300})
 	assert.Empty(t, w.MeatNote)
+}
+
+// brief is a block as "class|kind|status|EN line": the exact facts a case tells.
+func brief(facts []fact) []string {
+	out := make([]string, len(facts))
+	for i, f := range facts {
+		out[i] = fmt.Sprintf("%d|%s|%s|%s", f.Class, f.Kind, f.Status, f.EN)
+	}
+	return out
 }
