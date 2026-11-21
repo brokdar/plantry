@@ -246,3 +246,24 @@ func TestService_NoBetterFallbackSavesNothing(t *testing.T) {
 	assert.Contains(t, end.Notes, "nothing was saved")
 	assert.Len(t, e.window(), before, "the drafts are as they were")
 }
+
+// PL1b/CC14 (ledger V9): a plan with an open hard issue other than an empty
+// cell or H9 is never saved, whichever chooser planned it. With an Extractor
+// the chooser is always the heuristic; two confirmed cooks on one day (H2) are
+// beyond it.
+func TestService_PL1b_HeuristicPlanWithOpenHardIssueSavesNothing(t *testing.T) {
+	e := newSvcEnv(t)
+	e.deps.Extractor = &fakeExtractor{}
+	e.svc = planning.NewService(e.deps)
+	e.userPlate("2026-11-09", e.lunch, e.mains[3])
+	e.userPlate("2026-11-09", e.dinner, e.mains[4])
+	before := len(e.window())
+	req := e.req()
+	req.Chooser = airun.ChooserLLM
+
+	end := e.runs.end(e.generate(req))
+
+	assert.Equal(t, airun.StatusError, end.Status, "notes %q violations %s", end.Notes, end.ViolationsJSON)
+	assert.Equal(t, "error.plan.hard_rule_open", end.ErrorKey)
+	assert.Len(t, e.window(), before, "nothing was saved")
+}

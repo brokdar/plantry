@@ -1038,10 +1038,14 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 			}
 		}
 	}
-	// PL1b: when the heuristic does no better the run does not save the plan:
-	// it ends in error naming the rule, and the drafts stay as they are. (An
-	// empty cell nothing can fill is not a rule broken: that plan is partial.)
-	if still := slices.DeleteFunc(openHard(Merge(base, j.target, prop), j.target), func(is Issue) bool { return is.Code == CodeMissingPlate }); !isHeuristic(j.chooser) && j.side == nil && len(still) > 0 {
+	// PL1b/CC14: when the plan is final and a hard rule is still open the run
+	// does not save it, whichever chooser planned it: it ends in error naming
+	// the rule, and the drafts stay as they are. An empty cell nothing can fill
+	// is not a rule broken (that plan is partial), nor is the heuristic's H9
+	// floor no recipe reaches (partial, the notes say so).
+	if still := slices.DeleteFunc(openHard(Merge(base, j.target, prop), j.target), func(is Issue) bool {
+		return is.Code == CodeMissingPlate || (is.Code == CodeKcalBelowFloor && isHeuristic(j.chooser))
+	}); j.side == nil && len(still) > 0 {
 		closeStatus, closeStage = "error", "checking"
 		return RunEnd{
 			Status: airun.StatusError, ErrorKey: keyHardRuleOpen,
