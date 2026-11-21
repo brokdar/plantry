@@ -6,14 +6,35 @@ import {
   type Page,
 } from "@playwright/test"
 
-export const API = `http://localhost:${process.env.E2E_API_PORT ?? 8080}`
+/**
+ * The backend of the current worker's project. A live binding: the worker
+ * fixture `apiBinding` sets it before any test runs, because the
+ * global-settings project has its own server (see playwright.config.ts), so
+ * read it inside tests and helpers, never at a spec's top level.
+ */
+export let API = `http://localhost:${process.env.E2E_API_PORT ?? 8080}`
 
 /**
  * Extended `test` that auto-installs the dialog guard and a silent daily
- * suggestion on every page.
+ * suggestion on every page, and points `API` at the project's backend.
  * Import as: `import { test, expect } from "./helpers"`.
  */
-export const test = baseTest.extend({
+export const test = baseTest.extend<
+  object,
+  { apiPort: number; apiBinding: void }
+>({
+  apiPort: [
+    Number(process.env.E2E_API_PORT ?? 8080),
+    { scope: "worker", option: true },
+  ],
+  apiBinding: [
+    async ({ apiPort }, use) => {
+      API = `http://localhost:${apiPort}`
+      process.env.E2E_API_PORT = String(apiPort)
+      await use()
+    },
+    { scope: "worker", auto: true },
+  ],
   page: async ({ page }, runTest) => {
     failOnDialog(page)
     // The daily idea opens a sheet over Today; specs that are not about it

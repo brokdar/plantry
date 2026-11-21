@@ -409,6 +409,31 @@ test("F3-AC3: a failed run offers Plan without the assistant", async ({
   const start = addDays(window.start, 7 * 65)
   try {
     await stubRecipesReady(page)
+    // The first run the wizard polls reports a failure once it has really
+    // finished (so the next generation is not refused as running). The route
+    // is in place before the run starts: installed after it, the wizard could
+    // read the real "ok" first and never show the failure (it did on a fast
+    // backend).
+    let failingRun: string | undefined
+    await page.route("**/api/plan/runs/*", async (route) => {
+      const id = new URL(route.request().url()).pathname.split("/").pop()
+      failingRun ??= id
+      const res = await route.fetch()
+      const real = (await res.json()) as { status: string }
+      if (id !== failingRun || real.status === "running") {
+        await route.fulfill({ response: res, json: real })
+        return
+      }
+      await route.fulfill({
+        response: res,
+        json: {
+          ...real,
+          status: "error",
+          chooser: "llm",
+          error_key: "error.plan.timeout",
+        },
+      })
+    })
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto(`/plan/new?start=${start}`)
     const wizard = page.getByTestId("plan-wizard")
@@ -425,31 +450,6 @@ test("F3-AC3: a failed run offers Plan without the assistant", async ({
     const firstRes = await first
     expect(firstRes.request().postDataJSON()).toMatchObject({ start })
     const { run_id: failedId } = (await firstRes.json()) as { run_id: number }
-
-    // The wizard's polling of that run reports a failure (the real run is
-    // let to finish first, so the next generation is not refused as running).
-    await expect
-      .poll(
-        async () => {
-          const r = await request.get(`${API}/api/plan/runs/${failedId}`)
-          return ((await r.json()) as { status: string }).status
-        },
-        { timeout: 60_000 }
-      )
-      .not.toBe("running")
-    const real = await (
-      await request.get(`${API}/api/plan/runs/${failedId}`)
-    ).json()
-    await page.route(`**/api/plan/runs/${failedId}`, (route) =>
-      route.fulfill({
-        json: {
-          ...real,
-          status: "error",
-          chooser: "llm",
-          error_key: "error.plan.timeout",
-        },
-      })
-    )
 
     // A neutral headline; the run's error says what went wrong.
     const failed = wizard.getByTestId("wizard-failed").getByRole("alert")
