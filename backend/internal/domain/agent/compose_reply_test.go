@@ -106,6 +106,16 @@ func TestComposeReply_RefusedCallSaysNothingChanged(t *testing.T) {
 	saved, _ := blockOf([]byte(`{"saved":true,"applied":[{"op":"add"}],"skipped":[{"en":"Left out: adding x.","de":"Weggelassen: x hinzufügen."}]}`))
 	require.NotNil(t, saved)
 	assert.NotContains(t, composeReply("", replyTurn{user: "add", write: true, block: saved, numbers: map[string]bool{}}), "Nothing changed", "a partly saved call is not 'nothing changed'")
+
+	// One turn, several calls: a refused call followed by a saving one is not 'nothing changed'.
+	refused, _ := blockOf([]byte(out))
+	saving, _ := blockOf([]byte(`{"saved":true,"applied":[{"op":"add"}],"report":{"facts":[{"class":2,"kind":"meal","status":"ok","en":"Fri dinner: X replaced by Y.","de":"Fr Abendessen: X ersetzt durch Y."}]}}`))
+	require.NotNil(t, saving)
+	mixed := composeReply("", replyTurn{user: "swap", write: true, block: mergeBlock(refused, saving), numbers: map[string]bool{}})
+	assert.NotContains(t, mixed, "Nothing changed")
+	assert.Contains(t, mixed, "Fri dinner: X replaced by Y.")
+	both := composeReply("", replyTurn{user: "move", write: true, block: mergeBlock(refused, refused), numbers: map[string]bool{}})
+	assert.Equal(t, 1, strings.Count(both, "Nothing changed"))
 }
 
 // M3 cycle 1, tune g-question-00 (RP3, RP4): "per eater" is rewritten, not a reason
