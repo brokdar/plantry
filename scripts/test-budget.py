@@ -23,7 +23,8 @@ entries; it never raises one.
 
 Numbers are per machine: "ci" when $CI is set (GitHub's 4-vCPU runner, the
 reference), else "local". A machine without numbers yet is reported, not
-checked; --write seeds it (CI prints the numbers to copy into the file).
+checked; --write seeds it. In CI a missing machine fails unless
+TEST_BUDGET_SEED=1, which prints the numbers to copy into the file.
 """
 import json
 import os
@@ -145,9 +146,12 @@ def machine_budgets(b, write):
     """The budgets of this machine; a machine without any is seeded."""
     m = machine()
     if m not in b["machines"]:
-        # Nothing to check against yet: report, never fail. --write stores
-        # the numbers (locally; CI prints them to copy into the file).
+        # Nothing to check against yet: report. --write stores the numbers
+        # (locally; CI prints them to copy into the file). CI is the reference
+        # machine, so there a missing machine fails unless seeding is asked for.
         notes.append(f"no budgets for machine {m!r} yet: nothing checked; run with --write to seed")
+        if os.environ.get("CI") and not os.environ.get("TEST_BUDGET_SEED"):
+            failures.append(f"test-budget.json has no budgets for {m!r}: CI checks every run against them (seed once with TEST_BUDGET_SEED=1)")
         b["machines"][m] = {}
         global SEEDING
         SEEDING = True
