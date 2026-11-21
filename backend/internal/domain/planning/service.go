@@ -1052,15 +1052,19 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 			Notes: "A hard rule is still open, so nothing was saved: " + openRules(still) + ".",
 		}
 	}
-	// KR7 (v1 OQ6): a day replan that can only end with the same main at both
-	// meals saves nothing and says so.
+	// KR7 (v1 OQ6, v1.2): a day replan that can only end with the same main at
+	// both meals, where H8 is triggered by it (not relaxed, not outside the
+	// variety window), saves nothing and says so.
 	if j.scope.Kind == ScopeDay && j.side == nil {
 		x := newIndex(Merge(base, j.target, prop), j.target)
+		h8 := openHard(Merge(base, j.target, prop), j.target)
 		for _, d := range x.days {
 			if !d.Equal(j.scope.Date) {
 				continue
 			}
-			if _, _, other, ok := x.sameMainPair(d); ok {
+			if _, _, other, ok := x.sameMainPair(d); ok && slices.ContainsFunc(h8, func(is Issue) bool {
+				return is.Rule == "H8" && is.Params["food_id"] == other
+			}) {
 				closeStatus, closeStage = "error", "checking"
 				return RunEnd{
 					Status: airun.StatusError, ErrorKey: keyDayRepeat,
