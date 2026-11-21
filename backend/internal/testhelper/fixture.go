@@ -6,10 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/require"
-
-	"github.com/jaltszeimer/plantry/backend/db"
 )
 
 // CopyDB copies the SQLite file at src into a temp dir and opens the copy
@@ -30,7 +27,5 @@ func CopyDB(t testing.TB, src string) *sql.DB {
 // MigrateDB migrates conn to the latest schema.
 func MigrateDB(t testing.TB, conn *sql.DB) {
 	t.Helper()
-	goose.SetBaseFS(db.Migrations)
-	require.NoError(t, goose.SetDialect("sqlite3"))
-	require.NoError(t, goose.Up(conn, "migrations"))
+	Migrate(t, conn)
 }

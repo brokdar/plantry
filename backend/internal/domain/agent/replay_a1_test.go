@@ -7,15 +7,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	dbmigrations "github.com/jaltszeimer/plantry/backend/db"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
@@ -24,21 +21,13 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
 
-// gooseMu serialises migrations: goose keeps its logger and filesystem in
-// package variables, so parallel tests may not set them at once.
-var gooseMu sync.Mutex
-
 func migrateCopy(t *testing.T, conn *sql.DB) {
 	t.Helper()
-	gooseMu.Lock()
-	defer gooseMu.Unlock()
-	goose.SetLogger(goose.NopLogger())
-	goose.SetBaseFS(dbmigrations.Migrations)
-	require.NoError(t, goose.SetDialect("sqlite3"))
-	require.NoError(t, goose.Up(conn, "migrations"))
+	testhelper.Migrate(t, conn)
 }
 
 // replayEnv wires the tool set over a COPY of a start database.
