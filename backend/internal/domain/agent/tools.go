@@ -656,7 +656,8 @@ func withIssueSentences(svc Services, h ToolHandler) ToolHandler {
 					if merr != nil || json.Unmarshal(raw, &is) != nil || is.Code == "" {
 						continue
 					}
-					im["said"], changed = issueSentence(is, st), true
+					im["said"], _ = issueSentence(is, st)
+					changed = true
 				}
 			}
 		}

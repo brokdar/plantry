@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
@@ -405,7 +406,7 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 		assert.EqualValues(t, 1, skipped[0]["op"])
 		assert.Contains(t, skipped[0]["why"], "under its minimum")
 		assert.Contains(t, got["next"], "safe part is applied (1 of 2")
-		assert.Empty(t, plannerWord.FindAllString(string(res), -1), "kitchen words only")
+		assert.Empty(t, plannerWord.FindAllString(string(agent.WithoutFacts(res)), -1), "kitchen words only")
 		assert.NotRegexp(t, isoDate, fmt.Sprint(got["next"], got["skipped"]), "dates the way the user reads them")
 		assert.Contains(t, got["status"], "Saved")
 		assert.Equal(t, true, got["saved"])

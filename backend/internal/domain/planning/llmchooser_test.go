@@ -166,7 +166,7 @@ func (p *jsonPlan) plate(date string, slot, foodID int64, key string) {
 // cell (Sat and Sun breakfast, Mon–Fri lunch; the weekday breakfasts are
 // routine).
 func (e *llmEnv) validPlan() *jsonPlan {
-	p := &jsonPlan{Notes: "One batch a day."}
+	p := &jsonPlan{Notes: "One cooking a day."}
 	for i := range 7 {
 		date := e.start.AddDate(0, 0, i).Format(time.DateOnly)
 		key, main := fmt.Sprintf("s%d", i), e.mains[3+i]
@@ -223,7 +223,7 @@ func TestLLMChooser_RequestAndPrompt(t *testing.T) {
 	assert.Equal(t, planning.PromptVersion, r.PromptVersion)
 	assert.Equal(t, 0, r.RepairAttempts)
 	assert.Equal(t, 1, r.LLMSteps)
-	assert.Equal(t, "One batch a day.", r.Notes)
+	assert.Equal(t, "One cooking a day.", r.Notes)
 	var reasons int
 	require.NoError(t, e.db.QueryRow(`SELECT COUNT(*) FROM plates WHERE ai_run_id = ? AND reason LIKE 'Plate %'`, id).Scan(&reasons))
 	assert.Equal(t, 16, reasons)
@@ -301,7 +301,7 @@ func TestLLMChooser_RepairsAnH2Violation(t *testing.T) {
 	assert.Equal(t, 2, r.LLMSteps)
 	assert.Equal(t, 2000, r.InputTokens)
 	assert.Equal(t, 400, r.OutputTokens)
-	assert.Equal(t, "One batch a day.", r.Notes)
+	assert.Equal(t, "One cooking a day.", r.Notes)
 
 	reqs := e.client.Requests()
 	require.Len(t, reqs, 2)
@@ -525,7 +525,7 @@ func TestLLMChooser_StageAndReady(t *testing.T) {
 	// The empty first plan is H1-only: its repair is extra, then two repairs.
 	assert.Equal(t, 3, p.RepairAttempts)
 	assert.Equal(t, []planning.Stage{planning.StageRepairing, planning.StageRepairing, planning.StageRepairing}, stages)
-	assert.Equal(t, "p27", c.PromptVersion())
+	assert.Equal(t, "p28", c.PromptVersion())
 
 	require.NoError(t, c.Ready(context.Background()))
 	assert.ErrorIs(t, planning.NewLLMChooser(llm.StaticResolver(nil, "")).Ready(context.Background()), domain.ErrAIProviderMissing)

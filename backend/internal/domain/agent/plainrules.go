@@ -161,16 +161,20 @@ var kitchenWords = []struct {
 	{regexp.MustCompile(`\bdrafts\b`), "pending plans"},
 	{regexp.MustCompile(`\bDraft\b`), "Pending:"},
 	{regexp.MustCompile(`\bdraft\b`), "pending"},
-	{regexp.MustCompile(`\bsessions\b`), "batches"},
-	{regexp.MustCompile(`\bSessions\b`), "Batches"},
-	{regexp.MustCompile(`\bsession\b`), "batch"},
-	{regexp.MustCompile(`\bSession\b`), "Batch"},
+	{regexp.MustCompile(`\b(sessions|batches)\b`), "cookings"},
+	{regexp.MustCompile(`\b(Sessions|Batches)\b`), "Cookings"},
+	{regexp.MustCompile(`\b(session|batch)\b`), "cooking"},
+	{regexp.MustCompile(`\b(Session|Batch)\b`), "Cooking"},
+	{regexp.MustCompile(`\b(?i:light days)\b`), "days you eat less"},
+	{regexp.MustCompile(`\b(?i:light day)\b`), "day you eat less"},
 }
 
 // passBack are the result fields the model sends back to a tool unchanged
 // (ops, light and goal of a way, a cook_at cell, a move target, the cells of
-// an away op): they keep ISO dates in modelDates.
-var passBack = map[string]bool{"ops": true, "op": true, "light": true, "goal": true, "cook_at": true, "to": true, "cells": true, "pulse": true, "occupant": true}
+// an away op): they keep ISO dates in modelDates. "rows" (an unlock preview) is
+// not sent back: the stored conversation is what the panel rebuilds its unlock
+// card from after a reload, and the card reads ISO dates.
+var passBack = map[string]bool{"rows": true, "ops": true, "op": true, "light": true, "goal": true, "cook_at": true, "to": true, "cells": true, "pulse": true, "occupant": true}
 
 // modelDates is a tool result as the model reads it: every ISO date outside
 // passBack fields becomes "Wed 25 Nov". The run log and the audit keep the

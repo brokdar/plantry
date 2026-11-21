@@ -17,18 +17,18 @@ import {
   uid,
 } from "./helpers"
 
-// F2-AC5: a generated week on the LLM chooser (fake provider). The template
-// script plans three slots a day, so the window's cells are pinned with
-// overrides: the first three slots Plan, any other slot No plate. Generate
-// fills every active slot, so no parallel spec may add slots or plates
-// meanwhile. That is why this spec runs alone in
-// `global-settings` rather than in `ai-serial`.
+// F2-AC5: a week planned with a note on the assistant's chooser (fake provider).
+// PL2: the model only reads the note (one forced set_constraints call, the
+// template script's single turn), the heuristic plans. The window's cells are
+// pinned with overrides: the first three slots Plan, any other slot No plate.
+// Generate fills every active slot, so no parallel spec may add slots or plates
+// meanwhile. That is why this spec runs alone in `global-settings` rather than
+// in `ai-serial`.
 
 const TEMPLATE = new URL(
-  "./fixtures/chat-scripts/generate-week.json",
+  "./fixtures/chat-scripts/wish-light-dinner.json",
   import.meta.url
 )
-const NOTES = "One batch a day, cooked in the morning and eaten all day."
 
 interface PlanView {
   slots: { id: number; sort_order: number }[]
@@ -51,42 +51,21 @@ async function clearWindow(from: string, to: string) {
   await ctx.dispose()
 }
 
-/** Fills the template's placeholders and slows its first turn down, so the
+/** Fills the wish template for a window and slows its turn down, so the
  *  board can watch the run while it runs. */
-async function fillScript(
-  recipes: number[],
-  slots: number[],
-  days: string[]
-): Promise<string> {
-  let text = await readFile(TEMPLATE, "utf8")
-  recipes.forEach((id, i) => {
-    text = text.replaceAll(`"{{recipe_${i + 1}}}"`, String(id))
-  })
-  ;["breakfast", "lunch", "dinner"].forEach((k, i) => {
-    text = text.replaceAll(`"{{${k}}}"`, String(slots[i]))
-  })
-  days.forEach((d, i) => {
-    text = text.replaceAll(`{{d${i}}}`, d)
-  })
+async function fillScript(day: string): Promise<string> {
+  const text = (await readFile(TEMPLATE, "utf8")).replaceAll("{{d2}}", day)
   const script = JSON.parse(text) as {
     turns: { events: { delay_ms?: number }[] }[]
   }
   script.turns[0].events[0].delay_ms = 3000
-  script.turns[1].events[0].delay_ms = 2000
   return JSON.stringify(script)
 }
 
 test.describe("generated week on the LLM", () => {
-  test("F2-AC5: progress while running, run notes, Why this?", async ({
+  test("F2-AC5: progress while reading the note, the notes name what it asked, Why this?", async ({
     page,
   }) => {
-    // CC4 / PL2 (spec v1): the heuristic plans and the model only reads the
-    // note; with no note no model runs, so there is no running LLM plan whose
-    // progress the board shows. Needs a rewrite around the note flow.
-    test.fixme(
-      true,
-      "PL2: the model no longer plans; no LLM run to show progress for"
-    )
     const tag = uid()
     // A window of its own, past the heuristic spec's band.
     const start = addDays((await futureWindow()).start, 7 * 20)
@@ -100,8 +79,7 @@ test.describe("generated week on the LLM", () => {
       carbs_100g: 20,
     })
     const foods = [base.id]
-    const recipes: number[] = []
-    // Generate needs the 10-recipe target (D22); the script uses 8.
+    // Generate needs the 10-recipe target (D22).
     for (let i = 1; i <= 10; i++) {
       const f = await seedComposedFood({
         name: `Stew ${i} ${tag}`,
@@ -118,7 +96,6 @@ test.describe("generated week on the LLM", () => {
           },
         ],
       })
-      recipes.push(f.id)
       foods.unshift(f.id)
     }
     const ctx = await apiRequest.newContext({ baseURL: API })
@@ -149,11 +126,15 @@ test.describe("generated week on the LLM", () => {
           overrides.push(`${d}/${id}`)
         }
       }
-      await writeFile(scriptPath, await fillScript(recipes, slots, days))
+      await writeFile(scriptPath, await fillScript(days[2]))
       await setSetting("ai.fake_script", scriptPath)
 
       const res = await ctx.post("/api/plan/generate", {
-        data: { start, chooser: "llm" },
+        data: {
+          start,
+          chooser: "llm",
+          instruction: "Make the dinner on Wednesday light.",
+        },
       })
       expect(res.status(), await res.text()).toBe(202)
       const { run_id } = (await res.json()) as { run_id: number }
@@ -168,24 +149,22 @@ test.describe("generated week on the LLM", () => {
         await ctx.get(`/api/plan/runs/${run_id}`)
       ).json()) as { status: string }
       expect(run.status).toBe("ok")
-      // One repair: no API exposes repair_attempts, so count the LLM calls.
-      // A kcal gap costs no call.
+      // The model made one call, the forced reading of the note; the plan
+      // itself is the heuristic's (no further call).
       const detail = (await (
         await ctx.get(`/api/ai/runs/${run_id}`)
       ).json()) as { steps: { type: string }[] }
-      expect(detail.steps.filter((s) => s.type === "llm_call")).toHaveLength(2)
+      expect(detail.steps.filter((s) => s.type === "llm_call")).toHaveLength(1)
 
-      // The notes line carries the run's notes (from the repaired turn),
-      // then the "Below target" line when the template plan is under the
-      // profile's kcal target.
-      await expect(page.getByTestId("plan-notes")).toContainText(NOTES)
+      // The notes line names what the note asked for: the light dinner.
+      await expect(page.getByTestId("plan-notes")).toContainText(
+        /Light:.*dinner/
+      )
 
-      // "Why this?" shows the plate's reason.
+      // "Why this?" shows the plate's reason (the heuristic's).
       const sheet = await openCellSheet(page, days[0], slots[0])
       await expect(sheet.getByText("Why this?")).toBeVisible()
-      await expect(sheet.getByTestId("sheet-why")).toHaveText(
-        "Cooked fresh for the day"
-      )
+      await expect(sheet.getByTestId("sheet-why")).not.toBeEmpty()
     } finally {
       // Back to the env's script (plan-dinner.json).
       await ctx.delete("/api/settings/ai.fake_script")

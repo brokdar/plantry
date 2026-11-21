@@ -1,0 +1,26 @@
+{
+  "_comment": [
+    "Fake set_constraints turn for the wish extraction (PL2: the heuristic plans, the model only reads the note). A template: replace {{d2}} (a date of the window, YYYY-MM-DD), write the result to a unique path and point the backend at it (PUT /api/settings/ai.fake_script).",
+    "The extraction asks for a light dinner on {{d2}}; the run's notes then say it ('Light: ... dinner'). plan-review-llm.spec.ts slows the turn down with delay_ms so the board can show the run."
+  ],
+  "turns": [
+    {
+      "for_tool": "set_constraints",
+      "events": [
+        { "delay_ms": 50, "type": "message_start", "payload": { "model": "fake-e2e" } }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_wish_1",
+            "tool_name": "set_constraints",
+            "tool_input": { "light": [{ "date": "{{d2}}", "scope": "meal", "slot": "dinner" }] }
+          }
+        ]
+      },
+      "usage": { "input_tokens": 600, "output_tokens": 60 }
+    }
+  ]
+}

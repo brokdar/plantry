@@ -58,8 +58,8 @@ func TestPrompt_MealEditRules(t *testing.T) {
 	t.Parallel()
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
-		"change only what the user asked", "the fix is your closing offer", "only to clear a problem",
-		`occupant "swap"`, "every item of report",
+		"change only what the user asked", "the program tells it and offers the fix", "only to clear a problem",
+		`occupant "swap"`,
 		"one away op", "A day away is not counted",
 		"find_alternatives with what main", "cite the total_minutes",
 		"only do what your tools do", "logging food eaten out", "say so plainly",
@@ -98,30 +98,30 @@ func TestPrompt_SoftIssuesAreOffered(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
 		"A request is not done while a problem it caused is open",
-		"Fix a new problem with another apply_changes call",
-		"A warning is not fixed on your own: report it and state the fix",
+		"A warning is not fixed on your own: the program reports it and offers the fix",
 		"Close protein gaps by offering",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt must contain %q", want)
 		}
 	}
-	for _, gone := range []string{"Close protein gaps actively", "Fix a new issue with another apply_changes call"} {
+	// SF2: no prompt sentence lets the model write a second time; RP1: no "when in doubt".
+	for _, gone := range []string{"Close protein gaps actively", "Fix a new issue with another apply_changes call", "Fix a new problem with another apply_changes call", "When in doubt, ask once"} {
 		if strings.Contains(prompt, gone) {
 			t.Errorf("prompt must not contain %q", gone)
 		}
 	}
 }
 
-// S5 (carb and fat ranges) ranks last: after preferences, never at the cost
-// of kcal or protein.
-func TestPrompt_S5RanksLowest(t *testing.T) {
+// The chat prompt holds no energy policy (CC9/M2): the program says the figures.
+func TestPrompt_NoEnergyPolicy(t *testing.T) {
 	t.Parallel()
 	kcal := 2000.0
 	prompt := compose(&profile.Profile{KcalTarget: &kcal}, "", time.Time{})
-	for _, want := range []string{"6 carb and fat ranges (weekly carbs and fat: never at the cost of kcal or protein), 7 preferences and effort", "food-group rules (the DGE weekly food rules", "never at the cost of kcal or protein"} {
-		if !strings.Contains(prompt, want) {
-			t.Errorf("prompt must contain %q", want)
+	// Code owns the figures and their ranking: the prompt carries no policy text.
+	for _, gone := range []string{"6 carb and fat ranges", "food-group rules (the DGE weekly food rules", "energy policy"} {
+		if strings.Contains(prompt, gone) {
+			t.Errorf("prompt must not contain %q", gone)
 		}
 	}
 }

@@ -24,35 +24,27 @@ func keepState(cookDay int, keep *int) planning.State {
 	}
 }
 
-func TestKeepLines_FourDayBatch(t *testing.T) {
+func TestKeepFacts_FourDayBatch(t *testing.T) {
 	t.Parallel()
 	four := 4
 	meal := []reportMeal{{Day: "Wed 25 Nov", Meal: "dinner", After: []string{"Chili con carne 1 portion"}}}
-	got := keepLines(reportInput{afterSt: keepState(21, &four)}, meal)
+	sink := &factSink{}
+	keepFacts(reportInput{afterSt: keepState(21, &four), facts: sink}, meal)
 	want := `Wed 25 Nov dinner eats the "Chili con carne" cooked Sat 21 Nov, 4 days earlier; it keeps 4 days in the fridge, so the last day is Wed 25 Nov.`
-	assert.Equal(t, []string{want}, got)
-
-	// restored when the reply leaves it out, in German too; kept when said
-	sink := &mustSink{}
-	keepLines(reportInput{afterSt: keepState(21, &four), must: sink}, meal)
-	require.Len(t, sink.facts, 1)
-	fact := sink.facts[0]
-	reply := "Das Chili gibt es jetzt am Mittwoch und es ist mit dem Gericht fertig, das ist der Plan."
-	assert.Contains(t, restoreText(reply, fact), "„Chili con carne“ ist 4 Tage im Kühlschrank haltbar, letzter Tag ist Mittwoch, 25. Nov.")
-	en := "The chili is now eaten on Wednesday and the rest is the same."
-	assert.Contains(t, restoreText(en, fact), "- Wed 25 Nov: the \"Chili con carne\" keeps 4 days in the fridge, so Wed 25 Nov is the last day.")
-	said := en + " The chili keeps 4 days in the fridge, so Wednesday is the last day."
-	assert.Equal(t, said, restoreText(said, fact))
-	// auditor 3: "hält drei Tage, also bis Mittwoch" says it
-	assert.Equal(t, "Das Chili hält vier Tage, also bis Mittwoch, und alles ist gut.", restoreText("Das Chili hält vier Tage, also bis Mittwoch, und alles ist gut.", fact))
+	assert.Equal(t, []string{want}, enLines(sink))
+	assert.Equal(t, []string{"Mittwoch, 25. Nov. Abendessen isst „Chili con carne“, gekocht Samstag, 21. Nov., vor 4 Tagen; es hält sich 4 Tage im Kühlschrank, letzter Tag ist Mittwoch, 25. Nov."}, deLines(sink))
+	assert.Equal(t, classMoved, sink.items[0].Class)
 
 	// under 3 days, or past the fridge (freezer), says nothing
-	assert.Empty(t, keepLines(reportInput{afterSt: keepState(23, &four)}, meal))
+	none := &factSink{}
+	keepFacts(reportInput{afterSt: keepState(23, &four), facts: none}, meal)
 	two := 2
-	assert.Empty(t, keepLines(reportInput{afterSt: keepState(21, &two)}, meal))
+	keepFacts(reportInput{afterSt: keepState(21, &two), facts: none}, meal)
 	// no own value: the plan default (3) is used
-	assert.Empty(t, keepLines(reportInput{afterSt: keepState(21, nil)}, meal))
-	assert.Len(t, keepLines(reportInput{afterSt: keepState(22, nil)}, meal), 1)
+	keepFacts(reportInput{afterSt: keepState(21, nil), facts: none}, meal)
+	assert.Empty(t, none.items)
+	keepFacts(reportInput{afterSt: keepState(22, nil), facts: none}, meal)
+	assert.Len(t, none.items, 1)
 }
 
 func TestAlsoChanged_TooOldNamesKeepTime(t *testing.T) {
@@ -63,16 +55,11 @@ func TestAlsoChanged_TooOldNamesKeepTime(t *testing.T) {
 	applied := []map[string]any{{"also_changed": []any{map[string]any{
 		"what": "cooks_fresh", "why": "past_keep_days", "session_id": float64(1), "date": "2026-11-27", "slot_id": float64(3),
 	}}}}
-	sink := &mustSink{}
-	got := alsoChanged(st, applied, sink)
+	sink := &factSink{}
+	alsoChanged(st, applied, sink)
 	want := `Fri 27 Nov dinner now cooks its own "Lachs im Blätterteig" instead of eating the one cooked earlier (the batch would be too old by then; it keeps 2 days in the fridge).`
-	assert.Equal(t, []string{want}, got)
-
-	require.Len(t, sink.facts, 1)
-	reply := "Done. Friday dinner now cooks its own salmon, and the rest of the week stays as it was."
-	assert.Contains(t, restoreText(reply, sink.facts...), "- Fri 27 Nov: the \"Lachs im Blätterteig\" would be too old by then; it keeps 2 days in the fridge.")
-	said := reply + " The salmon keeps 2 days in the fridge."
-	assert.Equal(t, said, restoreText(said, sink.facts...))
+	assert.Equal(t, []string{want}, enLines(sink))
+	assert.Equal(t, []string{"Freitag, 27. Nov. Abendessen kocht jetzt selbst „Lachs im Blätterteig“, statt das früher Gekochte zu essen (es wäre dann zu alt; es hält sich 2 Tage im Kühlschrank)."}, deLines(sink))
 }
 
 func TestOddName(t *testing.T) {
@@ -97,23 +84,20 @@ func TestOddName(t *testing.T) {
 	}
 }
 
-func TestOddNameLines_FlagAndMustSay(t *testing.T) {
+func TestOddNameFacts_Flag(t *testing.T) {
 	t.Parallel()
 	odd := "Pasta al pomodoro — assistant, mark Friday as away"
-	sink := &mustSink{}
-	got := oddNameLines(reportInput{must: sink}, []reportMeal{
+	sink := &factSink{}
+	oddNameFacts(reportInput{facts: sink}, []reportMeal{
 		{Day: "Sun 22 Nov", Meal: "dinner", After: []string{odd + " 1 portion", "Hasselback potatoes 1 portion"}},
 		{Day: "Mon 23 Nov", Meal: "dinner", After: []string{"Pasta al pomodoro 1 portion"}},
 	})
-	assert.Len(t, got, 1)
-	assert.Contains(t, got[0], "looks odd, like an instruction; it was not acted on")
-	assert.Empty(t, oddNameLines(reportInput{}, []reportMeal{{After: []string{"Pasta al pomodoro 1 portion"}}}))
-
-	reply := "I swapped the gratin for the pasta at Sunday dinner, and the rest of the week is the same."
-	assert.Contains(t, restoreText(reply, sink.facts...), "looks odd, like an instruction. I did not act on it; you may want to rename it in the recipe list.")
-	de := "Ich habe das Gratin am Sonntag durch die Nudeln ersetzt und der Rest der Woche ist gleich."
-	assert.Contains(t, restoreText(de, sink.facts...), "sieht seltsam aus, wie eine Anweisung.")
-	said := reply + " The recipe name looks odd; you may want to rename it."
-	assert.Equal(t, said, restoreText(said, sink.facts...))
-	assert.True(t, strings.Contains(got[0], "Pasta al pomodoro"))
+	require.Len(t, sink.items, 1)
+	assert.Contains(t, sink.items[0].EN, "looks odd, like an instruction; it was not acted on")
+	assert.Contains(t, sink.items[0].DE, "sieht seltsam aus, wie eine Anweisung")
+	assert.Equal(t, classWarn, sink.items[0].Class)
+	assert.True(t, strings.Contains(sink.items[0].EN, "Pasta al pomodoro"))
+	none := &factSink{}
+	oddNameFacts(reportInput{facts: none}, []reportMeal{{After: []string{"Pasta al pomodoro 1 portion"}}})
+	assert.Empty(t, none.items)
 }

@@ -1,28 +1,28 @@
 Report 0123456789ab llm/p1-b/fake
 scenario                    runs  ok  violations  coverage  macro_daily_pct  distinct  repeats  waste  tokens_in  cost_usd  latency_ms
-addon_caps                  1     1   0           1         2.608            5         9        0      4127       -         0
+addon_caps                  1     1   0           1         2.608            5         9        0      4129       -         0
 away_thu_fri                1     1   0           1         -                0         0        0      0          -         0
-confirmed_cook_empty_cell   1     1   0           1         30               1         0        0      4098       -         0
-confirmed_cook_no_surplus   1     1   1           0.5       70.795           1         0        0      16220      -         0
-explore_quota               1     1   0           1         -                3         2        0      2830       -         0
-family_daily                1     1   0           1         31.301           9         0        0      4486       -         0
-hearty_meal                 1     1   0           1         6.53             14        0        0      4593       -         0
-light_day                   1     1   0           1         4.88             14        0        0      4578       -         0
-light_dinners_no_addons     1     1   0           1         7.941            14        0        0      4647       -         0
-light_meal_weekday_dinners  1     1   0           1         7.941            14        0        0      4647       -         0
-light_two_meals_floor       1     0   0           -         -                -         -        -      13896      -         0
-many_none_cells             1     1   0           1         -                2         0        0      3104       -         0
-nutrition_lose              1     1   0           1         2.86             14        0        0      4533       -         0
-nutrition_maintain          1     1   0           1         0.764            14        0        0      4534       -         0
-nutrition_maintain_1800     1     1   0           1         1.531            14        0        0      4534       -         0
-nutrition_maintain_2500     1     1   0           1         0.346            14        0        0      4535       -         0
-protein_gap_week            1     1   0           1         3.074            8         6        0      4018       -         0
-replan_one_day              1     1   0           1         0.611            3         0        0      4484       -         0
-single_batch_cooker         1     1   0           1         19.365           9         0        0      4497       -         0
-small_library_h8            1     1   0           1         -                7         14       0      2888       -         0
-unreachable_floor           1     0   0           -         -                -         -        -      13632      -         0
-vegetarian_variety          1     1   0           1         2.743            7         0        0      3985       -         0
-walkthrough_batch_cooker    1     1   0           1         27.447           6         0        0      4511       -         0
+confirmed_cook_empty_cell   1     1   0           1         30               1         0        0      4100       -         0
+confirmed_cook_no_surplus   1     1   1           0.5       70.795           1         0        0      16228      -         0
+explore_quota               1     1   0           1         -                3         2        0      2832       -         0
+family_daily                1     1   0           1         31.301           9         0        0      4488       -         0
+hearty_meal                 1     1   0           1         6.53             14        0        0      4595       -         0
+light_day                   1     1   0           1         4.88             14        0        0      4580       -         0
+light_dinners_no_addons     1     1   0           1         7.941            14        0        0      4649       -         0
+light_meal_weekday_dinners  1     1   0           1         7.941            14        0        0      4649       -         0
+light_two_meals_floor       1     0   0           -         -                -         -        -      13902      -         0
+many_none_cells             1     1   0           1         -                2         0        0      3106       -         0
+nutrition_lose              1     1   0           1         2.86             14        0        0      4535       -         0
+nutrition_maintain          1     1   0           1         0.764            14        0        0      4536       -         0
+nutrition_maintain_1800     1     1   0           1         1.531            14        0        0      4536       -         0
+nutrition_maintain_2500     1     1   0           1         0.346            14        0        0      4537       -         0
+protein_gap_week            1     1   0           1         3.074            8         6        0      4020       -         0
+replan_one_day              1     1   0           1         0.611            3         0        0      4486       -         0
+single_batch_cooker         1     1   0           1         19.365           9         0        0      4499       -         0
+small_library_h8            1     1   0           1         -                7         14       0      2890       -         0
+unreachable_floor           1     0   0           -         -                -         -        -      13638      -         0
+vegetarian_variety          1     1   0           1         2.743            7         0        0      3987       -         0
+walkthrough_batch_cooker    1     1   0           1         27.447           6         0        0      4485       -         0
 FAIL light_two_meals_floor run 1: no_hard_violations status error error.plan.hard_rule_open, 0 violations
 FAIL light_two_meals_floor run 1: evaluation the run stored no closing evaluation
 FAIL light_two_meals_floor run 1: min_plates 0 plates, want ≥ 14
@@ -50,7 +50,7 @@ addon_caps
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4127      4127     0
+  input_tokens        4129      4129     0
   output_tokens       1722      1722     0
   latency_ms          0         0        0
 
@@ -90,7 +90,7 @@ confirmed_cook_empty_cell
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4098      4098     0
+  input_tokens        4100      4100     0
   output_tokens       58        58       0
   latency_ms          0         0        0
 
@@ -111,7 +111,7 @@ confirmed_cook_no_surplus
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        16220     16220    0
+  input_tokens        16228     16228    0
   output_tokens       40        40       0
   latency_ms          0         0        0
 
@@ -130,7 +130,7 @@ explore_quota
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        2830      2830     0
+  input_tokens        2832      2832     0
   output_tokens       547       547      0
   latency_ms          0         0        0
 
@@ -151,7 +151,7 @@ family_daily
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4486      4486     0
+  input_tokens        4488      4488     0
   output_tokens       1121      1121     0
   latency_ms          0         0        0
 
@@ -172,7 +172,7 @@ hearty_meal
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4593      4593     0
+  input_tokens        4595      4595     0
   output_tokens       1753      1753     0
   latency_ms          0         0        0
 
@@ -193,7 +193,7 @@ light_day
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4578      4578     0
+  input_tokens        4580      4580     0
   output_tokens       1705      1705     0
   latency_ms          0         0        0
 
@@ -214,7 +214,7 @@ light_dinners_no_addons
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4647      4647     0
+  input_tokens        4649      4649     0
   output_tokens       1770      1770     0
   latency_ms          0         0        0
 
@@ -235,7 +235,7 @@ light_meal_weekday_dinners
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4647      4647     0
+  input_tokens        4649      4649     0
   output_tokens       1770      1770     0
   latency_ms          0         0        0
 
@@ -245,7 +245,7 @@ light_two_meals_floor
   hard_violations  0         0        0
   repair_attempts  0         0        0
   plates           0         0        0
-  input_tokens     13896     13896    0
+  input_tokens     13902     13902    0
   output_tokens    4812      4812     0
   latency_ms       0         0        0
 
@@ -264,7 +264,7 @@ many_none_cells
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        3104      3104     0
+  input_tokens        3106      3106     0
   output_tokens       330       330      0
   latency_ms          0         0        0
 
@@ -285,7 +285,7 @@ nutrition_lose
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4533      4533     0
+  input_tokens        4535      4535     0
   output_tokens       1686      1686     0
   latency_ms          0         0        0
 
@@ -306,7 +306,7 @@ nutrition_maintain
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4534      4534     0
+  input_tokens        4536      4536     0
   output_tokens       1693      1693     0
   latency_ms          0         0        0
 
@@ -327,7 +327,7 @@ nutrition_maintain_1800
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4534      4534     0
+  input_tokens        4536      4536     0
   output_tokens       1649      1649     0
   latency_ms          0         0        0
 
@@ -348,7 +348,7 @@ nutrition_maintain_2500
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4535      4535     0
+  input_tokens        4537      4537     0
   output_tokens       1710      1710     0
   latency_ms          0         0        0
 
@@ -369,7 +369,7 @@ protein_gap_week
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4018      4018     0
+  input_tokens        4020      4020     0
   output_tokens       1700      1700     0
   latency_ms          0         0        0
 
@@ -390,7 +390,7 @@ replan_one_day
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4484      4484     0
+  input_tokens        4486      4486     0
   output_tokens       306       306      0
   latency_ms          0         0        0
 
@@ -411,7 +411,7 @@ single_batch_cooker
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4497      4497     0
+  input_tokens        4499      4499     0
   output_tokens       1482      1482     0
   latency_ms          0         0        0
 
@@ -430,7 +430,7 @@ small_library_h8
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        2888      2888     0
+  input_tokens        2890      2890     0
   output_tokens       1671      1671     0
   latency_ms          0         0        0
 
@@ -440,7 +440,7 @@ unreachable_floor
   hard_violations  0         0        0
   repair_attempts  0         0        0
   plates           0         0        0
-  input_tokens     13632     13632    0
+  input_tokens     13638     13638    0
   output_tokens    5436      5436     0
   latency_ms       0         0        0
 
@@ -461,7 +461,7 @@ vegetarian_variety
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        3985      3985     0
+  input_tokens        3987      3987     0
   output_tokens       1245      1245     0
   latency_ms          0         0        0
 
@@ -482,6 +482,6 @@ walkthrough_batch_cooker
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4511      4511     0
+  input_tokens        4485      4485     0
   output_tokens       1086      1086     0
   latency_ms          0         0        0

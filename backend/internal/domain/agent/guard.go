@@ -10,6 +10,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -30,14 +31,130 @@ func newHard(before, after planning.Evaluation) []planning.Issue {
 	return out
 }
 
-// hardWhy says in plain words, with the numbers, what a new hard issue is.
-func hardWhy(is planning.Issue) string {
+// hardWhyL is hardWhy in English and German.
+func hardWhyL(is planning.Issue) (en, de string) {
 	if is.Code == planning.CodeKcalBelowFloor {
 		kcal, _ := is.Params["kcal"].(float64)
 		floor, _ := is.Params["floor_kcal"].(float64)
-		return fmt.Sprintf("%s would fall to %.0f kcal, under its minimum of %.0f kcal", dayLabelStr(is.Date), kcal, floor)
+		return fmt.Sprintf("%s would fall to %.0f kcal, under its minimum of %.0f kcal", dayLabelStr(is.Date), kcal, floor),
+			fmt.Sprintf("%s würde auf %.0f kcal fallen, unter den Mindestwert von %.0f kcal", deDay(dayLabelStr(is.Date)), kcal, floor)
 	}
-	return fmt.Sprintf("it would create a problem on %s: %s", dayLabelStr(is.Date), planning.PlainText(is.Code).Label)
+	labelDE, ok := hardLabelDE[is.Code]
+	if !ok {
+		labelDE = "eine Regel wäre verletzt"
+	}
+	figEN, figDE := hardFigures(is)
+	on, onDE := "", ""
+	if is.Date != "" {
+		on, onDE = " on "+dayLabelStr(is.Date), " am "+deDay(dayLabelStr(is.Date))
+	}
+	return fmt.Sprintf("it would create a problem%s: %s%s", on, planning.PlainText(is.Code).Label, figEN),
+		fmt.Sprintf("es würde%s ein Problem entstehen: %s%s", onDE, labelDE, figDE)
+}
+
+// hardLabelDE is the plain label of a hard issue in German.
+var hardLabelDE = map[string]string{
+	planning.CodeTooManyCookOccasions: "mehr getrennte Kochzeiten an einem Tag als erlaubt",
+	planning.CodeMeatDaysExceeded:     "mehr Fleischtage in der Woche als erlaubt",
+	planning.CodeDietIncompatible:     "ein Lebensmittel passt nicht zur Ernährungsweise",
+	planning.CodeKcalBelowFloor:       "der Tag läge unter seinem Mindestwert",
+	planning.CodeVarietyRepeat:        "ein Hauptgericht wurde zu kürzlich gekocht oder gegessen",
+	"leftover_before_cook":            "Reste würden vor dem Kochen gegessen",
+	"past_keep_days":                  "Reste wären nicht mehr haltbar",
+	"deficit":                         "es würde mehr gegessen, als gekocht wird",
+}
+
+// refusedPart names what the guard left out: the action with the dish and the
+// day and meal it concerns, in English and German, from the plan before the call.
+func refusedPart(ctx context.Context, svc Services, w window.Window, op changeOp, r applyRun) (en, de string) {
+	var st planning.State
+	haveSt := false
+	if svc.State != nil {
+		if s, err := svc.State(ctx, w, todayFrom(ctx)); err == nil {
+			st, haveSt = s, true
+		}
+	}
+	dish, cell := "", ""
+	if haveSt {
+		for _, p := range st.Plates {
+			match := p.ID == op.PlateID && op.PlateID != 0
+			for _, c := range p.Components {
+				if op.PlateComponentID != 0 && c.ID == op.PlateComponentID {
+					match, dish = true, foodName(st, c.FoodID)
+				}
+			}
+			if match {
+				cell = mealName(st, p)
+				if dish == "" && op.FoodID == 0 {
+					for _, c := range p.Components {
+						if c.Position == plate.PositionMain {
+							dish = foodName(st, c.FoodID)
+						}
+					}
+				}
+			}
+		}
+		if dish == "" && op.FoodID != 0 {
+			dish = foodName(st, op.FoodID)
+		}
+		if cell == "" && op.Date != "" {
+			cell = dayLabelStr(op.Date)
+			if n := strings.TrimPrefix(st.SlotNames[op.SlotID], "slot."); n != "" && op.SlotID != 0 {
+				cell += " " + n
+			}
+		}
+	}
+	if applied, ok := r.result["applied"].([]map[string]any); ok && len(applied) > 0 {
+		if dish == "" {
+			dish, _ = applied[0]["food"].(string)
+		}
+		if cell == "" && applied[0]["date"] != nil {
+			cell = dayLabelStr(fmt.Sprint(applied[0]["date"]))
+		}
+	}
+	cellDE := deCell(cell)
+	if len(strings.Fields(cell)) == 3 {
+		cellDE = deDay(cell)
+	}
+	q, qd := food.Quote(dish), deQuote(dish)
+	at := func(prep string) string {
+		if cell == "" {
+			return ""
+		}
+		return " " + prep + " " + cell
+	}
+	atDE := func(prep string) string {
+		if cell == "" {
+			return ""
+		}
+		return " " + prep + " " + cellDE
+	}
+	if dish == "" {
+		q, qd = "the food", "das Essen"
+	}
+	switch op.Op {
+	case "add":
+		return "adding " + q + at("to"), qd + atDE("zu") + " hinzufügen"
+	case "remove":
+		return "removing " + q + at("from"), qd + atDE("von") + " entfernen"
+	case "swap", "replace":
+		return "replacing " + q + at("at"), qd + atDE("bei") + " ersetzen"
+	case "set_quantity", "set_portions":
+		return "the new portion size of " + q + at("at"), "die neue Portionsgröße von " + qd + atDE("bei")
+	case "set_eaters":
+		return "the change of people" + at("at"), "die Änderung der Personenzahl" + atDE("bei")
+	case "move":
+		return "moving " + q + at("from"), qd + atDE("von") + " verschieben"
+	}
+	return "the change" + at("at"), "die Änderung" + atDE("bei")
+}
+
+// refusedFact is a part the guard left out, with its reason and numbers.
+func refusedFact(whatEN, whatDE, why, whyDE string) map[string]any {
+	return map[string]any{
+		"en": fmt.Sprintf("Left out: %s (%s).", whatEN, why),
+		"de": fmt.Sprintf("Weggelassen: %s (%s).", whatDE, whyDE),
+	}
 }
 
 // runGuarded is apply_changes' write path: a call whose ops would leave a day
@@ -71,8 +188,8 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 		return runApply(ctx, svc, w, t, nil)
 	}
 	type skip struct {
-		idx       int
-		what, why string
+		idx                      int
+		what, whatDE, why, whyDE string
 	}
 	var skipped []skip
 	var safe []int
@@ -87,7 +204,9 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 			continue
 		}
 		if hs := newHard(r.before, r.after); len(hs) > 0 {
-			skipped = append(skipped, skip{i, describeOp(op, r), hardWhy(hs[0])})
+			en, de := hardWhyL(hs[0])
+			wEN, wDE := refusedPart(ctx, svc, w, op, r)
+			skipped = append(skipped, skip{i, wEN, wDE, en, de})
 			continue
 		}
 		safe = append(safe, i)
@@ -107,11 +226,13 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 			break
 		}
 		last := safe[len(safe)-1]
-		why := "together with the other changes it would leave a day under its minimum"
+		why, whyDE := "together with the other changes it would leave a day under its minimum", "zusammen mit den anderen Änderungen würde ein Tag unter seinen Mindestwert fallen"
 		if err == nil {
-			why = hardWhy(newHard(r.before, r.after)[0]) + " together with the other changes"
+			en, de := hardWhyL(newHard(r.before, r.after)[0])
+			why, whyDE = en+" together with the other changes", de+" zusammen mit den anderen Änderungen"
 		}
-		skipped = append(skipped, skip{last, describeOp(in.Ops[last], applyRun{}), why})
+		wEN, wDE := refusedPart(ctx, svc, w, in.Ops[last], applyRun{})
+		skipped = append(skipped, skip{last, wEN, wDE, why, whyDE})
 		safe = safe[:len(safe)-1]
 	}
 
@@ -119,7 +240,11 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 	var skippedList []map[string]any
 	var offers []map[string]any
 	for _, s := range skipped {
-		skippedList = append(skippedList, map[string]any{"op": s.idx + 1, "what": s.what, "why": s.why})
+		entry := map[string]any{"op": s.idx + 1, "what": s.what, "why": s.why}
+		for k, v := range refusedFact(s.what, s.whatDE, s.why, s.whyDE) {
+			entry[k] = v
+		}
+		skippedList = append(skippedList, entry)
 		skippedOut = append(skippedOut, s.what+" ("+s.why+")")
 		if o := refusalOffer(ctx, svc, w, in.Ops[s.idx], len(offers) == 0); o != nil {
 			offers = append(offers, o)
@@ -217,20 +342,6 @@ func containsInt(l []int, v int) bool {
 	return false
 }
 
-// describeOp names an op in words for the skipped list: a removal by food and
-// date (from the check that ran it), else the op and its date.
-func describeOp(op changeOp, r applyRun) string {
-	if applied, ok := r.result["applied"].([]map[string]any); ok && len(applied) > 0 {
-		if name, ok := applied[0]["food"].(string); ok {
-			return fmt.Sprintf("%s %s on %v", op.Op, food.Quote(name), dayLabelStr(fmt.Sprint(applied[0]["date"])))
-		}
-	}
-	if op.Date != "" {
-		return fmt.Sprintf("%s on %s", op.Op, dayLabelStr(op.Date))
-	}
-	return op.Op
-}
-
 // replacementOffer offers, for a skipped removal, a fitting option that keeps
 // the day above its minimum: the best verified replacement of the component
 // (no new hard issue, no new warning), recommended when it is the first offer.
@@ -254,8 +365,9 @@ func replacementOffer(ctx context.Context, svc Services, w window.Window, op cha
 			}
 			if a, ok := firstClean(res.Alternatives, func(ops []planning.OptionOp) bool { return offerIsClean(ctx, svc, w, ops) }); ok {
 				return map[string]any{
-					"what": fmt.Sprintf("swap %s's %s for %s so the day stays above its minimum", mealName(st, p), food.Quote(res.Current.Name), food.Quote(a.Name)),
-					"ops":  a.Ops, "recommended": first, "recommended_because": "keeps the day above its minimum, no new warning",
+					"what":    fmt.Sprintf("swap %s's %s for %s so the day stays above its minimum", mealName(st, p), food.Quote(res.Current.Name), food.Quote(a.Name)),
+					"what_de": fmt.Sprintf("bei %s %s durch %s ersetzen, damit der Tag über seinem Mindestwert bleibt", deCell(mealName(st, p)), deQuote(res.Current.Name), deQuote(a.Name)),
+					"ops":     a.Ops, "recommended": first, "recommended_because": "keeps the day above its minimum, no new warning",
 					"effect": map[string]any{"day": dayLabel(p.Date), "day_kcal_after": a.DayKcal},
 				}
 			}
@@ -378,48 +490,73 @@ func mealName(st planning.State, p planning.Plate) string {
 	return dayLabel(p.Date) + " " + strings.TrimPrefix(st.SlotNames[p.SlotID], "slot.")
 }
 
-// withBackToRange adds, for the days the saved part left under their range
-// (the household allows it, and the reply says so), one recommended offer that
-// brings them back: the recommended option of each such day's issue, verified
-// together. With an offer for the skipped part already there, the two become
-// one offer when they check out together.
+// withBackToRange adds, for a day the saved part left under its range (the
+// household allows it, and the reply says so), one recommended offer that brings
+// it back: ONE change (spec C1/G3, OF2), the recommended option of the first
+// such day that is no cheese or nut filler (RL6) and checks out clean. An offer
+// for the skipped part already there stays the one offer: the under-range days
+// are in the facts block, never a second change in the same sentence.
 func withBackToRange(ctx context.Context, svc Services, w window.Window, res applyRun, offers []map[string]any) []map[string]any {
+	if len(offers) > 0 {
+		return offers
+	}
 	was := issueMap(res.before.Issues)
-	var ops []planning.OptionOp
-	var texts []string
-	var effect []map[string]any
 	for _, is := range res.after.Issues {
 		if _, old := was[issueKey(is)]; old || is.Code != planning.CodeKcalBelowBand || len(is.Options) == 0 {
 			continue
 		}
 		o := is.Options[0]
-		oops := o.Ops
-		if len(oops) == 0 {
-			oops = []planning.OptionOp{o.Op}
+		if isNutFiller(o) {
+			continue
 		}
-		ops = append(ops, oops...)
-		texts = append(texts, fmt.Sprintf("%s on %s", food.Quote(o.Name), dayLabelStr(is.Date)))
-		effect = append(effect, map[string]any{"day": dayLabelStr(is.Date), "day_kcal_after": o.DayKcal})
-	}
-	if len(ops) == 0 {
-		return offers
-	}
-	what := "add " + strings.Join(texts, " and ") + " so those days are back in their range"
-	if len(offers) > 0 {
-		first := offers[0]
-		firstOps, _ := first["ops"].([]planning.OptionOp)
-		merged := slices.Concat(firstOps, ops)
-		if offerIsClean(ctx, svc, w, merged) {
-			first["ops"] = merged
-			first["what"] = fmt.Sprint(first["what"]) + "; and " + what
-			first["effect"] = []any{first["effect"], effect}
-			first["recommended_because"] = "brings every day back above its minimum and into its range, no new warning"
-			return offers
+		ops := o.Ops
+		if len(ops) == 0 {
+			ops = []planning.OptionOp{o.Op}
 		}
-		return append(offers, map[string]any{"what": what, "ops": ops, "recommended": false, "effect": effect})
+		if !offerIsClean(ctx, svc, w, ops) {
+			continue
+		}
+		return []map[string]any{{
+			"what":                fmt.Sprintf("add %s on %s so that day is back in its range", food.Quote(o.Name), dayLabelStr(is.Date)),
+			"what_de":             fmt.Sprintf("%s am %s hinzufügen, damit dieser Tag wieder im Bereich liegt", deQuote(o.Name), deDay(dayLabelStr(is.Date))),
+			"ops":                 ops,
+			"recommended":         true,
+			"recommended_because": "brings that day back into its range, no new warning",
+			"effect":              map[string]any{"day": dayLabelStr(is.Date), "day_kcal_after": o.DayKcal},
+		}}
 	}
-	if !offerIsClean(ctx, svc, w, ops) {
-		return offers
+	return offers
+}
+
+// isNutFiller reports an add of a cheese or a nut: never a filler (RL6).
+func isNutFiller(o planning.Option) bool {
+	return o.Action == "add" && planning.IsCheeseOrNut(o.Name)
+}
+
+// hardFigures are the numbers of a hard issue, ", N days with meat, at most M":
+// the reason of a refusal carries its figures.
+func hardFigures(is planning.Issue) (en, de string) {
+	n := func(k string) float64 { return paramNum(is, k) }
+	switch is.Code {
+	case planning.CodeMeatDaysExceeded:
+		return fmt.Sprintf(" (%.0f days with meat, at most %.0f)", n("days"), n("max")), fmt.Sprintf(" (%.0f Tage mit Fleisch, höchstens %.0f)", n("days"), n("max"))
+	case planning.CodeTooManyCookOccasions:
+		return fmt.Sprintf(" (%.0f cooking times, at most %.0f)", n("count"), n("max")), fmt.Sprintf(" (%.0f Kochzeiten, höchstens %.0f)", n("count"), n("max"))
 	}
-	return []map[string]any{{"what": what, "ops": ops, "recommended": true, "recommended_because": "brings those days back into their range, no new warning", "effect": effect}}
+	keys := make([]string, 0, len(is.Params))
+	for k := range is.Params {
+		if k != "id" && !strings.HasSuffix(k, "_id") && paramNum(is, k) != 0 {
+			keys = append(keys, k)
+		}
+	}
+	slices.Sort(keys)
+	var parts, partsDE []string
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s %s", strings.ReplaceAll(k, "_", " "), fmtNum(n(k))))
+		partsDE = append(partsDE, fmt.Sprintf("%s %s", strings.ReplaceAll(k, "_", " "), fmtComma(n(k))))
+	}
+	if len(parts) == 0 {
+		return "", ""
+	}
+	return " (" + strings.Join(parts, ", ") + ")", " (" + strings.Join(partsDE, ", ") + ")"
 }

@@ -54,6 +54,12 @@ type RunRequest struct {
 	Tools       []llm.Tool
 	Temperature float64
 	MaxTokens   int
+	// UserText is the user's message of this turn: its language is the reply's;
+	// Locale is the profile's, the language when no message says (RP8); FoodNames
+	// are the plan's foods, which a write's text may not name unless its block does.
+	UserText  string
+	Locale    string
+	FoodNames []string
 	// Effort is the reasoning effort (ai.reasoning_effort.chat); empty: the
 	// provider default.
 	Effort string
@@ -107,7 +113,9 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 	}
 
 	requests, turns, conts, continuation, wrapUp := 0, 0, 0, false, false
-	var resizes []mustFact // the must-say facts of the newest saved change
+	// What the final reply is judged against and completed with (see composeReply).
+	turnReply := replyTurn{user: req.UserText, numbers: map[string]bool{}, locale: req.Locale, foods: req.FoodNames, earlier: earlierUserTexts(req.History)}
+	stateNumbers(req.SystemPrompt, turnReply.numbers)
 	for {
 		if requests++; requests > MaxRequests {
 			break
@@ -144,8 +152,14 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			done <- result{resp: r, err: err}
 		}()
 
-		// Relay every provider event untouched to the outer consumer.
+		// Relay the provider's events to the outer consumer, except the text: what
+		// the model writes is judged first (a reply is the model's framing and the
+		// code's block, see composeReply), so its text is held back and shown once,
+		// as stored, when the message is complete.
 		for evt := range providerCh {
+			if evt.Type == llm.EventAssistantDelta {
+				continue
+			}
 			if !send(ctx, out, evt) {
 				<-done // wait for goroutine exit
 				closeTurn()
@@ -195,9 +209,16 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		// ends: the UI refetches the conversation) in kitchen terms; the run log
 		// keeps what the model wrote.
 		if len(extractToolUses(res.resp.Message)) == 0 {
-			restoreMust(&res.resp.Message, resizes)
+			finalizeMessage(&res.resp.Message, turnReply)
+		} else {
+			sanitizeToolMessage(&res.resp.Message, turnReply)
 		}
-		plainReplyMessage(&res.resp.Message)
+		if shown := messageText(res.resp.Message); shown != "" {
+			if !send(ctx, out, llm.Event{Type: llm.EventAssistantDelta, Payload: llm.AssistantDeltaPayload{Text: shown}}) {
+				closeTurn()
+				return ctx.Err()
+			}
+		}
 		replay := llm.ReplayMessage(res.resp.Message)
 		if err := store(RoleAssistant, replay); err != nil {
 			return fail("error.server", err)
@@ -302,6 +323,8 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 				var refusal markRefusal
 				if errors.As(err, &refusal) {
 					payload["tell"] = refusal.tell
+					turnReply.write = true
+					turnReply.block = mergeBlock(turnReply.block, refusal.block())
 				}
 				errorPayload := withChange(mustMarshal(payload), change)
 				resultBlocks = append(resultBlocks, llm.ContentBlock{
@@ -329,10 +352,17 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			view := modelView(output)
 			// The facts come from the result itself, not from the model's
 			// view, which rewrites words.
-			if _, saved := mustTold(view); saved {
-				resizes, _ = mustTold(output)
+			toolNumbers(view, turnReply.numbers)
+			if writeTools[call.ToolUseName] {
+				turnReply.write = true
+				if b, check := blockOf(output); !check {
+					if b == nil {
+						b = savedBlock(call.ToolUseName, output)
+					}
+					turnReply.block = mergeBlock(turnReply.block, b)
+				}
 			}
-			view = withoutMust(view)
+			view = withoutFacts(view)
 			resultBlocks = append(resultBlocks, llm.ContentBlock{
 				Type:              llm.ContentTypeToolResult,
 				ToolResultID:      call.ToolUseID,
