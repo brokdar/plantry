@@ -151,6 +151,8 @@ def machine_budgets(b, write):
         b["machines"][m] = {}
         global SEEDING
         SEEDING = True
+        # CI cannot commit: it collects every entry and prints them (finish).
+        return b["machines"][m], write or bool(os.environ.get("CI"))
     return b["machines"][m], write
 
 
@@ -196,8 +198,6 @@ def cmd_race(args):
 
 
 def finish(b, write):
-    if SEEDING and os.environ.get("CI"):
-        write = True  # print this machine's numbers to seed its budgets
     if not write:
         return
     if os.environ.get("CI"):
