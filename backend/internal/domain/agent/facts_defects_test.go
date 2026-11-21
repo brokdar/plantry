@@ -2,7 +2,6 @@ package agent
 
 import (
 	"encoding/json"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -140,18 +139,4 @@ func TestBuildReport_CheckHoldsTheTouchedDaysBeforeAndAfter(t *testing.T) {
 	assert.NotContains(t, view, `"check"`)
 	assert.NotContains(t, view, `"facts"`)
 	assert.Contains(t, view, `"tell"`)
-}
-
-var quotedName = regexp.MustCompile(`"([^"]+)"`)
-
-// assertOfferDE: the German offer carries the dishes and the numbers of the English one.
-func assertOfferDE(t *testing.T, what, whatDE string) {
-	t.Helper()
-	require.NotEmpty(t, whatDE, "no German offer for %q", what)
-	for _, m := range quotedName.FindAllStringSubmatch(what, -1) {
-		assert.Contains(t, whatDE, m[1], "the German offer names the dish %q: %s", m[1], whatDE)
-	}
-	for _, n := range regexp.MustCompile(`\d+(?:\.\d+)?`).FindAllString(what, -1) {
-		assert.Contains(t, whatDE, strings.Replace(n, ".", ",", 1), "the German offer has the number %s: %s", n, whatDE)
-	}
 }
