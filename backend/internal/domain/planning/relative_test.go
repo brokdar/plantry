@@ -466,3 +466,25 @@ func TestWays_HalfPortionOnlyForADishCookedForOneMeal(t *testing.T) {
 	assert.GreaterOrEqual(t, smallest(relLeftover()), 0.75, "the dish feeds another meal")
 	assert.Equal(t, 0.5, smallest(relState(false)), "cooked fresh for this meal alone: half a portion is allowed")
 }
+
+// SC3/RL2: a comparative stores no mark, so its search judges the day against
+// the range the saved state has: the unmarked one, so the result's range is
+// the range of every way. ("light/filling" to the limit stores its mark and
+// keeps the marked range.)
+func TestWays_ComparativeJudgesTheDayByTheUnmarkedRange(t *testing.T) {
+	s := relState(false)
+	var plain planning.DayEval
+	for _, d := range planning.Evaluate(s, windowTarget(s)).Days {
+		if d.Date == sat {
+			plain = d
+		}
+	}
+	require.NotZero(t, plain.BandHigh)
+	for _, goal := range []string{planning.GoalLighter, planning.GoalHeartier} {
+		t.Run(goal, func(t *testing.T) {
+			res := ways(t, s, planning.WayRequest{PlateID: 3, Goal: goal, Limit: 8})
+			assert.InDelta(t, plain.BandLow, res.BandLow, 0.5)
+			assert.InDelta(t, plain.BandHigh, res.BandHigh, 0.5)
+		})
+	}
+}

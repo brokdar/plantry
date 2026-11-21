@@ -357,8 +357,13 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 		if req.Goal == GoalHeartier {
 			light = AltHeartier
 		}
-		if s, w.capKcal, w.minKcal, err = s.withAltLight(t, p, light); err != nil {
+		marked, capKcal, minKcal, err := s.withAltLight(t, p, light)
+		if err != nil {
 			return WayResult{}, err
+		}
+		w.capKcal, w.minKcal = capKcal, minKcal
+		if req.ToLimit {
+			s = marked // SC3: only the limit request stores the mark; a comparative is judged by the saved state's range
 		}
 		level := ""
 		if req.Goal == GoalHeartier {
