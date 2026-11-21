@@ -9,14 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	appdb "github.com/jaltszeimer/plantry/backend/db"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
 
@@ -42,10 +41,7 @@ func TestKR7_ColdPlateIsTheFallbackWhenItIsPossible(t *testing.T) {
 			require.NoError(t, err)
 			db.SetMaxOpenConns(1)
 			t.Cleanup(func() { _ = db.Close() })
-			goose.SetLogger(goose.NopLogger())
-			goose.SetBaseFS(appdb.Migrations)
-			require.NoError(t, goose.SetDialect("sqlite3"))
-			require.NoError(t, goose.Up(db, "migrations"))
+			testhelper.Migrate(t, db)
 			deps := testsvc.PlanningDeps(db)
 			deps.RunLog, deps.Runs = planning.RecorderLog{Recorder: airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)}, sqlite.NewAIRunRepo(db)
 			deps.Go = func(f func()) { f() }
