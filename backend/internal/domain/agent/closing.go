@@ -413,11 +413,15 @@ func offerOf(obj map[string]any) *offerLine {
 	first := func(is any) map[string]any {
 		m, _ := is.(map[string]any)
 		opts, _ := m["options"].([]any)
-		if len(opts) == 0 {
-			return nil
+		for _, x := range opts {
+			o, _ := x.(map[string]any)
+			name, _ := o["name"].(string)
+			if o["action"] == "add" && planning.IsCheeseOrNut(name) {
+				continue // never a cheese or a nut as a filler (RL6)
+			}
+			return o
 		}
-		o, _ := opts[0].(map[string]any)
-		return o
+		return nil
 	}
 	fixes, _ := issues["day_fix"].([]any)
 	for _, is := range fixes {

@@ -490,53 +490,47 @@ func mealName(st planning.State, p planning.Plate) string {
 	return dayLabel(p.Date) + " " + strings.TrimPrefix(st.SlotNames[p.SlotID], "slot.")
 }
 
-// withBackToRange adds, for the days the saved part left under their range
-// (the household allows it, and the reply says so), one recommended offer that
-// brings them back: the recommended option of each such day's issue, verified
-// together. With an offer for the skipped part already there, the two become
-// one offer when they check out together.
+// withBackToRange adds, for a day the saved part left under its range (the
+// household allows it, and the reply says so), one recommended offer that brings
+// it back: ONE change (spec C1/G3, OF2), the recommended option of the first
+// such day that is no cheese or nut filler (RL6) and checks out clean. An offer
+// for the skipped part already there stays the one offer: the under-range days
+// are in the facts block, never a second change in the same sentence.
 func withBackToRange(ctx context.Context, svc Services, w window.Window, res applyRun, offers []map[string]any) []map[string]any {
+	if len(offers) > 0 {
+		return offers
+	}
 	was := issueMap(res.before.Issues)
-	var ops []planning.OptionOp
-	var texts, textsDE []string
-	var effect []map[string]any
 	for _, is := range res.after.Issues {
 		if _, old := was[issueKey(is)]; old || is.Code != planning.CodeKcalBelowBand || len(is.Options) == 0 {
 			continue
 		}
 		o := is.Options[0]
-		oops := o.Ops
-		if len(oops) == 0 {
-			oops = []planning.OptionOp{o.Op}
+		if isNutFiller(o) {
+			continue
 		}
-		ops = append(ops, oops...)
-		texts = append(texts, fmt.Sprintf("%s on %s", food.Quote(o.Name), dayLabelStr(is.Date)))
-		textsDE = append(textsDE, fmt.Sprintf("%s am %s", deQuote(o.Name), deDay(dayLabelStr(is.Date))))
-		effect = append(effect, map[string]any{"day": dayLabelStr(is.Date), "day_kcal_after": o.DayKcal})
-	}
-	if len(ops) == 0 {
-		return offers
-	}
-	what := "add " + strings.Join(texts, " and ") + " so those days are back in their range"
-	whatDE := strings.Join(textsDE, " und ") + " hinzufügen, damit diese Tage wieder im Bereich liegen"
-	if len(offers) > 0 {
-		first := offers[0]
-		firstOps, _ := first["ops"].([]planning.OptionOp)
-		merged := slices.Concat(firstOps, ops)
-		if offerIsClean(ctx, svc, w, merged) {
-			first["ops"] = merged
-			first["what"] = fmt.Sprint(first["what"]) + "; and " + what
-			first["what_de"] = fmt.Sprint(first["what_de"]) + "; und " + whatDE
-			first["effect"] = []any{first["effect"], effect}
-			first["recommended_because"] = "brings every day back above its minimum and into its range, no new warning"
-			return offers
+		ops := o.Ops
+		if len(ops) == 0 {
+			ops = []planning.OptionOp{o.Op}
 		}
-		return append(offers, map[string]any{"what": what, "what_de": whatDE, "ops": ops, "recommended": false, "effect": effect})
+		if !offerIsClean(ctx, svc, w, ops) {
+			continue
+		}
+		return []map[string]any{{
+			"what":                fmt.Sprintf("add %s on %s so that day is back in its range", food.Quote(o.Name), dayLabelStr(is.Date)),
+			"what_de":             fmt.Sprintf("%s am %s hinzufügen, damit dieser Tag wieder im Bereich liegt", deQuote(o.Name), deDay(dayLabelStr(is.Date))),
+			"ops":                 ops,
+			"recommended":         true,
+			"recommended_because": "brings that day back into its range, no new warning",
+			"effect":              map[string]any{"day": dayLabelStr(is.Date), "day_kcal_after": o.DayKcal},
+		}}
 	}
-	if !offerIsClean(ctx, svc, w, ops) {
-		return offers
-	}
-	return []map[string]any{{"what": what, "what_de": whatDE, "ops": ops, "recommended": true, "recommended_because": "brings those days back into their range, no new warning", "effect": effect}}
+	return offers
+}
+
+// isNutFiller reports an add of a cheese or a nut: never a filler (RL6).
+func isNutFiller(o planning.Option) bool {
+	return o.Action == "add" && planning.IsCheeseOrNut(o.Name)
 }
 
 // hardFigures are the numbers of a hard issue, ", N days with meat, at most M":
