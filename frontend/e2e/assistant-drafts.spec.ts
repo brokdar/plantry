@@ -545,20 +545,24 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     ).steps.find((x) => x.name === "apply_changes")!
     expect(failed.is_error).toBe(true)
     expect(failed.result).toContain("confirmed")
-    // The stored conversation keeps the failed result's message key.
-    const latest = (
+    // The stored conversation keeps the failed result's message key (looked for
+    // in the newest conversations: two created in one second are not ordered).
+    const recent = (
       await getJSON<{ items: { id: number }[] }>(
         ctx,
-        "/api/ai/conversations?limit=1"
+        "/api/ai/conversations?limit=10"
       )
-    ).items[0]
-    const latestDetail = await getJSON<{ messages: unknown[] }>(
-      ctx,
-      `/api/ai/conversations/${latest.id}`
-    )
-    expect(JSON.stringify(latestDetail.messages)).toContain(
-      "error.plan.row_confirmed"
-    )
+    ).items
+    let keptKey = false
+    for (const c of recent) {
+      const detail = await getJSON<{ messages: unknown[] }>(
+        ctx,
+        `/api/ai/conversations/${c.id}`
+      )
+      if (JSON.stringify(detail.messages).includes("error.plan.row_confirmed"))
+        keptKey = true
+    }
+    expect(keptKey, "a conversation keeps error.plan.row_confirmed").toBe(true)
     let mon = (await plan()).cells.find(
       (c) => c.date === monday && c.slot_id === dinner.id
     )!.plate!
