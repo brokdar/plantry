@@ -1038,20 +1038,6 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 			}
 		}
 	}
-	// PL1b/CC14: when the plan is final and a hard rule is still open the run
-	// does not save it, whichever chooser planned it: it ends in error naming
-	// the rule, and the drafts stay as they are. An empty cell nothing can fill
-	// is not a rule broken (that plan is partial), nor is the heuristic's H9
-	// floor no recipe reaches (partial, the notes say so).
-	if still := slices.DeleteFunc(openHard(Merge(base, j.target, prop), j.target), func(is Issue) bool {
-		return is.Code == CodeMissingPlate || (is.Code == CodeKcalBelowFloor && isHeuristic(j.chooser))
-	}); j.side == nil && len(still) > 0 {
-		closeStatus, closeStage = "error", "checking"
-		return RunEnd{
-			Status: airun.StatusError, ErrorKey: keyHardRuleOpen,
-			Notes: "A hard rule is still open, so nothing was saved: " + openRules(still) + ".",
-		}
-	}
 	// KR7 (v1 OQ6, v1.2): a day replan that can only end with the same main at
 	// both meals, where H8 is triggered by it (not relaxed, not outside the
 	// variety window), saves nothing and says so.
@@ -1071,6 +1057,20 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 					Notes: prop.Notes + " Nothing was saved: " + food.Quote(foodName(Merge(base, j.target, prop), other)) + " would be the main at both meals of the day and no other main or cold plate fits.",
 				}
 			}
+		}
+	}
+	// PL1b/CC14: when the plan is final and a hard rule is still open the run
+	// does not save it, whichever chooser planned it: it ends in error naming
+	// the rule, and the drafts stay as they are. An empty cell nothing can fill
+	// is not a rule broken (that plan is partial), nor is the heuristic's H9
+	// floor no recipe reaches (partial, the notes say so).
+	if still := slices.DeleteFunc(openHard(Merge(base, j.target, prop), j.target), func(is Issue) bool {
+		return is.Code == CodeMissingPlate || (is.Code == CodeKcalBelowFloor && isHeuristic(j.chooser))
+	}); j.side == nil && len(still) > 0 {
+		closeStatus, closeStage = "error", "checking"
+		return RunEnd{
+			Status: airun.StatusError, ErrorKey: keyHardRuleOpen,
+			Notes: "A hard rule is still open, so nothing was saved: " + openRules(still) + ".",
 		}
 	}
 	if wishNote != "" {
