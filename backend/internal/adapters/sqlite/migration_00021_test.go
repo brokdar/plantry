@@ -86,7 +86,7 @@ func TestMigration00021_DeleteRunCascadesSteps(t *testing.T) {
 // TestMigration00021_UpDownUp verifies the migration is reversible.
 func TestMigration00021_UpDownUp(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ai-runs-roundtrip.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
+	conn, err := sql.Open("sqlite", testhelper.DSNWith(path, "_pragma=foreign_keys(1)"))
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 

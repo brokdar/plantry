@@ -19,7 +19,7 @@ type FeedbackRepo struct {
 
 // NewFeedbackRepo creates a SQLite-backed feedback repository.
 func NewFeedbackRepo(db *sql.DB) *FeedbackRepo {
-	return &FeedbackRepo{conn: conn{db: db}}
+	return &FeedbackRepo{conn: newConn(db)}
 }
 
 func (r *FeedbackRepo) Upsert(ctx context.Context, f *feedback.PlateFeedback) error {

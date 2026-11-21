@@ -19,7 +19,7 @@ import (
 func openDBAt00022(t *testing.T) *sql.DB {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "profile-prefs.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
+	conn, err := sql.Open("sqlite", testhelper.DSNWith(path, "_pragma=foreign_keys(1)"))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })

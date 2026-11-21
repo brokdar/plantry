@@ -12,11 +12,18 @@ import (
 // of one plate do not depend on another's, and one test that loops over the
 // whole week dominated the package's wall time under -race. The subtests are
 // grouped, so the caller's counters are final when eachDraftMeal returns.
+//
+// Under -short (the gate's race tier) it runs the week's first and last
+// meal only: the parallel structure stays race-checked, and the whole week
+// runs in the no-race pass. Checks over the whole week go under wholeWeek.
 func eachDraftMeal(t *testing.T, fn func(t *testing.T, e *planToolEnv, p plate.Plate)) {
 	t.Helper()
 	var ids []int64
 	for _, p := range relEnv(t).draftMeals() {
 		ids = append(ids, p.ID)
+	}
+	if !wholeWeek() && len(ids) > 2 {
+		ids = []int64{ids[0], ids[len(ids)-1]}
 	}
 	t.Run("plates", func(t *testing.T) {
 		for _, id := range ids {
@@ -51,3 +58,8 @@ func eachDraftDay(t *testing.T, fn func(t *testing.T, e *planToolEnv, p plate.Pl
 		}
 	})
 }
+
+// wholeWeek reports whether eachDraftMeal visits every meal (not -short):
+// assertions about the whole week (some way for every goal, some candidate
+// that repeats a dish) hold only then.
+func wholeWeek() bool { return !testing.Short() }

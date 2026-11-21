@@ -585,8 +585,10 @@ func TestRecorder_DurationsFromClock(t *testing.T) {
 	run.Finish(ctx, airun.StatusOK, "")
 
 	_, _, steps, _ := store.snapshot()
-	if len(steps) != 1 || steps[0].DurationMs != 5 {
-		t.Errorf("steps = %+v; want one step with DurationMs 5", steps)
+	// The call runs from its start to its end, the first token read between
+	// them (the meter reads the end after its forwarder): 10ms.
+	if len(steps) != 1 || steps[0].DurationMs != 10 {
+		t.Errorf("steps = %+v; want one step with DurationMs 10", steps)
 	}
 	// Clock reads: start, call start, first token, call end, finish => 20ms from start.
 	if !strings.Contains(logs.String(), `"duration_ms":20`) {

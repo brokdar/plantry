@@ -3,6 +3,7 @@ package eval
 import (
 	"bytes"
 	"context"
+	"runtime"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -63,7 +64,7 @@ func TestLibrary(t *testing.T) {
 func TestHeuristicHasNoHardViolations(t *testing.T) {
 	scs, err := LoadScenarios()
 	require.NoError(t, err)
-	recs, err := Run(context.Background(), Config{Chooser: airun.ChooserHeuristic, Runs: 1}, scs)
+	recs, err := Run(context.Background(), Config{Chooser: airun.ChooserHeuristic, Runs: 1, Parallel: runtime.NumCPU()}, scs)
 	require.NoError(t, err)
 	require.Len(t, recs, len(specScenarios))
 	for _, r := range recs {
@@ -144,7 +145,7 @@ func TestFrozenSpare(t *testing.T) {
 func TestScriptedLLMPromptHasScenarioDates(t *testing.T) {
 	scs, err := LoadScenarios()
 	require.NoError(t, err)
-	recs, err := Run(context.Background(), Config{Chooser: airun.ChooserLLM, Runs: 1}, scs)
+	recs, err := Run(context.Background(), Config{Chooser: airun.ChooserLLM, Runs: 1, Parallel: runtime.NumCPU()}, scs)
 	require.NoError(t, err)
 	require.Len(t, recs, len(specScenarios))
 	for _, r := range recs {
@@ -214,7 +215,7 @@ func TestReplanScenarios(t *testing.T) {
 	assert.Equal(t, ActionReplan, scs[0].Steps[len(scs[0].Steps)-1].Action)
 	assert.Equal(t, ActionRegenerate, scs[1].Steps[len(scs[1].Steps)-1].Action)
 
-	recs, err := Run(context.Background(), Config{Chooser: airun.ChooserHeuristic, Runs: 1}, scs)
+	recs, err := Run(context.Background(), Config{Chooser: airun.ChooserHeuristic, Runs: 1, Parallel: runtime.NumCPU()}, scs)
 	require.NoError(t, err)
 	require.Len(t, recs, 2)
 
@@ -311,7 +312,7 @@ func TestRunCancelledBeforeStartIsAnError(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	recs, err := Run(ctx, Config{Chooser: airun.ChooserHeuristic, Runs: 1}, scs)
+	recs, err := Run(ctx, Config{Chooser: airun.ChooserHeuristic, Runs: 1, Parallel: runtime.NumCPU()}, scs)
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.Empty(t, recs)
 }

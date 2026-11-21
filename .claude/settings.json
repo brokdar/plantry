@@ -37,6 +37,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-hygiene.js\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [

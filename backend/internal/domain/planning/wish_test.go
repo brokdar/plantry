@@ -267,3 +267,35 @@ func TestService_PL1b_HeuristicPlanWithOpenHardIssueSavesNothing(t *testing.T) {
 	assert.Equal(t, "error.plan.hard_rule_open", end.ErrorKey)
 	assert.Len(t, e.window(), before, "nothing was saved")
 }
+
+// secondCookChooser swaps a side the way the heuristic does, then cooks it at
+// another slot than the plate's own: a second cook occasion on a day already at
+// its limit (H2).
+type secondCookChooser struct{ slot int64 }
+
+func (c secondCookChooser) Choose(ctx context.Context, in planning.ChooseInput) (planning.Proposal, error) {
+	p, err := planning.Heuristic{}.Choose(ctx, in)
+	for i := range p.Sessions {
+		p.Sessions[i].CookSlotID = c.slot
+	}
+	return p, err
+}
+
+// PL1/PL1b: a "different side" run whose new side creates a hard issue the plan
+// did not have saves nothing and ends in error naming the rule.
+func TestService_PL1b_SideSwapThatCreatesAHardIssueSavesNothing(t *testing.T) {
+	e := newSvcEnv(t)
+	e.ok(e.generate(e.req()))
+	before := e.window()
+	p := before[key(sun, e.dinner)]
+	require.Len(t, p.Components, 2)
+	side := p.Components[1]
+	e.deps.Choosers = map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: secondCookChooser{slot: e.lunch}}
+	e.svc = planning.NewService(e.deps)
+
+	end := e.runs.end(e.regenerate(planning.Scope{Kind: planning.ScopeSide, ComponentID: side.ID}))
+
+	assert.Equal(t, airun.StatusError, end.Status, "notes %q violations %s", end.Notes, end.ViolationsJSON)
+	assert.Equal(t, "error.plan.hard_rule_open", end.ErrorKey)
+	assert.Equal(t, before, e.window(), "nothing was saved")
+}

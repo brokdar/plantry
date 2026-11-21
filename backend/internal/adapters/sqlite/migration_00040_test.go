@@ -12,12 +12,14 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/db"
 	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // Runs and steps written before 00040 count zero web searches.
 func TestMigration00040_ExistingRowsCountZeroSearches(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "migration40.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })

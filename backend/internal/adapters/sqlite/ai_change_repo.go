@@ -23,7 +23,7 @@ type AIChangeRepo struct {
 
 // NewAIChangeRepo creates a SQLite-backed change store.
 func NewAIChangeRepo(db *sql.DB) *AIChangeRepo {
-	return &AIChangeRepo{conn: conn{db: db}}
+	return &AIChangeRepo{conn: newConn(db)}
 }
 
 var _ agent.ChangeStore = (*AIChangeRepo)(nil)

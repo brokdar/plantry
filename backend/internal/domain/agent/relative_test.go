@@ -15,6 +15,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // relEnv is the batch-cooker week with meals of a few hundred kcal on a
@@ -138,8 +139,10 @@ func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 		}
 	})
 	assert.Positive(t, checked.Load())
-	for _, g := range []string{"lighter", "heartier", "more_protein"} {
-		assert.Positive(t, goals[g], "ways for %s", g)
+	if wholeWeek() {
+		for _, g := range []string{"lighter", "heartier", "more_protein"} {
+			assert.Positive(t, goals[g], "ways for %s", g)
+		}
 	}
 	t.Logf("checked %d ways and offers, %d offers", checked.Load(), offers.Load())
 }
@@ -429,6 +432,16 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 		assert.Empty(t, plannerWord.FindAllString(string(res), -1), "kitchen words only")
 		assert.InDelta(t, was, portions(a, ma), 1e-9)
 	})
+	t.Run("a call that carries a goal is guarded the same", func(t *testing.T) {
+		goal := fmt.Sprintf(`"goal":{"kind":"lower_day","date":%q},`, a.DateString())
+		res, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(`{`+goal+`"ops":[`+cut+`]}`))
+		require.NoError(t, err)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal(res, &got))
+		assert.Equal(t, false, got["saved"], "SF1/G2: a goal does not lift the guard: %s", res)
+		assert.Contains(t, got["refused"], "under its minimum")
+		assert.InDelta(t, was, portions(a, ma), 1e-9)
+	})
 	t.Run("a call that is all safe has no skipped part", func(t *testing.T) {
 		res, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(`{"dry_run":true,"ops":[`+raise+`]}`))
 		require.NoError(t, err)
@@ -452,6 +465,7 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 // that warning and is never the recommended one.
 func TestFindAlternatives_ListedWarningsAreTheWritesWarnings(t *testing.T) {
 	t.Parallel()
+	testhelper.Slow(t, "checks every listed alternative of every draft meal with a dry-run write (21 meals x 10 alternatives); a write that pushes a day over its range runs the lower-instead search (planning.Ways), about 2 CPU-s per meal. Faster needs a Ways that stops at the first fitting way, which changes its ranking.")
 	var shown, repeats atomic.Int64
 	eachDraftMeal(t, func(t *testing.T, e *planToolEnv, p plate.Plate) {
 		res := e.mustExec("find_alternatives", fmt.Sprintf(`{"plate_id":%d,"what":"main","limit":10}`, p.ID))
@@ -473,7 +487,9 @@ func TestFindAlternatives_ListedWarningsAreTheWritesWarnings(t *testing.T) {
 		}
 	})
 	require.NotZero(t, shown.Load())
-	require.NotZero(t, repeats.Load(), "the week has a candidate that repeats a dish")
+	if wholeWeek() {
+		require.NotZero(t, repeats.Load(), "the week has a candidate that repeats a dish")
+	}
 }
 
 // A replace that names its component needs no plate_id (the component knows

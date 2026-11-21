@@ -20,7 +20,7 @@ type AIRepo struct {
 
 // NewAIRepo creates a SQLite-backed AI repository.
 func NewAIRepo(db *sql.DB) *AIRepo {
-	return &AIRepo{conn: conn{db: db}}
+	return &AIRepo{conn: newConn(db)}
 }
 
 func (r *AIRepo) CreateConversation(ctx context.Context, title *string) (*agent.Conversation, error) {

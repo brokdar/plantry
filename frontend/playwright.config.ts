@@ -10,9 +10,17 @@ const DB_PATH = LANE ? `/tmp/plantry-e2e-${LANE}.db` : "/tmp/plantry-e2e.db"
 const IMAGE_PATH = LANE
   ? `/tmp/plantry-e2e-images-${LANE}`
   : "/tmp/plantry-e2e-images"
+// The global-settings specs change settings every other spec reads, so they
+// get their own backend, Vite and DB and run beside the rest instead of after
+// it (they were a serial 56 s at the end of the run).
+const API_PORT_GLOBAL = 8280 + LANE
+const PORT_GLOBAL = 5273 + LANE
+const DB_PATH_GLOBAL = `/tmp/plantry-e2e-global-${LANE}.db`
+const IMAGE_PATH_GLOBAL = `/tmp/plantry-e2e-images-global-${LANE}`
 // Read by e2e/helpers.ts and e2e/global-setup.ts (workers inherit the env).
 process.env.E2E_API_PORT = String(API_PORT)
 process.env.E2E_DB_PATH = DB_PATH
+process.env.E2E_DB_PATH_GLOBAL = DB_PATH_GLOBAL
 // The discovery fixture site (Phase 5 D20): serves the recipe pages the fake
 // research client points at. Read by e2e/discovery-fixture.ts.
 const SITE_PORT = 9100 + LANE
@@ -58,14 +66,16 @@ const SETUP_SPEC = "setup-wizard.spec.ts"
 // after `setup` and before everything else, and removes what it makes.
 const FRESH_SPEC = "fresh-install.spec.ts"
 
-export default defineConfig({
+export default defineConfig<object, { apiPort: number }>({
   globalSetup: "./e2e/global-setup.ts",
   testDir: "./e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   // Locally capped: the default (half the cores) starts ~14 browsers.
-  workers: process.env.CI ? 1 : 4,
+  // CI: the runner has 4 vCPUs and 16 GB (serial CI e2e took 6 min). Locally 6:
+  // chromium takes 4, the serial ai-serial and global-settings run beside it.
+  workers: process.env.CI ? 4 : 6,
   reporter: "list",
   use: {
     baseURL: `http://localhost:${PORT}`,
@@ -112,13 +122,32 @@ export default defineConfig({
       workers: 1,
       use: { ...devices["Desktop Chrome"] },
     },
+    // The global-settings server walks the setup wizard itself, then its
+    // specs run one at a time, beside chromium and ai-serial. Playwright starts
+    // a project only after every project of the dependency level before it, so
+    // global-settings also waits for fresh-install: on the level of chromium
+    // and ai-serial, not before them.
+    {
+      name: "setup-global",
+      testMatch: `**/${SETUP_SPEC}`,
+      fullyParallel: false,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: `http://localhost:${PORT_GLOBAL}`,
+        apiPort: API_PORT_GLOBAL,
+      },
+    },
     {
       name: "global-settings",
       testMatch: GLOBAL_SETTINGS_SPECS.map((s) => `**/${s}`),
-      dependencies: ["chromium", "ai-serial"],
+      dependencies: ["setup-global", "fresh-install"],
       fullyParallel: false,
       workers: 1,
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: `http://localhost:${PORT_GLOBAL}`,
+        apiPort: API_PORT_GLOBAL,
+      },
     },
   ],
   webServer: [
@@ -134,6 +163,19 @@ export default defineConfig({
     {
       command: `PLANTRY_API_TARGET=http://localhost:${API_PORT} bun run dev --port ${PORT} --strictPort`,
       url: `http://localhost:${PORT}`,
+      // Never reuse: a Vite on this port may belong to another worktree.
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
+      command: `cd ../backend && PLANTRY_PORT=${API_PORT_GLOBAL} PLANTRY_DB_PATH=${DB_PATH_GLOBAL} PLANTRY_IMAGE_PATH=${IMAGE_PATH_GLOBAL} PLANTRY_LOG_LEVEL=error PLANTRY_DEV_MODE=1 PLANTRY_OFF_DISABLED=1 PLANTRY_SECRET_KEY=0123456789abcdef0123456789abcdef PLANTRY_AI_PROVIDER=fake PLANTRY_AI_MODEL=fake-e2e PLANTRY_AI_RATE_LIMIT_PER_MIN=1000 PLANTRY_AI_FAKE_SCRIPT=../frontend/e2e/fixtures/chat-scripts/plan-dinner.json go run ./cmd/plantry`,
+      url: `http://localhost:${API_PORT_GLOBAL}/api/health`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
+      command: `PLANTRY_API_TARGET=http://localhost:${API_PORT_GLOBAL} bun run dev --port ${PORT_GLOBAL} --strictPort`,
+      url: `http://localhost:${PORT_GLOBAL}`,
       // Never reuse: a Vite on this port may belong to another worktree.
       reuseExistingServer: false,
       timeout: 60_000,

@@ -11,6 +11,8 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/db"
 	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // setupMigration14DB opens a fresh SQLite file, applies migrations 1-13, seeds
@@ -18,7 +20,7 @@ import (
 func setupMigration14DB(t *testing.T, year, weekNum, day int) *sql.DB {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "migration14.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })

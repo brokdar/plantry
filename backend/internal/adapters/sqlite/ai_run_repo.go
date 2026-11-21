@@ -30,7 +30,7 @@ type AIRunRepo struct {
 
 // NewAIRunRepo creates a SQLite-backed AI run store.
 func NewAIRunRepo(db *sql.DB) *AIRunRepo {
-	return &AIRunRepo{conn: conn{db: db}}
+	return &AIRunRepo{conn: newConn(db)}
 }
 
 var (

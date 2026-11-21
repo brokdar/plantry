@@ -102,9 +102,12 @@ func (m *meteredClient) Stream(ctx context.Context, req llm.Request, out chan<- 
 		attemptsMu.Unlock()
 	})
 	resp, err := m.inner.Stream(ctx, req, inner)
-	finished := m.rec.now()
 	close(stop)
 	<-done
+	// Read after the forwarder is done: it reads the clock for the first
+	// token, and reading before it made the order of the two reads, and so a
+	// stepping test clock's durations, depend on scheduling (a race-tier flake).
+	finished := m.rec.now()
 	attemptsMu.Lock()
 	for _, a := range attempts {
 		eff := a.Sent

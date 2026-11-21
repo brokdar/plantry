@@ -21,6 +21,7 @@ jobs:
   docker:
     name: Build image
     runs-on: ubuntu-latest
+    timeout-minutes: 10 # a tripwire, frozen in test-budget.json
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -32,4 +33,4 @@ jobs:
           load: true
           tags: plantry:ci
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,ignore-error=true # a denied cache write must not fail the build

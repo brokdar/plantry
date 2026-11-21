@@ -10,6 +10,8 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/jaltszeimer/plantry/backend/db"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // TestMigration00013_UnifiedFood verifies that migrating ingredients + components
@@ -17,7 +19,7 @@ import (
 // integrity.
 func TestMigration00013_UnifiedFood(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "food-migration.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	defer func() { _ = conn.Close() }()

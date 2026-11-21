@@ -14,8 +14,9 @@ import (
 	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
 )
 
-// The pragmas of the app's database (cmd/plantry openDB).
-const dsnPragmas = "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+// The pragmas of the app's database (cmd/plantry openDB), without fsync: the
+// run databases are scratch files read after the run at most (-keep-db).
+const dsnPragmas = "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(OFF)"
 
 // dbs hands out fresh migrated databases in one scratch directory: the
 // migrations run once, into a template file every database copies.

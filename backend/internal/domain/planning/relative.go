@@ -559,7 +559,7 @@ type wayCheck struct {
 
 func (w *waySearch) check(next State) wayCheck {
 	w.tried++
-	r := wayCheck{ev: Evaluate(next, w.t)}
+	r := wayCheck{ev: evaluateWith(next, w.t, false, true)} // open issues only, no options
 	for _, is := range r.ev.Issues {
 		switch {
 		case is.Severity == SeverityViolation && !w.hard[issueID(is)]:

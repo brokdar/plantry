@@ -65,7 +65,7 @@ type FoodRepo struct {
 
 // NewFoodRepo constructs a FoodRepo.
 func NewFoodRepo(db *sql.DB) *FoodRepo {
-	return &FoodRepo{conn: conn{db: db}}
+	return &FoodRepo{conn: newConn(db)}
 }
 
 func (r *FoodRepo) Create(ctx context.Context, f *food.Food) error {
