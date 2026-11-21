@@ -14,6 +14,7 @@ func TestPlainReply(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct{ name, in, want string }{
 		{"percent band", "Average energy is 102% of target (was 100%), within the 95–105% band.", "Average energy is 102% of target (was 100%), within the 95–105% range."},
+		{"RP3: batch, eaters and light day are kitchen words", "The batch feeds 4 eaters on the light day.", "The cooking feeds 4 people on the day you eat less."},
 		{"band of the week", "average energy is 99% of target, within the 95–105% band.", "average energy is 99% of target, within the 95–105% range."},
 		{"allowed band", "The allowed band is 95-105% for the week.", "The allowed range is 95-105% for the week."},
 		{"kept: allowed band of a choir", "The allowed band size is five.", "The allowed band size is five."},

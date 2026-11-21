@@ -292,7 +292,7 @@ func buildReport(in reportInput) changeReport {
 	alsoChanged(as, in.applied, in.facts)
 	weekFacts(in, bs, as)
 	if !in.undo {
-		r.EarlierWarnings = warnings(in, as, awayOnly(r.Changed))
+		r.EarlierWarnings = warnings(in, as, awayOnly(r.Changed), r.Days)
 	}
 	buildFacts(in, r)
 	r.Facts = selectBlock(in.facts.items)
@@ -633,11 +633,22 @@ func statusOfIssue(code string) string {
 // returns the number of earlier ones left as they were (or moved by less than a
 // step). A week figure that only moved because a day went away is no fact,
 // unless the week's meat is over its limit.
-func warnings(in reportInput, as planning.State, away bool) (unaffected int) {
+func warnings(in reportInput, as planning.State, away bool, days []reportDay) (unaffected int) {
+	// A day outside its range has its day line (class 4): no second line for the
+	// same figures.
+	dayTold := map[string]bool{}
+	for _, d := range days {
+		if d.Range != "" {
+			dayTold[d.Day] = true
+		}
+	}
 	was := issueMap(in.before.Issues)
 	issues := slices.Clone(in.after.Issues)
 	slices.SortFunc(issues, func(a, b planning.Issue) int { return strings.Compare(a.Date+a.Code, b.Date+b.Code) })
 	for _, is := range issues {
+		if is.Date != "" && dayTold[dayLabelStr(is.Date)] && slices.Contains([]string{planning.CodeKcalBelowBand, planning.CodeKcalAboveBand, planning.CodeKcalBelowFloor}, is.Code) {
+			continue
+		}
 		b, ok := was[issueKey(is)]
 		switch {
 		case !ok:
@@ -656,7 +667,7 @@ func warnings(in reportInput, as planning.State, away bool) (unaffected int) {
 			en, de := issueSentence(is, as)
 			in.facts.add(classWorse, kindWarn, statusOfIssue(is.Code),
 				fmt.Sprintf("Worse: %s It was already open and got worse: %s beyond its limit before, %s now.", en, badnessWords(is.Code, bb), badnessWords(is.Code, ab)),
-				fmt.Sprintf("Schlimmer: %s Es war schon offen und ist schlimmer geworden: vorher %s über der Grenze, jetzt %s.", de, badnessWords(is.Code, bb), badnessWords(is.Code, ab)))
+				fmt.Sprintf("Schlimmer: %s Es war schon offen und ist schlimmer geworden: vorher %s über der Grenze, jetzt %s.", de, strings.ReplaceAll(badnessWords(is.Code, bb), " points", " Punkte"), strings.ReplaceAll(badnessWords(is.Code, ab), " points", " Punkte")))
 		default:
 			unaffected++
 		}
@@ -868,7 +879,11 @@ func issueSentence(is planning.Issue, st planning.State) (en, de string) {
 				fmt.Sprintf("%s: %s wurde vorher zu kürzlich gekocht oder gegessen.", whereDE, dishDE))
 		}
 	}
-	return where + ": " + planning.PlainText(is.Code).Message, whereDE + ": eine Planungsregel ist nicht erfüllt."
+	msgDE, ok := issueMessageDE[is.Code]
+	if !ok {
+		msgDE = "eine Planungsregel ist nicht erfüllt."
+	}
+	return where + ": " + planning.PlainText(is.Code).Message, whereDE + ": " + msgDE
 }
 
 // issueDish is the main dish of the plate or batch an issue sits on.
@@ -1009,4 +1024,19 @@ func sessionMealLabels(st planning.State, is planning.Issue) []string {
 		out[i] = cellLabel(st, c.Date, c.SlotID)
 	}
 	return out
+}
+
+// issueMessageDE is the plain sentence of an issue code in German, for the codes
+// issueSentence has no numbers for.
+var issueMessageDE = map[string]string{
+	planning.CodeMealOutsideSlotBand: "Eine Mahlzeit hat mehr oder weniger von der Tagesenergie, als für diese Zeit gedacht ist.",
+	planning.CodeWeekFishBelowDGE:    "In der Woche gibt es keine Fischmahlzeit.",
+	planning.CodeWeekLegumesBelow:    "In der Woche gibt es keine Mahlzeit mit Hülsenfrüchten.",
+	planning.CodeDietIncompatible:    "Ein Lebensmittel passt nicht zur Ernährungsweise.",
+	planning.CodeDietUnknown:         "Bei einem Lebensmittel ist die Ernährungsweise unbekannt.",
+	planning.CodeMissingPlate:        "Für eine Mahlzeit fehlt das Essen.",
+	planning.CodeCookInNoneCell:      "Es wird zu einer Zeit gekocht, zu der niemand da ist.",
+	"leftover_before_cook":           "Reste werden gegessen, bevor sie gekocht sind.",
+	"past_keep_days":                 "Reste werden gegessen, nachdem sie nicht mehr haltbar sind.",
+	"deficit":                        "Von einem Gericht wird mehr gegessen, als gekocht wurde.",
 }

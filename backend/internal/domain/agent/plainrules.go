@@ -161,10 +161,12 @@ var kitchenWords = []struct {
 	{regexp.MustCompile(`\bdrafts\b`), "pending plans"},
 	{regexp.MustCompile(`\bDraft\b`), "Pending:"},
 	{regexp.MustCompile(`\bdraft\b`), "pending"},
-	{regexp.MustCompile(`\bsessions\b`), "batches"},
-	{regexp.MustCompile(`\bSessions\b`), "Batches"},
-	{regexp.MustCompile(`\bsession\b`), "batch"},
-	{regexp.MustCompile(`\bSession\b`), "Batch"},
+	{regexp.MustCompile(`\b(sessions|batches)\b`), "cookings"},
+	{regexp.MustCompile(`\b(Sessions|Batches)\b`), "Cookings"},
+	{regexp.MustCompile(`\b(session|batch)\b`), "cooking"},
+	{regexp.MustCompile(`\b(Session|Batch)\b`), "Cooking"},
+	{regexp.MustCompile(`\b(?i:light days)\b`), "days you eat less"},
+	{regexp.MustCompile(`\b(?i:light day)\b`), "day you eat less"},
 }
 
 // passBack are the result fields the model sends back to a tool unchanged

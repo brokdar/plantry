@@ -42,20 +42,24 @@ func hardWhyL(is planning.Issue) (en, de string) {
 		fmt.Sprintf("es würde am %s ein Problem entstehen", deDay(dayLabelStr(is.Date)))
 }
 
-// deOp says an op word in German for a refused part.
-var deOp = map[string]string{
-	"add": "hinzufügen", "remove": "entfernen", "swap": "tauschen", "replace": "ersetzen", "move": "verschieben",
-	"set_quantity": "Menge ändern", "set_eaters": "Personenzahl ändern", "away": "abwesend setzen",
+// opPlain says an op as a household reads it, in English and German.
+var opPlain = map[string][2]string{
+	"add": {"adding the food", "das Hinzufügen des Essens"}, "remove": {"removing the food", "das Entfernen des Essens"},
+	"swap": {"the swap", "der Tausch"}, "replace": {"the replacement", "der Austausch"}, "move": {"the move", "das Verschieben"},
+	"set_quantity": {"the new portion size", "die neue Portionsgröße"}, "set_eaters": {"the change of people", "die Änderung der Personenzahl"},
+	"set_portions": {"the new batch size", "die neue Kochmenge"}, "away": {"the day away", "die Abwesenheit"},
 }
 
 // refusedFact is a part the guard left out, with its reason and numbers.
 func refusedFact(what, why, whyDE string, op string) map[string]any {
-	whatDE := deQuoted(deDates(what))
-	if w, ok := deOp[op]; ok {
-		whatDE = w + strings.TrimPrefix(whatDE, op)
+	whatEN, whatDE := what, deQuoted(deDates(what))
+	if w, ok := opPlain[op]; ok {
+		rest := strings.TrimPrefix(what, op)
+		whatEN = w[0] + rest
+		whatDE = w[1] + deQuoted(deDates(rest))
 	}
 	return map[string]any{
-		"en": fmt.Sprintf("Left out: %s (%s).", what, why),
+		"en": fmt.Sprintf("Left out: %s (%s).", whatEN, why),
 		"de": fmt.Sprintf("Weggelassen: %s (%s).", whatDE, whyDE),
 	}
 }

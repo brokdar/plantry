@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 )
 
@@ -86,3 +87,14 @@ func RefusalTell(err error) []string {
 
 // MarkChange exposes the cause sentence of a day target that moved.
 func MarkChange(before, after []string) string { return markChange(before, after, langEN) }
+
+// ComposeReply is the reply a household reads for a turn whose last write
+// returned output (nil: no write), with the model's text.
+func ComposeReply(model, user string, write bool, output json.RawMessage) string {
+	t := replyTurn{user: user, write: write, numbers: map[string]bool{}}
+	if output != nil {
+		t.block, _ = blockOf(output)
+		numbersIn(string(output), t.numbers)
+	}
+	return composeReply(model, t)
+}

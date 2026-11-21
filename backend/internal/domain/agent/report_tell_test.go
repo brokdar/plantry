@@ -83,14 +83,14 @@ func TestWarnings_AwayDoesNotCallUnchangedFoodWorse(t *testing.T) {
 		after:  planning.Evaluation{Issues: []planning.Issue{meat(321, 257, 6)}, Week: &planning.WeekEval{Days: 6}},
 		facts:  &factSink{},
 	}
-	warnings(in, planning.State{}, true)
+	warnings(in, planning.State{}, true, nil)
 	if assert.Len(t, in.facts.items, 1, "the remaining days eat what they ate") {
 		assert.Equal(t, "With a day away the week is counted over 6 days; the meat limit for those days is 257 g and the plan holds 321 g, as before; that is 64 g over.", in.facts.items[0].EN)
 		assert.Equal(t, classWorse, in.facts.items[0].Class)
 		assert.Equal(t, statusOver, in.facts.items[0].Status)
 	}
 	in.facts = &factSink{}
-	warnings(in, planning.State{}, false)
+	warnings(in, planning.State{}, false, nil)
 	if assert.Len(t, in.facts.items, 1, "without an away it is told") {
 		assert.Contains(t, in.facts.items[0].EN, "Worse:")
 		assert.Contains(t, in.facts.items[0].DE, "Schlimmer:")

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -328,11 +329,35 @@ func dayFacts(in reportInput, r changeReport) {
 				de += fmt.Sprintf(" und unter dem Mindestwert von %d kcal", d.MinimumKcal)
 			}
 		}
+		// A day told as worse must be worse: further from its range than before.
+		if class == classWorse && !dayWorse(d) && !in.dayKcal {
+			continue
+		}
 		if class == classChanged && !in.dayKcal && !in.undo {
 			continue
 		}
 		in.facts.add(class, kindDay, status, dot(en), dot(de))
 	}
+}
+
+// dayWorse reports a day that is further from its range after the change than
+// before it, or that the change took out of its range.
+func dayWorse(d reportDay) bool {
+	lo, hi, ok := strings.Cut(strings.TrimSuffix(d.Range, " kcal"), "-")
+	if !ok {
+		return false
+	}
+	l, h := float64(atoi(lo)), float64(atoi(hi))
+	dist := func(k float64) float64 {
+		switch {
+		case k < l:
+			return l - k
+		case k > h:
+			return k - h
+		}
+		return 0
+	}
+	return dist(float64(d.KcalAfter)) > dist(float64(d.KcalBefore))+0.5
 }
 
 // qtyDeltaL says how much a quantity changed: " (half a portion more)".
@@ -535,13 +560,15 @@ func cookCells(st planning.State) map[string]*cookCell {
 	return out
 }
 
+// signature is the dishes cooked there: which meals eat them is not where the
+// cooking is.
 func (c *cookCell) signature() string {
 	if c == nil {
 		return ""
 	}
 	parts := make([]string, len(c.dishes))
 	for i, d := range c.dishes {
-		parts[i] = d.name + ">" + strings.Join(d.feeds, ",")
+		parts[i] = d.name
 	}
 	slices.Sort(parts)
 	return strings.Join(parts, ";")
@@ -589,10 +616,17 @@ func feedsList(feeds []string, de bool) string {
 // longest recipe's total minutes. A dish whose cooking moved says where it was.
 func cookFacts(in reportInput, r changeReport) {
 	before, after := cookCells(in.beforeSt), cookCells(in.afterSt)
-	wasAt := map[string]string{} // dish to the cell label it was cooked at
-	for _, c := range before {
+	// A dish that was cooked at a cell and no longer is moved from there.
+	wasAt := map[string]string{}
+	for k, c := range before {
 		for _, d := range c.dishes {
-			wasAt[d.name] = dayLabelStr(c.date) + " " + slotWord(in.beforeSt, c.slot)
+			if now := after[k]; now != nil && slices.ContainsFunc(now.dishes, func(x cookDish) bool { return x.name == d.name }) {
+				continue
+			}
+			label := dayLabelStr(c.date) + " " + slotWord(in.beforeSt, c.slot)
+			if cur, ok := wasAt[d.name]; !ok || label < cur {
+				wasAt[d.name] = label
+			}
 		}
 	}
 	keys := make([]string, 0, len(after))
@@ -672,3 +706,5 @@ func guestFacts(in reportInput) {
 		in.facts.add(classMoved, kindGuest, statusOK, en, de)
 	}
 }
+
+func atoi(s string) int { n, _ := strconv.Atoi(s); return n }

@@ -34,7 +34,7 @@ func TestComposeReply_BlockAndOfferAreCodeRendered(t *testing.T) {
 	for name, text := range map[string]string{
 		"a digit":                "Dinner now holds 1500 kcal.",
 		"a weekday not in block": "I moved it to Monday.",
-		"a planner word":         "The batch was resized.",
+		"a planner word":         "The draft is ready.",
 		"denies the open issue":  "Everything fits and there are no problems.",
 		"denies the range":       "The day is within its range.",
 	} {
