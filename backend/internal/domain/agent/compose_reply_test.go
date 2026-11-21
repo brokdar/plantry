@@ -139,3 +139,50 @@ func TestRefusedPart_MoveNamesItsDestination(t *testing.T) {
 	assert.Contains(t, en, "to Wed 9 Dec")
 	assert.Contains(t, de, "nach Mittwoch, 9. Dez.")
 }
+
+// v1.3 P-6 (G4 lint per sentence), tune g-move-08: on a write turn the sentence
+// that breaks the lint is dropped and the rest stays; a weekday the user named
+// may be said back.
+func TestComposeReply_WriteLintDropsOnlyTheBreakingSentence(t *testing.T) {
+	t.Parallel()
+	out := `{"saved":false,"applied":[],"skipped":[{"en":"Left out: moving \"Lasagne bolognese\" from Sun 6 Dec dinner (it would create a problem on Mon 7 Dec: cooking times per day (2 cooking times, at most 1)).","de":"Weggelassen: x."}]}`
+	b, _ := blockOf([]byte(out))
+	require.NotNil(t, b)
+	turn := replyTurn{user: "move Sunday's dinner over to Wednesday please", write: true, block: b, numbers: map[string]bool{}}
+	got := composeReply("I couldn't move Sunday's dinner to Wednesday, so nothing changed. The lasagne is cooked Sunday dinner and Monday dinner eats its leftovers.", turn)
+	assert.True(t, strings.HasPrefix(got, "I couldn't move Sunday's dinner to Wednesday, so nothing changed.\n\n- Nothing changed"), got)
+	assert.NotContains(t, got, "leftovers")
+
+	other := turn
+	other.user = "move it please"
+	assert.True(t, strings.HasPrefix(composeReply("I couldn't move Sunday's dinner to Wednesday, so nothing changed.", other), "- Nothing changed"), "a weekday neither the block nor the user names drops the sentence")
+}
+
+func TestComposeReply_CheckOnlyWriteFallsBackWhenEverySentenceFails(t *testing.T) {
+	t.Parallel()
+	got := composeReply("Friday has 9999 kcal.", replyTurn{user: "hi", write: true, numbers: map[string]bool{}})
+	assert.Equal(t, fallbackEN, got)
+}
+
+func TestUserNamesWeekday_WholeFullNamesOnly(t *testing.T) {
+	t.Parallel()
+	assert.False(t, userNamesWeekday("I'm satisfied, so.", "Sat"))
+	assert.False(t, userNamesWeekday("I'm satisfied, so.", "Sun"))
+	assert.True(t, userNamesWeekday("move Sunday's dinner to Wednesday", "Sun"))
+	assert.True(t, userNamesWeekday("move Sunday's dinner to Wednesday", "Wed"))
+	assert.True(t, userNamesWeekday("verschiebe den Sonntag", "Sun"))
+}
+
+func TestComposeReply_RefusedCallDropsDoneClaims(t *testing.T) {
+	t.Parallel()
+	out := `{"saved":false,"applied":[],"skipped":[{"en":"Left out: moving \"Lasagne bolognese\" from Sun 6 Dec dinner (it would create a problem on Mon 7 Dec: cooking times per day (2 cooking times, at most 1)).","de":"Weggelassen: x."}]}`
+	b, _ := blockOf([]byte(out))
+	require.NotNil(t, b)
+	require.True(t, b.nothingSaved)
+	turn := replyTurn{user: "move Sunday's dinner to Wednesday", write: true, block: b, numbers: map[string]bool{}}
+	for _, s := range []string{"I moved it to Wednesday.", "Ich habe das Abendessen verschoben."} {
+		assert.True(t, strings.HasPrefix(composeReply(s, turn), "- Nothing changed"), s)
+	}
+	got := composeReply("I couldn't move Sunday's dinner to Wednesday, so nothing changed.", turn)
+	assert.True(t, strings.HasPrefix(got, "I couldn't move"), got)
+}

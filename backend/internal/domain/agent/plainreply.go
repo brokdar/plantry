@@ -240,8 +240,17 @@ var (
 	modelOptionWords  = regexp.MustCompile(`(?i)\b(if you|only if|unless|i can|i could|i'?d (suggest|recommend)|you (could|can|may|might)|want me to|would you like|shall i|should i|alternatively|instead|otherwise|falls du|wenn du|nur wenn|ich kann|ich könnte|du kannst|du könntest|möchtest du|willst du|soll ich|stattdessen|alternativ|sonst)\b`)
 )
 
+// A done-claim next to a refused call (nothing saved) says what did not happen.
+var (
+	doneClaim = regexp.MustCompile(`(?i)\b(moved|swapped|replaced|added|removed|changed|(is|are) now|verschoben|getauscht|ersetzt|hinzugefügt|entfernt|geändert|ist jetzt)\b`)
+	negation  = regexp.MustCompile(`(?i)(\bnot\b|n't|\bcannot\b|\bno\b|\bnothing\b|\bnicht\b|\bkeine?\b|\bnichts\b)`)
+)
+
 // contradicts reports a model text that denies what the block states.
-func contradicts(text string, facts []fact) bool {
+func contradicts(text string, facts []fact, nothingSaved bool) bool {
+	if nothingSaved && doneClaim.MatchString(text) && !negation.MatchString(text) {
+		return true
+	}
 	has := func(kind string) bool {
 		for _, f := range facts {
 			if f.Kind == kind {
@@ -324,11 +333,12 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 			}
 		}
 		for _, w := range weekdayRe.FindAllString(text, -1) {
-			if k := weekdayKey(w); k == "" || !namesWeekday(blockText, k) {
+			// A day the block names, or one the user named (v1.3, P-6).
+			if k := weekdayKey(w); k == "" || (!namesWeekday(blockText, k) && !userNamesWeekday(t.user, k)) {
 				return "weekday"
 			}
 		}
-		if contradicts(text, t.block.facts) {
+		if contradicts(text, t.block.facts, t.block.nothingSaved) {
 			return "contradiction"
 		}
 		return ""
@@ -369,9 +379,9 @@ func composeReply(model string, t replyTurn) string {
 			text = strings.Join(ss[:2], " ")
 		}
 	}
-	if !t.write && lintModelText(text, t, lg) != "" {
-		// A read turn's answer keeps every sentence the lint passes: one figure
-		// the tools do not back costs that sentence, not the answer (RP4).
+	if lintModelText(text, t, lg) != "" {
+		// The text keeps every sentence the lint passes: a sentence that breaks it
+		// is dropped, not the whole text (G4 lint per sentence, v1.3 P-6; RP4).
 		var kept []string
 		for _, s := range sentences(text) {
 			if lintModelText(s, t, lg) == "" {
@@ -380,7 +390,7 @@ func composeReply(model string, t replyTurn) string {
 		}
 		text = strings.Join(kept, " ")
 	}
-	if text == "" && strings.TrimSpace(model) != "" && !t.write && t.block == nil {
+	if text == "" && strings.TrimSpace(model) != "" && t.block == nil {
 		if lg == langDE {
 			return fallbackDE
 		}
@@ -488,6 +498,14 @@ func namesWeekday(text, key string) bool {
 	de := strings.ToLower(deWeekday[key][0])
 	re := regexp.MustCompile(`(?i)\b` + en + `\w*|\b` + de + `\b|\b` + strings.TrimSuffix(strings.ToLower(deWeekday[key][1]), ".") + `\.`)
 	return re.MatchString(text)
+}
+
+// userNamesWeekday reports whether the user's text names the weekday in full, as
+// a whole word ("Sunday", "Sonntag", "Sunday's"); "so" or "satisfied" do not count.
+func userNamesWeekday(text, key string) bool {
+	en := map[string]string{"Mon": "monday", "Tue": "tuesday", "Wed": "wednesday", "Thu": "thursday", "Fri": "friday", "Sat": "saturday", "Sun": "sunday"}[key]
+	de := strings.ToLower(deWeekday[key][0])
+	return regexp.MustCompile(`(?i)\b(` + en + `|` + de + `)(['’]s)?\b`).MatchString(text)
 }
 
 // namesFood reports a text that names the food (a name of four letters or more,
