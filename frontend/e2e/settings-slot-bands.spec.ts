@@ -31,8 +31,13 @@ test.describe("Slot bands settings", () => {
     await maxInputs.first().fill("100")
     await minInputs.first().fill("100")
 
-    const alert = editor.getByRole("alert")
+    const alert = editor.getByRole("status")
     await expect(alert).toContainText(/at most 100/)
+    await expect(minInputs.first()).toHaveAttribute("aria-invalid", "true")
+    await expect(minInputs.first()).toHaveAttribute(
+      "aria-describedby",
+      "slot-bands-sums"
+    )
     await expect(
       editor.getByRole("button", { name: /save bands/i })
     ).toBeDisabled()
