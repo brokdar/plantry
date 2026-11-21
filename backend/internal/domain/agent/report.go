@@ -25,30 +25,17 @@ type changeReport struct {
 	Changed []reportMeal `json:"changed,omitempty"`
 	Days    []reportDay  `json:"days,omitempty"`
 	Cooking []reportCook `json:"cooking,omitempty"`
-	// Leftovers are cooked portions without a meal and portions a meal needs
-	// beyond its batch, each with what happened to the batch.
-	Leftovers []string `json:"-"` // said in Tell
-	// AlsoChanged is every change outside the requested meals.
-	AlsoChanged []string `json:"-"` // said in Tell
-	// Week holds only what this change made better or worse for the week.
-	Week []string `json:"-"` // said in Tell
-	// NewWarnings are the warnings and problems that did not exist before the
-	// change. Worse holds an earlier one that got worse by a real step (see
-	// worseStep), with its figure before and after.
-	NewWarnings []string `json:"-"` // said in Tell
-	Worse       []string `json:"-"` // said in Tell
 	// EarlierWarnings counts the warnings that existed before and are
 	// unaffected: do not list them.
 	EarlierWarnings int `json:"earlier_warnings_unaffected"`
-	// Tell is the ordered list of plain sentences the reply must convey,
-	// computed from the saved plan (see buildTell).
+	// Facts is the facts block of the change: at most five lines of classes
+	// 2 to 5 in class order (see selectBlock), each in English and German. The
+	// code puts it into the reply (see composeReply); the model does not read it.
+	Facts []fact `json:"facts,omitempty"`
+	// Tell is the English lines of Facts, what the model frames its sentence on.
 	Tell []string `json:"tell,omitempty"`
-	// Must is the typed form of the tell items the reply must carry; the code
-	// reads it (see restoreMust), the model does not (see withoutMust).
-	Must []mustFact `json:"must,omitempty"`
-	// Neutral is the one line for a week figure that only moved because a day
-	// went away (the week is counted over fewer days).
-	Neutral string `json:"-"`
+	// Offer is the one offer of the reply, rendered by code, or nil.
+	Offer *offerLine `json:"offer,omitempty"`
 	// Note is set by an undo: the plan is back as it was before the change.
 	Note string `json:"note,omitempty"`
 	// NotCovered says what the report could not compute.
@@ -94,8 +81,13 @@ type reportInput struct {
 	beforeSt, afterSt planning.State
 	before, after     planning.Evaluation
 	applied           []map[string]any
-	// must collects the facts the reply must carry (see mustFact); nil drops them.
-	must *mustSink
+	// facts collects the facts of the block while the report is built; nil drops them.
+	facts *factSink
+	// dayKcal is set for a lighter, heartier, light or filling change, which
+	// tells the day's kcal also when the day is inside its range.
+	dayKcal bool
+	// undo is set for an undo: no warning is new or worse.
+	undo bool
 }
 
 func dayLabel(d time.Time) string { return d.Format("Mon 2 Jan") }
@@ -295,13 +287,16 @@ func buildReport(in reportInput) changeReport {
 		r.Cooking = append(r.Cooking, rc)
 	}
 
-	in.must = &mustSink{}
-	r.Leftovers = leftovers(bs, as, in.must)
-	r.AlsoChanged = alsoChanged(as, in.applied, in.must)
-	r.Week = weekFacts(in, bs, as)
-	r.NewWarnings, r.Worse, r.EarlierWarnings, r.Neutral = warnings(in, as, awayOnly(r.Changed))
-	r.Tell = buildTell(in, r)
-	r.Must = in.must.sorted()
+	in.facts = &factSink{}
+	leftovers(bs, as, in.facts, r.Changed)
+	alsoChanged(as, in.applied, in.facts)
+	weekFacts(in, bs, as)
+	if !in.undo {
+		r.EarlierWarnings = warnings(in, as, awayOnly(r.Changed))
+	}
+	buildFacts(in, r)
+	r.Facts = selectBlock(in.facts.items)
+	r.Tell = tellOf(r.Facts)
 	return r
 }
 
@@ -410,8 +405,10 @@ func portionWord(v float64) string {
 
 // leftovers says what the change did to a cooking that exists in the saved
 // plan: cooked portions nobody eats, meals beyond the portions, a resize. A
-// cooking the saved plan no longer has is said as "no longer cooked".
-func leftovers(bs, as planning.State, must *mustSink) []string {
+// cooking the saved plan no longer has is said as "no longer cooked", unless a
+// changed meal explains it (its dish left that meal) or the dish is cooked
+// elsewhere now (the cooking-time fact says where).
+func leftovers(bs, as planning.State, sink *factSink, changed []reportMeal) {
 	b, a := batchesOf(bs), batchesOf(as)
 	keys := make([]string, 0, len(a)+len(b))
 	for k := range a {
@@ -423,32 +420,28 @@ func leftovers(bs, as planning.State, must *mustSink) []string {
 		}
 	}
 	slices.Sort(keys)
-	// A dish whose cooking is gone from one day and new on another moved.
-	// A dish with two new cookings names the earliest one, whatever the map
-	// order (the keys are sorted, the earliest cook date wins).
-	movedTo := map[string]batchFacts{}
-	for _, k := range keys {
-		v, isNew := a[k]
-		if _, old := b[k]; !isNew || old {
-			continue
-		}
-		if cur, ok := movedTo[v.dish]; !ok || v.cooked.Before(cur.cooked) {
-			movedTo[v.dish] = v
-		}
+	cookedNow := map[string]bool{}
+	for _, v := range a {
+		cookedNow[v.dish] = true
 	}
-	var out []string
+	explained := func(dish string) bool {
+		for _, m := range changed {
+			if slices.ContainsFunc(m.Before, func(s string) bool { n, _ := splitQty(s); return n == dish }) {
+				return true
+			}
+		}
+		return false
+	}
 	for _, k := range keys {
 		was, wasOK := b[k]
 		now, nowOK := a[k]
 		switch {
 		case wasOK && !nowOK:
-			if was.eaten > 0.005 {
-				if to, ok := movedTo[was.dish]; ok {
-					out = append(out, fmt.Sprintf("The %s is now cooked on %s at %s instead of %s at %s.", food.Quote(was.dish), to.cooked.Format("Mon 2 Jan"), to.cookedAt, was.cooked.Format("Mon 2 Jan"), was.cookedAt))
-					must.add(mustFact{Kind: factMoved, Dish: was.dish, Day: to.cooked.Format("Mon 2 Jan"), Meal: to.cookedAt, Day2: was.cooked.Format("Mon 2 Jan"), Meal2: was.cookedAt})
-				} else {
-					out = append(out, fmt.Sprintf("The %s cooked on %s is no longer cooked.", food.Quote(was.dish), was.cooked.Format("Mon 2 Jan")))
-				}
+			if was.eaten > 0.005 && !cookedNow[was.dish] && !explained(was.dish) {
+				day := was.cooked.Format("Mon 2 Jan")
+				sink.add(classMoved, kindLeftover, statusOK,
+					fmt.Sprintf("The %s cooked on %s is no longer cooked.", food.Quote(was.dish), day),
+					fmt.Sprintf("%s, gekocht am %s, wird nicht mehr gekocht.", deQuote(was.dish), deDay(day)))
 			}
 		case !wasOK:
 		default:
@@ -456,27 +449,33 @@ func leftovers(bs, as planning.State, must *mustSink) []string {
 				continue
 			}
 			free := now.portions - now.eaten
-			frozen := ""
+			frozen, frozenDE := "", ""
 			if now.frozen > 0.005 {
 				frozen = fmt.Sprintf(" (%s are meant for the freezer)", portionWord(now.frozen))
+				frozenDE = fmt.Sprintf(" (%s sind für den Gefrierschrank gedacht)", dePortions(now.frozen))
 			}
-			resized := "It was not resized."
+			resized, resizedDE := "It was not resized.", "Die Menge wurde nicht geändert."
 			if math.Abs(was.portions-now.portions) >= 0.005 {
 				resized = fmt.Sprintf("It was resized from %s to %s.", portionWord(was.portions), portionWord(now.portions))
+				resizedDE = fmt.Sprintf("Die Menge wurde von %s auf %s geändert.", dePortions(was.portions), dePortions(now.portions))
 			}
 			day := now.cooked.Format("Mon 2 Jan")
 			switch {
 			case math.Abs(free) <= 0.005 && math.Abs(was.portions-now.portions) >= 0.005:
-				out = append(out, fmt.Sprintf("%s: cook %s of the %s (was %s).", day, portionWord(now.portions), food.Quote(now.dish), fmtNum(was.portions)))
-				must.add(mustFact{Kind: factResize, Day: day, Dish: now.dish, N: now.portions, Was: was.portions})
+				sink.add(classMoved, kindLeftover, statusOK,
+					fmt.Sprintf("%s: cook %s of the %s (was %s).", day, portionWord(now.portions), food.Quote(now.dish), fmtNum(was.portions)),
+					fmt.Sprintf("%s: %s von %s kochen (statt %s).", deDay(day), dePortions(now.portions), deQuote(now.dish), fmtComma(was.portions)))
 			case free > 0.005:
-				out = append(out, fmt.Sprintf("%s of the %s cooked on %s is now left over (it is cooked for %s%s, the meals eat %s). %s", portionWord(free), food.Quote(now.dish), day, portionWord(now.portions), frozen, fmtNum(now.eaten), resized))
+				sink.add(classMoved, kindLeftover, statusOK,
+					fmt.Sprintf("%s of the %s cooked on %s is now left over (it is cooked for %s%s, the meals eat %s). %s", portionWord(free), food.Quote(now.dish), day, portionWord(now.portions), frozen, fmtNum(now.eaten), resized),
+					fmt.Sprintf("Von %s, gekocht am %s, bleiben %s übrig (gekocht für %s%s, die Mahlzeiten essen %s). %s", deQuote(now.dish), deDay(day), dePortions(free), dePortions(now.portions), frozenDE, fmtComma(now.eaten), resizedDE))
 			case free < -0.005:
-				out = append(out, fmt.Sprintf("The meals need %s more of the %s cooked on %s than it holds (%s). %s", portionWord(-free), food.Quote(now.dish), day, portionWord(now.portions), resized))
+				sink.add(classMoved, kindLeftover, statusUnder,
+					fmt.Sprintf("The meals need %s more of the %s cooked on %s than it holds (%s). %s", portionWord(-free), food.Quote(now.dish), day, portionWord(now.portions), resized),
+					fmt.Sprintf("Die Mahlzeiten brauchen %s mehr von %s, gekocht am %s, als es enthält (%s). %s", dePortions(-free), deQuote(now.dish), deDay(day), dePortions(now.portions), resizedDE))
 			}
 		}
 	}
-	return out
 }
 
 func asInt64(v any) int64 {
@@ -512,139 +511,98 @@ func sessionDish(st planning.State, id int64) string {
 	return ""
 }
 
-// alsoChanged says each knock-on change the operations reported: moved cooks,
-// meals that now cook fresh, resized batches and the automatic fixes.
-func alsoChanged(st planning.State, applied []map[string]any, must *mustSink) []string {
-	var out []string
-	cell := func(m map[string]any, dk, sk string) string {
-		if d, ok := asDate(m[dk]); ok {
-			return cellLabel(st, d, asInt64(m[sk]))
-		}
-		return ""
-	}
+// alsoChanged says a meal that now cooks its own dish instead of eating the
+// batch cooked earlier. (A cook that moved is told by its cooking-time fact.)
+func alsoChanged(st planning.State, applied []map[string]any, sink *factSink) {
 	for _, e := range applied {
-		if list, ok := e["also_changed"].([]any); ok {
-			for _, x := range list {
-				m, ok := x.(map[string]any)
-				if !ok {
-					continue
-				}
-				dish := sessionDish(st, asInt64(m["session_id"]))
-				if dish == "" {
-					dish = "a dish"
-				}
-				switch m["what"] {
-				case "cook_moved", "became_cooking_meal":
-					s := fmt.Sprintf("The %s is now cooked at %s", dish, cell(m, "date", "slot_id"))
-					if from := cell(m, "from_date", "from_slot_id"); from != "" {
-						s += " instead of " + from
-					}
-					out = append(out, s+".")
-				case "cooks_fresh":
-					why := map[string]string{"before_cook": "it comes before the batch is cooked", "past_keep_days": "the batch would be too old by then", "cooked": "the batch is already cooked"}[fmt.Sprint(m["why"])]
-					s := fmt.Sprintf("%s now cooks its own %s instead of eating the one cooked earlier", cell(m, "date", "slot_id"), dish)
-					if why != "" {
-						if m["why"] == "past_keep_days" {
-							why += keepTooOld(st, asInt64(m["session_id"]))
-							if d, ok := asDate(m["date"]); ok {
-								must.add(mustFact{Kind: factTooOld, Day: dayLabel(d), Dish: strings.Trim(dish, `"`), Keep: keepDaysOf(st, asInt64(m["session_id"]))})
-							}
-						}
-						s += " (" + why + ")"
-					}
-					out = append(out, s+".")
-				case "batch_resized":
-					out = append(out, fmt.Sprintf("The %s cooking was resized.", dish))
-				}
-			}
+		list, ok := e["also_changed"].([]any)
+		if !ok {
+			continue
 		}
-		if e["auto_fix"] != nil {
-			dish := sessionDish(st, asInt64(e["session_id"]))
+		for _, x := range list {
+			m, ok := x.(map[string]any)
+			if !ok || m["what"] != "cooks_fresh" {
+				continue
+			}
+			dish := sessionDish(st, asInt64(m["session_id"]))
 			if dish == "" {
 				dish = "a dish"
 			}
-			s := fmt.Sprintf("To keep one cooking time a day, %s is now cooked at %s", dish, cell(e, "cook_date", "cook_slot_id"))
-			if from := cell(e, "from_date", "from_slot_id"); from != "" {
-				s += " instead of " + from
+			cell := ""
+			if d, ok := asDate(m["date"]); ok {
+				cell = cellLabel(st, d, asInt64(m["slot_id"]))
 			}
-			out = append(out, s+".")
+			why := fmt.Sprint(m["why"])
+			en := fmt.Sprintf("%s now cooks its own %s instead of eating the one cooked earlier", cell, dish)
+			de := fmt.Sprintf("%s kocht jetzt selbst %s, statt das früher Gekochte zu essen", deCell(cell), deQuote(dish))
+			reasonEN := map[string]string{"before_cook": "it comes before the batch is cooked", "past_keep_days": "the batch would be too old by then", "cooked": "the batch is already cooked"}[why]
+			reasonDE := map[string]string{"before_cook": "es kommt vor dem Kochen", "past_keep_days": "es wäre dann zu alt", "cooked": "es ist schon gekocht"}[why]
+			if reasonEN != "" {
+				if why == "past_keep_days" {
+					if keep := keepDaysOf(st, asInt64(m["session_id"])); keep > 0 {
+						reasonEN += fmt.Sprintf("; it keeps %s in the fridge", countDays(keep, false))
+						reasonDE += fmt.Sprintf("; es hält sich %s im Kühlschrank", countDays(keep, true))
+					}
+				}
+				en += " (" + reasonEN + ")"
+				de += " (" + reasonDE + ")"
+			}
+			sink.add(classMoved, kindLeftover, statusOK, dot(en), dot(de))
 		}
 	}
-	return out
 }
 
-// mainDishes is the dish that is the main on each lunch or dinner plate of the
-// window: dish name to its meals.
-func mainDishes(st planning.State) map[string][]string {
-	out := map[string][]string{}
-	for _, p := range st.Plates {
-		if !st.Window.Contains(p.Date) || p.Proposed() {
-			continue
-		}
-		for _, c := range p.Components {
-			if c.Position == plate.PositionMain && c.Portions != nil {
-				n := foodName(st, c.FoodID)
-				out[n] = append(out[n], cellLabel(st, p.Date, p.SlotID))
-				break
-			}
-		}
-	}
-	return out
-}
-
-// weekFacts is what this change did to the week: the figures that moved, with
-// the numbers, and the dishes whose repeats changed.
-func weekFacts(in reportInput, bs, as planning.State) []string {
-	var out []string
+// weekFacts is what this change made worse for the week, with the numbers: a
+// figure that crossed its limit or moved further past it, or that fell short
+// (beans, fish, protein). A figure that moved without crossing is no news.
+func weekFacts(in reportInput, bs, as planning.State) {
 	bw, aw := in.before.Week, in.after.Week
+	if in.undo {
+		return
+	}
+	add := func(status, en, de string) {
+		in.facts.add(classWorse, kindWeek, status, "For the week: "+en+".", "Für die Woche: "+de+".")
+	}
 	if bw != nil && aw != nil {
 		limit := 300 * float64(aw.Days) / 7
-		// A figure is told only when this change moved it past a real step
-		// (25 g meat, 3 points of energy, 5 g protein) or across a line.
-		if math.Abs(aw.MeatG-bw.MeatG) >= 25 || (aw.MeatG > limit) != (bw.MeatG > 300*float64(bw.Days)/7) {
-			s := fmt.Sprintf("meat is %.0f g (was %.0f g, limit %.0f g)", aw.MeatG, bw.MeatG, limit)
+		wasLimit := 300 * float64(bw.Days) / 7
+		if aw.MeatG > limit && (aw.MeatG >= bw.MeatG+25 || bw.MeatG <= wasLimit) {
+			en := fmt.Sprintf("meat is %.0f g (was %.0f g, limit %.0f g)", aw.MeatG, bw.MeatG, limit)
+			de := fmt.Sprintf("Fleisch %.0f g (vorher %.0f g, Grenze %.0f g)", aw.MeatG, bw.MeatG, limit)
 			if aw.Days < 7 {
-				s = fmt.Sprintf("meat is %.0f g (was %.0f g, limit for the %d days you are home: %.0f g)", aw.MeatG, bw.MeatG, aw.Days, limit)
+				en = fmt.Sprintf("meat is %.0f g (was %.0f g, limit for the %d days you are home: %.0f g)", aw.MeatG, bw.MeatG, aw.Days, limit)
+				de = fmt.Sprintf("Fleisch %.0f g (vorher %.0f g, Grenze für die %d Tage, an denen du da bist: %.0f g)", aw.MeatG, bw.MeatG, aw.Days, limit)
 			}
-			out = append(out, s)
-			if now, was := int(math.Round(aw.MeatG)), int(math.Round(bw.MeatG)); now > int(math.Round(limit)) || now > was {
-				in.must.add(mustFact{Kind: factMeat, N: float64(now), Was: float64(was), Limit: math.Round(limit)})
-			}
+			add(statusOver, en, de)
 		}
 		pol := planning.PolicyOf(as.Profile)
-		inWeek := func(p float64) bool { return p >= pol.WeekLow*100-0.5 && p <= pol.WeekHigh*100+0.5 }
-		if math.Abs(aw.Pct-bw.Pct) >= 3 || inWeek(aw.Pct) != inWeek(bw.Pct) {
-			out = append(out, fmt.Sprintf("average energy is %.0f%% of the target (was %.0f%%); the week's range is %.0f–%.0f%%", aw.Pct, bw.Pct, pol.WeekLow*100, pol.WeekHigh*100))
-			now, was, lo, hi := math.Round(aw.Pct), math.Round(bw.Pct), math.Round(pol.WeekLow*100), math.Round(pol.WeekHigh*100)
-			if now < was || now < lo || now > hi {
-				in.must.add(mustFact{Kind: factEnergy, N: now, Was: was, Lo: lo, Hi: hi})
+		lo, hi := pol.WeekLow*100, pol.WeekHigh*100
+		inWeek := func(p float64) bool { return p >= lo-0.5 && p <= hi+0.5 }
+		if !inWeek(aw.Pct) && (inWeek(bw.Pct) || absf(aw.Pct-lo) > absf(bw.Pct-lo) && aw.Pct < lo || aw.Pct > hi && aw.Pct > bw.Pct) && absf(aw.Pct-bw.Pct) >= 3 {
+			st := statusUnder
+			if aw.Pct > hi {
+				st = statusOver
 			}
+			add(st, fmt.Sprintf("average energy is %.0f%% of the target (was %.0f%%); the week's range is %.0f–%.0f%%", aw.Pct, bw.Pct, lo, hi),
+				fmt.Sprintf("durchschnittliche Energie %.0f %% des Ziels (vorher %.0f %%); der Bereich der Woche liegt bei %.0f–%.0f %%", aw.Pct, bw.Pct, lo, hi))
 		}
-		if aw.TargetProteinG > 0 && math.Abs(aw.AvgProteinG-bw.AvgProteinG) >= 5 {
-			out = append(out, fmt.Sprintf("protein averages %.0f g a day against %.0f g wanted (was %.0f g)", aw.AvgProteinG, aw.TargetProteinG, bw.AvgProteinG))
+		if aw.TargetProteinG > 0 && aw.AvgProteinG < aw.TargetProteinG && aw.AvgProteinG <= bw.AvgProteinG-5 {
+			add(statusUnder, fmt.Sprintf("protein averages %.0f g a day against %.0f g wanted (was %.0f g)", aw.AvgProteinG, aw.TargetProteinG, bw.AvgProteinG),
+				fmt.Sprintf("Eiweiß liegt im Schnitt bei %.0f g pro Tag, gewünscht sind %.0f g (vorher %.0f g)", aw.AvgProteinG, aw.TargetProteinG, bw.AvgProteinG))
 		}
-		if (aw.FishMeals == 0) != (bw.FishMeals == 0) {
-			out = append(out, fmt.Sprintf("fish is on the plan %s (was %s)", timesWord(aw.FishMeals), timesWord(bw.FishMeals)))
+		if aw.FishMeals == 0 && bw.FishMeals != 0 {
+			add(statusUnder, fmt.Sprintf("fish is on the plan %s (was %s)", timesWord(aw.FishMeals), timesWord(bw.FishMeals)),
+				fmt.Sprintf("Fisch steht %s auf dem Plan (vorher %s)", deTimes(aw.FishMeals), deTimes(bw.FishMeals)))
 		}
-		if (aw.LegumeMeals == 0) != (bw.LegumeMeals == 0) {
-			out = append(out, fmt.Sprintf("beans or lentils are on the plan %s (was %s)", timesWord(aw.LegumeMeals), timesWord(bw.LegumeMeals)))
-		}
-	}
-	if in.after.MeatDaysMax != nil && (in.after.MeatDays > *in.after.MeatDaysMax) != (in.before.MeatDays > *in.after.MeatDaysMax) {
-		out = append(out, fmt.Sprintf("meat is on %d days (was %d, at most %d)", in.after.MeatDays, in.before.MeatDays, *in.after.MeatDaysMax))
-	}
-	bm, am := mainDishes(bs), mainDishes(as)
-	dishes := make([]string, 0, len(am))
-	for d := range am {
-		dishes = append(dishes, d)
-	}
-	slices.Sort(dishes)
-	for _, d := range dishes {
-		if len(am[d]) >= 2 && !slices.Equal(am[d], bm[d]) {
-			out = append(out, fmt.Sprintf("%s is eaten as the main dish at %d meals: %s", food.Quote(d), len(am[d]), strings.Join(am[d], ", ")))
+		if aw.LegumeMeals == 0 && bw.LegumeMeals != 0 {
+			add(statusUnder, fmt.Sprintf("beans or lentils are on the plan %s (was %s)", timesWord(aw.LegumeMeals), timesWord(bw.LegumeMeals)),
+				fmt.Sprintf("Bohnen oder Linsen stehen %s auf dem Plan (vorher %s)", deTimes(aw.LegumeMeals), deTimes(bw.LegumeMeals)))
 		}
 	}
-	return out
+	if in.after.MeatDaysMax != nil && in.after.MeatDays > *in.after.MeatDaysMax && in.before.MeatDays <= *in.after.MeatDaysMax {
+		add(statusOver, fmt.Sprintf("meat is on %d days (was %d, at most %d)", in.after.MeatDays, in.before.MeatDays, *in.after.MeatDaysMax),
+			fmt.Sprintf("Fleisch steht an %d Tagen auf dem Plan (vorher %d, höchstens %d)", in.after.MeatDays, in.before.MeatDays, *in.after.MeatDaysMax))
+	}
 }
 
 func timesWord(n int) string {
@@ -657,10 +615,25 @@ func timesWord(n int) string {
 	return fmt.Sprintf("%d times", n)
 }
 
-// warnings are the issues that did not exist before the change, the earlier
-// ones that got worse by a real step, each as one plain sentence, and the
-// number of earlier ones left as they were (or moved by less than a step).
-func warnings(in reportInput, as planning.State, away bool) (out, worse []string, unaffected int, neutral string) {
+// statusOfIssue says on which side of its limit an issue is.
+func statusOfIssue(code string) string {
+	switch code {
+	case planning.CodeKcalBelowBand, planning.CodeKcalBelowFloor, planning.CodeProteinLow, planning.CodeWeekProteinLow,
+		planning.CodeWeekKcalBelowBand, planning.CodeMealNotHearty:
+		return statusUnder
+	case planning.CodeKcalAboveBand, planning.CodeWeekKcalAboveBand, planning.CodeMealNotLight, planning.CodeWeekMeatAboveDGE,
+		planning.CodeMeatDaysExceeded, planning.CodeDishRepeats, planning.CodeAddOnExcess, planning.CodeTooManyCookOccasions:
+		return statusOver
+	}
+	return statusUnknown
+}
+
+// warnings adds the issues that did not exist before the change as class 5
+// facts, and the earlier ones that got worse by a real step as class 4 facts. It
+// returns the number of earlier ones left as they were (or moved by less than a
+// step). A week figure that only moved because a day went away is no fact,
+// unless the week's meat is over its limit.
+func warnings(in reportInput, as planning.State, away bool) (unaffected int) {
 	was := issueMap(in.before.Issues)
 	issues := slices.Clone(in.after.Issues)
 	slices.SortFunc(issues, func(a, b planning.Issue) int { return strings.Compare(a.Date+a.Code, b.Date+b.Code) })
@@ -668,32 +641,27 @@ func warnings(in reportInput, as planning.State, away bool) (out, worse []string
 		b, ok := was[issueKey(is)]
 		switch {
 		case !ok:
-			out = append(out, issueSentence(is, as))
+			en, de := issueSentence(is, as)
+			in.facts.add(classWarn, kindWarn, statusOfIssue(is.Code), "New warning: "+en, "Neue Warnung: "+de)
 		case worsened(b, is) && away && is.Date == "" && is.Code != planning.CodeWeekFatRange && is.Code != planning.CodeWeekCarbsRange:
 			// Only the day count changed: the remaining days eat what they ate.
 			unaffected++
-			if neutral == "" || is.Code == planning.CodeWeekMeatAboveDGE {
-				neutral = awayNeutral(in, as, is)
-				if is.Code == planning.CodeWeekMeatAboveDGE && paramNum(is, "meat_g") > paramNum(is, "max_g") {
-					in.must.add(mustFact{Kind: factAwayMeat, N: math.Round(paramNum(is, "meat_g")), Limit: math.Round(paramNum(is, "max_g"))})
-				}
+			if is.Code == planning.CodeWeekMeatAboveDGE && paramNum(is, "meat_g") > paramNum(is, "max_g") {
+				en, de := awayNeutral(in, is)
+				in.facts.add(classWorse, kindWeek, statusOver, en, de)
 			}
 		case worsened(b, is):
 			bb, _ := badness(b)
 			ab, _ := badness(is)
-			if is.Code == planning.CodeWeekFatRange || is.Code == planning.CodeWeekCarbsRange {
-				share := "fat"
-				if is.Code == planning.CodeWeekCarbsRange {
-					share = "carbs"
-				}
-				in.must.add(mustFact{Kind: factShare, Share: share, N: math.Round(paramNum(is, "pct")), Lo: math.Round(paramNum(is, "range_low_pct")), Hi: math.Round(paramNum(is, "range_high_pct"))})
-			}
-			worse = append(worse, fmt.Sprintf("%s It was already open and got worse: %s beyond its limit before, %s now.", issueSentence(is, as), badnessWords(is.Code, bb), badnessWords(is.Code, ab)))
+			en, de := issueSentence(is, as)
+			in.facts.add(classWorse, kindWarn, statusOfIssue(is.Code),
+				fmt.Sprintf("Worse: %s It was already open and got worse: %s beyond its limit before, %s now.", en, badnessWords(is.Code, bb), badnessWords(is.Code, ab)),
+				fmt.Sprintf("Schlimmer: %s Es war schon offen und ist schlimmer geworden: vorher %s über der Grenze, jetzt %s.", de, badnessWords(is.Code, bb), badnessWords(is.Code, ab)))
 		default:
 			unaffected++
 		}
 	}
-	return out, worse, unaffected, neutral
+	return unaffected
 }
 
 // awayOnly reports a change that only removed meals (a day away): the food of
@@ -710,9 +678,9 @@ func awayOnly(changed []reportMeal) bool {
 	return true
 }
 
-// awayNeutral is the one neutral line for a week figure that was already open
-// and only changed because the week is counted over fewer days.
-func awayNeutral(in reportInput, as planning.State, is planning.Issue) string {
+// awayNeutral is the line for the week's meat that was already over its limit
+// and is counted over fewer days now.
+func awayNeutral(in reportInput, is planning.Issue) (en, de string) {
 	days := 0
 	if in.after.Week != nil {
 		days = in.after.Week.Days
@@ -729,14 +697,19 @@ func awayNeutral(in reportInput, as planning.State, is planning.Issue) string {
 			away = append(away, dayLabel(m.Date))
 		}
 	}
-	who := "a day"
+	who, whoDE := "a day", "einem Tag"
 	if len(away) > 0 {
 		who = strings.Join(away, " and ")
+		d := make([]string, len(away))
+		for i, a := range away {
+			d[i] = deDay(a)
+		}
+		whoDE = strings.Join(d, " und ")
 	}
-	if is.Code == planning.CodeWeekMeatAboveDGE {
-		return fmt.Sprintf("With %s away the week is counted over %d days; the meat limit for those days is %.0f g and the plan holds %.0f g, as before%s.", who, days, paramNum(is, "max_g"), paramNum(is, "meat_g"), overBy(paramNum(is, "meat_g")-paramNum(is, "max_g")))
-	}
-	return fmt.Sprintf("With %s away the week is counted over %d days: %s It was already open, as before.", who, days, issueSentence(is, as))
+	over := paramNum(is, "meat_g") - paramNum(is, "max_g")
+	en = fmt.Sprintf("With %s away the week is counted over %d days; the meat limit for those days is %.0f g and the plan holds %.0f g, as before%s.", who, days, paramNum(is, "max_g"), paramNum(is, "meat_g"), overBy(over))
+	de = fmt.Sprintf("Bei Abwesenheit an %s wird die Woche über %d Tage gezählt; die Fleischgrenze für diese Tage liegt bei %.0f g, der Plan hat %.0f g, wie vorher%s.", whoDE, days, paramNum(is, "max_g"), paramNum(is, "meat_g"), overByDE(over))
+	return en, de
 }
 
 // overBy says how far over a limit, "; that is 64 g over", or nothing.
@@ -745,6 +718,13 @@ func overBy(g float64) string {
 		return ""
 	}
 	return fmt.Sprintf("; that is %.0f g over", g)
+}
+
+func overByDE(g float64) string {
+	if g < 0.5 {
+		return ""
+	}
+	return fmt.Sprintf("; das sind %.0f g darüber", g)
 }
 
 // badnessWords says a badness value with its unit.
@@ -774,8 +754,8 @@ func paramNum(is planning.Issue, k string) float64 {
 }
 
 // issueSentence says an issue in one plain sentence naming the day or meal
-// and the numbers.
-func issueSentence(is planning.Issue, st planning.State) string {
+// and the numbers, in English and in German.
+func issueSentence(is planning.Issue, st planning.State) (en, de string) {
 	where := ""
 	switch {
 	case is.PlateID != nil:
@@ -790,70 +770,105 @@ func issueSentence(is planning.Issue, st planning.State) string {
 	if where == "" && is.Date != "" {
 		where = dayLabelStr(is.Date)
 	}
-	if where == "" {
+	week := where == ""
+	if week {
 		where = "The week"
 	}
+	whereDE := deCell(where)
+	if week {
+		whereDE = "Die Woche"
+	} else if len(strings.Fields(where)) == 3 {
+		whereDE = deDay(where)
+	}
 	n := func(k string) float64 { return paramNum(is, k) }
+	both := func(e, d string) (string, string) { return e, d }
 	switch is.Code {
 	case planning.CodeTooManyCookOccasions:
-		return fmt.Sprintf("%s has %.0f separate cooking times; the limit is %.0f.", where, n("count"), n("max"))
+		return both(fmt.Sprintf("%s has %.0f separate cooking times; the limit is %.0f.", where, n("count"), n("max")),
+			fmt.Sprintf("%s hat %.0f getrennte Kochzeiten; erlaubt sind %.0f.", whereDE, n("count"), n("max")))
 	case planning.CodeKcalBelowFloor:
-		return fmt.Sprintf("%s holds only %.0f kcal, under the day's minimum of %.0f kcal.", where, n("kcal"), n("floor_kcal"))
+		return both(fmt.Sprintf("%s holds only %.0f kcal, under the day's minimum of %.0f kcal.", where, n("kcal"), n("floor_kcal")),
+			fmt.Sprintf("%s hat nur %.0f kcal, unter dem Mindestwert des Tages von %.0f kcal.", whereDE, n("kcal"), n("floor_kcal")))
 	case planning.CodeKcalBelowBand, planning.CodeKcalAboveBand:
-		side := "under"
+		side, sideDE := "below", "unter"
 		if is.Code == planning.CodeKcalAboveBand {
-			side = "over"
+			side, sideDE = "above", "über"
 		}
-		if side == "under" {
-			side = "below"
-		} else {
-			side = "above"
-		}
-		return fmt.Sprintf("%s holds %.0f kcal, %s a good amount for the day (%.0f–%.0f kcal).", where, n("kcal"), side, n("band_low_kcal"), n("band_high_kcal"))
+		return both(fmt.Sprintf("%s holds %.0f kcal, %s a good amount for the day (%.0f–%.0f kcal).", where, n("kcal"), side, n("band_low_kcal"), n("band_high_kcal")),
+			fmt.Sprintf("%s hat %.0f kcal, %s dem passenden Bereich für den Tag (%.0f–%.0f kcal).", whereDE, n("kcal"), sideDE, n("band_low_kcal"), n("band_high_kcal")))
 	case planning.CodeProteinLow:
-		return fmt.Sprintf("%s has %.0f g protein; the minimum is %.0f g.", where, n("protein_g"), n("min_g"))
+		return both(fmt.Sprintf("%s has %.0f g protein; the minimum is %.0f g.", where, n("protein_g"), n("min_g")),
+			fmt.Sprintf("%s hat %.0f g Eiweiß; das Minimum sind %.0f g.", whereDE, n("protein_g"), n("min_g")))
 	case planning.CodeMealNotLight:
-		return fmt.Sprintf("%s is meant to be light (at most %.0f kcal) but holds %.0f kcal.", where, n("max_kcal"), n("kcal"))
+		return both(fmt.Sprintf("%s is meant to be light (at most %.0f kcal) but holds %.0f kcal.", where, n("max_kcal"), n("kcal")),
+			fmt.Sprintf("%s soll leicht sein (höchstens %.0f kcal), hat aber %.0f kcal.", whereDE, n("max_kcal"), n("kcal")))
 	case planning.CodeMealNotHearty:
-		return fmt.Sprintf("%s is meant to be filling (at least %.0f kcal) but holds %.0f kcal.", where, n("min_kcal"), n("kcal"))
+		return both(fmt.Sprintf("%s is meant to be filling (at least %.0f kcal) but holds %.0f kcal.", where, n("min_kcal"), n("kcal")),
+			fmt.Sprintf("%s soll sättigend sein (mindestens %.0f kcal), hat aber %.0f kcal.", whereDE, n("min_kcal"), n("kcal")))
 	case planning.CodeWeekMeatAboveDGE:
 		if d := n("days"); d > 0 && d < 7 {
-			return fmt.Sprintf("The week's meat is %.0f g; the limit for the %.0f days you are home is %.0f g (300 g a week).", n("meat_g"), d, n("max_g"))
+			return both(fmt.Sprintf("The week's meat is %.0f g; the limit for the %.0f days you are home is %.0f g (300 g a week).", n("meat_g"), d, n("max_g")),
+				fmt.Sprintf("Das Fleisch der Woche beträgt %.0f g; die Grenze für die %.0f Tage, an denen du da bist, liegt bei %.0f g (300 g pro Woche).", n("meat_g"), d, n("max_g")))
 		}
-		return fmt.Sprintf("The week's meat is %.0f g; the limit is %.0f g.", n("meat_g"), n("max_g"))
+		return both(fmt.Sprintf("The week's meat is %.0f g; the limit is %.0f g.", n("meat_g"), n("max_g")),
+			fmt.Sprintf("Das Fleisch der Woche beträgt %.0f g; die Grenze liegt bei %.0f g.", n("meat_g"), n("max_g")))
 	case planning.CodeWeekKcalBelowBand, planning.CodeWeekKcalAboveBand:
-		return fmt.Sprintf("The week's average is %.0f kcal a day, %.0f%% of the target; the week's range is %.0f-%.0f%%.", n("avg_kcal"), n("pct"), n("band_low_pct"), n("band_high_pct"))
+		return both(fmt.Sprintf("The week's average is %.0f kcal a day, %.0f%% of the target; the week's range is %.0f-%.0f%%.", n("avg_kcal"), n("pct"), n("band_low_pct"), n("band_high_pct")),
+			fmt.Sprintf("Der Wochendurchschnitt liegt bei %.0f kcal pro Tag, %.0f %% des Ziels; der Bereich der Woche liegt bei %.0f–%.0f %%.", n("avg_kcal"), n("pct"), n("band_low_pct"), n("band_high_pct")))
 	case planning.CodeWeekProteinLow:
-		return fmt.Sprintf("The week's average protein is %.0f g a day; the target is %.0f g.", n("avg_protein_g"), n("target_protein_g"))
+		return both(fmt.Sprintf("The week's average protein is %.0f g a day; the target is %.0f g.", n("avg_protein_g"), n("target_protein_g")),
+			fmt.Sprintf("Das Eiweiß der Woche liegt im Schnitt bei %.0f g pro Tag; das Ziel sind %.0f g.", n("avg_protein_g"), n("target_protein_g")))
 	case planning.CodeWeekCarbsRange, planning.CodeWeekFatRange:
-		return fmt.Sprintf("%s: %.0f%% of the week's energy; the range is %.0f-%.0f%%.", cap1(planning.PlainText(is.Code).Label), n("pct"), n("range_low_pct"), n("range_high_pct"))
+		label, labelDE := "Weekly carbs", "Kohlenhydrate der Woche"
+		if is.Code == planning.CodeWeekFatRange {
+			label, labelDE = "Weekly fat", "Fett der Woche"
+		}
+		return both(fmt.Sprintf("%s: %.0f%% of the week's energy; the range is %.0f-%.0f%%.", label, n("pct"), n("range_low_pct"), n("range_high_pct")),
+			fmt.Sprintf("%s: %.0f %% der Energie der Woche; der Bereich liegt bei %.0f–%.0f %%.", labelDE, n("pct"), n("range_low_pct"), n("range_high_pct")))
 	case planning.CodeDishRepeats:
-		return fmt.Sprintf("%s is the main dish of %.0f meals; the limit is %.0f.", food.Quote(fmt.Sprint(is.Params["name"])), n("meals"), n("max"))
+		name := fmt.Sprint(is.Params["name"])
+		return both(fmt.Sprintf("%s is the main dish of %.0f meals; the limit is %.0f.", food.Quote(name), n("meals"), n("max")),
+			fmt.Sprintf("%s ist das Hauptgericht von %.0f Mahlzeiten; erlaubt sind %.0f.", deQuote(name), n("meals"), n("max")))
 	case planning.CodeMeatDaysExceeded:
-		return fmt.Sprintf("%.0f days of the week have meat; the limit is %.0f.", n("days"), n("max"))
+		return both(fmt.Sprintf("%.0f days of the week have meat; the limit is %.0f.", n("days"), n("max")),
+			fmt.Sprintf("An %.0f Tagen der Woche gibt es Fleisch; erlaubt sind %.0f.", n("days"), n("max")))
 	case planning.CodeAddOnExcess:
-		why := map[string]string{
-			"light_meal": "added to a light meal", "duplicates_main": "already in the main", "over_cap": fmt.Sprintf("over the usual serving of %.0f g", n("max_grams")),
-			"day_limit": "more sides that day than usual", "repeated": "the same side on too many meals",
+		why := map[string][2]string{
+			"light_meal":      {"added to a light meal", "zu einer leichten Mahlzeit dazugegeben"},
+			"duplicates_main": {"already in the main", "schon im Hauptgericht enthalten"},
+			"over_cap":        {fmt.Sprintf("over the usual serving of %.0f g", n("max_grams")), fmt.Sprintf("über der üblichen Portion von %.0f g", n("max_grams"))},
+			"day_limit":       {"more sides that day than usual", "mehr Beilagen an dem Tag als üblich"},
+			"repeated":        {"the same side on too many meals", "dieselbe Beilage zu zu vielen Mahlzeiten"},
 		}[fmt.Sprint(is.Params["reason"])]
-		return fmt.Sprintf("%s: %s %.0f g is %s.", where, food.Quote(fmt.Sprint(is.Params["name"])), n("grams"), why)
+		name := fmt.Sprint(is.Params["name"])
+		return both(fmt.Sprintf("%s: %s %.0f g is %s.", where, food.Quote(name), n("grams"), why[0]),
+			fmt.Sprintf("%s: %s %.0f g ist %s.", whereDE, deQuote(name), n("grams"), why[1]))
 	}
 	switch is.Code {
 	case planning.CodeVarietyRepeat, planning.CodeVarietyRelaxed, planning.CodeVarietyRepeatWeek, planning.CodeVarietyRepeatNamed:
 		if dish := issueDish(is, st); dish != "" {
+			dishDE := deQuoted(dish)
 			if is.Code == planning.CodeVarietyRepeatWeek {
 				if meals := sessionMealLabels(st, is); len(meals) > 1 {
-					return fmt.Sprintf("%s is cooked more than once this week: it is eaten at %s.", dish, strings.Join(meals, ", "))
+					de := make([]string, len(meals))
+					for i, m := range meals {
+						de[i] = deCell(m)
+					}
+					return both(fmt.Sprintf("%s is cooked more than once this week: it is eaten at %s.", dish, strings.Join(meals, ", ")),
+						fmt.Sprintf("%s wird diese Woche mehr als einmal gekocht: es wird gegessen am %s.", dishDE, strings.Join(de, ", ")))
 				}
-				return fmt.Sprintf("%s: %s is cooked more than once this week.", where, dish)
+				return both(fmt.Sprintf("%s: %s is cooked more than once this week.", where, dish),
+					fmt.Sprintf("%s: %s wird diese Woche mehr als einmal gekocht.", whereDE, dishDE))
 			}
 			if is.Code == planning.CodeVarietyRepeatNamed {
-				return fmt.Sprintf("%s: %s is in the plan as you asked, but it was cooked or eaten recently before.", where, dish)
+				return both(fmt.Sprintf("%s: %s is in the plan as you asked, but it was cooked or eaten recently before.", where, dish),
+					fmt.Sprintf("%s: %s steht wie gewünscht im Plan, wurde aber vorher erst kürzlich gekocht oder gegessen.", whereDE, dishDE))
 			}
-			return fmt.Sprintf("%s: %s was cooked or eaten too recently before.", where, dish)
+			return both(fmt.Sprintf("%s: %s was cooked or eaten too recently before.", where, dish),
+				fmt.Sprintf("%s: %s wurde vorher zu kürzlich gekocht oder gegessen.", whereDE, dishDE))
 		}
 	}
-	return where + ": " + planning.PlainText(is.Code).Message
+	return where + ": " + planning.PlainText(is.Code).Message, whereDE + ": eine Planungsregel ist nicht erfüllt."
 }
 
 // issueDish is the main dish of the plate or batch an issue sits on.
@@ -875,17 +890,10 @@ func issueDish(is planning.Issue, st planning.State) string {
 	return ""
 }
 
-func cap1(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
-}
-
 // reportOf reads the plan after the ops (inside the unit of work, so a check
 // still sees them) and builds the report. A state that cannot be read leaves
 // a report that says so, never a guess.
-func reportOf(ctx context.Context, svc Services, w window.Window, beforeSt planning.State, beforeErr error, before, after planning.Evaluation, applied []map[string]any) *changeReport {
+func reportOf(ctx context.Context, svc Services, w window.Window, beforeSt planning.State, beforeErr error, before, after planning.Evaluation, applied []map[string]any, dayKcal bool) *changeReport {
 	if beforeErr != nil {
 		return &changeReport{NotCovered: []string{"the plan before the change could not be read"}}
 	}
@@ -893,7 +901,7 @@ func reportOf(ctx context.Context, svc Services, w window.Window, beforeSt plann
 	if err != nil {
 		return &changeReport{NotCovered: []string{"the plan after the change could not be read"}}
 	}
-	r := buildReport(reportInput{beforeSt: beforeSt, afterSt: afterSt, before: before, after: after, applied: applied})
+	r := buildReport(reportInput{beforeSt: beforeSt, afterSt: afterSt, before: before, after: after, applied: applied, dayKcal: dayKcal})
 	return &r
 }
 
@@ -919,28 +927,16 @@ func withReport(svc Services, h ToolHandler, undo bool) ToolHandler {
 		if e3 != nil || e4 != nil || json.Unmarshal(out, &obj) != nil || obj == nil {
 			return out, eff, err
 		}
-		r := buildReport(reportInput{beforeSt: beforeSt, afterSt: afterSt, before: beforeEv, after: afterEv})
+		r := buildReport(reportInput{beforeSt: beforeSt, afterSt: afterSt, before: beforeEv, after: afterEv, undo: undo})
 		if undo {
 			// An undo restores the plan exactly as it was before the undone
 			// change: every warning open now existed then, so none is new or
 			// worse; they are all earlier ones.
-			r.NewWarnings, r.Worse, r.EarlierWarnings = nil, nil, len(afterEv.Issues)
+			r.EarlierWarnings = len(afterEv.Issues)
 			r.Note = "Undone: the plan is exactly as it was before that change, and the warnings open now were open then. Say what is back; list no warning."
 			for i := range r.Days {
 				r.Days[i].Status = ""
 			}
-			in := reportInput{beforeSt: beforeSt, afterSt: afterSt, before: beforeEv, after: afterEv, must: &mustSink{}}
-			r.Tell = buildTell(in, r)
-			// The facts of the week and of the batches stay; the days and
-			// the cooking are told again, and no warning is new.
-			var kept []mustFact
-			for _, f := range r.Must {
-				if slices.Contains([]string{factResize, factMoved, factTooOld, factMeat, factEnergy, factAwayMeat}, f.Kind) {
-					kept = append(kept, f)
-				}
-			}
-			in.must.facts = append(kept, in.must.facts...)
-			r.Must = in.must.sorted()
 		}
 		if len(r.Changed) > 0 || len(r.Cooking) > 0 {
 			obj["report"] = mustJSON(r)

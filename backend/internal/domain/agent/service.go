@@ -33,7 +33,7 @@ const chatProgrammatic = false
 
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v37"
+const PromptVersion = "v38"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
@@ -207,6 +207,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		ConversationID: conv.ID,
 		Model:          model,
 		SystemPrompt:   prompt,
+		UserText:       req.UserText,
 		History:        history,
 		Tools:          s.tools.Describe(),
 		Effort:         s.effort(ctx),

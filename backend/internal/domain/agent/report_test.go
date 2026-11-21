@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,25 +94,23 @@ func TestBuildReport_Items(t *testing.T) {
 			name:  "leftovers: a half portion is left and the batch was not resized",
 			after: reportState(2, 0.5, 1),
 			check: func(t *testing.T, r changeReport) {
-				require.Len(t, r.Leftovers, 1)
-				assert.Contains(t, r.Leftovers[0], `0.5 portions of the "Salmon" cooked on Sat 21 Nov`)
-				assert.Contains(t, r.Leftovers[0], "It was not resized.")
+				tell := strings.Join(r.Tell, "\n")
+				assert.Contains(t, tell, `0.5 portions of the "Salmon" cooked on Sat 21 Nov`)
+				assert.Contains(t, tell, "It was not resized.")
 			},
 		},
 		{
 			name:  "leftovers: a batch resized to the meals leaves nothing over and says so",
 			after: reportState(1.5, 0.5, 1),
 			check: func(t *testing.T, r changeReport) {
-				require.Len(t, r.Leftovers, 1)
-				assert.Contains(t, r.Leftovers[0], "cook 1.5 portions of the \"Salmon\" (was 2)")
+				assert.Contains(t, strings.Join(r.Tell, "\n"), "cook 1.5 portions of the \"Salmon\" (was 2)")
 			},
 		},
 		{
 			name:  "leftovers: meals that need more than the batch holds",
 			after: reportState(2, 1.5, 1),
 			check: func(t *testing.T, r changeReport) {
-				require.Len(t, r.Leftovers, 1)
-				assert.Contains(t, r.Leftovers[0], `need 0.5 portions more of the "Salmon"`)
+				assert.Contains(t, strings.Join(r.Tell, "\n"), `need 0.5 portions more of the "Salmon"`)
 			},
 		},
 		{
@@ -122,8 +121,9 @@ func TestBuildReport_Items(t *testing.T) {
 				return s
 			}(),
 			check: func(t *testing.T, r changeReport) {
-				require.Len(t, r.Leftovers, 1)
-				assert.Contains(t, r.Leftovers[0], "is no longer cooked")
+				// the meals that went explain it: no meal any more, nothing cooked
+				assert.Contains(t, strings.Join(r.Tell, "\n"), "no meal any more")
+				assert.Contains(t, strings.Join(r.Tell, "\n"), "nothing is cooked")
 			},
 		},
 		{
@@ -131,7 +131,7 @@ func TestBuildReport_Items(t *testing.T) {
 			after: reportState(2, 1, 1),
 			aev:   planning.Evaluation{Week: &planning.WeekEval{Days: 7, MeatG: 546, Pct: 100}},
 			check: func(t *testing.T, r changeReport) {
-				assert.Contains(t, r.Week, "meat is 546 g (was 321 g, limit 300 g)")
+				assert.Contains(t, strings.Join(r.Tell, "\n"), "meat is 546 g (was 321 g, limit 300 g)")
 			},
 		},
 		{
@@ -143,10 +143,9 @@ func TestBuildReport_Items(t *testing.T) {
 				{Rule: "S2", Code: planning.CodeKcalBelowBand, Severity: planning.SeveritySoft, Date: "2026-11-21", Params: map[string]any{"kcal": 1600.0, "band_low_kcal": 1800.0, "band_high_kcal": 2200.0}},
 			}},
 			check: func(t *testing.T, r changeReport) {
-				assert.Equal(t, []string{
-					"Sat 21 Nov holds 1600 kcal, below a good amount for the day (1800–2200 kcal).",
-					"Sun 22 Nov holds only 1100 kcal, under the day's minimum of 1500 kcal.",
-				}, r.NewWarnings)
+				tell := strings.Join(r.Tell, "\n")
+				assert.Contains(t, tell, "New warning: Sat 21 Nov holds 1600 kcal, below a good amount for the day (1800–2200 kcal).")
+				assert.Contains(t, tell, "New warning: Sun 22 Nov holds only 1100 kcal, under the day's minimum of 1500 kcal.")
 				assert.Equal(t, 1, r.EarlierWarnings)
 			},
 		},
@@ -174,21 +173,33 @@ func TestBuildReport_EarlierWarningsAreOnlyCounted(t *testing.T) {
 	st := reportState(2, 1, 1)
 	ev := planning.Evaluation{Issues: []planning.Issue{open}}
 	r := buildReport(reportInput{beforeSt: st, afterSt: st, before: ev, after: ev})
-	assert.Empty(t, r.NewWarnings)
+	assert.NotContains(t, strings.Join(r.Tell, "\n"), "New warning")
 	assert.Equal(t, 1, r.EarlierWarnings)
 }
 
-func TestBuildReport_AlsoChangedSaysMovedCooksAndAutomaticFixes(t *testing.T) {
+// A cook that moved is told by one cooking-time fact (where the dish is cooked
+// now, what it feeds, the longest recipe's minutes), not by the also_changed
+// sentences of the ops.
+func TestBuildReport_MovedCookIsOneCookingTimeFact(t *testing.T) {
 	t.Parallel()
-	st := reportState(2, 1, 1)
+	before := reportState(2, 1, 1)
+	after := reportState(2, 1, 1)
+	after.Sessions[0].CookDate = rd(2)
 	applied := []map[string]any{
 		{"op": "away", "also_changed": []any{map[string]any{"what": "cook_moved", "session_id": json.Number("1"), "date": "2026-11-22", "slot_id": json.Number("2"), "from_date": "2026-11-21", "from_slot_id": json.Number("2")}}},
 		{"op": "move_cook", "auto_fix": "x", "session_id": 1, "cook_date": "2026-11-22", "cook_slot_id": 2, "from_date": "2026-11-21", "from_slot_id": 2},
 	}
-	r := buildReport(reportInput{beforeSt: st, afterSt: st, applied: applied})
-	require.Len(t, r.AlsoChanged, 2)
-	assert.Equal(t, `The "Salmon" is now cooked at Sun 22 Nov dinner instead of Sat 21 Nov dinner.`, r.AlsoChanged[0])
-	assert.Equal(t, `To keep one cooking time a day, "Salmon" is now cooked at Sun 22 Nov dinner instead of Sat 21 Nov dinner.`, r.AlsoChanged[1])
+	r := buildReport(reportInput{beforeSt: before, afterSt: after, applied: applied})
+	var cooks int
+	for _, f := range r.Facts {
+		if f.Kind == kindCook && strings.Contains(f.EN, " you cook ") {
+			cooks++
+			assert.Contains(t, f.EN, `Sun 22 Nov at dinner you cook "Salmon"`)
+			assert.Contains(t, f.EN, "cooked Sat 21 Nov dinner before")
+		}
+	}
+	assert.Equal(t, 1, cooks, "%v", r.Tell)
+	assert.NotContains(t, strings.Join(r.Tell, "\n"), "To keep one cooking time")
 }
 
 // E022c: a meal of no-cook foods is named a cold plate in the report, so the

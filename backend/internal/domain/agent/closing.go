@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -309,4 +310,199 @@ func unLightOffer(ctx context.Context, svc Services, w window.Window, is plannin
 		"recommended_because": "no other planned meal of the day can take more food while it is marked light",
 		"effect":              map[string]any{"day": dayLabelStr(is.Date), "day_kcal_now": math.Round(paramNum(is, "kcal")), "day_minimum": math.Round(paramNum(is, "floor_kcal"))},
 	}
+}
+
+// offerLine is the one offer of a reply, rendered by code in both languages
+// with a fixed marker ("I can also ...: say so if you want it."). It is never a
+// question and is the last line of the reply.
+type offerLine struct {
+	EN string `json:"en"`
+	DE string `json:"de"`
+}
+
+func makeOffer(whatEN, whatDE string) *offerLine {
+	return &offerLine{
+		EN: "I can also " + whatEN + ": say so if you want it.",
+		DE: "Ich kann auch " + whatDE + ": sag Bescheid, wenn du das möchtest.",
+	}
+}
+
+var (
+	deDateIn   = regexp.MustCompile(`\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b`)
+	deAddTo    = regexp.MustCompile(`^add (\d+) g of (.+) (?:to|on) (.+)$`)
+	deLeaveOut = regexp.MustCompile(`^leave out (.+)$`)
+	deSwapFor  = regexp.MustCompile(`^swap (.+?)'s (".+?") for (".+?")(?: so the day stays above its minimum)?$`)
+	deSwapMain = regexp.MustCompile(`^swap the main for (.+)$`)
+)
+
+// deDates writes the day labels of a sentence in German.
+func deDates(s string) string {
+	return deDateIn.ReplaceAllStringFunc(s, deDay)
+}
+
+// deWhat says an offer's action in German: the common shapes translated, any
+// other as a plain statement that a checked change is ready.
+func deWhat(en string) string {
+	t := strings.TrimSpace(en)
+	if m := deAddTo.FindStringSubmatch(t); m != nil {
+		return fmt.Sprintf("%s g %s zu %s hinzufügen", m[1], deQuoted(m[2]), deCell(deDates(m[3])))
+	}
+	if m := deLeaveOut.FindStringSubmatch(t); m != nil {
+		return deQuoted(m[1]) + " weglassen"
+	}
+	if m := deSwapFor.FindStringSubmatch(t); m != nil {
+		return fmt.Sprintf("bei %s %s durch %s ersetzen", deCell(m[1]), deQuoted(m[2]), deQuoted(m[3]))
+	}
+	if m := deSwapMain.FindStringSubmatch(t); m != nil {
+		return "das Hauptgericht durch " + deQuoted(m[1]) + " ersetzen"
+	}
+	return "eine geprüfte Änderung anwenden"
+}
+
+// offerOf is the one offer of a saved change, or nil: the first of the result's
+// offers, else the fix of a day under its range, else the first option of an
+// issue the change made new.
+func offerOf(obj map[string]any) *offerLine {
+	if list, _ := obj["offers"].([]any); len(list) > 0 {
+		if o, ok := list[0].(map[string]any); ok {
+			if what, _ := o["what"].(string); what != "" {
+				en, de := what, deWhat(what)
+				if eff, _ := o["effect"].(map[string]any); eff != nil {
+					day, _ := eff["day"].(string)
+					if k := num(eff["day_kcal_after"]); day != "" && k > 0 {
+						en += fmt.Sprintf(" (%s would then hold %.0f kcal)", day, math.Round(k))
+						de += fmt.Sprintf(" (%s hätte dann %.0f kcal)", deDay(day), math.Round(k))
+					}
+				}
+				return makeOffer(en, de)
+			}
+		}
+	}
+	after, _ := obj["after"].(map[string]any)
+	issues, _ := after["issues"].(map[string]any)
+	first := func(is any) map[string]any {
+		m, _ := is.(map[string]any)
+		opts, _ := m["options"].([]any)
+		if len(opts) == 0 {
+			return nil
+		}
+		o, _ := opts[0].(map[string]any)
+		return o
+	}
+	fixes, _ := issues["day_fix"].([]any)
+	for _, is := range fixes {
+		m, _ := is.(map[string]any)
+		if o := first(is); o != nil {
+			if off := dayFixOffer(o, m); off != nil {
+				return off
+			}
+		}
+	}
+	news, _ := issues["new"].([]any)
+	for _, is := range news {
+		o := first(is)
+		if o == nil {
+			continue
+		}
+		name, _ := o["name"].(string)
+		date, _ := o["date"].(string)
+		var amountEN, amountDE string
+		switch {
+		case num(o["grams"]) > 0:
+			amountEN, amountDE = fmt.Sprintf("%.0f g of ", math.Round(num(o["grams"]))), fmt.Sprintf("%.0f g ", math.Round(num(o["grams"])))
+		case num(o["portions"]) > 0:
+			amountEN, amountDE = fmtNum(num(o["portions"]))+" portions of ", fmtComma(num(o["portions"]))+" Portionen "
+		}
+		var en, de string
+		where, whereDE := "", ""
+		if date != "" {
+			where, whereDE = " on "+dayLabelStr(date), " am "+deDay(dayLabelStr(date))
+			if slotName, _ := o["slot"].(string); slotName != "" {
+				where += " " + slotName
+				whereDE += " " + deSlot(slotName)
+			}
+		}
+		switch o["action"] {
+		case "add":
+			en, de = "add "+amountEN+name, amountDE+deQuote(name)+" hinzufügen"
+		case "raise":
+			en, de = "raise "+name+" to "+strings.TrimSuffix(amountEN, " of "), deQuote(name)+" auf "+strings.TrimSpace(amountDE)+" erhöhen"
+		case "remove":
+			en, de = "leave out "+name, deQuote(name)+" weglassen"
+		case "swap":
+			en, de = "swap in "+name, deQuote(name)+" einsetzen"
+		case "portions":
+			en, de = "change the portions of "+name+" to "+strings.TrimSuffix(amountEN, " of "), "die Portionen von "+deQuote(name)+" auf "+strings.TrimSpace(amountDE)+" ändern"
+		case "move_cook":
+			en, de = "cook it on another day", "es an einem anderen Tag kochen"
+		}
+		if en == "" || (name == "" && o["action"] != "move_cook") {
+			continue
+		}
+		en, de = en+where, de+whereDE
+		if k := num(o["day_kcal"]); k > 0 {
+			en += fmt.Sprintf(" (the day would then hold %.0f kcal)", math.Round(k))
+			de += fmt.Sprintf(" (der Tag hätte dann %.0f kcal)", math.Round(k))
+		}
+		return makeOffer(en, de)
+	}
+	return nil
+}
+
+// dayFixOffer is the one fix of a day under its range: the meal, the day, the
+// amount and the day's kcal afterwards.
+func dayFixOffer(o, issue map[string]any) *offerLine {
+	name, _ := o["name"].(string)
+	date, _ := issue["date"].(string)
+	slotName, _ := o["slot"].(string)
+	op, _ := o["op"].(map[string]any)
+	var amountEN, amountDE string
+	switch {
+	case num(op["amount"]) > 0:
+		amountEN, amountDE = fmt.Sprintf("%.0f g of ", math.Round(num(op["amount"]))), fmt.Sprintf("%.0f g ", math.Round(num(op["amount"])))
+	case num(op["portions"]) > 0:
+		amountEN, amountDE = fmtNum(num(op["portions"]))+" portions of ", fmtComma(num(op["portions"]))+" Portionen "
+	}
+	where := strings.TrimSpace(dayLabelStr(date) + " " + slotName)
+	var en, de string
+	switch o["action"] {
+	case "add":
+		en, de = "add "+amountEN+name, amountDE+deQuote(name)+" hinzufügen"
+	case "raise":
+		en, de = "raise "+name+" to "+strings.TrimSuffix(amountEN, " of "), deQuote(name)+" auf "+strings.TrimSpace(amountDE)+" erhöhen"
+	}
+	k := num(o["day_kcal"])
+	if en == "" || name == "" || where == "" || k <= 0 {
+		return nil
+	}
+	whereDE := deCell(where)
+	if slotName == "" {
+		whereDE = deDay(where)
+	}
+	if was, _ := issue["was_under_range"].(bool); was {
+		return &offerLine{
+			EN: fmt.Sprintf("%s was already under its range before this change. I can also %s on %s (the day would then hold %.0f kcal, inside its range): say so if you want it.", dayLabelStr(date), en, where, math.Round(k)),
+			DE: fmt.Sprintf("%s lag schon vor dieser Änderung unter dem Bereich. Ich kann auch %s bei %s (der Tag hätte dann %.0f kcal, im Bereich): sag Bescheid, wenn du das möchtest.", deDay(dayLabelStr(date)), de, whereDE, math.Round(k)),
+		}
+	}
+	return makeOffer(fmt.Sprintf("%s on %s (the day would then hold %.0f kcal, inside its range)", en, where, math.Round(k)),
+		fmt.Sprintf("%s bei %s (der Tag hätte dann %.0f kcal, im Bereich)", de, whereDE, math.Round(k)))
+}
+
+// setOffer puts the offer of a saved change into its report; false when there
+// is none (a check, or no verified offer).
+func setOffer(obj map[string]any) bool {
+	if obj["dry_run"] == true {
+		return false
+	}
+	rep, _ := obj["report"].(map[string]any)
+	if rep == nil {
+		return false
+	}
+	o := offerOf(obj)
+	if o == nil {
+		return false
+	}
+	rep["offer"] = map[string]any{"en": o.EN, "de": o.DE}
+	return true
 }

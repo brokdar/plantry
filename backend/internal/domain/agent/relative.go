@@ -586,6 +586,10 @@ func checkMarks(st planning.State, light []planning.LightIntent, ev planning.Eva
 						fmt.Sprintf("I did not mark %s %s as light and saved nothing: it would still hold %.0f kcal, more than a light meal (at most %.0f kcal).", dayLabelStr(l.Date), l.Slot, kcal, limit),
 						"I can make it smaller first, or leave the light mark off: say so if you want one of them.",
 					},
+					tellDE: []string{
+						fmt.Sprintf("Ich habe %s %s nicht als leicht markiert und nichts gespeichert: es hätte noch %.0f kcal, mehr als eine leichte Mahlzeit (höchstens %.0f kcal).", deDay(dayLabelStr(l.Date)), deSlot(l.Slot), kcal, limit),
+						"Ich kann es zuerst kleiner machen oder die Markierung weglassen: sag Bescheid, wenn du eins davon möchtest.",
+					},
 				}
 			}
 			least, _ := is.Params["min_kcal"].(float64)
@@ -594,6 +598,10 @@ func checkMarks(st planning.State, light []planning.LightIntent, ev planning.Eva
 				tell: []string{
 					fmt.Sprintf("I did not mark %s %s as filling and saved nothing: it would hold only %.0f kcal, less than a filling meal (at least %.0f kcal).", dayLabelStr(l.Date), l.Slot, kcal, least),
 					"I can make it bigger first, or leave the filling mark off: say so if you want one of them.",
+				},
+				tellDE: []string{
+					fmt.Sprintf("Ich habe %s %s nicht als sättigend markiert und nichts gespeichert: es hätte nur %.0f kcal, weniger als eine sättigende Mahlzeit (mindestens %.0f kcal).", deDay(dayLabelStr(l.Date)), deSlot(l.Slot), kcal, least),
+					"Ich kann es zuerst größer machen oder die Markierung weglassen: sag Bescheid, wenn du eins davon möchtest.",
 				},
 			}
 		}
@@ -764,8 +772,21 @@ func slicesDeleteFlag(why string) []string {
 // the short tell the reply says (what was refused, why with the number, the
 // one thing that can be done instead).
 type markRefusal struct {
-	err  error
-	tell []string
+	err    error
+	tell   []string
+	tellDE []string
+}
+
+// block is the refusal as the reply carries it: what was refused with its
+// number, and the one thing that can be done instead as the offer.
+func (e markRefusal) block() *replyBlock {
+	if len(e.tell) < 2 || len(e.tellDE) < 2 {
+		return nil
+	}
+	return &replyBlock{
+		facts: []fact{{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: e.tell[0], DE: e.tellDE[0]}},
+		offer: &offerLine{EN: e.tell[1], DE: e.tellDE[1]},
+	}
 }
 
 func (e markRefusal) Error() string { return e.err.Error() }

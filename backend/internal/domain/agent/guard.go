@@ -30,14 +30,34 @@ func newHard(before, after planning.Evaluation) []planning.Issue {
 	return out
 }
 
-// hardWhy says in plain words, with the numbers, what a new hard issue is.
-func hardWhy(is planning.Issue) string {
+// hardWhyL is hardWhy in English and German.
+func hardWhyL(is planning.Issue) (en, de string) {
 	if is.Code == planning.CodeKcalBelowFloor {
 		kcal, _ := is.Params["kcal"].(float64)
 		floor, _ := is.Params["floor_kcal"].(float64)
-		return fmt.Sprintf("%s would fall to %.0f kcal, under its minimum of %.0f kcal", dayLabelStr(is.Date), kcal, floor)
+		return fmt.Sprintf("%s would fall to %.0f kcal, under its minimum of %.0f kcal", dayLabelStr(is.Date), kcal, floor),
+			fmt.Sprintf("%s würde auf %.0f kcal fallen, unter den Mindestwert von %.0f kcal", deDay(dayLabelStr(is.Date)), kcal, floor)
 	}
-	return fmt.Sprintf("it would create a problem on %s: %s", dayLabelStr(is.Date), planning.PlainText(is.Code).Label)
+	return fmt.Sprintf("it would create a problem on %s: %s", dayLabelStr(is.Date), planning.PlainText(is.Code).Label),
+		fmt.Sprintf("es würde am %s ein Problem entstehen", deDay(dayLabelStr(is.Date)))
+}
+
+// deOp says an op word in German for a refused part.
+var deOp = map[string]string{
+	"add": "hinzufügen", "remove": "entfernen", "swap": "tauschen", "replace": "ersetzen", "move": "verschieben",
+	"set_quantity": "Menge ändern", "set_eaters": "Personenzahl ändern", "away": "abwesend setzen",
+}
+
+// refusedFact is a part the guard left out, with its reason and numbers.
+func refusedFact(what, why, whyDE string, op string) map[string]any {
+	whatDE := deQuoted(deDates(what))
+	if w, ok := deOp[op]; ok {
+		whatDE = w + strings.TrimPrefix(whatDE, op)
+	}
+	return map[string]any{
+		"en": fmt.Sprintf("Left out: %s (%s).", what, why),
+		"de": fmt.Sprintf("Weggelassen: %s (%s).", whatDE, whyDE),
+	}
 }
 
 // runGuarded is apply_changes' write path: a call whose ops would leave a day
@@ -71,8 +91,8 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 		return runApply(ctx, svc, w, t, nil)
 	}
 	type skip struct {
-		idx       int
-		what, why string
+		idx              int
+		what, why, whyDE string
 	}
 	var skipped []skip
 	var safe []int
@@ -87,7 +107,8 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 			continue
 		}
 		if hs := newHard(r.before, r.after); len(hs) > 0 {
-			skipped = append(skipped, skip{i, describeOp(op, r), hardWhy(hs[0])})
+			en, de := hardWhyL(hs[0])
+			skipped = append(skipped, skip{i, describeOp(op, r), en, de})
 			continue
 		}
 		safe = append(safe, i)
@@ -107,11 +128,12 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 			break
 		}
 		last := safe[len(safe)-1]
-		why := "together with the other changes it would leave a day under its minimum"
+		why, whyDE := "together with the other changes it would leave a day under its minimum", "zusammen mit den anderen Änderungen würde ein Tag unter seinen Mindestwert fallen"
 		if err == nil {
-			why = hardWhy(newHard(r.before, r.after)[0]) + " together with the other changes"
+			en, de := hardWhyL(newHard(r.before, r.after)[0])
+			why, whyDE = en+" together with the other changes", de+" zusammen mit den anderen Änderungen"
 		}
-		skipped = append(skipped, skip{last, describeOp(in.Ops[last], applyRun{}), why})
+		skipped = append(skipped, skip{last, describeOp(in.Ops[last], applyRun{}), why, whyDE})
 		safe = safe[:len(safe)-1]
 	}
 
@@ -119,7 +141,11 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 	var skippedList []map[string]any
 	var offers []map[string]any
 	for _, s := range skipped {
-		skippedList = append(skippedList, map[string]any{"op": s.idx + 1, "what": s.what, "why": s.why})
+		entry := map[string]any{"op": s.idx + 1, "what": s.what, "why": s.why}
+		for k, v := range refusedFact(s.what, s.why, s.whyDE, in.Ops[s.idx].Op) {
+			entry[k] = v
+		}
+		skippedList = append(skippedList, entry)
 		skippedOut = append(skippedOut, s.what+" ("+s.why+")")
 		if o := refusalOffer(ctx, svc, w, in.Ops[s.idx], len(offers) == 0); o != nil {
 			offers = append(offers, o)

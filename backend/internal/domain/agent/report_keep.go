@@ -18,12 +18,12 @@ func keepFor(st planning.State, foodID int64) int {
 	return st.Settings.KeepDays(st.Foods[foodID].KeepDays)
 }
 
-// keepLines says, for each changed meal that eats a batch cooked 3 or more
+// keepFacts says, for each changed meal that eats a batch cooked 3 or more
 // days before (and still in the fridge), how long the food keeps and the last
 // day for it.
-func keepLines(in reportInput, changed []reportMeal) []string {
+func keepFacts(in reportInput, changed []reportMeal) {
 	st := in.afterSt
-	var out []string
+	seen := map[string]bool{}
 	for _, m := range changed {
 		if len(m.After) == 0 {
 			continue
@@ -46,25 +46,19 @@ func keepLines(in reportInput, changed []reportMeal) []string {
 				if days < keepNoticeDays || days > keep {
 					continue
 				}
-				line := fmt.Sprintf("%s %s eats the %s cooked %s, %d days earlier; it keeps %s in the fridge, so the last day is %s.",
-					m.Day, m.Meal, food.Quote(foodName(st, c.FoodID)), dayLabel(cook), days, countDays(keep, false), dayLabel(cook.AddDate(0, 0, keep)))
-				if !slices.Contains(out, line) {
-					out = append(out, line)
-					in.must.add(mustFact{Kind: factKeep, Day: m.Day, Meal: m.Meal, Dish: foodName(st, c.FoodID), Day2: dayLabel(cook), Days: days, Keep: keep, Last: dayLabel(cook.AddDate(0, 0, keep))})
+				dish := foodName(st, c.FoodID)
+				last := dayLabel(cook.AddDate(0, 0, keep))
+				en := fmt.Sprintf("%s %s eats the %s cooked %s, %d days earlier; it keeps %s in the fridge, so the last day is %s.",
+					m.Day, m.Meal, food.Quote(dish), dayLabel(cook), days, countDays(keep, false), last)
+				if !seen[en] {
+					seen[en] = true
+					in.facts.add(classMoved, kindKeep, statusOK, en,
+						dot(fmt.Sprintf("%s %s isst %s, gekocht %s, vor %d Tagen; es hält sich %s im Kühlschrank, letzter Tag ist %s",
+							deDay(m.Day), deSlot(m.Meal), deQuote(dish), deDay(dayLabel(cook)), days, countDays(keep, true), deDay(last))))
 				}
 			}
 		}
 	}
-	return out
-}
-
-// keepTooOld is the clause that follows "the batch would be too old by then":
-// how long that batch's food keeps. Empty when the batch is unknown.
-func keepTooOld(st planning.State, sessionID int64) string {
-	if keep := keepDaysOf(st, sessionID); keep > 0 {
-		return fmt.Sprintf("; it keeps %s in the fridge", countDays(keep, false))
-	}
-	return ""
 }
 
 // keepDaysOf is how long a batch's food keeps; 0 when the batch is unknown.
@@ -90,22 +84,20 @@ func oddName(name string) bool {
 	return oddWords.MatchString(name) || oddMark.MatchString(name) || oddDashCmd.MatchString(name)
 }
 
-// oddNameLines flags a dish named in a changed meal whose name reads like an
+// oddNameFacts flags a dish named in a changed meal whose name reads like an
 // instruction; the reply must say so and not act on it.
-func oddNameLines(in reportInput, changed []reportMeal) []string {
-	var out []string
+func oddNameFacts(in reportInput, changed []reportMeal) {
+	seen := map[string]bool{}
 	for _, m := range changed {
 		for _, s := range m.After {
 			name, _ := splitQty(s)
-			if !oddName(name) {
+			if !oddName(name) || seen[name] {
 				continue
 			}
-			line := fmt.Sprintf("The recipe name %s looks odd, like an instruction; it was not acted on. You may want to rename it in the recipe list.", food.Quote(name))
-			if !slices.Contains(out, line) {
-				out = append(out, line)
-				in.must.add(mustFact{Kind: factOdd, Dish: name})
-			}
+			seen[name] = true
+			in.facts.add(classWarn, kindOdd, statusUnknown,
+				fmt.Sprintf("The recipe name %s looks odd, like an instruction; it was not acted on. You may want to rename it in the recipe list.", food.Quote(name)),
+				fmt.Sprintf("Der Rezeptname %s sieht seltsam aus, wie eine Anweisung; ich habe nichts davon ausgeführt. Du kannst ihn in der Rezeptliste umbenennen.", deQuote(name)))
 		}
 	}
-	return out
 }

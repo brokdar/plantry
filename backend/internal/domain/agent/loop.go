@@ -54,6 +54,8 @@ type RunRequest struct {
 	Tools       []llm.Tool
 	Temperature float64
 	MaxTokens   int
+	// UserText is the user's message of this turn: its language is the reply's.
+	UserText string
 	// Effort is the reasoning effort (ai.reasoning_effort.chat); empty: the
 	// provider default.
 	Effort string
@@ -107,7 +109,9 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 	}
 
 	requests, turns, conts, continuation, wrapUp := 0, 0, 0, false, false
-	var resizes []mustFact // the must-say facts of the newest saved change
+	// What the final reply is judged against and completed with (see composeReply).
+	turnReply := replyTurn{user: req.UserText, numbers: map[string]bool{}}
+	numbersIn(req.SystemPrompt, turnReply.numbers)
 	for {
 		if requests++; requests > MaxRequests {
 			break
@@ -195,9 +199,10 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		// ends: the UI refetches the conversation) in kitchen terms; the run log
 		// keeps what the model wrote.
 		if len(extractToolUses(res.resp.Message)) == 0 {
-			restoreMust(&res.resp.Message, resizes)
+			finalizeMessage(&res.resp.Message, turnReply)
+		} else {
+			plainReplyMessage(&res.resp.Message)
 		}
-		plainReplyMessage(&res.resp.Message)
 		replay := llm.ReplayMessage(res.resp.Message)
 		if err := store(RoleAssistant, replay); err != nil {
 			return fail("error.server", err)
@@ -302,6 +307,8 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 				var refusal markRefusal
 				if errors.As(err, &refusal) {
 					payload["tell"] = refusal.tell
+					turnReply.write = true
+					turnReply.block = refusal.block()
 				}
 				errorPayload := withChange(mustMarshal(payload), change)
 				resultBlocks = append(resultBlocks, llm.ContentBlock{
@@ -329,10 +336,14 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			view := modelView(output)
 			// The facts come from the result itself, not from the model's
 			// view, which rewrites words.
-			if _, saved := mustTold(view); saved {
-				resizes, _ = mustTold(output)
+			numbersIn(string(view), turnReply.numbers)
+			if writeTools[call.ToolUseName] {
+				turnReply.write = true
+				if b, check := blockOf(output); !check {
+					turnReply.block = b
+				}
 			}
-			view = withoutMust(view)
+			view = withoutFacts(view)
 			resultBlocks = append(resultBlocks, llm.ContentBlock{
 				Type:              llm.ContentTypeToolResult,
 				ToolResultID:      call.ToolUseID,
