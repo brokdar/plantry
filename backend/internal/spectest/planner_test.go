@@ -290,7 +290,7 @@ func TestPL7_PlannerMealsInsideSlotBands(t *testing.T) {
 
 var (
 	breadWords  = regexp.MustCompile(`(?i)bread|brot|ciabatta|baguette|toast|br[oö]tchen|roll`)
-	spreadWords = regexp.MustCompile(`(?i)hummus|cheese|k[aä]se|mozzarella|feta|parmesan|gouda|cheddar|halloumi`)
+	spreadWords = regexp.MustCompile(`(?i)hummus|cheese|k[aä]se|mozzarella|feta|parmesan|gouda|cheddar`)
 )
 
 // coldPlatePossible is the spec's KR7 cold plate computed from the library: a
