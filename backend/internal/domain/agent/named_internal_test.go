@@ -21,3 +21,13 @@ func TestNamedFoods(t *testing.T) {
 	assert.Equal(t, map[int64]bool{6: true}, namedFoods("KÄSESPÄTZLE bitte", foods), "folded")
 	assert.Empty(t, namedFoods("make dinner lighter", foods))
 }
+
+// SF3: the food id appears in the message as a food name: a whole word, not
+// the start of another word.
+func TestNamedFoods_WholeWords(t *testing.T) {
+	t.Parallel()
+	foods := map[int64]planning.FoodFacts{1: {Name: "Reis"}}
+	assert.Empty(t, namedFoods("Gib mir Reiswaffeln am Freitag", foods), "Reiswaffeln does not name Reis")
+	assert.Equal(t, map[int64]bool{1: true}, namedFoods("Reis am Freitag", foods))
+	assert.Equal(t, map[int64]bool{1: true}, namedFoods("Freitag: Reis.", foods), "punctuation ends a word")
+}

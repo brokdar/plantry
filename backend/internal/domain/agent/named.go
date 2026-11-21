@@ -20,7 +20,7 @@ func namedFoods(text string, foods map[int64]planning.FoodFacts) map[int64]bool 
 	byName := map[string][]int64{}
 	for id, f := range foods {
 		n := diet.Fold(f.Name)
-		if len(n) >= 4 && strings.Contains(msg, n) {
+		if len(n) >= 4 && containsWord(msg, n) {
 			byName[n] = append(byName[n], id)
 		}
 	}
@@ -42,6 +42,25 @@ func namedFoods(text string, foods map[int64]planning.FoodFacts) map[int64]bool 
 	}
 	return out
 }
+
+// containsWord reports whether name is in msg as whole words: neither side is
+// a letter or digit ("Reis" is not in "Reiswaffeln").
+func containsWord(msg, name string) bool {
+	for from := 0; ; {
+		i := strings.Index(msg[from:], name)
+		if i < 0 {
+			return false
+		}
+		i += from
+		end := i + len(name)
+		if (i == 0 || !isWordByte(msg[i-1])) && (end == len(msg) || !isWordByte(msg[end])) {
+			return true
+		}
+		from = i + 1
+	}
+}
+
+func isWordByte(b byte) bool { return b >= 0x80 || b >= 'a' && b <= 'z' || b >= '0' && b <= '9' }
 
 var weekdayWords = [7][]string{
 	time.Sunday: {"sunday", "sonntag"}, time.Monday: {"monday", "montag"}, time.Tuesday: {"tuesday", "dienstag"},
