@@ -10,13 +10,15 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/jaltszeimer/plantry/backend/db"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // TestMigration00008_UpDownUp verifies that the AI migration is reversible:
 // goose up → down → up leaves a schema the app can query without error.
 func TestMigration00008_UpDownUp(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "roundtrip.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
+	conn, err := sql.Open("sqlite", testhelper.DSNWith(path, "_pragma=foreign_keys(1)"))
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 

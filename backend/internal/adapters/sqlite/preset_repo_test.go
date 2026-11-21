@@ -409,26 +409,30 @@ func TestPresetRepo_AddRemoveTag_Roundtrip(t *testing.T) {
 	}
 	require.NoError(t, repo.Create(ctx, p))
 
-	before, err := repo.Get(ctx, p.ID)
-	require.NoError(t, err)
-	updatedBefore := before.UpdatedAt
+	// updated_at has 1-second granularity: set it into the past before each
+	// write instead of sleeping (the sleeps cost 2.2 s and still flaked).
+	backdate := func() time.Time {
+		t.Helper()
+		_, err := db.Exec(`UPDATE presets SET updated_at = '2000-01-01 00:00:00' WHERE id = ?`, p.ID)
+		require.NoError(t, err)
+		got, err := repo.Get(ctx, p.ID)
+		require.NoError(t, err)
+		return got.UpdatedAt
+	}
 
-	// Sleep 1.1s so timestamps (1-second granularity) advance.
-	time.Sleep(1100 * time.Millisecond)
-
+	updatedBefore := backdate()
 	require.NoError(t, repo.AddTag(ctx, p.ID, "quick"))
 	got, err := repo.Get(ctx, p.ID)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"quick"}, got.Tags)
 	assert.True(t, got.UpdatedAt.After(updatedBefore), "updated_at advances after AddTag")
-	updatedAfterAdd := got.UpdatedAt
 
-	time.Sleep(1100 * time.Millisecond)
+	updatedBefore = backdate()
 	require.NoError(t, repo.RemoveTag(ctx, p.ID, "quick"))
 	got, err = repo.Get(ctx, p.ID)
 	require.NoError(t, err)
 	assert.Empty(t, got.Tags)
-	assert.True(t, got.UpdatedAt.After(updatedAfterAdd), "updated_at advances after RemoveTag")
+	assert.True(t, got.UpdatedAt.After(updatedBefore), "updated_at advances after RemoveTag")
 }
 
 // --- CountUsingFood ---

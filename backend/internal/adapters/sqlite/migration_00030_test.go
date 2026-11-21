@@ -12,6 +12,8 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/db"
 	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // openDBAt00029 opens a fresh SQLite file migrated to 00029 holding plate 5
@@ -20,7 +22,7 @@ import (
 func openDBAt00029(t *testing.T) *sql.DB {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "migration30.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })

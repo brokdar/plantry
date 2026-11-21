@@ -11,6 +11,8 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/db"
 	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // setupMigration16DB opens a fresh SQLite file, applies migrations 1-15, seeds
@@ -19,7 +21,7 @@ import (
 func setupMigration16DB(t *testing.T) *sql.DB {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "migration16.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })
@@ -137,7 +139,7 @@ func TestMigration00016_PlatesDateColumnSurvives(t *testing.T) {
 // Verify that migration 16 is reachable as the final migration via goose.Up.
 func TestMigration00016_FullMigrateUp(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "migration16_full.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })
