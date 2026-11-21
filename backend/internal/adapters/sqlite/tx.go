@@ -69,7 +69,8 @@ func inTx(ctx context.Context, db *sql.DB, fn func(ctx context.Context) error) e
 
 // conn is embedded by every repository. It resolves the database handle for
 // a call: the unit of work's transaction when ctx carries one, else the pool.
-// Both reuse prepared statements (see stmts).
+// Generated queries reuse prepared statements (queriesFor); hand-written SQL
+// does not (dbtx).
 type conn struct {
 	db    *sql.DB
 	stmts *stmts
@@ -78,21 +79,30 @@ type conn struct {
 // newConn is the conn of a repository over db.
 func newConn(db *sql.DB) conn { return conn{db: db, stmts: &stmts{db: db, m: map[string]*sql.Stmt{}}} }
 
-// dbtx returns the transaction in ctx, or the pool, with statement reuse.
+// dbtx returns the transaction in ctx, or the pool, for hand-written SQL.
+// It never reuses statements: a caller may run the same query again while
+// its earlier rows are open, and two cursors on one SQLite statement corrupt
+// each other (TestConn_SameRawQueryWhileItsRowsAreOpen).
 func (c conn) dbtx(ctx context.Context) sqlcgen.DBTX {
 	if u, ok := ctx.Value(txKey{}).(*unit); ok {
-		return txDB{u: u, pool: c.stmts}
+		return u.tx
 	}
-	if c.stmts == nil {
-		return c.db
-	}
-	return c.stmts
+	return c.db
 }
 
 // queriesFor returns sqlc queries bound to the transaction in ctx, or to the
-// pool.
+// pool, with prepared statements reused (see stmts and txDB). Safe because a
+// generated query reads and closes its rows before it returns, and a unit of
+// work is used by one goroutine at a time, so no statement is used again
+// while its rows are open.
 func (c conn) queriesFor(ctx context.Context) *sqlcgen.Queries {
-	return sqlcgen.New(c.dbtx(ctx))
+	if u, ok := ctx.Value(txKey{}).(*unit); ok {
+		return sqlcgen.New(txDB{u: u, pool: c.stmts})
+	}
+	if c.stmts == nil {
+		return sqlcgen.New(c.db)
+	}
+	return sqlcgen.New(c.stmts)
 }
 
 // inTx runs a multi-statement write atomically, joining the caller's unit of

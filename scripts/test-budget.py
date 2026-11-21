@@ -196,6 +196,8 @@ def cmd_race(args):
 
 
 def finish(b, write):
+    if SEEDING and os.environ.get("CI"):
+        write = True  # print this machine's numbers to seed its budgets
     if not write:
         return
     if os.environ.get("CI"):

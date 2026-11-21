@@ -104,7 +104,9 @@ func (b *Builder) Build(ctx context.Context, w window.Window, today, from, to ti
 	if !ok {
 		return b.build(ctx, w, today, from, to)
 	}
-	key := fmt.Sprintf("%s|%s|%s|%s|%s|%s", v, w.Start, w.End, today, from, to)
+	// Round(0) drops the monotonic reading, which time.Now() values carry and
+	// which would make every key unique.
+	key := fmt.Sprintf("%s|%s|%s|%s|%s|%s", v, w.Start.Round(0), w.End.Round(0), today.Round(0), from.Round(0), to.Round(0))
 	b.mu.Lock()
 	for _, m := range b.memo {
 		if m.key == key {

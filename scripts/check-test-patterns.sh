@@ -29,7 +29,7 @@ python3 "$ROOT/scripts/test-budget.py" slowlist || fail=1
 
 # 5. Playwright: projects that run one test at a time stay on the allowlist.
 #    A serial project adds its whole duration to the e2e critical path.
-serial="$(grep -c 'workers: 1' "$ROOT/frontend/playwright.config.ts" || true)"
+serial="$(grep -cE '^\s*workers: 1,' "$ROOT/frontend/playwright.config.ts" || true)"
 max="$(python3 -c "import json;print(json.load(open('$ROOT/test-budget.json'))['e2e_serial_projects_max'])")"
 if [ "$serial" -gt "$max" ]; then
   bad "frontend/playwright.config.ts has $serial serial projects (workers: 1), allowed $max" "give the specs their own server or data instead of serializing them"
