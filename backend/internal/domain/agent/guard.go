@@ -49,7 +49,7 @@ func hardWhy(is planning.Issue) string {
 // the reason and the offer. The model gets the right outcome in one call: it
 // never has to work out the subset itself.
 func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInput, ignored map[int][]string) (applyRun, error) {
-	if in.Goal != nil || in.quiet || len(in.Ops) == 0 || !slicesAnyOp(in.Ops, func(o changeOp) bool { return !exemptOps[o.Op] }) {
+	if in.quiet || len(in.Ops) == 0 || !slicesAnyOp(in.Ops, func(o changeOp) bool { return !exemptOps[o.Op] }) {
 		return runApply(ctx, svc, w, in, ignored)
 	}
 	probe := in

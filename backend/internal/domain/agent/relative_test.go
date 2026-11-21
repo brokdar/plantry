@@ -428,6 +428,16 @@ func TestApplyChanges_NeverLeavesADayUnderItsMinimum(t *testing.T) {
 		assert.Empty(t, plannerWord.FindAllString(string(res), -1), "kitchen words only")
 		assert.InDelta(t, was, portions(a, ma), 1e-9)
 	})
+	t.Run("a call that carries a goal is guarded the same", func(t *testing.T) {
+		goal := fmt.Sprintf(`"goal":{"kind":"lower_day","date":%q},`, a.DateString())
+		res, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(`{`+goal+`"ops":[`+cut+`]}`))
+		require.NoError(t, err)
+		var got map[string]any
+		require.NoError(t, json.Unmarshal(res, &got))
+		assert.Equal(t, false, got["saved"], "SF1/G2: a goal does not lift the guard: %s", res)
+		assert.Contains(t, got["refused"], "under its minimum")
+		assert.InDelta(t, was, portions(a, ma), 1e-9)
+	})
 	t.Run("a call that is all safe has no skipped part", func(t *testing.T) {
 		res, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(`{"dry_run":true,"ops":[`+raise+`]}`))
 		require.NoError(t, err)
