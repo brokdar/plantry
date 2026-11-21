@@ -141,3 +141,7 @@ var KitchenJSON = kitchenJSON
 
 // OpenRulesForTest exposes openRules to the external tests.
 var OpenRulesForTest = openRules
+
+// EvaluateNoOptions exposes the evaluation the planner's own re-checks use:
+// the same verdicts, without the verified options of each issue.
+func EvaluateNoOptions(s State, t Target) Evaluation { return evaluateWith(s, t, false, true) }

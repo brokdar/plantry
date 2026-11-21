@@ -36,7 +36,7 @@ func replayEnv(t *testing.T, src string) *planToolEnv {
 	require.NoError(t, err)
 	path := filepath.Join(t.TempDir(), "r.db")
 	require.NoError(t, os.WriteFile(path, data, 0o600))
-	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	db, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	db.SetMaxOpenConns(1)
 	// The fixture may predate the newest migrations: bring the copy up.
@@ -76,6 +76,7 @@ const chatStartDB = "testdata/chat_start.db"
 // start database: each result carries one recommended option.
 func TestReplayA1(t *testing.T) {
 	t.Parallel()
+	testhelper.Slow(t, "replays a recorded chat turn by turn over the A1 fixture database, every tool call against the real planner; one goroutine, nothing for -race to find")
 	src := chatStartDB
 	run := func(e *planToolEnv, ctx context.Context, name, in string) map[string]any {
 		out, _, _, err := e.ts.Execute(ctx, name, json.RawMessage(in))

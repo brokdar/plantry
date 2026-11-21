@@ -18,6 +18,8 @@ import (
 	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // TestReplayStored is the M0 replay harness (see replay_stored_README.md).
@@ -172,7 +174,7 @@ func replayRun(t *testing.T, roundDir, runDB, variant string) []replayCall {
 	require.NoError(t, err)
 	mig := filepath.Join(t.TempDir(), "start.db")
 	require.NoError(t, os.WriteFile(mig, b, 0o600))
-	mdb, err := sql.Open("sqlite", "file:"+mig+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	mdb, err := sql.Open("sqlite", testhelper.DSN(mig))
 	require.NoError(t, err)
 	migrateCopy(t, mdb)
 	var smax int64 // the run DB's first runs are the start DB's own history

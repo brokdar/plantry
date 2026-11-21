@@ -18,7 +18,7 @@ type SlotRepo struct {
 
 // NewSlotRepo creates a SQLite-backed time slot repository.
 func NewSlotRepo(db *sql.DB) *SlotRepo {
-	return &SlotRepo{conn: conn{db: db}}
+	return &SlotRepo{conn: newConn(db)}
 }
 
 func (r *SlotRepo) Create(ctx context.Context, s *slot.TimeSlot) error {

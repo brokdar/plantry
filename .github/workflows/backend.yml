@@ -1,10 +1,15 @@
 name: Backend
 
+# Three parallel jobs, each well inside its budget (test-budget.json). The
+# timeouts below are tripwires for hangs, never the fix for slow tests: they
+# are frozen in test-budget.json (scripts/test-budget.py timeouts).
 on:
   pull_request:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'scripts/**'
+      - 'test-budget.json'
       - '.github/workflows/backend.yml'
 
 concurrency:
@@ -15,14 +20,17 @@ permissions:
   contents: read
 
 jobs:
-  backend:
-    name: Go vet, test, sqlc drift
+  checks:
+    name: Go checks (vet, lint, builds, sqlc, deadcode, budgets)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # budget diff against origin/main
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
@@ -30,10 +38,14 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: go vet
         run: go vet ./...
-      - name: go test (race detector)
-        env:
-          CGO_ENABLED: "1"
-        run: go test -race -timeout 45m ./...
+      - name: golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.15.0
+          golangci-lint run
+      - name: Cross builds (arm64, armv7, no CGO)
+        run: |
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o /dev/null ./cmd/plantry
+          GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o /dev/null ./cmd/plantry
       - name: Install sqlc
         run: |
           curl -fsSL -o /tmp/sqlc.tar.gz https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_amd64.tar.gz
@@ -49,3 +61,98 @@ jobs:
         run: |
           out="$(go tool deadcode -test ./... | grep -v '/sqlcgen/' || true)"
           if [ -n "$out" ]; then echo "$out"; exit 1; fi
+      - name: Test patterns, timeouts, budget raises carry a reason
+        run: |
+          bash ../scripts/check-test-patterns.sh
+          python3 ../scripts/test-budget.py timeouts
+          python3 ../scripts/test-budget.py diff origin/main
+
+  test:
+    name: go test (no race, CPU budget)
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: backend/go.sum
+      - name: go test
+        run: GO_TEST_CPU_LOG=/tmp/cpu.jsonl go test -count=1 -json -exec "$PWD/../scripts/cpu-exec.py" ./... > /tmp/go-test.json
+      - name: Failures
+        if: failure()
+        run: |
+          python3 - /tmp/go-test.json <<'PY'
+          import json, sys
+          out = []
+          for line in open(sys.argv[1]):
+              try:
+                  e = json.loads(line)
+              except ValueError:
+                  out.append(line.rstrip())  # build errors are not JSON
+                  continue
+              o, t = e.get("Output", ""), e.get("Test", "")
+              if e.get("Action") == "fail" or any(k in o for k in ("--- FAIL", "panic:", "DATA RACE", "test timed out", "Error Trace", "Error:")):
+                  out.append(f"{e.get('Package', '').split('backend/')[-1]} {t} {e.get('Action')} {o.rstrip()}")
+          print("\n".join(out[:200]))
+          PY
+      - name: Upload test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-test-json
+          path: /tmp/go-test.json
+          retention-days: 7
+      - name: CPU budget (tests may get slower only with the tests added)
+        run: TEST_BUDGET_CALIB="$(go run ../scripts/calibrate.go)" python3 ../scripts/test-budget.py go /tmp/go-test.json /tmp/cpu.jsonl
+
+  race:
+    name: go test -race -short (CPU budget)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: backend/go.sum
+      # The SQLite engine (C translated to Go) is not race-instrumented: it
+      # was 60% of the race CPU, and our own code stays instrumented.
+      - name: go test -race -short
+        env:
+          CGO_ENABLED: "1"
+        run: GO_TEST_CPU_LOG=/tmp/cpu.jsonl go test -race -short -gcflags='modernc.org/sqlite/...=-race=false' -timeout 5m -count=1 -json -exec "$PWD/../scripts/cpu-exec.py" ./... > /tmp/go-race.json
+      - name: Failures
+        if: failure()
+        run: |
+          python3 - /tmp/go-race.json <<'PY'
+          import json, sys
+          out = []
+          for line in open(sys.argv[1]):
+              try:
+                  e = json.loads(line)
+              except ValueError:
+                  out.append(line.rstrip())  # build errors are not JSON
+                  continue
+              o, t = e.get("Output", ""), e.get("Test", "")
+              if e.get("Action") == "fail" or any(k in o for k in ("--- FAIL", "panic:", "DATA RACE", "test timed out", "Error Trace", "Error:")):
+                  out.append(f"{e.get('Package', '').split('backend/')[-1]} {t} {e.get('Action')} {o.rstrip()}")
+          print("\n".join(out[:200]))
+          PY
+      - name: Upload test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-race-json
+          path: /tmp/go-race.json
+          retention-days: 7
+      - name: CPU budget
+        run: TEST_BUDGET_CALIB="$(go run ../scripts/calibrate.go)" python3 ../scripts/test-budget.py race /tmp/go-race.json /tmp/cpu.jsonl

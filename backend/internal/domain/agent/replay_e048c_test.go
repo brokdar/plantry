@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // E048c: de-lighter-wed on the real start plan. The light dinner is a compound
@@ -32,6 +34,7 @@ func e048cOffer(t *testing.T) (e *planToolEnv, res map[string]any, offer map[str
 // test's cost) and each check is a subtest of it.
 func TestReplayE048c(t *testing.T) {
 	t.Parallel()
+	testhelper.Slow(t, "replays the E048c offer over the stored week and dry-runs every way of the day; one goroutine, nothing for -race to find")
 	e, res, o := e048cOffer(t)
 	t.Run("the offer clears the lunch mark it grows", func(t *testing.T) { e048cClearsTheMark(t, o) })
 	t.Run("the day gets one bread fix inside its range", func(t *testing.T) { e048cFixInsideRange(t, e, res, o) })

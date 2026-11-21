@@ -12,6 +12,8 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/db"
 	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // setupMigration26DB opens a fresh SQLite file migrated to 00025 holding one
@@ -19,7 +21,7 @@ import (
 func setupMigration26DB(t *testing.T) *sql.DB {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "migration26.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })

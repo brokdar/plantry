@@ -17,7 +17,7 @@ type ProfileRepo struct {
 
 // NewProfileRepo creates a SQLite-backed profile repository.
 func NewProfileRepo(db *sql.DB) *ProfileRepo {
-	return &ProfileRepo{conn: conn{db: db}}
+	return &ProfileRepo{conn: newConn(db)}
 }
 
 func (r *ProfileRepo) Get(ctx context.Context) (*profile.Profile, error) {

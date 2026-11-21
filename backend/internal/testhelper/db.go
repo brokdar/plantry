@@ -15,7 +15,21 @@ import (
 	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
 )
 
-const dsnPragmas = "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+// dsnPragmas are the app's pragmas (cmd/plantry openDB) plus synchronous(OFF):
+// a test database needs no durability, and an fsync on every commit made the
+// database-bound packages wait on the disk (planning 50 s → 8 s without it).
+const dsnPragmas = "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(OFF)"
+
+// DSN is the data source name a test opens a database file with: the app's
+// pragmas, without fsync. Tests never build their own SQLite DSN
+// (scripts/check-test-patterns.sh).
+func DSN(path string) string { return "file:" + path + dsnPragmas }
+
+// DSNWith opens path with the given pragmas (a query string without "?"),
+// for tests that need other pragmas than the app's; fsync stays off.
+func DSNWith(path, query string) string {
+	return "file:" + path + "?" + query + "&_pragma=synchronous(OFF)"
+}
 
 var (
 	templateOnce  sync.Once
@@ -59,7 +73,7 @@ func migratedTemplate() ([]byte, error) {
 		defer func() { _ = os.RemoveAll(dir) }()
 
 		path := filepath.Join(dir, "template.db")
-		conn, err := sql.Open("sqlite", "file:"+path+dsnPragmas)
+		conn, err := sql.Open("sqlite", DSN(path))
 		if err != nil {
 			templateErr = err
 			return
@@ -85,18 +99,36 @@ func migratedTemplate() ([]byte, error) {
 // migrated file. The connection is closed automatically when the test ends.
 func NewTestDB(t testing.TB) *sql.DB {
 	t.Helper()
-
 	tmpl, err := migratedTemplate()
 	require.NoError(t, err)
+	return NewTestDBFrom(t, tmpl)
+}
 
+// NewTestDBFrom returns a database on its own copy of src, a SnapshotDB
+// result: a fixture built once per test process and copied per test is far
+// cheaper than building it again in every test.
+func NewTestDBFrom(t testing.TB, src []byte) *sql.DB {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "test.db")
-	require.NoError(t, os.WriteFile(path, tmpl, 0o600))
+	require.NoError(t, os.WriteFile(path, src, 0o600))
 
-	conn, err := sql.Open("sqlite", "file:"+path+dsnPragmas)
+	conn, err := sql.Open("sqlite", DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 
 	t.Cleanup(func() { _ = conn.Close() })
 
 	return conn
+}
+
+// SnapshotDB returns a consistent copy of db's file (VACUUM INTO), to build a
+// fixture once and hand it to NewTestDBFrom.
+func SnapshotDB(t testing.TB, db *sql.DB) []byte {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "snapshot.db")
+	_, err := db.Exec(`VACUUM INTO ?`, path)
+	require.NoError(t, err)
+	b, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return b
 }

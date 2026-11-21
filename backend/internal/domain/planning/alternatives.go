@@ -832,7 +832,8 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 	}
 	next.Plates[pi] = np
 
-	ev := Evaluate(next, t)
+	// Only the open issues are read: no options (TestEvaluateNoOptions_SameVerdicts).
+	ev := evaluateWith(next, t, false, true)
 	if why := newNutritionGap(base, ev, p); why != "" {
 		return Alternative{}, why, nil
 	}

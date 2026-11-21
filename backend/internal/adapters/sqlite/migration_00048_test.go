@@ -12,13 +12,15 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/db"
 	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
+
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // Migration 00048 gives every component a position and backfills it per
 // plate: the first main-like composed food is the main (one per plate).
 func TestMigration00048_BackfillsPositions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "migration48.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })
@@ -111,7 +113,7 @@ func TestMigration00048_BackfillsPositions(t *testing.T) {
 // Migration 00049 adds the nullable no_cook override.
 func TestMigration00049_NoCookDefaultsToDerived(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "migration49.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })
@@ -132,7 +134,7 @@ func TestMigration00049_NoCookDefaultsToDerived(t *testing.T) {
 // Migration 00052 adds the nullable serving_g, positive only.
 func TestMigration00052_ServingG(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "migration52.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = conn.Close() })

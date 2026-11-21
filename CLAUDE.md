@@ -22,10 +22,38 @@ docker compose up --build             # build + run (port 8080)
 ### Merge gate (repo root)
 
 ```bash
-E2E_LANE=N scripts/gate.sh [specs]    # backend + frontend checks in parallel, then e2e
+E2E_LANE=N scripts/gate.sh --fast [specs]  # T1, per fix batch (~1 min)
+E2E_LANE=N scripts/gate.sh [specs]         # T2, once per PR / hand-back (~2.5 min)
 ```
 
-Runs `go test -race`, `go vet`, `golangci-lint`, the `GOARCH=arm64` and `GOARCH=arm GOARM=7` cross builds (`CGO_ENABLED=0`; a dependency that needs CGO fails here), `check-sqlc-usage.sh`, `go tool deadcode -test ./...` (nothing outside `sqlcgen/`), then `bun run check`, `bun run build`, then the full e2e suite or only the named specs. Skip parts with `GATE_SKIP_BACKEND=1`, `GATE_SKIP_FRONTEND=1`, `GATE_SKIP_E2E=1`. `E2E_LANE` (1-9) gives each worktree its own backend/Vite ports and DB so several can run e2e at once (see `frontend/playwright.config.ts`); never use lane 0 (port 8080/5173) from a worktree. Prefix every e2e run with it: `E2E_LANE=N bun run e2e -- <specs>`.
+Both run the cheap checks first (`go vet`, `golangci-lint`, the `GOARCH=arm64` and `GOARCH=arm GOARM=7` cross builds with `CGO_ENABLED=0`, `check-sqlc-usage.sh`, `go tool deadcode -test ./...` (nothing outside `sqlcgen/`), `scripts/check-test-patterns.sh`, the timeout and budget checks, frontend lint/typecheck/knip), so a slip fails in seconds. **T1** then runs `go test ./...` without race and with the test cache on (only changed packages run), the unit tests of changed frontend files (`vitest related`) and only the named e2e specs. **T2** runs, in parallel: `go test ./...` then `go test -race -short` (the SQLite engine is not race-instrumented), vitest + build, and the full e2e suite; then checks the time budgets. Every step prints its time; logs go to a fresh `/tmp/plantry-gate-<lane>-*` directory; one T2 runs at a time on the machine (`flock`); a clean tree that passed a mode exits at once. Skip parts with `GATE_SKIP_BACKEND=1`, `GATE_SKIP_FRONTEND=1`, `GATE_SKIP_E2E=1`. `E2E_LANE` (1-9) gives each worktree its own ports and DBs so several can run e2e at once (see `frontend/playwright.config.ts`); never use lane 0 (port 8080/5173) from a worktree. Prefix every e2e run with it: `E2E_LANE=N bun run e2e -- <specs>`.
+
+### Test speed contract
+
+Verification speed is iteration speed. These rules hold for every change and every agent; `scripts/gate.sh`, CI and the `test-hygiene` hook enforce them.
+
+**Which tests when.**
+
+| Tier | When | What |
+|---|---|---|
+| T0 | every edit | `go test ./<pkg> -run '<Test>'` (no race, cache on); `bunx vitest related --run <files>` |
+| T1 | each fix batch / commit handed back | `scripts/gate.sh --fast [specs you touched]` |
+| T2 | once per PR or milestone hand-back, on the final commit | `scripts/gate.sh` |
+
+Never run `go test -count=1` (it switches off the test cache, which is what runs only the affected packages) or `go test -race` without `-run` outside the gate; only to chase a flake or a data race.
+
+**Slow tests and timeouts.** When a test or CI step is slow or times out, never raise the timeout or a budget first: profile (`go test -run X -cpuprofile cpu.out ./pkg`, `go tool pprof -top`, or the per-test times in the gate log), find the cause, fix it. Timeouts are tripwires for hangs and are frozen in `test-budget.json`; a change needs `reasons["timeouts:<file>"]`.
+
+**Time budgets (`test-budget.json`, `scripts/test-budget.py`).** Tests may get slower only in proportion to the tests added: per Go package (CPU seconds of its test binary, no race), the race tier, vitest and e2e, `allowed = budget x (1 + tolerance) + new tests x budget / tests`. Anything over fails T2 and CI. Past it only with a higher budget in the same PR and a reason under `reasons` saying why it costs this much and why it cannot be faster (CI checks the reason against `origin/main`, and the PR body lists it under "Test budget changes"). A leaf test over `single_test_max_s` fails unless it calls `testhelper.Slow(t, reason)` (skipped under `-short`, so the race tier leaves it out; the no-race pass runs it) and is listed under `slow_tests`. `--write` lowers beaten budgets (the ratchet) and never raises one; run it when a PR makes tests faster. CI (GitHub's 4-vCPU runner) is the reference machine: a test that is fast on 28 local cores can be 10x slower there, so budgets count CPU, not wall.
+
+**Anti-patterns** (each once cost minutes of gate time):
+- A fixture rebuilt in every test or subtest: build it once per process and copy the database (`testhelper.SnapshotDB` / `NewTestDBFrom`; the agent week fixture does).
+- An own SQLite DSN in a test: use `testhelper.NewTestDB`, `DSN` or `DSNWith` (fsync off; planning went from 50 s to 8 s).
+- A scenario sweep in a unit test, or one run serially: run it once, in parallel (`eval.Config.Parallel`), and give a golden test the fewest scenarios that cover its format.
+- A full re-evaluation with options inside a candidate loop: candidate checks use `evaluateWith(..., noOptions)`; a per-call reload of the plan state (the `Builder` memo covers it) or of the same SQL (the statement cache covers it).
+- `time.Sleep` to wait for a clock: set the stored time instead.
+- A serial Playwright project at the end of the run: give the specs their own server and data (global-settings has its own) instead of serializing them.
+- Polling a background job in a loop: the background task notifies when it ends.
 
 ## Required Skills
 
