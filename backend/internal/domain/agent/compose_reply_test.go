@@ -1,10 +1,13 @@
 package agent
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // G4: the reply of a write is the model's framing (at most two sentences, when
@@ -84,4 +87,45 @@ func TestComposeReply_PlannerWordsAreDropped(t *testing.T) {
 	got := composeReply("The batch for the eaters is a light day with a hearty minimum, the cap is soft.", replyTurn{user: "hi", numbers: map[string]bool{}})
 	assert.Equal(t, fallbackEN, got)
 	assert.Equal(t, `The "soft cheese" is a good pick.`, composeReply(`The "soft cheese" is a good pick.`, replyTurn{user: "hi", numbers: map[string]bool{}}), "quoted names stay")
+}
+
+// M3 cycle 1, tune g-move-08 / g-swap-14 / h-refusal-06 (G4.1, SF2): a call that
+// saved nothing says so in code, also when the lint drops the model's text.
+func TestComposeReply_RefusedCallSaysNothingChanged(t *testing.T) {
+	t.Parallel()
+	out := `{"saved":false,"applied":[],"skipped":[{"en":"Left out: moving \"Lasagne bolognese\" from Sun 6 Dec dinner to Wed 9 Dec dinner (it would create a problem on Mon 7 Dec: cooking times per day (2 cooking times, at most 1)).","de":"Weggelassen: „Lasagne bolognese“ von Sonntag, 6. Dez. Abendessen nach Mittwoch, 9. Dez. Abendessen verschieben (es würde am Montag, 7. Dez. ein Problem entstehen: mehr getrennte Kochzeiten an einem Tag als erlaubt (2 Kochzeiten, höchstens 1))."}]}`
+	b, _ := blockOf([]byte(out))
+	require.NotNil(t, b)
+	turn := replyTurn{user: "move Sunday's dinner over to Wednesday please", write: true, block: b, numbers: map[string]bool{}}
+	got := composeReply("I couldn't move Sunday's dinner to Wednesday, so nothing changed. The lasagne is cooked Sunday dinner and Monday dinner eats its leftovers.", turn)
+	assert.Contains(t, got, "- Nothing changed: the plan is as it was.\n- Left out: moving")
+	de := turn
+	de.user = "Kannst du das Abendessen vom Sonntag auf Mittwoch verschieben?"
+	assert.Contains(t, composeReply("", de), "- Nichts geändert: der Plan bleibt, wie er war.")
+
+	saved, _ := blockOf([]byte(`{"saved":true,"applied":[{"op":"add"}],"skipped":[{"en":"Left out: adding x.","de":"Weggelassen: x hinzufügen."}]}`))
+	require.NotNil(t, saved)
+	assert.NotContains(t, composeReply("", replyTurn{user: "add", write: true, block: saved, numbers: map[string]bool{}}), "Nothing changed", "a partly saved call is not 'nothing changed'")
+}
+
+// M3 cycle 1, tune g-question-00 (RP3, RP4): "per eater" is rewritten, not a reason
+// to drop the answer, and on a read turn an unbacked figure costs only its sentence.
+func TestComposeReply_ReadTurnKeepsTheBackedAnswer(t *testing.T) {
+	t.Parallel()
+	nums := map[string]bool{"1522": true, "1504": true}
+	turn := replyTurn{user: "kcal on Saturday?", numbers: nums}
+	got := composeReply("Saturday comes to 1522 kcal per eater. That's a little above the day's range top of 1504, so the day is slightly over its range.", turn)
+	assert.Equal(t, "Saturday comes to 1522 kcal per person. That's a little above the day's range top of 1504, so the day is slightly over its range.", got)
+	assert.Equal(t, "Saturday comes to 1522 kcal.", composeReply("Saturday comes to 1522 kcal. That is 21 % of the week.", turn))
+	assert.Equal(t, fallbackEN, composeReply("That is 21 % of the week.", turn))
+}
+
+// M3 cycle 1, tune g-move-08: a refused move names where it was going, so the
+// reply may say the day the user named back (G4.1, lint weekday rule).
+func TestRefusedPart_MoveNamesItsDestination(t *testing.T) {
+	t.Parallel()
+	op := changeOp{Op: "move", To: []byte(`{"date":"2026-12-09","slot_id":3}`)}
+	en, de := refusedPart(context.Background(), Services{}, window.Window{}, op, applyRun{})
+	assert.Contains(t, en, "to Wed 9 Dec")
+	assert.Contains(t, de, "nach Mittwoch, 9. Dez.")
 }

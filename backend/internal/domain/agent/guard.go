@@ -144,7 +144,20 @@ func refusedPart(ctx context.Context, svc Services, w window.Window, op changeOp
 	case "set_eaters":
 		return "the change of people" + at("at"), "die Änderung der Personenzahl" + atDE("bei")
 	case "move":
-		return "moving " + q + at("from"), qd + atDE("von") + " verschieben"
+		// The destination too: the user named it, and a reply may say it back (G4.1).
+		to, toDE := "", ""
+		if c, err := op.toCell(); err == nil && c.Date != "" {
+			to = dayLabelStr(c.Date)
+			if n := strings.TrimPrefix(st.SlotNames[c.SlotID], "slot."); n != "" && haveSt {
+				to += " " + n
+			}
+			toDE = deCell(to)
+			if len(strings.Fields(to)) == 3 {
+				toDE = deDay(to)
+			}
+			to, toDE = " to "+to, " nach "+toDE
+		}
+		return "moving " + q + at("from") + to, qd + atDE("von") + toDE + " verschieben"
 	}
 	return "the change" + at("at"), "die Änderung" + atDE("bei")
 }
