@@ -328,6 +328,8 @@ def cmd_diff(args):
     for mach, sections in new.get("machines", {}).items():
         old_s = base.get("machines", {}).get(mach, {})
         for sec, val in sections.items():
+            if not isinstance(val, dict):
+                continue  # calib_s: the machine's calibration, not a budget
             entries = val.items() if sec == "go" else [(sec, val)]
             old_entries = old_s.get(sec, {}) if sec == "go" else {sec: old_s.get(sec)}
             for name, e in entries:
