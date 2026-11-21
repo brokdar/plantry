@@ -82,7 +82,7 @@ func TestFactsGolden_CoreRequestTypes(t *testing.T) {
 			},
 		},
 		{
-			name: "cook_elsewhere", userEN: "cook it at breakfast time", userDE: "koche es zum Frühstück", modelEN: "The cooking moves earlier.", modelDE: "Das Kochen rückt nach vorn.", write: true,
+			name: "cook_elsewhere", userEN: "cook it at breakfast time", userDE: "koche es zum Frühstück", modelEN: "Done, that is moved earlier.", modelDE: "Erledigt, das liegt jetzt früher.", write: true,
 			run: func(e *planToolEnv) json.RawMessage {
 				v, p := e.laterMealSession()
 				return e.raw("apply_changes", fmt.Sprintf(`{"ops":[{"op":"move_cook","session_id":%d,"cook_at":%s}]}`, v.ID, cellJSON(p.DateString(), e.slotID("breakfast"))))

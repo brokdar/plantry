@@ -221,6 +221,14 @@ var (
 	dayUnder    = regexp.MustCompile(`(?i)\b(day|tag)\b[^.]*\b(under|below|short|too little|unter|darunter|zu wenig)\b|\b(under|below) (its|the) (range|amount|minimum)`)
 )
 
+// Word classes the model's text on a write turn may not use: the block states
+// the cooking and the leftovers, and the one offer is code-rendered (G4, CL3,
+// CL4). A narrow vocabulary check in English and German, not a parser.
+var (
+	modelCookingWords = regexp.MustCompile(`(?i)\b(cook\w*|batch(es)?|leftovers?|left ?overs?|fresh(ly)?|portions? (are |is )?left|kochen|koch\w*|gekocht\w*|kochzeit\w*|reste?|übrig\w*|frisch\w*)\b`)
+	modelOptionWords  = regexp.MustCompile(`(?i)\b(if you|only if|unless|i can|i could|i'?d (suggest|recommend)|you (could|can|may|might)|want me to|would you like|shall i|should i|alternatively|instead|otherwise|falls du|wenn du|nur wenn|ich kann|ich könnte|du kannst|du könntest|möchtest du|willst du|soll ich|stattdessen|alternativ|sonst)\b`)
+)
+
 // contradicts reports a model text that denies what the block states.
 func contradicts(text string, facts []fact) bool {
 	has := func(kind string) bool {
@@ -277,6 +285,12 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 		}
 		if digitRe.MatchString(text) {
 			return "digit"
+		}
+		if modelCookingWords.MatchString(text) {
+			return "cooking_claim"
+		}
+		if modelOptionWords.MatchString(text) {
+			return "option"
 		}
 		blockText := ""
 		for _, f := range t.block.facts {
