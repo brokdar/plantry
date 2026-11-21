@@ -111,5 +111,3 @@ func TestCookingFacts_MovedDishIsDeterministic(t *testing.T) {
 		`Fri 27 Nov at dinner you cook "Lachs" for Fri 27 Nov dinner (cooked Mon 23 Nov dinner before); the longest recipe takes about 40 min.`,
 	}, first, "the earliest new cooking comes first, and the dish is not told as no longer cooked")
 }
-
-func ptrF(v float64) *float64 { return &v }
