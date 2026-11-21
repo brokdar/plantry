@@ -305,3 +305,13 @@ func TestRunParallelStopsAtTheFirstError(t *testing.T) {
 	assert.Contains(t, err.Error(), "broken run 1")
 	assert.Less(t, int(started.Load()), 30, "the jobs after the failure were not started")
 }
+
+func TestRunCancelledBeforeStartIsAnError(t *testing.T) {
+	scs, err := LoadScenarios()
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	recs, err := Run(ctx, Config{Chooser: airun.ChooserHeuristic, Runs: 1}, scs)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Empty(t, recs)
+}

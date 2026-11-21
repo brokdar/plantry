@@ -178,6 +178,9 @@ func Run(ctx context.Context, cfg Config, scenarios []Scenario) ([]Record, error
 	if firstErr != nil {
 		return nil, firstErr
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err // cancelled before every job started: no partial records
+	}
 	return out, nil
 }
 
