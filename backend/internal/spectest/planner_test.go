@@ -5,9 +5,12 @@ package spectest
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"slices"
 	"sync"
 	"testing"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 
 	"github.com/stretchr/testify/assert"
@@ -223,8 +226,15 @@ func TestKR7_ReplanDoesNotRepeatNeighbours(t *testing.T) {
 				v, err := e.planner.Run(context.Background(), id)
 				require.NoError(t, err)
 				if v.ErrorKey == "error.plan.day_same_dish" && snapshot(e.st()) == snapshot(before) {
-					return // nothing saved, told: v1.2 KR7's last step, a pass
+					// "nothing saved, told" is KR7's last step. It passes only when the test
+					// itself shows that no fallback exists: no cold plate can be made from
+					// the library (bread, hummus or cheese, a raw vegetable, fitting the diet).
+					ok, why := coldPlatePossible(before)
+					t.Logf("KR7 path: nothing saved; cold plate possible=%v (%s)", ok, why)
+					assert.False(t, ok, "nothing was saved although a cold plate can be made (%s): a fallback existed", why)
+					return
 				}
+				t.Logf("KR7 path: replan saved")
 				s := e.st()
 				mains := map[string]map[int64]bool{} // date -> main foods
 				perMeal := map[string][]int64{}
@@ -276,4 +286,39 @@ func TestPL7_PlannerMealsInsideSlotBands(t *testing.T) {
 				"%d of %d lunches and dinners on feasible days outside their band (%d infeasible days)", c.FeasOutBand, c.FeasMeals, c.InfeasDays)
 		})
 	}
+}
+
+var (
+	breadWords  = regexp.MustCompile(`(?i)bread|brot|ciabatta|baguette|toast|br[oö]tchen|roll`)
+	spreadWords = regexp.MustCompile(`(?i)hummus|cheese|k[aä]se|mozzarella|feta|parmesan|gouda|cheddar|halloumi`)
+)
+
+// coldPlatePossible is the spec's KR7 cold plate computed from the library: a
+// no-cook bread, hummus or a cheese, and a raw vegetable, all fitting the diet.
+func coldPlatePossible(s planning.State) (bool, string) {
+	var bread, spread, veg string
+	vegKcal := 1e9
+	ids := make([]int64, 0, len(s.Foods))
+	for id := range s.Foods {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	for _, id := range ids {
+		f := s.Foods[id]
+		if f.Kind != food.KindLeaf || !f.NoCook || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet {
+			continue
+		}
+		if planning.DietRestricts(s.Profile.DietType) && !(diet.Valid(f.DietClass) && diet.Compatible(f.DietClass, diet.Class(s.Profile.DietType))) {
+			continue
+		}
+		switch {
+		case f.LeafRole == food.RoleSideStarch && breadWords.MatchString(f.Name):
+			bread = f.Name
+		case spreadWords.MatchString(f.Name):
+			spread = f.Name
+		case f.LeafRole == food.RoleSideVeg && f.Macros.Kcal <= 60 && f.Macros.Kcal < vegKcal: // a raw vegetable (the leanest, so not a fruit)
+			veg, vegKcal = f.Name, f.Macros.Kcal
+		}
+	}
+	return bread != "" && spread != "" && veg != "", fmt.Sprintf("bread %q, spread %q, vegetable %q", bread, spread, veg)
 }
