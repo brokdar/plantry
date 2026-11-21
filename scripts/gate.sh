@@ -48,6 +48,10 @@ if [ "$MODE" = full ]; then
   flock -n 9 || { echo "another full gate is running; waiting for it"; flock 9; }
 fi
 
+# calib prints this machine's speed (a fixed CPU workload): the budgets are
+# scaled by it, measured right after the tests, under the same load.
+calib() { (cd "$ROOT" && go run scripts/calibrate.go); }
+
 step() { # step NAME CMD... : run, time, log
   local name=$1 s=$SECONDS; shift
   if "$@" >>"$LOG/$name.log" 2>&1; then
@@ -100,7 +104,8 @@ tests_backend() {
     grep -E '"Action":"fail"|WARNING: DATA RACE' "$LOG/go-race.log" | grep -oE '"Package":"[^"]+","Test":"[^"]+"|DATA RACE' | sort -u | head -20
     return 1
   }
-  step go-budget python3 "$BUDGET" go "$LOG/go-test.log" "$cpu" &&
+  TEST_BUDGET_CALIB="$(calib)" && export TEST_BUDGET_CALIB &&
+    step go-budget python3 "$BUDGET" go "$LOG/go-test.log" "$cpu" &&
     step race-budget python3 "$BUDGET" race "$LOG/go-race.log" "$rcpu"
 }
 tests_frontend() {
@@ -115,6 +120,7 @@ tests_frontend() {
     return
   fi
   step vitest bunx vitest run --maxWorkers=8 --reporter=default --reporter=json --outputFile.json="$LOG/vitest.json" &&
+    { TEST_BUDGET_CALIB="$(calib)" && export TEST_BUDGET_CALIB; } &&
     step vitest-budget python3 "$BUDGET" vitest "$LOG/vitest.json" &&
     step build bun run build
 }
@@ -129,6 +135,7 @@ tests_e2e() {
     return
   fi
   step e2e env PLAYWRIGHT_JSON_OUTPUT_NAME="$LOG/e2e.json" bun run e2e -- --reporter=list,json &&
+    { TEST_BUDGET_CALIB="$(calib)" && export TEST_BUDGET_CALIB; } &&
     step e2e-budget python3 "$BUDGET" e2e "$LOG/e2e.json"
 }
 

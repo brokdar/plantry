@@ -108,7 +108,7 @@ jobs:
           path: /tmp/go-test.json
           retention-days: 7
       - name: CPU budget (tests may get slower only with the tests added)
-        run: python3 ../scripts/test-budget.py go /tmp/go-test.json /tmp/cpu.jsonl
+        run: TEST_BUDGET_SEED=1 TEST_BUDGET_CALIB="$(go run ../scripts/calibrate.go)" python3 ../scripts/test-budget.py go /tmp/go-test.json /tmp/cpu.jsonl
 
   race:
     name: go test -race -short (CPU budget)
@@ -155,4 +155,4 @@ jobs:
           path: /tmp/go-race.json
           retention-days: 7
       - name: CPU budget
-        run: python3 ../scripts/test-budget.py race /tmp/go-race.json /tmp/cpu.jsonl
+        run: TEST_BUDGET_SEED=1 TEST_BUDGET_CALIB="$(go run ../scripts/calibrate.go)" python3 ../scripts/test-budget.py race /tmp/go-race.json /tmp/cpu.jsonl

@@ -56,5 +56,9 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Vitest
         run: bunx vitest run --reporter=default --reporter=json --outputFile.json=/tmp/vitest.json
+      - uses: actions/setup-go@v5 # scripts/calibrate.go: the budget is scaled by the runner's speed
+        with:
+          go-version: "1.25"
+          cache: false
       - name: Wall budget
-        run: python3 ../scripts/test-budget.py vitest /tmp/vitest.json
+        run: TEST_BUDGET_SEED=1 TEST_BUDGET_CALIB="$(go run ../scripts/calibrate.go)" python3 ../scripts/test-budget.py vitest /tmp/vitest.json

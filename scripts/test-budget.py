@@ -21,6 +21,10 @@ it costs this much and why it can't be faster; `diff` enforces the reason.
 `--write` lowers budgets that are beaten (the ratchet) and adds missing
 entries; it never raises one.
 
+Times are scaled by TEST_BUDGET_CALIB (go run scripts/calibrate.go, a fixed
+CPU workload) against the calibration stored with the machine's budgets, so a
+slower or busier runner does not fail them and a faster one hides nothing.
+
 Numbers are per machine: "ci" when $CI is set (GitHub's 4-vCPU runner, the
 reference), else "local". A machine without numbers yet is reported, not
 checked; --write seeds it. In CI a missing machine fails unless
@@ -50,6 +54,7 @@ TIMEOUT_FILES = {
 
 failures, notes = [], []
 SEEDING = False  # this machine has no budgets yet: report only
+FACTOR = 1.0  # this run's machine speed against the budgets' (calibration)
 
 
 def machine():
@@ -73,6 +78,7 @@ def allowed(entry, tests, tol, key="cpu_s"):
 
 
 def check_entry(section, name, entry, value, tests, tol, key, write, table):
+    value = value / FACTOR  # in the units of the machine speed the budgets were set at
     if entry is None:
         if value > NEW_ENTRY_FREE and not write and not SEEDING:
             failures.append(f"{section} {name}: {value:.1f}s has no budget; run with --write and add a reason if it is over {NEW_ENTRY_FREE:.0f}s")
@@ -144,7 +150,15 @@ def summary(title, table, key="s"):
 
 def machine_budgets(b, write):
     """The budgets of this machine; a machine without any is seeded."""
+    global FACTOR
     m = machine()
+    calib = float(os.environ.get("TEST_BUDGET_CALIB") or 0)
+    if m in b["machines"] and calib and b["machines"][m].get("calib_s"):
+        # Budgets are in the units of the machine speed they were set at.
+        FACTOR = min(max(calib / b["machines"][m]["calib_s"], 0.33), 3.0)
+        notes.append(f"machine speed factor {FACTOR:.2f} (calibration {calib:.3f}s against {b['machines'][m]['calib_s']:.3f}s)")
+    elif not calib:
+        notes.append("no TEST_BUDGET_CALIB: budgets compared unscaled (go run scripts/calibrate.go)")
     if m not in b["machines"]:
         # Nothing to check against yet: report. --write stores the numbers
         # (locally; CI prints them to copy into the file). CI is the reference
@@ -152,7 +166,7 @@ def machine_budgets(b, write):
         notes.append(f"no budgets for machine {m!r} yet: nothing checked; run with --write to seed")
         if os.environ.get("CI") and not os.environ.get("TEST_BUDGET_SEED"):
             failures.append(f"test-budget.json has no budgets for {m!r}: CI checks every run against them (seed once with TEST_BUDGET_SEED=1)")
-        b["machines"][m] = {}
+        b["machines"][m] = {"calib_s": calib} if calib else {}
         global SEEDING
         SEEDING = True
         # CI cannot commit: it collects every entry and prints them (finish).
