@@ -28,12 +28,17 @@ func ComposePrompt(p *profile.Profile, facts, summary string, today time.Time) (
 	if p != nil {
 		writeProfileSection(&b, p)
 	}
+	// The plan state is the program's computed view of the stored plan, a
+	// get_plan result in the prompt: its figures are tool-result figures to the
+	// reply lint (stateNumbers), the rule text around it is not.
+	b.WriteString(planStateStart)
 	b.WriteString(facts)
-	room := promptCharBudget - len(tail) - b.Len()
+	room := promptCharBudget - len(tail) - b.Len() - len(planStateEnd)
 	if len(summary) > room {
 		summary = dropPastCells(summary, today)
 	}
 	b.WriteString(summary)
+	b.WriteString(planStateEnd)
 
 	body := b.String()
 	if room := promptCharBudget - len(tail); len(body) > room {
@@ -42,6 +47,12 @@ func ComposePrompt(p *profile.Profile, facts, summary string, today time.Time) (
 	}
 	return body + tail, cut
 }
+
+// The lines that fence the plan state in the prompt.
+const (
+	planStateStart = "PLAN STATE (computed by the program from the stored plan, read it like a get_plan result)\n"
+	planStateEnd   = "END OF PLAN STATE\n"
+)
 
 // dropPastCells removes the summary's cell lines dated before today (the lines
 // start with "Weekday YYYY-MM-DD | ") and says so.
@@ -79,7 +90,7 @@ Cooking times per day are the distinct cells where something is cooked that day:
 The plan window below is current as of this message; get_plan (optionally from/to) reads it again.
 
 When the user asks for a change:
-1. Read the plan below; any figure you tell the user comes from a tool result, so call get_plan for it.
+1. Read the plan below; get_plan only for a missing figure.
 2. Find candidates: find_alternatives (replace on a plate) or find_foods (library).
 3. Do an explicit request at once with one apply_changes call holding all its ops, without a check first and without asking "should I save?". Several fitting options: apply the recommended one, name another. dry_run true only for a what-if question.
 

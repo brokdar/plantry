@@ -602,3 +602,30 @@ func savedBlock(tool string, output json.RawMessage) *replyBlock {
 	}
 	return &replyBlock{facts: []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: en, DE: de}}}
 }
+
+var (
+	// cellID is the slot id in a cell line ("Fri 2026-11-27 | 3 dinner | ...").
+	cellID = regexp.MustCompile(`(?m)^(\w+ \d{4}-\d{2}-\d{2} \| )\d+ `)
+	// idRef is an id in the plan state: "plate_id 30", "| id 12", "slot_id 3".
+	idRef = regexp.MustCompile(`(?i)\b(?:[a-z]+_)?ids?[ :=]*\d+`)
+)
+
+// stateNumbers collects the figures of the prompt's plan state (kcal, portions,
+// minutes, counts) into set: the plan state is the program's computed view of the
+// stored plan, as a get_plan result would be. The rule text around it is not
+// state, and ids and ISO dates are no figures.
+func stateNumbers(prompt string, set map[string]bool) {
+	i := strings.Index(prompt, planStateStart)
+	if i < 0 {
+		return
+	}
+	state := prompt[i+len(planStateStart):]
+	if j := strings.Index(state, planStateEnd); j >= 0 {
+		state = state[:j]
+	} else if j := strings.Index(state, "\nTool usage rules:"); j >= 0 {
+		state = state[:j]
+	}
+	state = cellID.ReplaceAllString(state, "$1")
+	state = idRef.ReplaceAllString(state, " ")
+	numbersIn(isoAnywhere.ReplaceAllString(state, " "), set)
+}

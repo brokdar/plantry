@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -247,4 +248,26 @@ func TestMinors_GermanGramsAndOneMarker(t *testing.T) {
 	out, _ := blockOf(json.RawMessage(`{"skipped":[{"en":"Left out: a (b).","de":"Weggelassen: a (b)."},{"en":"Left out: a (b).","de":"Weggelassen: a (b)."}]}`))
 	require.NotNil(t, out)
 	assert.Len(t, out.facts, 1, "the same refused part is told once")
+}
+
+// RP4 (V19): the prompt's plan state is a computed get_plan result: its figures
+// count on a read-only turn, ids and ISO dates do not, and the rule text around
+// it does not either.
+func TestLint_PlanStateFiguresCountRuleTextFiguresDoNot(t *testing.T) {
+	t.Parallel()
+	summary := "Cells (date | slot_id | mode | content):\nFri 2026-11-27 | 3 dinner | plan | plate_id 30, draft, 1 eater: Chili (component_id 41, food_id 7) 1 portion, 750 kcal\nOpen now: 2 problems\n"
+	prompt, _ := ComposePrompt(nil, "Foods on the plan:\nChili | id 7 | main, 80 min, 600 kcal\n", summary, time.Time{})
+	nums := map[string]bool{}
+	stateNumbers(prompt, nums)
+	assert.True(t, nums["750"] && nums["80"] && nums["600"] && nums["2"], "the state's figures: %v", nums)
+	assert.False(t, nums["30"], "a plate id is no figure")
+	assert.False(t, nums["41"], "a component id is no figure")
+	assert.False(t, nums["2026"], "no ISO date fragment")
+	assert.True(t, strings.Contains(prompt, "6 portions"), "the rule text has a 6")
+	assert.False(t, nums["6"], "a figure of the rule text is no state figure")
+
+	turn := replyTurn{user: "how much is Friday dinner?", numbers: nums}
+	assert.Equal(t, "Friday's dinner holds 750 kcal.", composeReply("Friday's dinner holds 750 kcal.", turn))
+	assert.Equal(t, fallbackEN, composeReply("That is about 6 days away.", turn))
+	assert.Equal(t, fallbackEN, composeReply("That is plate 30.", turn))
 }
