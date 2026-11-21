@@ -184,3 +184,12 @@ func TestAddDerived_WaysClosing(t *testing.T) {
 	require.NoError(t, json.Unmarshal(out, &none))
 	assert.NotContains(t, none, "closing")
 }
+
+// An unlock preview keeps ISO dates in the stored conversation: the panel
+// rebuilds its unlock card from it after a reload and parses them.
+func TestModelView_UnlockPreviewRowsKeepISODates(t *testing.T) {
+	t.Parallel()
+	out := string(agent.ModelView(json.RawMessage(`{"status":"needs_user_confirmation","rows":[{"date":"2026-11-09","slot_id":3,"names":["Chili"]}],"other":"2026-11-09"}`)))
+	assert.Contains(t, out, `"date":"2026-11-09"`)
+	assert.Contains(t, out, `"other":"Mon 9 Nov"`)
+}

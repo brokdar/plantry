@@ -108,8 +108,7 @@ async function send(page: Page, text: string) {
 const weekday = (iso: string) =>
   new Date(`${iso}T12:00:00`).toLocaleDateString("en", { weekday: "long" })
 
-// Pre-existing failure (ledger V7): unlock card not visible after reload; rewrite in M2.
-test.fixme("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, accepted runs", async ({
+test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, accepted runs", async ({
   page,
 }) => {
   test.setTimeout(180_000)
@@ -351,7 +350,7 @@ test.fixme("AC-1 to AC-4.1: portions and freezing, a different side, the unlock 
     expect(detail1).toMatchObject({
       kind: "chat",
       status: "ok",
-      prompt_version: "v37",
+      prompt_version: "v38",
     })
     expect(detail1.instruction).toBe("Make the chili 6 portions and freeze 2")
     expect(detail1.steps.map((s) => s.name)).toEqual(

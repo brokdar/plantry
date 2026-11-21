@@ -10,7 +10,6 @@ import {
   planCell,
   seedLeafFood,
   seedRecipeLibrary,
-  setSetting,
   test,
   uid,
 } from "./helpers"
@@ -391,40 +390,66 @@ test.describe("plan wizard", () => {
   })
 })
 
-// F3-AC3: the assistant fails (B7's empty fake script fails every call)
-// and "Plan without the assistant" plans heuristically (D11: no automatic
-// fallback).
-const ERROR_SCRIPT =
-  "../frontend/e2e/fixtures/chat-scripts/generate-week-error.json"
-
-test("F3-AC3: an assistant failure offers Plan without the assistant", async ({
+// F3-AC3: a run that ends in an error offers Plan without the assistant, which
+// plans heuristically (D11: no automatic fallback). PL2: the assistant no longer
+// plans (the heuristic does, the model only reads the note), so a run the
+// assistant chose fails only for the reasons any run does. The first run is real
+// (the wizard starts it with the assistant's chooser); what the wizard polls for
+// it is the error a failed run reports (the same body the API gives for a run
+// that ends in `error`), so the failure UI and its recovery are what is tested.
+test("F3-AC3: a failed run offers Plan without the assistant", async ({
   page,
   request,
 }) => {
-  // CC4 / PL2 (spec v1): the heuristic plans and the model only reads the
-  // user's note, and a note it cannot read ends partial, not failed. The
-  // script's failing plan call is never made, so this flow needs a new
-  // trigger for a failed run.
-  test.fixme(
-    true,
-    "PL2: the model no longer plans; no assistant failure to show"
-  )
   test.slow()
   // Hearty recipes, so the heuristic plan is ok (H9 floor; see above).
   const library = await seedRecipeLibrary(uid(), 10, undefined, 490)
   const plan = await request.get(`${API}/api/plan`)
   const { window } = (await plan.json()) as { window: { start: string } }
   const start = addDays(window.start, 7 * 65)
-  await setSetting("ai.fake_script", ERROR_SCRIPT)
   try {
     await stubRecipesReady(page)
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto(`/plan/new?start=${start}`)
     const wizard = page.getByTestId("plan-wizard")
     await wizard.getByRole("button", { name: "Next" }).click()
+
+    const first = page.waitForResponse(
+      (r) =>
+        r.url().includes("/api/plan/generate") &&
+        r.request().method() === "POST"
+    )
     await wizard
       .getByRole("button", { name: "Generate without a note" })
       .click()
+    const firstRes = await first
+    expect(firstRes.request().postDataJSON()).toMatchObject({ start })
+    const { run_id: failedId } = (await firstRes.json()) as { run_id: number }
+
+    // The wizard's polling of that run reports a failure (the real run is
+    // let to finish first, so the next generation is not refused as running).
+    await expect
+      .poll(
+        async () => {
+          const r = await request.get(`${API}/api/plan/runs/${failedId}`)
+          return ((await r.json()) as { status: string }).status
+        },
+        { timeout: 60_000 }
+      )
+      .not.toBe("running")
+    const real = await (
+      await request.get(`${API}/api/plan/runs/${failedId}`)
+    ).json()
+    await page.route(`**/api/plan/runs/${failedId}`, (route) =>
+      route.fulfill({
+        json: {
+          ...real,
+          status: "error",
+          chooser: "llm",
+          error_key: "error.plan.timeout",
+        },
+      })
+    )
 
     // A neutral headline; the run's error says what went wrong.
     const failed = wizard.getByTestId("wizard-failed").getByRole("alert")
@@ -447,6 +472,7 @@ test("F3-AC3: an assistant failure offers Plan without the assistant", async ({
       chooser: "heuristic",
     })
     const { run_id: runId } = (await res.json()) as { run_id: number }
+    expect(runId).not.toBe(failedId)
 
     await expect(page.getByTestId("plan-wizard")).toHaveCount(0, {
       timeout: 60_000,
@@ -458,7 +484,6 @@ test("F3-AC3: an assistant failure offers Plan without the assistant", async ({
       status: "ok",
     })
   } finally {
-    await request.delete(`${API}/api/settings/ai.fake_script`)
     await request.delete(
       `${API}/api/plan?from=${start}&to=${addDays(start, 6)}`
     )
