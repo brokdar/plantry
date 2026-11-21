@@ -6,17 +6,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
 // PlanReader is the read model behind GET /api/plan (planview.Service).
@@ -36,7 +40,7 @@ var getPlanSchema = `{
   "additionalProperties":false
 }`
 
-const getPlanDescription = `Read the plan window (optionally only from..to, both inclusive, inside the window): every cell, the cook sessions, the checker's issues and the evaluation. Returns JSON {window:{start,end,today,shopping_day}, cells:[{date,slot_id,mode,preset_name?,note?,plate:{id,state draft|confirmed,eaters,reason?,components:[{id,food_id,name,portions?|amount+unit?,session_id?,position main|side|extra,batch? cook|leftover|frozen (cook: this meal is the batch's cooking meal)}]}|null}], sessions:[{id,food_id,name,cook_date,cook_slot_id,portions,frozen_portions,state,cooked,consumed,frozen_consumed,use_by,links:[{plate_id,component_id,portions,kind}],warnings:[{code,plate_id?}]}], issues:[issue], draft:{plates,sessions,run_id,notes}|null, evaluation (compact: only the requested range, kcal whole and other numbers one decimal, a field that is 0, false or empty left out so absent means 0 / false / none; complete and nutrition_complete show only when false):{days:[{date,kcal,target_kcal,band_low,band_high,floor_kcal,room_kcal (kcal left to the band top),light_meals?,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete?,nutrition_missing?}], plates:[{date,slot_id,plate_id,eaters,kcal,protein_g,intent? (light|hearty),max_kcal?|min_kcal?,components:[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}] (food, role and session are in the cells), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only),meat_g? (per week, extrapolated to 7 days),fish_meals?,legume_meals?,produce_g_per_day? (DGE food groups per eater, display only)} (weekly kcal ledger over the whole window, complete days only; with light requests target_kcal is the target after them and normal_target_kcal the normal one, and a light day shows light (meal|day) and normal_target_kcal), issues:[issue], totals:{violations,warnings,soft}}}. Pass light to evaluate the plan under the user's light requests. kcal and protein are per eater, also per plate and per component. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[...]}: violations (H1-H9) are hard rules, soft issues (S2 day kcal outside the day band, S3 protein under 90% of the day target (g/kg) or the share under target or the weekly average under target, S4 weekly average outside the week band, S5 weekly carb or fat share outside its range, S6 a light meal over its cap (max_kcal), S6b a hearty meal under its minimum (min_kcal), S7 a DGE food rule missed (week_meat_above_dge over 300 g, week_fish_below_dge, week_legumes_below_dge), S8 a dish as main of too many meals) never block saving. Options (computed, verified, each with a ready op; ops when it needs several): S2 below band and S3 add or raise food (action add|raise); S6/S6b portions (a smaller or larger portion, 0.75-1.5), remove (an add-on, S6 only) or swap (a lighter or heartier main or side); H2 move_cook (cook the batch on another cell) or swap (a leftover or no-cook food). An S6/S6b option may leave the day under its band (a light or hearty request ranks above the day and week bands) but never under the H9 floor. an option's op is a ready apply_changes op. evaluation.issues is what the user sees; the top-level issues are the board's.`
+const getPlanDescription = `Read the plan window (optionally only from..to, both inclusive, inside the window): every cell, the cook sessions, the checker's issues and the evaluation. Returns JSON {window:{start,end,today,shopping_day}, cells:[{date,slot_id,mode,preset_name?,note?,plate:{id,state draft|confirmed,eaters,reason?,kind? (cold_plate: a meal of foods eaten as they are, nothing to cook),components:[{id,food_id,name,portions?|amount+unit?,session_id?,position main|side|extra,batch? cook|leftover|frozen (cook: this meal is the batch's cooking meal)}]}|null}], sessions:[{id,food_id,name,cook_date,cook_slot_id,portions,frozen_portions,state,cooked,consumed,frozen_consumed,use_by,links:[{plate_id,component_id,portions,kind}],warnings:[{code,plate_id?}]}], issues:[issue], draft:{plates,sessions,run_id,notes}|null, evaluation (compact: only the requested range, kcal whole and other numbers one decimal, a field that is 0, false or empty left out so absent means 0 / false / none; complete and nutrition_complete show only when false):{days:[{date,kcal,target_kcal,band_low,band_high,floor_kcal,room_kcal (kcal left to the band top),light_meals?,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete?,nutrition_missing?}], plates:[{date,slot_id,plate_id,eaters,kcal,protein_g,intent? (light|hearty),max_kcal?|min_kcal?,components:[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}] (food, role and session are in the cells), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only),meat_g? (per week, extrapolated to 7 days),fish_meals?,legume_meals?,produce_g_per_day? (DGE food groups per eater, display only)} (weekly kcal ledger over the whole window, complete days only; with light requests target_kcal is the target after them and normal_target_kcal the normal one, and a light day shows light (meal|day) and normal_target_kcal), issues:[issue], totals:{violations,warnings,soft}}}. Pass light to evaluate the plan under the user's light requests. kcal and protein are per eater, also per plate and per component. An issue is {label (the rule in plain words), message (one plain sentence), severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[...]}: violations are hard rules, soft issues (label "day energy": day kcal outside the day band; "day protein" and "weekly protein": protein under 90% of the day target (g/kg) or the share under target or the weekly average under target; "weekly energy": weekly average outside the week band; "weekly carbs" and "weekly fat": the share outside its range; "light meal": a light meal over its cap (max_kcal); "hearty meal": a hearty meal under its minimum (min_kcal); "weekly meat" (over 300 g), "weekly fish" and "weekly legumes": a DGE food rule missed; "dish as main too often": a dish as main of too many meals) never block saving. Options (computed, verified, each with a ready op; ops when it needs several): "day energy" below band and "day protein" add or raise food (action add|raise); "light meal" and "hearty meal" portions (a smaller or larger portion, three quarters to 1.5), remove (an add-on, light meal only) or swap (a lighter or heartier main or side); "cooking occasions per day" move_cook (cook the batch on another cell) or swap (a leftover or no-cook food). A light meal or hearty meal option may leave the day under its band (a light or hearty request ranks above the day and week bands) but never under the day energy minimum. an option's op is a ready apply_changes op. evaluation.issues is what the user sees; the top-level issues are the board's.`
 
 // toolGetPlan returns the chat window's plan: the same cells, sessions and
 // issues as GET /api/plan for that window, in a compact shape (D10), plus
@@ -78,6 +82,19 @@ func toolGetPlan(svc Services) Tool {
 					ev = &e
 				} else {
 					out.EvaluationError = err.Error()
+				}
+			}
+			if ev != nil {
+				kinds := map[int64]string{}
+				for _, pe := range ev.Plates {
+					if pe.Kind != "" {
+						kinds[pe.PlateID] = pe.Kind
+					}
+				}
+				for i := range out.Cells {
+					if pl := out.Cells[i].Plate; pl != nil {
+						pl.Kind = kinds[pl.ID]
+					}
 				}
 			}
 			if in.From != "" || in.To != "" {
@@ -149,10 +166,12 @@ type planCellOut struct {
 }
 
 type planPlateOut struct {
-	ID         int64              `json:"id"`
-	State      string             `json:"state"`
-	Eaters     float64            `json:"eaters"`
-	Reason     *string            `json:"reason,omitempty"`
+	ID     int64   `json:"id"`
+	State  string  `json:"state"`
+	Eaters float64 `json:"eaters"`
+	Reason *string `json:"reason,omitempty"`
+	// Kind is "cold_plate" for a meal of no-cook foods and no recipe.
+	Kind       string             `json:"kind,omitempty"`
 	Components []planComponentOut `json:"components"`
 }
 
@@ -245,7 +264,7 @@ func planOutput(p *planview.Plan) planOut {
 
 func planSession(v plate.SessionView) planSessionOut {
 	s := planSessionOut{
-		ID: v.ID, FoodID: v.FoodID, Name: v.FoodName,
+		ID: v.ID, FoodID: v.FoodID, Name: food.Data(v.FoodName),
 		CookDate: v.CookDate.Format(time.DateOnly), CookSlotID: v.CookSlotID,
 		Portions: v.Portions, FrozenPortions: v.FrozenPortions, State: string(v.State),
 		Cooked: v.CookedAt != nil, Consumed: v.Consumed, FrozenConsumed: v.FrozenConsumed,
@@ -277,7 +296,7 @@ func planPlate(p *plate.Plate, batch map[int64]string) *planPlateOut {
 	}
 	for i, c := range p.Components {
 		out.Components[i] = planComponentOut{
-			ID: c.ID, FoodID: c.FoodID, Name: c.FoodName,
+			ID: c.ID, FoodID: c.FoodID, Name: food.Data(c.FoodName),
 			Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, SessionID: c.CookSessionID,
 			Position: string(c.Position), Batch: batch[c.ID],
 		}
@@ -508,7 +527,7 @@ func toolRegenerate(svc Services) Tool {
 	return Tool{
 		Name: "regenerate",
 		Description: "Let the planner choose again for part of the draft plan and wait for it, only when the user asks to plan a whole day or week again (for one dish or side use find_alternatives). Confirmed rows are kept. " +
-			"Returns JSON {run_id, status (ok|partial|error|...), error_key?, counts:{plates, sessions, cook_days, kept_confirmed}, issues:[issue], notes?, changed:[{date, slot_id, plate}]} where plate has the shape of a get_plan cell plate.",
+			"Returns JSON {run_id, status (ok|partial|error|...), error_key?, counts:{plates, sessions, cook_days, kept_confirmed}, issues:[issue], notes?, changed:[{date, slot_id, plate}], week?:{meat_g:{before, after, limit}, same_dish_twice:[string]}} (week: the meat of the whole window per person against its weekly limit, before and after the run, and the repeated dishes or dish families the week now holds) where plate has the shape of a get_plan cell plate.",
 		Schema: schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -541,6 +560,8 @@ func toolRegenerate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
+			weekBefore := weekOf(ctx, svc, w)
+			stBefore, haveBefore := windowState(ctx, svc, w)
 			req := planning.Request{Start: w.Start, Today: todayFrom(ctx), Scope: sc, Instruction: in.Instruction, Light: light}
 			var id int64
 			if sc.Kind == planning.ScopeWindow {
@@ -580,6 +601,14 @@ func toolRegenerate(svc Services) Tool {
 				// The run already rewrote the plan: it is still a change.
 				noteChange(ctx, "regenerate_"+string(sc.Kind), params)
 				return nil, ToolEffectNone, err
+			}
+			out.Week = weekEffect(weekBefore, weekOf(ctx, svc, w))
+			if stAfter, ok := windowState(ctx, svc, w); ok && haveBefore {
+				scoped := map[string]bool{}
+				for _, c := range out.Changed {
+					scoped[c.Date] = true
+				}
+				out.OtherDays = otherCookingDays(stBefore, stAfter, scoped)
 			}
 			params["count"] = len(out.Changed)
 			if sc.Kind == planning.ScopeSide {
@@ -638,7 +667,7 @@ func newSideName(before *plate.Plate, changed []changedPlateOut) (string, bool) 
 		}
 		for _, c := range ch.Plate.Components {
 			if !had[c.FoodID] {
-				return c.Name, true
+				return food.Data(c.Name), true
 			}
 		}
 	}
@@ -687,6 +716,56 @@ type regenerateOut struct {
 	Issues   []planning.Issue  `json:"issues"`
 	Notes    string            `json:"notes,omitempty"`
 	Changed  []changedPlateOut `json:"changed"`
+	Week     *weekOut          `json:"week,omitempty"`
+	// OtherDays says, per day outside the plates the run wrote, how its cooking
+	// changed (a batch now for fewer or more meals, moved or gone).
+	OtherDays []string `json:"other_days,omitempty"`
+}
+
+// weekOut is what the run did to the week: the window's meat per person
+// against its limit, and the repeats the plan holds (E019).
+type weekOut struct {
+	MeatG    meatOut  `json:"meat_g"`
+	MeatNote string   `json:"meat_note,omitempty"`
+	Repeats  []string `json:"same_dish_twice"`
+}
+
+// meatMainG is about the meat in one meat dish per person, for the meat note.
+const meatMainG = 100
+
+type meatOut struct {
+	Before float64 `json:"before"`
+	After  float64 `json:"after"`
+	Limit  float64 `json:"limit"`
+}
+
+// weekOf reads the window's week effects; nil when the state cannot be read.
+func weekOf(ctx context.Context, svc Services, w window.Window) *planning.WeekEffect {
+	if svc.State == nil {
+		return nil
+	}
+	st, err := svc.State(ctx, w, todayFrom(ctx))
+	if err != nil {
+		return nil
+	}
+	e := planning.WeekEffectOf(st)
+	return &e
+}
+
+func weekEffect(before, after *planning.WeekEffect) *weekOut {
+	if before == nil || after == nil {
+		return nil
+	}
+	r := math.Round
+	out := &weekOut{MeatG: meatOut{Before: r(before.MeatG), After: r(after.MeatG), Limit: r(after.LimitG)}, Repeats: after.Repeats}
+	// A fact for the reply: why the new meals may hold no meat dish.
+	if after.LimitG > 0 && after.LimitG-after.MeatG < meatMainG {
+		out.MeatNote = fmt.Sprintf("The week now holds %.0f g of meat per person against a limit of %.0f g: %.0f g is left, less than one meat dish.", r(after.MeatG), r(after.LimitG), r(max(after.LimitG-after.MeatG, 0)))
+	}
+	if out.Repeats == nil {
+		out.Repeats = []string{}
+	}
+	return out
 }
 
 type regenerateCounts struct {
@@ -743,3 +822,52 @@ func changedPlates(ctx context.Context, svc Services, from, to time.Time, runID 
 
 // fnum formats a portion count for an error message.
 func fnum(v float64) string { return strconv.FormatFloat(v, 'g', -1, 64) }
+
+// windowState reads the planning state of the window; false when it cannot be read.
+func windowState(ctx context.Context, svc Services, w window.Window) (planning.State, bool) {
+	if svc.State == nil {
+		return planning.State{}, false
+	}
+	st, err := svc.State(ctx, w, todayFrom(ctx))
+	return st, err == nil
+}
+
+// otherCookingDays lists the days outside scoped (ISO dates of the plates the
+// run wrote) whose cooking differs before and after: "Wed 25 Nov: the Tofu
+// stir-fry (for Fri 27 Nov lunch) was cooked for 2 meals, now for 1".
+func otherCookingDays(before, after planning.State, scoped map[string]bool) []string {
+	bc, ac := cookingByDay(before), cookingByDay(after)
+	days := map[string]bool{}
+	for d := range bc {
+		days[d] = true
+	}
+	for d := range ac {
+		days[d] = true
+	}
+	keys := make([]string, 0, len(days))
+	for d := range days {
+		if !scoped[d] {
+			keys = append(keys, d)
+		}
+	}
+	slices.Sort(keys)
+	var out []string
+	for _, d := range keys {
+		if sameCooking(bc[d], ac[d]) {
+			continue
+		}
+		out = append(out, fmt.Sprintf("%s cooking: was %s, now %s.", dayLabelStr(d), cookingWords(bc[d]), cookingWords(ac[d])))
+	}
+	return out
+}
+
+func cookingWords(ds []reportDish) string {
+	if len(ds) == 0 {
+		return "nothing"
+	}
+	parts := make([]string, len(ds))
+	for i, d := range ds {
+		parts[i] = fmt.Sprintf("%s at %s for %s", d.Dish, d.At, strings.Join(d.Eaten, ", "))
+	}
+	return strings.Join(parts, "; ")
+}

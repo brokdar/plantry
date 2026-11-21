@@ -78,11 +78,36 @@ func TestCheck_H1(t *testing.T) {
 		},
 		{
 			name: "plate in a none cell", state: noneDinner, target: satDinner,
-			want: []string{planning.CodePlateInNoneCell},
+			want: []string{planning.CodePlateInNoneCell, planning.CodeCookInNoneCell},
 		},
 		{
 			name: "none cell left empty", state: noneDinner, target: func(planning.State) planning.Target {
 				return planning.Target{Cells: []plateCellKey{cell(sat, dinner)}, PlateIDs: []int64{70}, SessionIDs: []int64{7}}
+			},
+		},
+		{
+			name: "proposed cook on a none cell", target: satDinner,
+			state: func() planning.State {
+				s := baseState()
+				setMode(&s, cell(sat, dinner), availability.ModeNone)
+				return s
+			},
+			prop: planning.Proposal{
+				Sessions: []planning.ProposedSession{session("s1", chili, sat, dinner, 1)},
+				Plates:   []planning.ProposedPlate{pplate(sat, lunch, onKey(chili, "s1"))},
+			},
+			want: []string{planning.CodeCookInNoneCell},
+		},
+		{
+			name: "cook on a routine cell is fine", target: satDinner,
+			state: func() planning.State {
+				s := baseState()
+				setMode(&s, cell(sat, dinner), availability.ModeRoutine)
+				return s
+			},
+			prop: planning.Proposal{
+				Sessions: []planning.ProposedSession{session("s1", chili, sat, dinner, 1)},
+				Plates:   []planning.ProposedPlate{pplate(sat, dinner, onKey(chili, "s1"))},
 			},
 		},
 		{
@@ -373,6 +398,20 @@ func TestCheck_H7(t *testing.T) {
 			name: "zero portions", target: sunDinner, prop: one(planning.ProposedComponent{FoodID: curry}),
 			want: []string{planning.CodeInvalidPortions},
 		},
+		// The portion cap is per eater and judges dishes only.
+		{name: "1.5 portions pass", target: sunDinner, prop: one(planning.ProposedComponent{FoodID: curry, Portions: 1.5})},
+		{
+			name: "1.75 portions fail", target: sunDinner, prop: one(planning.ProposedComponent{FoodID: curry, Portions: 1.75}),
+			want: []string{planning.CodePortionsOverCap},
+		},
+		{
+			name: "3 eaters with 1 portion each pass", target: sunDinner,
+			prop: planning.Proposal{Plates: []planning.ProposedPlate{{Date: day(sun), SlotID: dinner, Eaters: 3, Components: []planning.ProposedComponent{fresh(curry)}}}},
+		},
+		{
+			name: "an eat-as-is add-on in grams is not judged", target: sunDinner,
+			prop: one(fresh(curry), planning.ProposedComponent{FoodID: egg, Grams: 600}),
+		},
 		{name: "duplicate session key", target: sunDinner, prop: planning.Proposal{
 			Sessions: []planning.ProposedSession{session("s1", curry, sun, dinner, 1), session("s1", curry, sun, dinner, 1)},
 			Plates:   []planning.ProposedPlate{pplate(sun, dinner, onKey(curry, "s1"))},
@@ -383,6 +422,17 @@ func TestCheck_H7(t *testing.T) {
 			return s
 		}, target: sunDinner, prop: one(fresh(curry)), want: []string{planning.CodeInvalidPortions}},
 	})
+}
+
+func TestCheck_PortionsOverCapIssueNamesValueCapAndFix(t *testing.T) {
+	s := baseState()
+	p := planning.Proposal{Plates: []planning.ProposedPlate{pplate(sun, dinner, planning.ProposedComponent{FoodID: curry, Portions: 2.5})}}
+	got := only(check(s, targetCells(cell(sun, dinner)), p), "H7")
+	require.Len(t, got, 1)
+	assert.Equal(t, planning.SeverityViolation, got[0].Severity)
+	assert.Equal(t, 2.5, got[0].Params["portions"])
+	assert.Equal(t, planning.MaxDishPortions, got[0].Params["max_portions"])
+	assert.Contains(t, got[0].Params["hint"], "side or a no-cook add-on")
 }
 
 func TestCheck_H7DuplicateKeysInFirstSeenOrder(t *testing.T) {
@@ -661,4 +711,26 @@ func TestCheck_CleanWindowHasNoIssues(t *testing.T) {
 	// Curry cooks at dinner but is eaten at lunch: only H4 fires.
 	assert.Equal(t, []string{"leftover_before_cook"}, codes(got, "H4"))
 	assert.Len(t, got, 1)
+}
+
+// SF3: a dish the user named that repeats inside the variety window is a
+// warning (variety_repeat_named) on persisted data; unnamed it stays a violation.
+func TestCheck_H8NamedDishRepeatIsAWarning(t *testing.T) {
+	s := baseState()
+	manyMains(&s, 5)
+	last := day(sat).AddDate(0, 0, -7)
+	f := s.Foods[100]
+	f.LastEaten = &last
+	s.Foods[100] = f
+	s.Plates = []planning.Plate{{ID: 1, Date: day(sat), SlotID: dinner, Eaters: 1, Components: []planning.Component{{FoodID: 100, Portions: f64(1)}}}}
+
+	got := only(planning.Check(s, windowTarget(s)), "H8")
+	require.Len(t, got, 1)
+	assert.Equal(t, planning.SeverityViolation, got[0].Severity)
+
+	s.Named = map[int64]bool{100: true}
+	got = only(planning.Check(s, windowTarget(s)), "H8")
+	require.Len(t, got, 1)
+	assert.Equal(t, planning.CodeVarietyRepeatNamed, got[0].Code)
+	assert.Equal(t, planning.SeverityWarning, got[0].Severity)
 }

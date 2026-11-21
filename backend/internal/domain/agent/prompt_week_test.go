@@ -2,6 +2,7 @@ package agent_test
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -143,6 +144,7 @@ func realisticWeek() (planning.State, *profile.Profile) {
 // cut it ("[prompt truncated]") and with it the facts of the later foods and
 // the per-day table (audit B1). Run with -v for the byte counts.
 func TestChatPrompt_RealisticWeekFitsWithRoomToSpare(t *testing.T) {
+	t.Parallel()
 	st, prof := realisticWeek()
 	require.Len(t, st.Plates, 20)
 	require.Len(t, st.Sessions, 22)
@@ -159,17 +161,23 @@ func TestChatPrompt_RealisticWeekFitsWithRoomToSpare(t *testing.T) {
 	// The facts come before the cells, and every food and day is in them.
 	assert.Less(t, strings.Index(prompt, "Foods on the plan"), strings.Index(prompt, "Cells (date"))
 	assert.Less(t, strings.Index(prompt, "Kcal per eater and day"), strings.Index(prompt, "Cells (date"))
-	assert.Contains(t, prompt, "food_id 110 Gebratener Reis mit Ei", "the later foods are not cut")
+	assert.Contains(t, prompt, "Gebratener Reis mit Ei | id 110 |", "the later foods are not cut")
 	for d := range 7 {
 		assert.Contains(t, prompt, fmt.Sprintf("%s: ", st.Window.Start.AddDate(0, 0, d).Format(time.DateOnly)))
 	}
 	// One-portion sessions on their own cell add nothing to the cell line.
 	assert.NotContains(t, prompt, "session_id 1 | food_id")
-	assert.Contains(t, prompt, "Cook sessions:")
+	assert.Contains(t, prompt, "Cook batches:")
 	// The stored light mark, the routine and the day numbers are there.
 	assert.Contains(t, prompt, "plan, light meal")
 	assert.Contains(t, prompt, "routine, not cooking")
-	assert.Contains(t, prompt, "| band ")
+	assert.Contains(t, prompt, "| range ")
+	// E030: the whole prompt as the app sends it, the plan summary and the
+	// facts included, holds none of the planner's words (a hit names where).
+	banned := regexp.MustCompile(`(?i)\b(bands?|floors?|caps?|soft|hard|violations?|drafts?|sessions?|occasions?|hearty|add-ons?|dry[- ]run|the tools?)\b`)
+	for _, m := range banned.FindAllStringIndex(prompt, -1) {
+		t.Errorf("planner word %q in the chat prompt: ...%s...", prompt[m[0]:m[1]], prompt[max(0, m[0]-50):min(len(prompt), m[1]+50)])
+	}
 	assert.Contains(t, prompt, "light dinner")
 	assert.Contains(t, prompt, "| vegan |", "diet class in the foods list")
 }

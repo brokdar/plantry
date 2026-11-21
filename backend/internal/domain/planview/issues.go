@@ -7,6 +7,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -86,9 +88,15 @@ func (s *Service) checkState(ctx context.Context, in checkInput) (planning.State
 	}
 	st.SlotNames = make(map[int64]string, len(in.env.active))
 	st.SlotKind = in.env.kinds
+	var bands []slot.Band
+	st.SlotBand = make(map[int64]slot.Band, len(in.env.active))
 	for _, sl := range in.env.active {
 		st.SlotNames[sl.ID] = sl.NameKey
+		b := sl.Effective()
+		bands = append(bands, b)
+		st.SlotBand[sl.ID] = b
 	}
+	st.SlotShare = slot.Shares(bands)
 	if st.Light, err = s.d.Light.List(ctx, in.w.Start, in.w.End); err != nil {
 		return planning.State{}, fmt.Errorf("read light requests: %w", err)
 	}

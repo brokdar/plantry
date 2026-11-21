@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // Option is one computed way to close a soft rule's gap on a day: add a
@@ -20,6 +21,13 @@ type Option struct {
 	Name   string `json:"name"`
 	Date   string `json:"date"`
 	SlotID int64  `json:"slot_id"`
+	// ServingG and LeafRole describe a leaf add: the grams of one serving and
+	// its effective role (side_veg: produce, side_starch: bread), so a caller can
+	// size it in natural units.
+	ServingG float64 `json:"serving_g,omitempty"`
+	LeafRole string  `json:"leaf_role,omitempty"`
+	// Slot names the meal ("lunch"); the chat tools fill it from the plan's slots.
+	Slot string `json:"slot,omitempty"`
 	// PlateID is nil for a proposed plate (address it by date and slot).
 	PlateID *int64 `json:"plate_id"`
 	// Portions or Grams: the amount to add, or the new amount of a raise
@@ -42,9 +50,15 @@ type Option struct {
 	Ops []OptionOp `json:"ops,omitempty"`
 	// PlateKcal is the plate's kcal after the option (S6/S6b options).
 	PlateKcal float64 `json:"plate_kcal,omitempty"`
+	// Recommended marks the first, best-ranked verified option (one per
+	// issue); Because says why in one phrase.
+	Recommended bool   `json:"recommended,omitempty"`
+	Because     string `json:"recommended_because,omitempty"`
 	// Why says why Go chose this plate when it is not the day's last one
 	// ("lunch: dinner is light").
 	Why string `json:"why,omitempty"`
+	// MeatSavedG is the meat per eater a week swap takes off its plate.
+	MeatSavedG float64 `json:"meat_saved_g,omitempty"`
 
 	inBand   bool
 	shareGap float64
@@ -86,7 +100,7 @@ const (
 	roundGrams      = 10
 	roundPortions   = 0.25
 	minAddPortions  = 0.5
-	maxAddPortions  = 2.0
+	maxAddPortions  = MaxDishPortions
 	proteinKcalPerG = 4
 )
 
@@ -194,11 +208,13 @@ func (x *index) dgeIssues(w *WeekEval) []Issue {
 	meatOK := dt == "" || diet.Compatible(diet.Omnivore, dt)
 	fishOK := dt == "" || diet.Compatible(diet.Pescetarian, dt)
 	if meatOK && w.MeatG > DGEMeatMaxG*float64(w.Days)/weekDays {
-		out = append(out, issue("S7", CodeWeekMeatAboveDGE, SeveritySoft).
-			with("days", w.Days).with("meat_g", math.Round(w.MeatG)).with("max_g", math.Round(DGEMeatMaxG*float64(w.Days)/weekDays)))
+		is := issue("S7", CodeWeekMeatAboveDGE, SeveritySoft).
+			with("days", w.Days).with("meat_g", math.Round(w.MeatG)).with("max_g", math.Round(DGEMeatMaxG*float64(w.Days)/weekDays))
+		out = append(out, is)
 	}
 	if fishOK && w.FishMeals == 0 {
-		out = append(out, issue("S7", CodeWeekFishBelowDGE, SeveritySoft).with("days", w.Days).with("fish_meals", 0).with("min_meals", 1))
+		is := issue("S7", CodeWeekFishBelowDGE, SeveritySoft).with("days", w.Days).with("fish_meals", 0).with("min_meals", 1)
+		out = append(out, is)
 	}
 	if w.LegumeMeals == 0 {
 		out = append(out, issue("S7", CodeWeekLegumesBelow, SeveritySoft).with("days", w.Days).with("legume_meals", 0).with("min_meals", 1))
@@ -210,6 +226,10 @@ func (x *index) dgeIssues(w *WeekEval) []Issue {
 // scaled target) and S3 (protein share below the profile's minus the
 // margin) for every complete day of ev with a plate. Each carries its
 // options.
+//
+// A day's energy issue carries two separate gaps: gap_to_target_kcal (target
+// minus kcal, signed) and gap_to_range_kcal (the distance to the nearest edge
+// of the day's range, signed the same way: positive under the range).
 func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 	var out []Issue
 	proteinTarget := x.s.Profile.ProteinPct
@@ -235,7 +255,8 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 			if code != "" {
 				is := issue("S2", code, SeveritySoft).onDate(day).
 					with("kcal", math.Round(d.Kcal)).with("target_kcal", math.Round(target)).
-					with("gap_kcal", math.Round(target-d.Kcal)).
+					with("gap_to_target_kcal", math.Round(target-d.Kcal)).
+					with("gap_to_range_kcal", math.Round(bandGap(d.Kcal, target*x.pol.DayLow, target*x.pol.DayHigh))).
 					with("band_low_kcal", math.Round(target*x.pol.DayLow)).with("band_high_kcal", math.Round(target*x.pol.DayHigh))
 				if code == CodeKcalBelowBand {
 					is.Options = x.options(ev, t, d, day, false)
@@ -263,6 +284,7 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 	out = append(out, x.lightIssues(ev)...)
 	out = append(out, x.dishIssues()...)
 	out = append(out, x.addOnIssues()...)
+	out = append(out, x.slotBandIssues(ev)...)
 	// S4: the weekly average outside the policy's week band. No date and no
 	// options: the model decides which days to move.
 	if w := ev.Week; w != nil && w.Days >= MinWeekDays {
@@ -321,6 +343,23 @@ func (x *index) options(ev Evaluation, t Target, d DayEval, day time.Time, prote
 // optionsFor is options with the bound an option must reach to count as
 // "reachable" (the band's low end for S2/S3, the floor for H9).
 func (x *index) optionsFor(ev Evaluation, t Target, d DayEval, day time.Time, protein bool, target, reach float64) []Option {
+	if x.noOptions {
+		return nil
+	}
+	return recommendFirst(x.optionsRaw(ev, t, d, day, protein, target, reach))
+}
+
+// recommendFirst marks the best-ranked option of a verified list as the
+// recommended one: the options are already ranked, each verified to add no
+// hard issue and no new add-on warning.
+func recommendFirst(opts []Option) []Option {
+	if len(opts) > 0 {
+		opts[0].Recommended, opts[0].Because = true, "the best-ranked option that was checked: no new problem"
+	}
+	return opts
+}
+
+func (x *index) optionsRaw(ev Evaluation, t Target, d DayEval, day time.Time, protein bool, target, reach float64) []Option {
 	want := target - d.Kcal
 	if want <= 0 {
 		want = target*x.pol.DayHigh - d.Kcal
@@ -419,7 +458,7 @@ func (x *index) editablePlates(day time.Time) []int {
 	var out []int
 	for i, p := range x.s.Plates {
 		// A light meal stays light: no option or top-up adds to its plate.
-		if dayOf(p.Date) == dayOf(day) && !p.Confirmed && x.s.Window.Contains(p.Date) && !x.routine(p.Cell()) && !x.s.lightMeal(p.Date, p.SlotID) {
+		if dayOf(p.Date) == dayOf(day) && !p.Confirmed && x.s.Window.Contains(p.Date) && !x.routine(p.Cell()) && !x.s.lightMeal(p.Date, p.SlotID) && !x.s.isColdPlate(p) {
 			out = append(out, i)
 		}
 	}
@@ -460,7 +499,7 @@ func (x *index) candidates(day time.Time, want float64) []optCand {
 		for _, c := range x.s.Plates[last].Components {
 			onPlate = onPlate || c.FoodID == id
 		}
-		if onPlate {
+		if onPlate || !x.s.addOnFits(x.s.Plates[last], f, slotName(x.s, x.s.Plates[last].SlotID)) {
 			continue
 		}
 		c := optCand{plate: last, comp: -1}
@@ -477,6 +516,7 @@ func (x *index) candidates(day time.Time, want float64) []optCand {
 			g := math.Min(math.Round(n*serving/roundGrams)*roundGrams, addCapG(f, dayTarget))
 			c.add = Component{FoodID: id, Grams: &g, Proposed: true}
 			c.opt.Grams = &g
+			c.opt.ServingG, c.opt.LeafRole = serving, string(f.LeafRole)
 			c.kcal, c.protein = f.Macros.Kcal*g/100, f.Macros.Protein*g/100
 		}
 		c.opt.Action, c.opt.FoodID, c.opt.Name, c.opt.Why = "add", id, f.Name, why
@@ -494,6 +534,10 @@ func (x *index) candidates(day time.Time, want float64) []optCand {
 				n := math.Round(*comp.Portions*raiseFactor/roundPortions) * roundPortions
 				if n <= *comp.Portions {
 					n = *comp.Portions + roundPortions
+				}
+				n = math.Min(n, MaxDishPortions)
+				if n <= *comp.Portions {
+					continue
 				}
 				from := *comp.Portions
 				c.opt.Portions, c.opt.From = &n, &from
@@ -531,12 +575,12 @@ func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, tar
 		p.Components[c.comp] = comp
 	}
 	s.Plates[c.plate] = p
-	for k := range hardKeys(Check(s, t)) {
+	y := newIndex(s, t) // one index for the hard check and the figures below
+	for k := range hardKeys(check(y)) {
 		if !base[k] {
 			return Option{}, false
 		}
 	}
-	y := newIndex(s, t)
 	for k := range y.addOnKeys() {
 		if !x.baseAddOnKeys()[k] {
 			return Option{}, false
@@ -647,4 +691,62 @@ func (x *index) addDayTarget(day time.Time) float64 {
 		return dk.Adjusted
 	}
 	return 0
+}
+
+// bandGap is the distance from kcal to the nearest edge of [low, high],
+// positive when under the range, negative when over it.
+func bandGap(kcal, low, high float64) float64 {
+	switch {
+	case kcal < low:
+		return low - kcal
+	case kcal > high:
+		return high - kcal
+	}
+	return 0
+}
+
+// slotBandIssues reports S10 `meal_outside_slot_band` for every lunch or dinner
+// plate whose kcal per eater are outside its slot's band (SB1), in percent of
+// the day's full target. Only complete days that are not away are judged, a
+// meal with a light or hearty mark (or on a light or hearty day) is exempt (the
+// explicit request outranks the band), and the issue has no options.
+func (x *index) slotBandIssues(ev Evaluation) []Issue {
+	k := x.s.Profile.KcalTarget
+	if k == nil || *k <= 0 || len(x.s.SlotBand) == 0 {
+		return nil
+	}
+	judged := map[string]bool{}
+	for _, d := range ev.Days {
+		judged[d.Date] = d.Complete && !d.Away && !d.NutritionMissing
+	}
+	accounts := map[string]DayKcal{}
+	for _, dk := range x.dayAccounts(x.days) {
+		accounts[dk.Date.Format(time.DateOnly)] = dk
+	}
+	var out []Issue
+	for _, p := range ev.Plates {
+		b, ok := x.s.SlotBand[p.SlotID]
+		if !ok || !judged[p.Date] || p.Kcal <= 0 || x.mealOf(p.SlotID) != mealFull || x.unfixable(p) {
+			continue
+		}
+		day, err := time.Parse(time.DateOnly, p.Date)
+		if err != nil || x.s.lightMeal(day, p.SlotID) || x.s.heartyMeal(day, p.SlotID) || x.s.lightDay(day) || x.s.heartyDay(day) {
+			continue
+		}
+		lo, hi := accounts[p.Date].bandKcal(b, p.SlotID) // shifted by a routine meal's gap (SB5)
+		side := ""
+		switch {
+		case p.Kcal < lo-0.5:
+			side = "below"
+		case p.Kcal > hi+0.5:
+			side = "above"
+		}
+		if side == "" {
+			continue
+		}
+		out = append(out, issue("S10", CodeMealOutsideSlotBand, SeveritySoft).atCell(plate.CellKey{Date: day, SlotID: p.SlotID}).
+			with("kcal", math.Round(p.Kcal)).with("min_kcal", math.Round(lo)).with("max_kcal", math.Round(hi)).
+			with("band_min_pct", b.MinPct).with("band_max_pct", b.MaxPct).with("side", side))
+	}
+	return out
 }

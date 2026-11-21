@@ -84,6 +84,7 @@ func (e *planToolEnv) sessionNamed(name string) int64 {
 
 // B5-AC1
 func TestChange_SetSessionPortions(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	sid := e.sessionNamed("Chili")
@@ -118,6 +119,7 @@ func TestChange_SetSessionPortions(t *testing.T) {
 
 // B5-AC2
 func TestChange_RegenerateSideUndo(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	target, idx := e.sidePlate()
@@ -156,6 +158,7 @@ func TestChange_RegenerateSideUndo(t *testing.T) {
 
 // B5-AC3
 func TestChange_UndoStaleAndTwice(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, _ := e.mainSession()
@@ -194,6 +197,7 @@ func TestChange_UndoStaleAndTwice(t *testing.T) {
 
 // B5-AC4
 func TestChange_UndoDeletePlate(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, _ := e.mainSession()
@@ -216,6 +220,7 @@ func TestChange_UndoDeletePlate(t *testing.T) {
 
 // B5-AC4
 func TestChange_UndoSetAvailabilityNone(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, _ := e.mainSession()
@@ -245,6 +250,7 @@ func TestChange_UndoSetAvailabilityNone(t *testing.T) {
 // B5-AC4: an availability change on an empty cell clears the override it
 // wrote.
 func TestChange_UndoSetAvailabilityWithoutOverride(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	d := planStart.AddDate(0, 0, 6)
@@ -273,6 +279,7 @@ func TestChange_UndoSetAvailabilityWithoutOverride(t *testing.T) {
 // B5-AC5 (store side): the conversation lists its changes in order with
 // undone_at.
 func TestChange_ConversationList(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, conv := e.chat()
 	p, sid := e.mainSession()
@@ -296,6 +303,7 @@ func TestChange_ConversationList(t *testing.T) {
 
 // A tool call outside a chat run, or a read, records no change.
 func TestChange_OnlyPlanWritesOfARun(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.mainSession()
 	_, _, ch, err := e.ts.Execute(e.ctx, "apply_changes", json.RawMessage(applyJSON(t, "set_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))))
@@ -313,6 +321,7 @@ func TestChange_OnlyPlanWritesOfARun(t *testing.T) {
 
 // D13: a confirm change is undone like any other: its rows go back to draft.
 func TestChange_UndoConfirm(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, sid := e.mainSession()
@@ -333,6 +342,7 @@ func TestChange_UndoConfirm(t *testing.T) {
 // D16: the chat stream carries one change event per plan-writing call, after
 // its tool result.
 func TestChange_ChatStreamsChangeEvent(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.mainSession()
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{
@@ -373,6 +383,7 @@ func TestChange_ChatStreamsChangeEvent(t *testing.T) {
 // A user edit of a touched plate between the change's first and last event
 // is neither in the change nor after it; undo must still refuse.
 func TestChange_UndoStaleWhenUserEditedMidChange(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	target, idx := e.sidePlate()
@@ -400,6 +411,7 @@ func TestChange_UndoStaleWhenUserEditedMidChange(t *testing.T) {
 // change_confirmed, nothing written, and the list flags it undo_blocked. A
 // confirm change itself stays undoable (TestChange_UndoConfirm).
 func TestChange_UndoBlockedWhenConfirmed(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, conv := e.chat()
 	p, _ := e.mainSession()
@@ -424,4 +436,25 @@ func TestChange_UndoBlockedWhenConfirmed(t *testing.T) {
 	key, _ := domain.MessageKey(err, "ai")
 	assert.Equal(t, "error.ai.change_confirmed", key)
 	assert.Equal(t, n, e.eventCount(), "nothing written")
+}
+
+// E010: two changes of one plate component, undone newest first, put the plan
+// back exactly; a not-undone edit between them still makes the older stale.
+func TestChange_UndoChainNewestFirst(t *testing.T) {
+	t.Parallel()
+	e := newPlanToolEnv(t)
+	ctx, _ := e.chat()
+	p, _ := e.mainSession()
+	dump := e.planDump()
+	a := e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
+	b := e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":2}`, p.ID))
+	require.NotEqual(t, dump, e.planDump())
+
+	_, err := e.changes.Undo(context.Background(), a.ID)
+	require.ErrorIs(t, err, domain.ErrAIChangeStale, "the newer change is not undone yet")
+	_, err = e.changes.Undo(context.Background(), b.ID)
+	require.NoError(t, err)
+	_, err = e.changes.Undo(context.Background(), a.ID)
+	require.NoError(t, err)
+	assert.Equal(t, dump, e.planDump())
 }

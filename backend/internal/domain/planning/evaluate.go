@@ -148,6 +148,11 @@ type DayEval struct {
 	// Away: the day's lunch and dinner are No plate (DayKcal.Away); H9, S2,
 	// the day S3 and the week do not judge it.
 	Away bool `json:"away,omitempty"`
+	// AwayKcal is the energy the slots that are not planned are assumed to hold
+	// (the day's full target x their expected shares, SB3) and PlannedTargetKcal
+	// the day's target less it; both only on a day with a slot not planned.
+	AwayKcal          float64 `json:"away_kcal,omitempty"`
+	PlannedTargetKcal float64 `json:"planned_target_kcal,omitempty"`
 }
 
 // PlateEval is one plate of the window with its per-eater macros.
@@ -164,6 +169,8 @@ type PlateEval struct {
 	Intent  string  `json:"intent,omitempty"`
 	MaxKcal float64 `json:"max_kcal,omitempty"`
 	MinKcal float64 `json:"min_kcal,omitempty"`
+	// Kind is "cold_plate" for a meal of no-cook foods and no recipe.
+	Kind string `json:"kind,omitempty"`
 }
 
 // ComponentEval is one food on a plate: its portions (composed) or grams
@@ -190,11 +197,28 @@ type ComponentEval struct {
 // source of the day accounts (index.dayAccounts, which DayKcals shares), the
 // H5 meat days (index.meatDays, which h5 shares), the cook occasions and the
 // foods' macros; pass the state after Merge to evaluate a proposal.
-func Evaluate(s State, t Target) Evaluation {
+func Evaluate(s State, t Target) Evaluation { return evaluate(s, t, false) }
+
+// evaluateLean is Evaluate without the options of the energy and protein
+// issues: for the planner's own re-checks, which read the open issues and the
+// figures, never the options (each option costs a re-evaluation).
+func evaluateLean(s State, t Target) Evaluation { return evaluateWith(s, t, false, true) }
+
+// EvaluateWeek is Evaluate with verified swap options on the week's meat and
+// fish issues (S7); the planner's evaluate_plan, its repair feedback and its
+// guard read it. It costs a re-evaluation per candidate swap.
+func EvaluateWeek(s State, t Target) Evaluation { return evaluate(s, t, true) }
+
+func evaluate(s State, t Target, weekOpts bool) Evaluation {
+	return evaluateWith(s, t, weekOpts, false)
+}
+
+func evaluateWith(s State, t Target, weekOpts, noOptions bool) Evaluation {
 	x := newIndex(s, t)
+	x.weekOpts, x.noOptions = weekOpts, noOptions
 	ev := Evaluation{
 		Days: []DayEval{}, Plates: []PlateEval{}, MeatDaysMax: s.Profile.MeatDaysPerWeekMax,
-		Issues: Check(s, t), Light: s.Light,
+		Issues: check(x), Light: s.Light,
 	}
 	ev.Totals = totalsOf(ev.Issues)
 
@@ -221,6 +245,9 @@ func Evaluate(s State, t Target) Evaluation {
 			pe.Components = append(pe.Components, ce)
 		}
 		x.markIntent(&pe, p)
+		if x.s.isColdPlate(p) {
+			pe.Kind = ColdPlateKind
+		}
 		ev.Plates = append(ev.Plates, pe)
 	}
 
@@ -254,12 +281,21 @@ func Evaluate(s State, t Target) Evaluation {
 			if dk.Adjusted != dk.Scaled {
 				de.NormalTargetKcal = dk.Scaled
 			}
-			de.BandLow, de.BandHigh = math.Round(sc*x.pol.DayLow), math.Round(sc*x.pol.DayHigh)
 			de.FloorKcal = math.Round(dk.Floor(x.pol))
+			// The floor is hard and never lowered: a range never starts under it
+			// (a day target the floor lifted has a band whose low end would).
+			de.BandLow, de.BandHigh = max(math.Round(sc*x.pol.DayLow), de.FloorKcal), math.Round(sc*x.pol.DayHigh)
+			if dk.AwayShare > 1e-9 {
+				de.AwayKcal = math.Round(dk.Target * dk.AwayShare)
+				de.PlannedTargetKcal = math.Round(dk.Target) - de.AwayKcal
+			}
 			de.RoomKcal = math.Max(0, de.BandHigh-math.Round(dk.Kcal))
 		}
-		de.Light, de.LightLevel = x.lightOf(dk.Date)
-		de.LightMeals = x.lightMeals(dk.Date)
+		// A day away is not judged and is never called light.
+		if !dk.Away {
+			de.Light, de.LightLevel = x.lightOf(dk.Date)
+			de.LightMeals = x.lightMeals(dk.Date)
+		}
 		if t := x.pol.ProteinTargetG(dk.Share()); t > 0 {
 			de.ProteinTargetG = t
 		}
@@ -276,6 +312,9 @@ func Evaluate(s State, t Target) Evaluation {
 	ev.Week = x.week(ev)
 	ev.Issues = append(ev.Issues, x.softIssues(ev, t)...)
 	x.floorOptions(&ev, t)
+	if weekOpts {
+		x.weekOptionsFor(&ev, t)
+	}
 	ev.Totals = totalsOf(ev.Issues)
 	return ev
 }
@@ -309,6 +348,16 @@ func (e Evaluation) ViewedAs(issues []Issue) Evaluation {
 // so a cancelled run still records its closing evaluation.
 func RecordEvaluation(ctx context.Context, phase string, build func() Evaluation) {
 	recordEvaluation(ctx, map[string]any{"phase": phase}, build)
+}
+
+// RecordEvaluationWith is RecordEvaluation with more fields in the step's args
+// (the closing evaluation also carries what the code changed after the chooser).
+func RecordEvaluationWith(ctx context.Context, phase string, extra map[string]any, build func() Evaluation) {
+	a := map[string]any{"phase": phase}
+	for k, v := range extra {
+		a[k] = v
+	}
+	recordEvaluation(ctx, a, build)
 }
 
 // RecordAttemptEvaluation stores the merged proposal of chooser attempt n.

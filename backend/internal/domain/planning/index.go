@@ -66,7 +66,11 @@ type index struct {
 	days    []time.Time // dates with a target cell, ascending
 	byCell  map[cellID][]int
 	byPlate map[int64]int
-	byRef   map[sessionRef]int
+	// accounts memoises the account of every day (dayAccounts(x.days)): the
+	// evaluation asks for it once per rule.
+	accounts []DayKcal
+	haveAcc  bool
+	byRef    map[sessionRef]int
 	// dupKeys are the proposed session keys used more than once, in
 	// first-seen order.
 	dupKeys []string
@@ -78,6 +82,11 @@ type index struct {
 	// merged reports whether the state holds proposed rows: a run's result
 	// rather than persisted data.
 	merged bool
+	// weekOpts asks the S7 week issues for their swap options (EvaluateWeek).
+	weekOpts bool
+	// noOptions skips the verified options of the energy and protein issues
+	// (the planner's own re-checks read only which issues are open).
+	noOptions bool
 	// occasions holds each day's cooking occasions (H2): the distinct cook
 	// cells of sessions and of fresh components without a session, routine
 	// cells excluded.

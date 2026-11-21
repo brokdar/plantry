@@ -32,7 +32,7 @@ func (r *PlanLightRepo) List(ctx context.Context, from, to time.Time) ([]plannin
 	}
 	var out []planning.LightIntent
 	for _, row := range rows {
-		out = append(out, planning.LightIntent{Date: row.Date, Scope: row.Scope, Slot: row.Slot, Level: levelOut(row.Level)})
+		out = append(out, planning.LightIntent{Date: row.Date, Scope: row.Scope, Slot: row.Slot, Level: levelOut(row.Level), TargetKcal: row.TargetKcal})
 	}
 	return out, nil
 }
@@ -55,7 +55,7 @@ func (r *PlanLightRepo) Replace(ctx context.Context, today time.Time, dates []st
 		if l.Date < from {
 			continue
 		}
-		if err := q.CreatePlanLight(ctx, sqlcgen.CreatePlanLightParams{Date: l.Date, Scope: l.Scope, Slot: l.Slot, Level: l.LevelOrLight()}); err != nil {
+		if err := q.CreatePlanLight(ctx, sqlcgen.CreatePlanLightParams{Date: l.Date, Scope: l.Scope, Slot: l.Slot, Level: l.LevelOrLight(), TargetKcal: l.TargetKcal}); err != nil {
 			return fmt.Errorf("save plan light: %w", err)
 		}
 	}

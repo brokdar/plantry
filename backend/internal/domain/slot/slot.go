@@ -21,4 +21,7 @@ type TimeSlot struct {
 	Active    bool
 	// Kind defaults to KindMeal when empty on create and update.
 	Kind Kind
+	// BandMinPct and BandMaxPct are the slot's own energy band, in percent of
+	// the day's target; both nil means the default band (see DefaultBand).
+	BandMinPct, BandMaxPct *float64
 }

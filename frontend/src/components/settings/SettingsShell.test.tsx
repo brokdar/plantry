@@ -35,7 +35,10 @@ vi.mock("@/lib/api/availability", () => ({
   getAvailabilityDefaults: vi.fn(),
   setAvailabilityDefaults: vi.fn(),
 }))
-vi.mock("@/lib/api/slots", () => ({ listTimeSlots: vi.fn() }))
+vi.mock("@/lib/api/slots", () => ({
+  listTimeSlots: vi.fn(),
+  getSlotBands: vi.fn().mockResolvedValue({ items: [], shares: {} }),
+}))
 vi.mock("@/lib/api/presets", () => ({ getPresets: vi.fn() }))
 
 import { getAvailabilityDefaults } from "@/lib/api/availability"

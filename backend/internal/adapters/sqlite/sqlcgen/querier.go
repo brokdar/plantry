@@ -184,6 +184,7 @@ type Querier interface {
 	// normalized duplicate check.
 	ListSourceURLs(ctx context.Context) ([]string, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
+	ListUndoneAIChangesAfter(ctx context.Context, firstEventID sql.NullInt64) ([]AiChange, error)
 	// Recipes no confirmed plate dated in [since, today] holds, plates marked
 	// not_eaten aside: FoodHistory's last_eaten is before since, or there is
 	// none. The variety rule H8 counts them (D21). The eaten set is one
@@ -219,6 +220,7 @@ type Querier interface {
 	// (confirmed) of some of a run's drafts makes an open run partially_accepted.
 	SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) error
 	SetSessionsState(ctx context.Context, arg SetSessionsStateParams) error
+	SetTimeSlotBand(ctx context.Context, arg SetTimeSlotBandParams) error
 	// D12: assigns the day to the oldest pending, never-shown suggestion after
 	// the given id.
 	ShowNextPending(ctx context.Context, arg ShowNextPendingParams) (RecipeSuggestion, error)

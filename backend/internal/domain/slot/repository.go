@@ -10,4 +10,6 @@ type Repository interface {
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context, activeOnly bool) ([]TimeSlot, error)
 	CountPlatesUsing(ctx context.Context, slotID int64) (int64, error)
+	// SetBand stores a slot's own band; nil values restore the default.
+	SetBand(ctx context.Context, id int64, minPct, maxPct *float64) error
 }

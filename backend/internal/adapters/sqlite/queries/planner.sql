@@ -1,6 +1,6 @@
 -- name: CreateTimeSlot :one
-INSERT INTO time_slots (name_key, icon, sort_order, active, kind)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO time_slots (name_key, icon, sort_order, active, kind, band_min_pct, band_max_pct)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetTimeSlot :one
@@ -12,9 +12,14 @@ UPDATE time_slots SET
     icon       = ?,
     sort_order = ?,
     active     = ?,
-    kind       = ?
+    kind       = ?,
+    band_min_pct = ?,
+    band_max_pct = ?
 WHERE id = ?
 RETURNING *;
+
+-- name: SetTimeSlotBand :exec
+UPDATE time_slots SET band_min_pct = ?, band_max_pct = ? WHERE id = ?;
 
 -- name: DeleteTimeSlot :execresult
 DELETE FROM time_slots WHERE id = ?;

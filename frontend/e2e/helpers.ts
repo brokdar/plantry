@@ -171,10 +171,36 @@ export async function seedRecipeLibrary(
       })
     )
   }
+  // A bread, a cheese and a raw vegetable: a day that cannot hold two cooked
+  // mains gets a cold plate from them, else its replan saves nothing (v1 OQ6).
+  const cold = [
+    await seedLeafFood({
+      name: `Vollkornbrot ${tag}`,
+      kcal_100g: 230,
+      protein_100g: 8,
+      fat_100g: 2,
+      carbs_100g: 40,
+    }),
+    await seedLeafFood({
+      name: `Gouda Käse ${tag}`,
+      kcal_100g: 350,
+      protein_100g: 25,
+      fat_100g: 28,
+      carbs_100g: 0,
+    }),
+    await seedLeafFood({
+      name: `Gurke ${tag}`,
+      kcal_100g: 12,
+      protein_100g: 0.6,
+      fat_100g: 0.1,
+      carbs_100g: 2,
+    }),
+  ]
   return {
     mains,
     cleanup: async () => {
       for (const m of mains) await cleanupFood(m.id)
+      for (const c of cold) await cleanupFood(c.id)
       await cleanupFood(leaf.id)
     },
   }

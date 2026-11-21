@@ -15,6 +15,7 @@ import (
 // find_alternatives gives the food's and the plate's kcal apart, the food
 // being replaced and, for a light ask, only candidates under the cap (audit B6).
 func TestFindAlternatives_FoodAndPlateKcalCurrentAndLight(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	e.withMacros()
 	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "2"))

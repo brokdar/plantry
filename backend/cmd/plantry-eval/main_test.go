@@ -37,10 +37,14 @@ func TestCompareGolden(t *testing.T) {
 	dir := t.TempDir()
 	a, b := filepath.Join(dir, "a.jsonl"), filepath.Join(dir, "b.jsonl")
 
-	_, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-prompt-version", "p1-a", "-out", a)
-	require.NoError(t, err)
-	out, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-prompt-version", "p1-b", "-out", b, "-compare", a)
-	require.NoError(t, err)
+	// PL1b: the two floor scenarios end in error in scripted LLM mode (the
+	// model and the heuristic both leave the floor open, nothing is saved), so
+	// the CLI reports those two runs; the reports are still written.
+	const floorFailures = "2 of 23 runs failed expectations"
+	_, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-parallel", "24", "-prompt-version", "p1-a", "-out", a)
+	require.ErrorContains(t, err, floorFailures)
+	out, err := runCLI(t, "-chooser", "llm", "-runs", "1", "-parallel", "24", "-prompt-version", "p1-b", "-out", b, "-compare", a)
+	require.ErrorContains(t, err, floorFailures)
 
 	for path, label := range map[string]string{a: "p1-a", b: "p1-b"} {
 		f, err := os.Open(path)
@@ -73,7 +77,7 @@ func TestHeuristicRun(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "eval.jsonl")
 	stdout, err := runCLI(t, "-chooser", "heuristic", "-runs", "1", "-scenarios", "single_batch_cooker,away_thu_fri", "-out", out)
 	require.NoError(t, err)
-	assert.Contains(t, stdout, "Report 0123456789ab heuristic/h16/")
+	assert.Contains(t, stdout, "Report 0123456789ab heuristic/h18/")
 	assert.Contains(t, stdout, "single_batch_cooker")
 	assert.Contains(t, stdout, "away_thu_fri")
 	assert.NotContains(t, stdout, "FAIL")

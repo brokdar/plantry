@@ -70,6 +70,15 @@ type AltRequest struct {
 	// is evaluated as a light (hearty) meal and only candidates whose plate
 	// meets its cap (minimum) are kept. Empty: no such filter.
 	Light string
+	// TolerateFloor keeps a candidate that takes its day under the energy
+	// floor (the compound ways of Ways make that up on another meal; their
+	// own check drops the ones that do not).
+	TolerateFloor bool
+	// KeepMeat keeps a candidate that raises the week's meat over its limit: the
+	// user named the dish, so it is listed (with the warning) instead of dropped.
+	KeepMeat bool
+	// NoLimit lists every verified candidate (Ways picks among them itself).
+	NoLimit bool
 }
 
 // AltConstraints narrow the candidates. Zero values do not filter.
@@ -115,9 +124,18 @@ type Alternative struct {
 	DayKcal       float64 `json:"day_kcal"`
 	// DayPct and WeekPct are the day's kcal against its target and the
 	// weekly ledger's pct (0 without a target).
-	DayPct           float64 `json:"day_pct"`
-	WeekPct          float64 `json:"week_pct"`
+	DayPct  float64 `json:"day_pct"`
+	WeekPct float64 `json:"week_pct"`
+	// Also names the other steps of the same change (a side that no longer
+	// fits the new main is swapped), their ops are in Ops.
+	Also string `json:"also,omitempty"`
+	// WeekMeatG is the week's meat after the change, per eater (g).
+	WeekMeatG        float64 `json:"week_meat_g,omitempty"`
 	CookOccasionsDay int     `json:"cook_occasions_day"`
+	// Recommended marks the first alternative (one per result); Because
+	// says why in one phrase.
+	Recommended bool   `json:"recommended,omitempty"`
+	Because     string `json:"recommended_because,omitempty"`
 	// NewIssues are the soft issues the change adds (without options).
 	NewIssues []Issue `json:"new_issues"`
 	// Ops are the apply_changes ops that make the change, in order.
@@ -126,6 +144,8 @@ type Alternative struct {
 	rank altRank
 	// plateKcal is PlateKcal unrounded, for the light filter.
 	plateKcal float64
+	// next is the state with the change applied (Ways builds on it).
+	next State
 }
 
 // altRank is the ranking key, compared field by field (lower first).
@@ -171,6 +191,19 @@ type AltCurrent struct {
 	Intent       string  `json:"intent,omitempty"`
 	MaxKcal      float64 `json:"max_kcal"`
 	MinKcal      float64 `json:"min_kcal"`
+}
+
+// MeatStepG is how much more weekly meat counts as a real step.
+const MeatStepG = 25.0
+
+// MeatOverStep reports whether the change from before to after raises the
+// week's meat by a real step while the week is over its meat limit: such a
+// change is never offered by a tool; one the user names is saved and its
+// week effect told.
+func MeatOverStep(before, after Evaluation) bool {
+	a, b := before.Week, after.Week
+	return a != nil && b != nil && b.MeatG >= a.MeatG+MeatStepG &&
+		slices.ContainsFunc(after.Issues, func(is Issue) bool { return is.Code == CodeWeekMeatAboveDGE })
 }
 
 // EmptyReason says why nothing fits: how many candidates fit the position
@@ -236,7 +269,7 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 	blocked := map[string]Issue{} // per drop key the blocking issue that came closest
 	lightBest := math.NaN()       // the plate kcal closest to the light cap or minimum
 	for _, c := range cands {
-		a, why, by := s.tryAlt(t, pi, old, drop, c, base, hard, soft, len(baseCooks), cookedInWindow)
+		a, why, by := s.tryAlt(t, pi, old, drop, c, base, hard, soft, len(baseCooks), cookedInWindow, req.TolerateFloor, req.KeepMeat)
 		if why != "" {
 			dropped[why]++
 			if by != nil && closer(why, *by, blocked[why]) {
@@ -279,8 +312,15 @@ func Alternatives(s State, t Target, req AltRequest) (AltResult, error) {
 		listed[a.FoodID] = true
 		return false
 	})
-	if len(out) > limit {
+	if len(out) > limit && !req.NoLimit {
 		out = out[:limit]
+	}
+	if len(out) > 0 {
+		out[0].Recommended = true
+		out[0].Because = "the best-ranked candidate: no new problem, the fewest new warnings, no extra cooking where possible"
+		if len(out[0].NewIssues) > 0 {
+			out[0].Because = "the best-ranked candidate, but it creates a new warning (see new_issues)"
+		}
 	}
 	res := AltResult{Alternatives: out}
 	if old >= 0 {
@@ -336,9 +376,9 @@ func (s State) withAltLight(t Target, p Plate, light string) (State, float64, fl
 		return s, 0, 0, fmt.Errorf("%w: light needs a kcal target in the profile", domain.ErrInvalidInput)
 	}
 	if level == LevelHearty {
-		return s, 0, HeartyMealShare * dk.normalShare(), nil
+		return s, 0, HeartyMealShare * dk.mealShare(p.SlotID), nil
 	}
-	return s, dk.mealCap(), 0, nil
+	return s, dk.mealCap(p.SlotID), 0, nil
 }
 
 // altCurrent describes the component at old of p and its plate.
@@ -377,7 +417,7 @@ func mealHint(s State, base Evaluation, p Plate, drop []int) string {
 		}
 		for _, j := range drop {
 			if j < len(pe.Components) {
-				names = append(names, pe.Components[j].Name)
+				names = append(names, food.Quote(pe.Components[j].Name))
 				kcal += pe.Components[j].Kcal
 			}
 		}
@@ -426,9 +466,9 @@ func dropWords(candidates int, dropped map[string]int, blocked map[string]Issue,
 		n, is := dropped[k], blocked[k]
 		switch k {
 		case "H9." + CodeKcalBelowFloor:
-			out = append(out, fmt.Sprintf("H9: %d would leave the day under its kcal floor; the best reaches %.0f kcal, the floor is %.0f kcal", n, num(is, "kcal"), num(is, "floor_kcal")))
+			out = append(out, fmt.Sprintf("%s: %d would leave the day under its kcal floor; the best reaches %.0f kcal, the floor is %.0f kcal", PlainText(CodeKcalBelowFloor).Label, n, num(is, "kcal"), num(is, "floor_kcal")))
 		case "H2." + CodeTooManyCookOccasions:
-			out = append(out, fmt.Sprintf("H2: %d would add a cooking occasion to a day that already has its maximum (%.0f of %.0f)", n, num(is, "count"), num(is, "max")))
+			out = append(out, fmt.Sprintf("%s: %d would add a cooking time to a day that already has its maximum (%.0f of %.0f)", PlainText(CodeTooManyCookOccasions).Label, n, num(is, "count"), num(is, "max")))
 		case "S6." + CodeMealNotLight:
 			out = append(out, fmt.Sprintf("light: %d would keep the meal over its cap of %.0f kcal; the lightest plate is %.0f kcal", n, lightMax, lightBest))
 		case "S6b." + CodeMealNotHearty:
@@ -579,6 +619,20 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 		if onPlate[id] || !fitsPosition(f, req.What, kind) || !fitsDiet(f.DietClass, household) ||
 			(req.Constraints.Diet != "" && !fitsDiet(f.DietClass, diet.Class(req.Constraints.Diet))) ||
 			!req.Constraints.matches(f, words) {
+			continue
+		}
+		if req.What == AltAdd || req.What == AltSide {
+			// A side that replaces another is judged beside the rest of the plate.
+			beside := p
+			if req.What == AltSide && old >= 0 {
+				beside.Components = slices.Delete(slices.Clone(p.Components), old, old+1)
+			}
+			if !s.addOnFits(beside, f, slotName(s, p.SlotID)) {
+				continue
+			}
+		}
+		// Breakfast food is no main for lunch or dinner either.
+		if s.PairAddOns && !s.MealFits(f, slotName(s, p.SlotID)) {
 			continue
 		}
 		comp := Component{FoodID: id, Proposed: true}
@@ -743,7 +797,7 @@ func (c AltConstraints) matches(f FoodFacts, words [][]diet.Alt) bool {
 
 // tryAlt applies c to a copy of s, re-evaluates it and builds the result;
 // false when the change adds a hard issue.
-func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluation, hard, soft map[string]bool, baseCooks int, cookedInWindow map[int64]bool) (Alternative, string, *Issue) {
+func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluation, hard, soft map[string]bool, baseCooks int, cookedInWindow map[int64]bool, tolerateFloor, keepMeat bool) (Alternative, string, *Issue) {
 	p := s.Plates[pi]
 	next := s
 	next.Plates = slices.Clone(s.Plates)
@@ -782,9 +836,12 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 	if why := newNutritionGap(base, ev, p); why != "" {
 		return Alternative{}, why, nil
 	}
+	if !keepMeat && MeatOverStep(base, ev) {
+		return Alternative{}, "S7." + CodeWeekMeatAboveDGE, nil
+	}
 	var newIssues []Issue
 	for _, is := range ev.Issues {
-		if is.Severity == SeverityViolation && !hard[issueID(is)] {
+		if is.Severity == SeverityViolation && !hard[issueID(is)] && (!tolerateFloor || is.Code != CodeKcalBelowFloor) {
 			return Alternative{}, is.Rule + "." + is.Code, &is
 		}
 		if is.Severity == SeveritySoft && !soft[softKey(is)] {
@@ -825,8 +882,10 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 	}
 	if ev.Week != nil {
 		a.WeekPct = math.Round(ev.Week.Pct*10) / 10
+		a.WeekMeatG = ev.Week.MeatG
 	}
 	a.Ops = s.altOps(p, old, drop, c, a.CookAt)
+	a.next = next
 	y := newIndex(next, t)
 	a.rank = altRank{
 		newIssues: len(newIssues),
@@ -980,9 +1039,9 @@ func (x *index) kcalFit(p Plate, kcal float64) float64 {
 	}
 	switch {
 	case x.s.lightMeal(p.Date, p.SlotID):
-		return max(0, kcal-dk.mealCap())
+		return max(0, kcal-dk.mealCap(p.SlotID))
 	case x.s.heartyMeal(p.Date, p.SlotID):
-		return max(0, HeartyMealShare*dk.normalShare()-kcal)
+		return max(0, HeartyMealShare*dk.mealShare(p.SlotID)-kcal)
 	case x.s.lightDay(p.Date), x.s.heartyDay(p.Date):
 		return math.Abs(kcal - dk.Adjusted/float64(dk.Active()))
 	}

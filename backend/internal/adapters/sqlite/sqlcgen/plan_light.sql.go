@@ -10,14 +10,15 @@ import (
 )
 
 const createPlanLight = `-- name: CreatePlanLight :exec
-INSERT OR IGNORE INTO plan_light (date, scope, slot, level) VALUES (?, ?, ?, ?)
+INSERT OR IGNORE INTO plan_light (date, scope, slot, level, target_kcal) VALUES (?, ?, ?, ?, ?)
 `
 
 type CreatePlanLightParams struct {
-	Date  string
-	Scope string
-	Slot  string
-	Level string
+	Date       string
+	Scope      string
+	Slot       string
+	Level      string
+	TargetKcal float64
 }
 
 func (q *Queries) CreatePlanLight(ctx context.Context, arg CreatePlanLightParams) error {
@@ -26,6 +27,7 @@ func (q *Queries) CreatePlanLight(ctx context.Context, arg CreatePlanLightParams
 		arg.Scope,
 		arg.Slot,
 		arg.Level,
+		arg.TargetKcal,
 	)
 	return err
 }
@@ -49,7 +51,7 @@ func (q *Queries) DeletePlanLightDate(ctx context.Context, date string) error {
 }
 
 const listPlanLight = `-- name: ListPlanLight :many
-SELECT date, scope, slot, level FROM plan_light
+SELECT date, scope, slot, level, target_kcal FROM plan_light
 WHERE date >= ? AND date <= ?
 ORDER BY date, scope, slot
 `
@@ -73,6 +75,7 @@ func (q *Queries) ListPlanLight(ctx context.Context, arg ListPlanLightParams) ([
 			&i.Scope,
 			&i.Slot,
 			&i.Level,
+			&i.TargetKcal,
 		); err != nil {
 			return nil, err
 		}

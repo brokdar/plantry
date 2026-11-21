@@ -82,11 +82,19 @@ func (b *Builder) Build(ctx context.Context, w window.Window, today, from, to ti
 	s.SlotOrder = make(plate.SlotOrder, len(slots))
 	s.SlotNames = make(map[int64]string, len(slots))
 	s.SlotKind = make(map[int64]slot.Kind, len(slots))
+	var bands []slot.Band
+	s.SlotBand = make(map[int64]slot.Band, len(slots))
 	for _, sl := range slots {
 		s.SlotKind[sl.ID] = sl.Kind
 		s.SlotOrder[sl.ID] = sl.SortOrder
 		s.SlotNames[sl.ID] = sl.NameKey
+		if sl.Active {
+			b := sl.Effective()
+			bands = append(bands, b)
+			s.SlotBand[sl.ID] = b
+		}
 	}
+	s.SlotShare = slot.Shares(bands)
 	if s.Light, err = b.d.Light.List(ctx, w.Start, w.End); err != nil {
 		return State{}, fmt.Errorf("read light requests: %w", err)
 	}
@@ -308,9 +316,9 @@ func stringSet(v any) map[string]bool {
 // further reads (the context builder's facts).
 func BaseFacts(f *food.Food) FoodFacts {
 	ff := FoodFacts{
-		ID: f.ID, Name: f.Name, Kind: f.Kind, KeepDays: f.KeepDays, Freezable: f.Freezable != nil && *f.Freezable,
+		ID: f.ID, Name: food.Data(f.Name), Kind: f.Kind, KeepDays: f.KeepDays, Freezable: f.Freezable != nil && *f.Freezable,
 		Favorite: f.Favorite, LastEaten: f.History.LastEaten, ReferencePortions: 1, DietClass: f.DietClass,
-		NoCook: NoCook(f), Sweet: IsSweet(f), Tags: f.Tags,
+		NoCook: NoCook(f), Sweet: IsSweet(f), Tags: food.Labels(f.Tags),
 	}
 	if f.ServingG != nil {
 		ff.ServingG = *f.ServingG

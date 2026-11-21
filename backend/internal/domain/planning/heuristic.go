@@ -39,6 +39,13 @@ func (Heuristic) Choose(ctx context.Context, in ChooseInput) (Proposal, error) {
 		prop, err = h.side(*in.Side)
 	} else {
 		h, prop, err = planWithForcedCooks(in, h)
+		if err == nil {
+			// The week's meat budget and one fish meal, by verified swaps
+			// (the picks above only weigh them as tie-breaks).
+			var notes []string
+			prop, notes = guardWeek(in.State, in.Target, prop, idSet(in.Exclude), in.Instruction)
+			prop.Notes = joinNotes(append([]string{prop.Notes}, notes...)...)
+		}
 	}
 	h.recordChoices(ctx)
 	return prop, err
@@ -76,6 +83,13 @@ type planner struct {
 	// occasions holds each day's cook cells (H2), routine cells excluded.
 	occasions map[int]map[cellID]bool
 	meatDays  map[int]bool
+	// balance marks the final balancing pass over a plan a model made
+	// (balancePlan): fresh components grow too and a day may take a side recipe.
+	balance bool
+	// sided are the days that took a side recipe in that pass.
+	sided map[int]bool
+	// meatLimitG is the DGE meat limit prorated to the planned days (S7).
+	meatLimitG float64
 	// allowMeat lets a leftover add a meat day past the limit: the last
 	// resort for a cell nothing else can fill (H1 weighs more than H5); it
 	// also lets a batch pass its S8 dish cap then.
@@ -120,6 +134,10 @@ func newPlanner(in ChooseInput) *planner {
 		avoid: idSet(in.Avoid), avoidBatch: idSet(in.AvoidBatches), exclude: idSet(in.Exclude), routineFoods: nil,
 	}
 	h.routineFoods = h.x.routineFoods()
+	h.meatLimitG = DGEMeatMaxG
+	if b, ok := MeatBudgetOf(s, in.Target); ok {
+		h.meatLimitG = b.LimitG
+	}
 	for day, cells := range h.x.occasions {
 		h.occasions[day] = map[cellID]bool{}
 		for c := range cells {
@@ -173,6 +191,10 @@ func (h *planner) plan() (Proposal, error) {
 		eaters := h.eaters(c.Date)
 		limit := h.s.Settings.MaxCookOccasionsPerDay
 		maxed := limit > 0 && len(h.occasions[dayOf(c.Date)]) >= limit
+		// The user's cooking-day limit: a day that does not cook yet is closed
+		// once the limit's days cook (a day that cooks already stays open).
+		daysUsed := h.in.MaxCookDays > 0 && len(h.occasions[dayOf(c.Date)]) == 0 && h.cookDays() >= h.in.MaxCookDays
+		maxed = maxed || daysUsed
 		// A forced cell cooks unless earlier cooks of the rerun used its
 		// day's cap meanwhile.
 		if _, ok := h.forced[idOf(c)]; ok && (!maxed || h.occasions[dayOf(c.Date)][idOf(c)]) {
@@ -199,6 +221,15 @@ func (h *planner) plan() (Proposal, error) {
 			if h.eatAnyway(c, eaters) {
 				continue
 			}
+			if daysUsed && (limit <= 0 || len(h.occasions[dayOf(c.Date)]) < limit) {
+				// Only the cooking-day limit stops this cell: an empty meal breaks
+				// a hard rule, a third cooking day does not. Cook, and say so.
+				h.notes = append(h.notes, fmt.Sprintf(h.text(textCookDays), h.weekday(c.Date), h.in.MaxCookDays))
+				if err := h.cook(c); err != nil {
+					return Proposal{}, err
+				}
+				continue
+			}
 			// The day's cap is used by other cells' cooks (confirmed ones
 			// included) and no batch can feed c: leave it empty; the checker
 			// reports it (H1). A cell that already is an occasion may cook.
@@ -211,6 +242,10 @@ func (h *planner) plan() (Proposal, error) {
 		}
 	}
 	h.topUpFloors()
+	h.fitMealsToBands()
+	h.prop.MaxCookDays = h.in.MaxCookDays
+	h.prop.OwnSet = true
+	h.prop.Own = strings.TrimSpace(strings.Join(append([]string{h.exploreNote()}, h.notes...), "\n"))
 	if note := lightNote(h.s.Light, h.in.Locale); note != "" {
 		h.notes = append(h.notes, note)
 	}
@@ -560,6 +595,17 @@ func (h *planner) cook(c plate.CellKey) error {
 	return nil
 }
 
+// cookDays is the number of days with a cooking time so far.
+func (h *planner) cookDays() int {
+	n := 0
+	for _, occ := range h.occasions {
+		if len(occ) > 0 {
+			n++
+		}
+	}
+	return n
+}
+
 func (h *planner) addOccasion(c plate.CellKey) {
 	if h.x.routine(c) {
 		return
@@ -689,11 +735,15 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		atCap := h.x.mealOf(c.SlotID) == mealFull && h.dishFull(f.ID)
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
 			b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
-			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), dge.fish(f), dge.legume(f), dge.meat(f), fit,
+			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
 	return best(cands)
 }
+
+// pairInPlanner turns the add-on pairing rules on in the planner's own top-ups (tests switch it off
+// to measure what it changes).
+var pairInPlanner = true
 
 // dgeFitBucket is the kcal width within which the kcal fit counts as equal,
 // so the DGE keys decide only between recipes that fit the meal equally
@@ -707,6 +757,7 @@ const dgeFitBucket = 1
 type dgeState struct {
 	needFish, needLegume bool
 	meatG                float64
+	limitG               float64
 }
 
 // dgeState counts what the fixed plates and the recipes cooked so far hold:
@@ -715,7 +766,7 @@ type dgeState struct {
 // portions (a batch feeds that many cells).
 func (h *planner) dgeState() dgeState {
 	t := diet.Class(h.s.Profile.DietType)
-	d := dgeState{needFish: t == "" || diet.Compatible(diet.Pescetarian, t), needLegume: true}
+	d := dgeState{needFish: t == "" || diet.Compatible(diet.Pescetarian, t), needLegume: true, limitG: h.meatLimitG}
 	// note takes the groups of one portion eaten (g) and the portions of
 	// meat that count against the week.
 	note := func(g FoodGroups, meatPortions float64) {
@@ -748,9 +799,10 @@ func (d dgeState) legume(f FoodFacts) float64 {
 	return b2f(!(d.needLegume && f.Groups.LegumeG >= minMealG))
 }
 
-// meat is 1 for a recipe that takes the estimated week past the DGE limit.
+// meat is 1 for a recipe that takes the estimated week past the DGE limit
+// prorated to the planned days (the guard, guardWeek, trims what is left).
 func (d dgeState) meat(f FoodFacts) float64 {
-	return b2f(f.Groups.MeatG > 0 && d.meatG+f.Groups.MeatG*f.ReferencePortions > DGEMeatMaxG)
+	return b2f(f.Groups.MeatG > 0 && d.meatG+f.Groups.MeatG*f.ReferencePortions > d.limitG)
 }
 
 // mainCandidate reports whether f may be cooked as the main of c.
@@ -869,10 +921,11 @@ func (h *planner) kcalShare(c plate.CellKey) float64 {
 	if t == nil || *t <= 0 {
 		return 0
 	}
-	n, meals := 0, 0
+	var cells []Cell
+	n := 0
 	for _, o := range h.s.Cells {
 		if dayOf(o.Date) == dayOf(c.Date) {
-			meals++
+			cells = append(cells, o)
 			if o.Mode != availability.ModeNone {
 				n++
 			}
@@ -881,17 +934,24 @@ func (h *planner) kcalShare(c plate.CellKey) float64 {
 	if n == 0 {
 		return 0
 	}
+	// The meal aims at its slot's expected share of the day's full target (SB2).
+	// A routine meal that misses its own share moves it (SB5).
+	weights, total := daySlotShares(h.s, cells)
+	share := *t * weights[c.SlotID] / total
+	if accounts := h.x.dayAccounts([]time.Time{c.Date}); len(accounts) > 0 {
+		share = accounts[0].mealShare(c.SlotID)
+	}
 	switch {
 	case h.s.lightMeal(c.Date, c.SlotID):
-		return LightMealShare * *t / float64(meals)
+		return LightMealShare * share
 	case h.s.heartyMeal(c.Date, c.SlotID):
-		return HeartyMealShare * *t / float64(meals)
+		return HeartyMealShare * share
 	case h.s.lightDay(c.Date):
-		return *t / float64(n) * LightDayShare
+		return share * LightDayShare
 	case h.s.heartyDay(c.Date):
-		return *t / float64(n) * HeartyDayShare
+		return share * HeartyDayShare
 	}
-	return *t / float64(n)
+	return share
 }
 
 // side swaps a plate's side (the side scope): a new side recipe cooked at
@@ -931,6 +991,7 @@ const (
 	textMeatOver
 	textNoMain
 	textCookMoved
+	textCookDays
 )
 
 var texts = map[string]map[textKey]string{
@@ -944,6 +1005,7 @@ var texts = map[string]map[textKey]string{
 		textMeatOver:         "%s is a meat day past the limit of %d per week: no other recipe fit",
 		textNoMain:           "No main recipe available for %s %s: the cell stays empty",
 		textCookMoved:        "%s now cooked %s %s",
+		textCookDays:         "%s needed a cooking day beyond your limit of %d: without it a meal would stay empty",
 	},
 	"de": {
 		textNew:              "Neu: noch nie gegessen",
@@ -955,6 +1017,7 @@ var texts = map[string]map[textKey]string{
 		textMeatOver:         "%s ist ein Fleischtag über dem Wochenlimit von %d: kein anderes Rezept passte",
 		textNoMain:           "Kein Hauptgericht verfügbar für %s %s: die Zelle bleibt leer",
 		textCookMoved:        "%s wird jetzt %s %s gekocht",
+		textCookDays:         "%s brauchte einen Kochtag über deinem Limit von %d: sonst bliebe eine Mahlzeit leer",
 	},
 }
 
@@ -996,4 +1059,13 @@ func (h *planner) recipeReason(f FoodFacts) string {
 
 func (h *planner) leftoverReason(cookDate time.Time) string {
 	return fmt.Sprintf(h.text(textLeftovers), weekdays[h.lang()][cookDate.Weekday()])
+}
+
+// distinctDays is the number of days the target's cells span.
+func distinctDays(t Target) int {
+	days := map[int]bool{}
+	for _, c := range t.Cells {
+		days[dayOf(c.Date)] = true
+	}
+	return len(days)
 }

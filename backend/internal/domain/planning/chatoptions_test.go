@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -93,6 +94,61 @@ func TestIssueOptions_H2(t *testing.T) {
 	assert.NotNil(t, opts[0].Op.CookAt)
 }
 
+// H2 options never cook on a cell marked No plate, however near it is.
+func TestIssueOptions_H2SkipsNoneCells(t *testing.T) {
+	build := func(none ...plateCellKey) planning.State {
+		s := baseState()
+		s.Settings.MaxCookOccasionsPerDay = 1
+		s.Sessions = []planning.Session{
+			persistedSession(1, curry, sun, lunch, 1, false),
+			persistedSession(2, soup, sun, dinner, 1, false),
+		}
+		s.Plates = []planning.Plate{persisted(10, sun, lunch, false, curry, 1), persisted(11, sun, dinner, false, soup, 2)}
+		for i := range s.Plates {
+			s.Plates[i].Components[0].ID, s.Plates[i].Components[0].Position = int64(100+i), plate.PositionMain
+		}
+		for _, c := range none {
+			setMode(&s, c, availability.ModeNone)
+		}
+		return s
+	}
+	free := optionsOf(t, build(), "H2")
+	require.NotEmpty(t, free)
+	for _, tc := range []struct {
+		name string
+		none []plateCellKey
+	}{
+		{"first option's cell", []plateCellKey{{Date: day(sun), SlotID: free[0].SlotID}}},
+		{"the cell of every move", func() []plateCellKey {
+			var out []plateCellKey
+			for _, o := range free {
+				if o.Action == "move_cook" {
+					d, err := time.Parse(time.DateOnly, o.Date)
+					require.NoError(t, err)
+					out = append(out, plateCellKey{Date: d, SlotID: o.SlotID})
+				}
+			}
+			return out
+		}()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := build(tc.none...)
+			tgt := planning.WindowTarget(s)
+			ev := planning.Evaluate(s, tgt)
+			for _, is := range planning.IssueOptions(s, tgt, ev, ev.Issues, nil) {
+				for _, o := range is.Options {
+					if o.Action != "move_cook" {
+						continue
+					}
+					for _, n := range tc.none {
+						assert.False(t, o.Date == n.Date.Format(time.DateOnly) && o.SlotID == n.SlotID, "option %+v cooks on a none cell", o)
+					}
+				}
+			}
+		})
+	}
+}
+
 // A far-over-cap plate (main plus composed side plus add-on) gets a
 // whole-meal option: no single swap or portion change reaches the cap, but
 // replacing the main and dropping the rest does.
@@ -173,4 +229,145 @@ func TestIssueOptions_Cap(t *testing.T) {
 	assert.Equal(t, "2026-01-05", last, "the earliest by date")
 	n, _ = countOpts(planning.IssueOptions(s, tgt, ev, issues, func(is planning.Issue) bool { return is.Date == "2026-01-08" }))
 	assert.Equal(t, 1, n)
+}
+
+// h2DayState is a Sunday over the cook limit (one occasion) with every other
+// day marked No plate, so the only way out is within the day.
+func h2DayState(sessions []planning.Session, plates []planning.Plate) planning.State {
+	s := baseState()
+	s.Sessions, s.Plates = sessions, plates
+	for i := range s.Plates {
+		for j := range s.Plates[i].Components {
+			s.Plates[i].Components[j].ID, s.Plates[i].Components[j].Position = int64(100+10*i+j), plate.PositionMain
+		}
+	}
+	for _, c := range s.Cells {
+		if c.Key().Date.Format(time.DateOnly) != sun {
+			setMode(&s, c.Key(), availability.ModeNone)
+		}
+	}
+	return s
+}
+
+// moved applies move_cook ops to s.
+func moved(t *testing.T, s planning.State, ops []planning.OptionOp) planning.State {
+	t.Helper()
+	s.Sessions = slices.Clone(s.Sessions)
+	for _, op := range ops {
+		require.Equal(t, "move_cook", op.Op)
+		d, err := time.Parse(time.DateOnly, op.CookAt.Date)
+		require.NoError(t, err)
+		for i := range s.Sessions {
+			if s.Sessions[i].ID == *op.SessionID {
+				s.Sessions[i].CookDate, s.Sessions[i].CookSlotID = d, op.CookAt.SlotID
+			}
+		}
+	}
+	return s
+}
+
+// H2 on a day whose other days are away: the way out is a cook cell of the
+// day itself, one batch alone or all of the day's batches together.
+func TestIssueOptions_H2SameDay(t *testing.T) {
+	freshPlate := persisted(12, sun, breakfast, false, chili, 0)
+	for _, tc := range []struct {
+		name string
+		s    planning.State
+		ops  int // ops of the first option
+		cell planning.OptionCell
+	}{
+		{
+			// Breakfast cooks the curry, lunch the soup: the soup moves to
+			// the breakfast cell (or the curry to lunch).
+			name: "one batch to the cook cell of the day",
+			s: h2DayState(
+				[]planning.Session{persistedSession(1, curry, sun, breakfast, 1, false), persistedSession(2, soup, sun, lunch, 1, false)},
+				[]planning.Plate{persisted(10, sun, breakfast, false, curry, 1), persisted(11, sun, lunch, false, soup, 2)}),
+			ops: 1, cell: planning.OptionCell{Date: sun, SlotID: breakfast},
+		},
+		{
+			// Breakfast cooks fresh, lunch and dinner each cook a batch: no
+			// single move leaves fewer than two occasions, both together
+			// into the breakfast cell leave one.
+			name: "all batches into one cell",
+			s: h2DayState(
+				[]planning.Session{persistedSession(1, curry, sun, lunch, 1, false), persistedSession(2, soup, sun, dinner, 1, false)},
+				[]planning.Plate{freshPlate, persisted(10, sun, lunch, false, curry, 1), persisted(11, sun, dinner, false, soup, 2)}),
+			ops: 2, cell: planning.OptionCell{Date: sun, SlotID: breakfast},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tgt := windowTarget(tc.s)
+			require.Contains(t, codes(planning.Check(tc.s, tgt), "H2"), planning.CodeTooManyCookOccasions)
+			opts := optionsOf(t, tc.s, "H2")
+			require.NotEmpty(t, opts)
+			first := opts[0]
+			assert.Equal(t, "move_cook", first.Action)
+			ops := first.Ops
+			if len(ops) == 0 {
+				ops = []planning.OptionOp{first.Op}
+			}
+			require.Len(t, ops, tc.ops)
+			assert.Equal(t, ops[0], first.Op, "op is the first of ops")
+			for _, op := range ops {
+				assert.Equal(t, &tc.cell, op.CookAt)
+			}
+			assert.Equal(t, 1, first.CookOccasions)
+			for _, o := range opts {
+				ops := o.Ops
+				if len(ops) == 0 {
+					ops = []planning.OptionOp{o.Op}
+				}
+				assert.NotContains(t, codes(planning.Check(moved(t, tc.s, ops), tgt), "H2"), planning.CodeTooManyCookOccasions, "option %+v leaves H2", o)
+			}
+		})
+	}
+}
+
+// A dish and its side cooked at dinner never move onto a lunch that already
+// cooks the curry: three dishes at one lunch is not a plan anyone cooks. No
+// option piles more than two dishes on one cooking time.
+func TestIssueOptions_H2NeverPilesThreeDishes(t *testing.T) {
+	s := h2DayState(
+		[]planning.Session{
+			persistedSession(3, oats, sun, breakfast, 1, false), persistedSession(1, curry, sun, lunch, 1, false),
+			persistedSession(2, soup, sun, dinner, 1, false), persistedSession(4, rice, sun, dinner, 1, false),
+		},
+		[]planning.Plate{persisted(13, sun, breakfast, false, oats, 3), persisted(10, sun, lunch, false, curry, 1), persisted(11, sun, dinner, false, soup, 2)})
+	s.Plates[2].Components = append(s.Plates[2].Components, planning.Component{ID: 120, FoodID: rice, Portions: f64(1), SessionID: 4})
+	setMode(&s, cell(sun, breakfast), availability.ModeRoutine)
+	require.Contains(t, codes(planning.Check(s, windowTarget(s)), "H2"), planning.CodeTooManyCookOccasions)
+	for _, o := range optionsOf(t, s, "H2") {
+		ops := o.Ops
+		if len(ops) == 0 {
+			ops = []planning.OptionOp{o.Op}
+		}
+		toLunch := 0
+		for _, op := range ops {
+			if op.Op == "move_cook" && op.CookAt != nil && op.CookAt.SlotID == lunch {
+				toLunch++
+			}
+		}
+		assert.LessOrEqual(t, toLunch, 1, "the lunch cooks the curry already: %v", o.Name)
+	}
+}
+
+// The household's switch: with CookTogether, on the away guard's path, the dish and its side move onto the
+// lunch that cooks the curry (three dishes at one cooking time), as before.
+func TestIssueOptions_CookTogetherPolicyPilesThem(t *testing.T) {
+	old := planning.CookPolicy
+	planning.CookPolicy = planning.CookTogether
+	t.Cleanup(func() { planning.CookPolicy = old })
+	s := h2DayState(
+		[]planning.Session{
+			persistedSession(3, oats, sun, breakfast, 1, false), persistedSession(1, curry, sun, lunch, 1, false),
+			persistedSession(2, soup, sun, dinner, 1, false), persistedSession(4, rice, sun, dinner, 1, false),
+		},
+		[]planning.Plate{persisted(13, sun, breakfast, false, oats, 3), persisted(10, sun, lunch, false, curry, 1), persisted(11, sun, dinner, false, soup, 2)})
+	s.Plates[2].Components = append(s.Plates[2].Components, planning.Component{ID: 120, FoodID: rice, Portions: f64(1), SessionID: 4})
+	setMode(&s, cell(sun, breakfast), availability.ModeRoutine)
+	s.CookPile = true // the away guard's path
+	opts := optionsOf(t, s, "H2")
+	require.NotEmpty(t, opts)
+	assert.Len(t, opts[0].Ops, 2, "both dinner dishes move to the lunch")
 }

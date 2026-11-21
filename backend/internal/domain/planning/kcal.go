@@ -3,6 +3,7 @@ package planning
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -56,6 +57,19 @@ type DayKcal struct {
 	// and the weekly averages do not judge the day (light and routine cells
 	// do not count).
 	Away bool
+	// shares are the expected shares of the day's slots (SB2) and share the
+	// planned part of the day: 1 minus the shares of the slots not planned (away,
+	// default no plate, or routine without a plate). Zero share means an even
+	// split over the day's cells (a state without slot bands).
+	shares     map[int64]float64
+	shareTotal float64
+	share      float64
+	// shift is, per planned non-routine slot, the kcal its expected share and
+	// band move by because a routine meal of the day misses its own share
+	// (SB5).
+	shift map[int64]float64
+	// AwayShare is the sum of the expected shares of the slots not planned.
+	AwayShare float64
 }
 
 // Floor is the lowest kcal per person the day may hold (H9): 75 % of the
@@ -69,9 +83,35 @@ func (d DayKcal) Floor(p Policy) float64 {
 // planned meals less the routine cells that hold no plate.
 func (d DayKcal) Active() int { return d.Planned - d.Unplated }
 
-// Share is Active as a part of all the day's meals: the share of the day's
-// kcal and protein target, the floor and a light meal's cap.
-func (d DayKcal) Share() float64 { return float64(d.Active()) / float64(d.Meals) }
+// Share is the planned part of the day (SB3): the share of the day's kcal and
+// protein target and of the floor. With slot bands it is 1 minus the expected
+// shares of the slots not planned; without, Active as a part of all the meals.
+func (d DayKcal) Share() float64 {
+	if d.share > 0 {
+		return d.share
+	}
+	return float64(d.Active()) / float64(d.Meals)
+}
+
+// mealShare is the kcal of one meal of slot id at its expected share of the
+// day's full target (SB2): what a light meal's cap and a filling meal's minimum
+// are measured from, ignoring marks and aways. Without slot bands it is the
+// even share of the planned meals.
+func (d DayKcal) mealShare(slotID int64) float64 {
+	if sh, ok := d.shares[slotID]; ok && d.shareTotal > 0 {
+		return d.Target*sh/d.shareTotal + d.shift[slotID]
+	}
+	if d.Active() == 0 {
+		return 0
+	}
+	return d.Scaled / float64(d.Active())
+}
+
+// bandKcal is a slot's band on this day in kcal per eater: its min and max
+// percent of the day's full target moved by the slot's SB5 shift.
+func (d DayKcal) bandKcal(b slot.Band, slotID int64) (lo, hi float64) {
+	return b.MinPct/100*d.Target + d.shift[slotID], b.MaxPct/100*d.Target + d.shift[slotID]
+}
 
 // DayKcals computes the account of every day with a cell in t that has at
 // least one planned (non-No-plate) meal, proposed or not. Nil without a kcal
@@ -88,20 +128,51 @@ func DayKcals(s State, t Target) []DayKcal {
 // dayAccounts is the account of each of days that has a planned meal: the
 // one place that sums a day's plates, with or without a kcal target.
 func (x *index) dayAccounts(days []time.Time) []DayKcal {
+	all := len(days) > 0 && len(days) == len(x.days) && &days[0] == &x.days[0]
+	if all && x.haveAcc {
+		return slices.Clone(x.accounts)
+	}
+	out := x.computeAccounts(days)
+	if all {
+		x.accounts, x.haveAcc = slices.Clone(out), true
+	}
+	return out
+}
+
+func (x *index) computeAccounts(days []time.Time) []DayKcal {
 	s := x.s
 	var k float64
 	if t := s.Profile.KcalTarget; t != nil && *t > 0 {
 		k = *t
 	}
 	var out []DayKcal
+	// Cells and plates by day, grouped once: the account is asked for in
+	// loops (every way the search tries), so the per-day scans stay short.
+	wanted := make(map[int]bool, len(days))
+	for _, d := range days {
+		wanted[dayOf(d)] = true
+	}
+	cellsBy, platesBy := map[int][]Cell{}, map[int][]Plate{}
+	for _, c := range s.Cells {
+		if dd := dayOf(c.Date); wanted[dd] {
+			cellsBy[dd] = append(cellsBy[dd], c)
+		}
+	}
+	for _, p := range s.Plates {
+		if dd := dayOf(p.Date); wanted[dd] {
+			platesBy[dd] = append(platesBy[dd], p)
+		}
+	}
 	for _, d := range days {
 		dk := DayKcal{Date: d, Target: k, Complete: true}
-		meals, away, lightMeals, heartyMeals := 0, 0, 0, 0
-		for _, c := range s.Cells {
-			if dayOf(c.Date) != dayOf(d) {
-				continue
-			}
+		meals, away, lightBase, heartyBase := 0, 0, 0.0, 0.0
+		cells, dayPlates := cellsBy[dayOf(d)], platesBy[dayOf(d)]
+		dk.shares, dk.shareTotal = daySlotShares(s, cells)
+		dk.shift = x.routineShift(&dk, cells, dayPlates)
+		totalShare, unplanned := 0.0, 0.0
+		for _, c := range cells {
 			dk.Meals++
+			totalShare += dk.shares[c.SlotID]
 			if c.Mode != availability.ModeRoutine && s.SlotKind[c.SlotID] != slot.KindLight {
 				meals++
 				if c.Mode == availability.ModeNone {
@@ -109,18 +180,20 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 				}
 			}
 			if c.Mode == availability.ModeNone {
+				unplanned += dk.shares[c.SlotID]
 				continue
 			}
 			dk.Planned++
 			switch {
 			case s.lightMeal(c.Date, c.SlotID):
-				lightMeals++
+				lightBase += dk.mealShare(c.SlotID)
 			case s.heartyMeal(c.Date, c.SlotID):
-				heartyMeals++
+				heartyBase += dk.mealShare(c.SlotID)
 			}
 			if len(x.byCell[idOf(c.Key())]) == 0 {
 				if c.Mode == availability.ModeRoutine {
 					dk.Unplated++
+					unplanned += dk.shares[c.SlotID]
 				} else {
 					dk.Complete = false
 				}
@@ -129,26 +202,33 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 		if dk.Active() == 0 {
 			continue
 		}
+		if totalShare > 0 {
+			dk.share = (totalShare - unplanned) / totalShare
+			dk.AwayShare = unplanned / totalShare
+		}
 		dk.Away = meals > 0 && away == meals
 		dk.Scaled = k * dk.Share()
 		dk.Adjusted = dk.Scaled
+		lightReq, isLight := s.dayRequest(d, "")
+		heartyReq, isHearty := s.dayRequest(d, LevelHearty)
 		switch {
-		case s.lightDay(d):
+		case isLight && lightReq.TargetKcal > 0: // the number the user named (P-3)
+			dk.Adjusted = lightReq.TargetKcal
+		case isHearty && heartyReq.TargetKcal > 0:
+			dk.Adjusted = heartyReq.TargetKcal
+		case isLight:
 			dk.Adjusted *= LightDayShare
-		case s.heartyDay(d):
+		case isHearty:
 			dk.Adjusted *= HeartyDayShare
-		case lightMeals+heartyMeals > 0:
-			dk.Adjusted = x.pol.shiftedTarget(dk.Scaled, dk.Active(), lightMeals, heartyMeals)
+		case lightBase+heartyBase > 0:
+			dk.Adjusted = x.pol.shiftedTarget(dk.Scaled, lightBase, heartyBase)
 		}
 		if dk.Adjusted < dk.Scaled {
 			// A light day is never asked to go below the floor, so the week
 			// is not measured against a target the hard floor forbids.
 			dk.Adjusted = min(dk.Scaled, max(dk.Adjusted, x.pol.Floor(k, dk.Share())))
 		}
-		for _, p := range s.Plates {
-			if dayOf(p.Date) != dayOf(d) {
-				continue
-			}
+		for _, p := range dayPlates {
 			for _, c := range p.Components {
 				if f, ok := x.food(c.FoodID); ok {
 					m := c.Multiplier()
@@ -165,6 +245,54 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 		}
 		dk.Gap = dk.Adjusted - dk.Kcal
 		out = append(out, dk)
+	}
+	return out
+}
+
+// routineShift is SB5: a routine meal counts with its real kcal, and its gap
+// to its expected share is spread over the planned non-routine slots in
+// proportion to their expected shares. Away, default-none and routine slots
+// without a plate stay assumed at their share. Nil when there is nothing to move.
+func (x *index) routineShift(dk *DayKcal, cells []Cell, plates []Plate) map[int64]float64 {
+	if dk.Target <= 0 || dk.shareTotal <= 0 {
+		return nil
+	}
+	real := map[int64]float64{}
+	for _, p := range plates {
+		for _, c := range p.Components {
+			if f, ok := x.food(c.FoodID); ok {
+				real[p.SlotID] += f.Macros.Kcal * c.Multiplier()
+			}
+		}
+	}
+	// E is what the planned non-routine meals hold: the day target less the
+	// unplanned shares and the routine meals' real kcal.
+	e, planned, routine := dk.Target, 0.0, false
+	for _, c := range cells {
+		switch c.Mode {
+		case availability.ModeNone:
+			e -= dk.Target * dk.shares[c.SlotID] / dk.shareTotal
+		case availability.ModeRoutine:
+			if len(x.byCell[idOf(c.Key())]) == 0 {
+				e -= dk.Target * dk.shares[c.SlotID] / dk.shareTotal
+				continue
+			}
+			e -= real[c.SlotID]
+			routine = true
+		default:
+			planned += dk.shares[c.SlotID]
+		}
+	}
+	if !routine || planned <= 0 {
+		return nil
+	}
+	e = math.Max(e, 0)
+	out := map[int64]float64{}
+	for _, c := range cells {
+		if c.Mode == availability.ModeRoutine || c.Mode == availability.ModeNone {
+			continue
+		}
+		out[c.SlotID] = e*dk.shares[c.SlotID]/planned - dk.Target*dk.shares[c.SlotID]/dk.shareTotal
 	}
 	return out
 }
@@ -211,9 +339,9 @@ func writeDayBudgets(b *strings.Builder, x *index) {
 				continue
 			}
 			if l.Hearty() {
-				fmt.Fprintf(b, ", %s hearty >=%.0f", l.Slot, HeartyMealShare*dk.normalShare())
+				fmt.Fprintf(b, ", %s hearty >=%.0f", l.Slot, HeartyMealShare*dk.mealShare(x.s.slotByName(l.Slot)))
 			} else {
-				fmt.Fprintf(b, ", %s light <=%.0f", l.Slot, dk.mealCap())
+				fmt.Fprintf(b, ", %s light <=%.0f", l.Slot, dk.mealCap(x.s.slotByName(l.Slot)))
 			}
 		}
 		b.WriteByte('\n')
@@ -251,4 +379,31 @@ func floorNote(s State, t Target) string {
 		return ""
 	}
 	return "Below the daily minimum (the plan could not reach it, please add food to these days): " + strings.Join(parts, ", ")
+}
+
+// daySlotShares are the expected shares of the slots of one day's cells as the
+// state has them (an even weight of 1 when it has none) and their sum: a slot's
+// part of the day is its weight over the sum (SB2, normalised over the day's
+// cells).
+func daySlotShares(s State, cells []Cell) (weights map[int64]float64, total float64) {
+	weights = make(map[int64]float64, len(cells))
+	for _, c := range cells {
+		v, ok := s.SlotShare[c.SlotID]
+		if !ok {
+			v = 1
+		}
+		weights[c.SlotID] = v
+		total += v
+	}
+	return weights, total
+}
+
+// slotByName is the id of the slot named name (lunch, dinner); 0 if none.
+func (s State) slotByName(name string) int64 {
+	for id := range s.SlotNames {
+		if s.slotIs(id, name) {
+			return id
+		}
+	}
+	return 0
 }

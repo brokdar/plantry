@@ -8,7 +8,7 @@
     "plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "true",
     "plan.max_dish_meals_per_week": "5"
   },
-  "profile": {"diet_type": "omnivore", "household_portions": 1, "kcal_target": 2200},
+  "profile": {"diet_type": "pescetarian", "household_portions": 1, "kcal_target": 2200},
   "slots": ["breakfast", "lunch", "dinner"],
   "presets": [{"name": "Oats", "slot": "breakfast", "recipe": "Overnight Oats"}],
   "availability": {"defaults": [{"weekdays": [0, 1, 2, 3, 4], "slot": "breakfast", "mode": "routine", "preset": "Oats"}]},

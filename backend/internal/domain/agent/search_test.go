@@ -9,6 +9,7 @@ import (
 )
 
 func TestSearchPage_SynonymsTagsAndUmlauts(t *testing.T) {
+	t.Parallel()
 	res := &food.ListResult{Items: []food.Food{
 		{ID: 1, Name: "Kartoffelgratin"},
 		{ID: 2, Name: "Hähnchen-Curry"},
@@ -37,6 +38,7 @@ func TestSearchPage_SynonymsTagsAndUmlauts(t *testing.T) {
 
 // Synonym members match word prefixes, not substrings.
 func TestSearchPage_NoSubstringFalsePositives(t *testing.T) {
+	t.Parallel()
 	res := &food.ListResult{Items: []food.Food{
 		{ID: 1, Name: "Peanut Butter"},
 		{ID: 2, Name: "Peach Cake"},

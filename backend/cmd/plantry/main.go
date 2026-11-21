@@ -156,6 +156,7 @@ func run() error {
 	slotSvc := slot.NewService(slotRepo)
 
 	txRunner := sqlite.NewTxRunner(conn)
+	slotSvc.WithTx(txRunner)
 	presetRepo := sqlite.NewPresetRepo(conn)
 
 	// Availability gates where plates may go (D10, D12), so it is built
@@ -253,22 +254,16 @@ func run() error {
 		Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{
 			airun.ChooserHeuristic: planning.Heuristic{},
-			airun.ChooserLLM: planning.NewLLMChooser(llmResolver).WithProgrammatic(func(ctx context.Context) bool {
-				v, err := settingsSvc.Get(ctx, settingsdom.KeyAIProgrammaticTools)
-				if err != nil {
-					slog.WarnContext(ctx, "plan.programmatic.setting", "error", err)
-					return false
-				}
-				return v.Raw == "true"
-			}).WithEffort(func(ctx context.Context) string {
-				v, err := settingsSvc.Get(ctx, settingsdom.KeyAIReasoningEffortGenerate)
-				if err != nil {
-					slog.WarnContext(ctx, "plan.effort.setting", "error", err)
-					return ""
-				}
-				return v.Raw
-			}),
 		},
+		// PL2: a model only reads the wish into constraints; the heuristic plans.
+		Extractor: planning.NewLLMExtractor(llmResolver).WithEffort(func(ctx context.Context) string {
+			v, err := settingsSvc.Get(ctx, settingsdom.KeyAIReasoningEffortGenerate)
+			if err != nil {
+				slog.WarnContext(ctx, "plan.effort.setting", "error", err)
+				return ""
+			}
+			return v.Raw
+		}),
 		Logger: logger,
 	})
 	defer func() {
@@ -302,6 +297,7 @@ func run() error {
 
 	aiRepo := sqlite.NewAIRepo(conn)
 	changeRepo := sqlite.NewAIChangeRepo(conn)
+	changes := agent.NewChanges(changeRepo, plateSvc, availabilitySvc, planLight, txRunner, time.Now)
 	tools, err := agent.NewToolSet(agent.Services{
 		Foods:             foodSvc,
 		NutritionResolver: nutritionResolver,
@@ -320,13 +316,14 @@ func run() error {
 		},
 		Light: planLight,
 		Tx:    txRunner,
+		Undo:  changes,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
 	}
 	agentSvc := agent.NewService(aiRepo, llmResolver, tools, profileSvc, settingsSvc,
 		agent.PlanContext{Build: planBuilder.Build, Summary: planning.RenderPlanSummary}, time.Now).WithRecorder(runRecorder)
-	aiHandler := handlers.NewAIHandler(agentSvc, agent.NewChanges(changeRepo, plateSvc, availabilitySvc, planLight, txRunner, time.Now), llmResolver)
+	aiHandler := handlers.NewAIHandler(agentSvc, changes, llmResolver)
 
 	// Run log read side: runs, insights and prices. Costs are computed on
 	// read from the built-in table plus ai.price_overrides.

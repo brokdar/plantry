@@ -69,6 +69,7 @@ func runWithChangeTool(t *testing.T, ts *ToolSet) ([]llm.Event, *memRepo) {
 // A failed call that still changed the plan emits its change line, and the
 // error result carries the change id.
 func TestRun_ChangeAfterFailedCall(t *testing.T) {
+	t.Parallel()
 	evts, _ := runWithChangeTool(t, failingChangeTool(t, stubChangeStore{}))
 	assertContainsInOrder(t, eventTypes(evts), llm.EventToolResult, llm.EventChange, llm.EventDone)
 	for _, e := range evts {
@@ -89,6 +90,7 @@ func TestRun_ChangeAfterFailedCall(t *testing.T) {
 // When the watermark cannot be read the change is made but not recorded, on
 // a failed call as on a successful one.
 func TestRun_WatermarkFailureIsNotRecorded(t *testing.T) {
+	t.Parallel()
 	evts, _ := runWithChangeTool(t, failingChangeTool(t, stubChangeStore{markErr: errors.New("db gone")}))
 	var seen int
 	for _, e := range evts {

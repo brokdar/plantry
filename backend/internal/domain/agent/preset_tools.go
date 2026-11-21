@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 )
@@ -88,9 +89,12 @@ func toolListPresets(svc Services) Tool {
 			for i, p := range res.Items {
 				items[i] = presetSummary(&p)
 			}
-			knownOut := make([]map[string]any, len(known))
-			for i, kt := range known {
-				knownOut[i] = map[string]any{"tag": kt.Tag, "count": kt.Count}
+			knownOut := make([]map[string]any, 0, len(known))
+			for _, kt := range known {
+				if !food.IsLabel(kt.Tag) {
+					continue
+				}
+				knownOut = append(knownOut, map[string]any{"tag": kt.Tag, "count": kt.Count})
 			}
 			return mustJSON(map[string]any{
 				"presets":    items,
@@ -287,10 +291,10 @@ func presetSummary(p *preset.Preset) map[string]any {
 	}
 	out := map[string]any{
 		"id":          p.ID,
-		"name":        p.Name,
+		"name":        food.Data(p.Name),
 		"plate_count": len(p.Plates),
 		"slot_ids":    slotIDs,
-		"tags":        p.Tags,
+		"tags":        food.Labels(p.Tags),
 	}
 	if p.LastUsedAt != nil {
 		out["last_used_at"] = p.LastUsedAt.UTC().Format(time.RFC3339)
@@ -323,7 +327,7 @@ func presetDetail(p *preset.Preset) map[string]any {
 				cm["grams_source"] = *c.GramsSource
 			}
 			if c.Note != nil {
-				cm["note"] = *c.Note
+				cm["note"] = food.Data(*c.Note)
 			}
 			comps[j] = cm
 		}

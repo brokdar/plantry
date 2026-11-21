@@ -49,6 +49,11 @@ type ChooseInput struct {
 	// Side is set for the side scope: swap one side, keep everything else.
 	Side        *SideSwap
 	Instruction string
+	// MaxCookDays is the number of days the user allows anything to be cooked
+	// on (0: no limit stated), read from the wish by the constraint extractor.
+	// The heuristic keeps to it while every cell can still be filled and says
+	// so when it needed another day.
+	MaxCookDays int
 	// Locale is the profile's locale for the chooser's reasons and notes.
 	Locale string
 	// Stage reports a chooser's progress (the LLM's repair turns); nil

@@ -58,7 +58,7 @@ func TestRenderPlanSummary_SkipsSessionsOfTheirOwnCell(t *testing.T) {
 // the 300-recipe state.
 func TestRenderPlanSummary(t *testing.T) {
 	s := summaryState()
-	issues := []planning.Issue{{Rule: "H2", Code: "too_many_cooks", Severity: planning.SeverityViolation, Date: sat, Params: map[string]any{"count": 2}}}
+	issues := []planning.Issue{{Rule: "H2", Code: planning.CodeTooManyCookOccasions, Severity: planning.SeverityViolation, Date: sat, Params: map[string]any{"count": 2}}}
 
 	got := planning.RenderPlanSummary(s, issues)
 
@@ -67,23 +67,23 @@ func TestRenderPlanSummary(t *testing.T) {
 		"the shopping day is Saturday",
 		"- Saturday 2026-11-07\n",
 		"- Friday 2026-11-13\n",
-		"plate_id 11, confirmed, 2 eaters: Chili (component_id 21, food_id ",
+		"plate_id 11, confirmed, 2 people: Chili (component_id 21, food_id ",
 		", session_id 4 cook)",
-		"plate_id 12, draft, 1 eater: Oats (component_id 22",
+		"plate_id 12, pending, 1 person: Oats (component_id 22",
 		"60 g/eater",
 		"| none | no plate, leave empty",
 		"session_id 4 | food_id ",
 		"portions 4, frozen 1 | eaten 3, of which frozen 0 | keeps until 2026-11-10",
-		"Issues:\n- H2 too_many_cooks (violation) " + sat + " count=2\n",
+		"Open now: 1 problems, 0 warnings.",
 	} {
 		assert.Contains(t, got, want)
 	}
 	assert.NotContains(t, got, "Candidate")
 	assert.NotContains(t, got, ", )")
-	assert.NotContains(t, got, "1 eaters")
+	assert.NotContains(t, got, "1 people")
 	assert.LessOrEqual(t, len(got), 24_000)
 }
 
 func TestRenderPlanSummary_NoIssues(t *testing.T) {
-	require.Contains(t, planning.RenderPlanSummary(summaryState(), nil), "Issues: none.")
+	require.Contains(t, planning.RenderPlanSummary(summaryState(), nil), "Open now: nothing.")
 }

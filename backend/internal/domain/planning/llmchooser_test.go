@@ -41,6 +41,13 @@ type llmEnv struct {
 
 func newLLMEnv(t *testing.T) *llmEnv {
 	t.Helper()
+	return newLLMEnvOver(t, func(c llm.Client) llm.Client { return c })
+}
+
+// newLLMEnvOver is newLLMEnv with the provider client wrapped by wrap (under
+// the run recorder's meter), to inject provider failures.
+func newLLMEnvOver(t *testing.T, wrap func(llm.Client) llm.Client) *llmEnv {
+	t.Helper()
 	script := &fake.Script{}
 	client := fake.NewFromScript(script)
 	e := newSvcEnv(t)
@@ -50,13 +57,30 @@ func newLLMEnv(t *testing.T) *llmEnv {
 	e.deps.RunLog, e.deps.Runs = planning.RecorderLog{Recorder: rec}, repo
 	e.deps.Choosers = map[airun.Chooser]planning.Chooser{
 		airun.ChooserHeuristic: planning.Heuristic{},
-		airun.ChooserLLM:       planning.NewLLMChooser(llm.StaticResolver(rec.Meter(client, "fake"), "fake-model")),
+		airun.ChooserLLM:       planning.NewLLMChooser(llm.StaticResolver(rec.Meter(wrap(client), "fake"), "fake-model")),
 	}
 	e.svc = planning.NewService(e.deps)
 	return &llmEnv{svcEnv: e, client: client, script: script}
 }
 
 // generate runs a window generation with the default chooser.
+// req is the service env's request asking for the LLM chooser: without a name
+// the planner is the heuristic (PL2).
+func (e *llmEnv) req() planning.Request {
+	r := e.svcEnv.req()
+	r.Chooser = airun.ChooserLLM
+	return r
+}
+
+func (e *llmEnv) regenerate(sc planning.Scope) int64 {
+	e.t.Helper()
+	req := e.req()
+	req.Scope = sc
+	id, err := e.svc.Regenerate(e.ctx, req)
+	require.NoError(e.t, err)
+	return id
+}
+
 func (e *llmEnv) gen(turns ...fake.Turn) int64 {
 	e.t.Helper()
 	e.script.Turns = turns
@@ -243,7 +267,7 @@ func TestLLMChooser_RequestAndPrompt(t *testing.T) {
 		row := candidateLine(t, sys, fid)
 		kcal := macros[fid].Macros.Kcal
 		require.Positive(t, kcal)
-		assert.Equal(t, fmt.Sprintf("%.0f", kcal), strings.Split(row, "|")[6], "candidate %d", fid)
+		assert.Equal(t, fmt.Sprintf("%.0f", kcal), strings.Split(row, "|")[8], "candidate %d", fid)
 	}
 	assert.Contains(t, sys, "- diet type: omnivore\n")
 	assert.Contains(t, sys, "No coriander, ever.")
@@ -297,33 +321,45 @@ func TestLLMChooser_RepairsAnH2Violation(t *testing.T) {
 	assert.Equal(t, 12, sessions)
 }
 
-// B7-AC3: three invalid proposals: the last one is persisted with its
-// violations, the run is partial and the board shows the issue.
+// B7-AC3 as PL1b changed it: three invalid proposals are never saved: the
+// heuristic plan is saved instead, the run is ok with no violation and the
+// notes say so.
 func TestLLMChooser_UnresolvedViolationsArePersisted(t *testing.T) {
 	e := newLLMEnv(t)
 
 	id := e.gen(submit(t, "tu_1", e.h2Plan()))
 
 	r := e.run(id)
-	assert.Equal(t, "partial", r.Status)
-	assert.Equal(t, 2, r.RepairAttempts)
+	assert.Equal(t, "ok", r.Status)
 	assert.Equal(t, 3, r.LLMSteps)
 	var vs []planning.Issue
 	require.NoError(t, json.Unmarshal([]byte(r.Violations), &vs))
-	require.Len(t, vs, 1)
-	assert.Equal(t, "H2", vs[0].Rule)
-	assert.Equal(t, sun, vs[0].Date)
+	assert.Empty(t, vs)
+	assert.Contains(t, r.Notes, "heuristic plan instead")
 	plates, _ := e.rows(id)
 	assert.Equal(t, 21, plates)
 
 	board, err := testsvc.PlanView(e.db).Plan(e.ctx, &e.start, day(svcToday))
 	require.NoError(t, err)
-	assert.True(t, slices.ContainsFunc(board.Issues, func(is planning.Issue) bool {
-		return is.Code == planning.CodeTooManyCookOccasions && is.Date == sun
-	}), "board issues %+v", board.Issues)
+	assert.False(t, slices.ContainsFunc(board.Issues, func(is planning.Issue) bool {
+		return is.Code == planning.CodeTooManyCookOccasions
+	}), "the saved heuristic plan holds no hard issue: board issues %+v", board.Issues)
 	require.NotNil(t, board.Draft)
-	require.NotNil(t, board.Draft.Notes)
-	assert.True(t, strings.HasPrefix(r.Notes, "Two occasions on Sunday."), r.Notes)
+	assert.Empty(t, r.ErrorKey)
+	assert.Contains(t, r.Notes, "The model's plan broke cooking times per day")
+}
+
+// A plan whose only hard issue is an empty cell (nothing can fill the meal)
+// is partial without the open-rule key.
+func TestOpenRules_AnEmptyCellIsNotAnOpenRule(t *testing.T) {
+	assert.Empty(t, planning.OpenRulesForTest([]planning.Issue{{Code: planning.CodeMissingPlate, Date: "2026-11-23"}}))
+	got := planning.OpenRulesForTest([]planning.Issue{
+		{Code: planning.CodeTooManyCookOccasions, Date: "2026-11-22"},
+		{Code: planning.CodeTooManyCookOccasions, Date: "2026-11-24"},
+		{Code: planning.CodeMissingPlate, Date: "2026-11-23"},
+		{Code: planning.CodeKcalBelowFloor, Date: "2026-11-25"},
+	})
+	assert.Equal(t, "cooking times per day (2026-11-22, 2026-11-24); day energy minimum (2026-11-25)", got)
 }
 
 // B7-AC4: an unknown food id is an H7 violation that is repaired.
@@ -415,9 +451,8 @@ func TestLLMChooser_UnreadableReplies(t *testing.T) {
 		e := newLLMEnv(t)
 		id := e.gen(submit(t, "tu_1", e.h2Plan()), bad)
 		r := e.run(id)
-		assert.Equal(t, "partial", r.Status)
-		assert.Equal(t, 2, r.RepairAttempts)
-		assert.True(t, strings.HasPrefix(r.Notes, "Two occasions on Sunday.\nWarning, not resolved:"), r.Notes)
+		assert.Equal(t, "ok", r.Status, "PL1b: the unresolved proposal is not saved, the heuristic plan is")
+		assert.Contains(t, r.Notes, "heuristic plan instead")
 	})
 }
 
@@ -490,7 +525,7 @@ func TestLLMChooser_StageAndReady(t *testing.T) {
 	// The empty first plan is H1-only: its repair is extra, then two repairs.
 	assert.Equal(t, 3, p.RepairAttempts)
 	assert.Equal(t, []planning.Stage{planning.StageRepairing, planning.StageRepairing, planning.StageRepairing}, stages)
-	assert.Equal(t, "p17", c.PromptVersion())
+	assert.Equal(t, "p27", c.PromptVersion())
 
 	require.NoError(t, c.Ready(context.Background()))
 	assert.ErrorIs(t, planning.NewLLMChooser(llm.StaticResolver(nil, "")).Ready(context.Background()), domain.ErrAIProviderMissing)
@@ -562,7 +597,7 @@ func TestRenderPrompt_NamesAndSideBudget(t *testing.T) {
 	s.History = []planning.HistoryPlate{{Date: day("2026-11-01"), SlotID: dinner, FoodIDs: []int64{chili}}}
 	prompt := planning.RenderPrompt(planning.ChooseInput{State: s, Target: windowTarget(s)})
 	assert.NotContains(t, prompt, "Chili |")
-	assert.Contains(t, prompt, "2026-11-01 | slot 2 | Chili / extra hot\n")
+	assert.NotContains(t, prompt, "Eaten in the last 4 weeks", "variety is last_eaten per candidate, not a history section")
 
 	s, tgt, _ := benchState()
 	eaten := day("2026-11-01")

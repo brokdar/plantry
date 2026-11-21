@@ -209,3 +209,18 @@ func TestEvaluate_S2OptionsCloseTheGapAndCarryOps(t *testing.T) {
 		}
 	}
 }
+
+// d1: the day's energy issue says the gap to the target and the gap to its
+// range as two fields; one number never carries both meanings.
+func TestEvaluate_S2GapToRangeAndTargetAreSeparate(t *testing.T) {
+	s := softState(2200)
+	ev := planning.Evaluate(s, windowTarget(s))
+	s2 := softOf(ev, "S2")
+	require.Len(t, s2, 1)
+	p := s2[0].Params
+	assert.NotContains(t, p, "gap_kcal")
+	kcal, target, low := p["kcal"].(float64), p["target_kcal"].(float64), p["band_low_kcal"].(float64)
+	assert.InDelta(t, target-kcal, p["gap_to_target_kcal"], 0.51)
+	assert.InDelta(t, low-kcal, p["gap_to_range_kcal"], 0.51)
+	assert.NotEqual(t, p["gap_to_target_kcal"], p["gap_to_range_kcal"])
+}

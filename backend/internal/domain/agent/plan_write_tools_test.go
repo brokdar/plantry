@@ -64,7 +64,7 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 	set := testsvc.Settings(db)
 	for k, v := range map[string]string{
 		"plan.shopping_day": "5", "plan.batch_cooking": "true", "plan.default_keep_days": "3",
-		"plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "true",
+		"plan.max_cook_occasions_per_day": "3", "plan.variety_weeks": "3", "plan.freezing_enabled": "true",
 	} {
 		require.NoError(t, set.Set(ctx, k, v))
 	}
@@ -94,18 +94,18 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 	e.planner = planning.NewService(e.deps)
 	// The plate clock is the chat's today: meal operations refuse cells before it.
 	e.plates, e.avail = testsvc.PlanAt(db, nil, func() time.Time { return planToday })
+	e.changes = agent.NewChanges(sqlite.NewAIChangeRepo(db), e.plates, e.avail, sqlite.NewPlanLightRepo(db), sqlite.NewTxRunner(db), func() time.Time { return planToday })
 	foods := sqlite.NewFoodRepo(db)
 	var err error
 	e.ts, err = agent.NewToolSet(agent.Services{
 		Foods: food.NewService(foods), NutritionResolver: food.NewNutritionResolver(foods),
 		Plates: e.plates, Profile: profile.NewService(sqlite.NewProfileRepo(db)),
 		Slots: slot.NewService(sqlite.NewSlotRepo(db)), Settings: set,
-		PlanView: testsvc.PlanView(db), Planner: e.planner, Cells: e.avail,
+		PlanView: testsvc.PlanView(db), Planner: e.planner, Cells: e.avail, Availability: e.avail,
 		Changes: sqlite.NewAIChangeRepo(db),
-		State:   testsvc.PlanState(db), Tx: sqlite.NewTxRunner(db), Light: sqlite.NewPlanLightRepo(db),
+		State:   testsvc.PlanState(db), Tx: sqlite.NewTxRunner(db), Light: sqlite.NewPlanLightRepo(db), Undo: e.changes,
 	})
 	require.NoError(t, err)
-	e.changes = agent.NewChanges(sqlite.NewAIChangeRepo(db), e.plates, e.avail, sqlite.NewPlanLightRepo(db), sqlite.NewTxRunner(db), func() time.Time { return planToday })
 	e.ctx = agent.WithWindow(agent.WithToday(ctx, planToday), window.Window{Start: planStart, End: planStart.AddDate(0, 0, 6)})
 
 	id, err := e.planner.Generate(ctx, planning.Request{Start: planStart, Today: planToday, Chooser: airun.ChooserHeuristic})
@@ -214,14 +214,15 @@ func (e *planToolEnv) session(id int64) *plate.SessionView {
 
 // B4-AC1
 func TestTool_SetSessionPortions(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	_, id := e.mainSession()
 
 	out := e.mustOp("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":6,"frozen_portions":2}`, id))
 	assert.Equal(t, 6.0, out["portions"])
 	assert.Equal(t, 2.0, out["frozen_portions"])
-	s0 := out["after"].(map[string]any)["sessions"].([]any)[0].(map[string]any)
-	assert.Equal(t, "draft", s0["state"])
+	s0 := out["after"].(map[string]any)["batches"].([]any)[0].(map[string]any)
+	assert.Equal(t, "pending", s0["state"])
 	assert.Contains(t, s0, "consumed")
 	assert.Contains(t, s0, "warnings")
 	v := e.session(id)
@@ -266,6 +267,7 @@ func components(p plate.Plate) []componentKey {
 
 // B4-AC2
 func TestTool_RegenerateSide(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	target, idx := e.sidePlate()
 	old := target.Components[idx]
@@ -321,6 +323,7 @@ func TestTool_RegenerateSide(t *testing.T) {
 }
 
 func TestTool_RegenerateConfirmedPlate(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.mainSession()
 	_, err := e.plates.Confirm(context.Background(), plate.RowSet{PlateIDs: []int64{p.ID}})
@@ -343,6 +346,7 @@ func (g gateChooser) Choose(ctx context.Context, in planning.ChooseInput) (plann
 
 // B4-AC2: a window generation already running fails the tool call.
 func TestTool_RegenerateWhileGenerationRuns(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	g := gateChooser{entered: make(chan struct{}), release: make(chan struct{})}
 	deps := e.deps // shares the Progress registry
@@ -364,6 +368,7 @@ func TestTool_RegenerateWhileGenerationRuns(t *testing.T) {
 
 // B4-AC4
 func TestTool_SetAvailability(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx := context.Background()
 	week := e.week()
@@ -404,6 +409,7 @@ func TestTool_SetAvailability(t *testing.T) {
 
 // B4-AC5
 func TestTool_ConfirmAndSetPlateEaters(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx := context.Background()
 	p, sid := e.mainSession()
@@ -494,6 +500,7 @@ func messageKey(t *testing.T, r llm.ToolResultPayload) string {
 // B4-AC3: unlock is two-phase; the yes must come in a later turn of the same
 // conversation.
 func TestTool_UnlockNeedsTheUsersYesInALaterTurn(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx := context.Background()
 	p, sid := e.mainSession()
@@ -569,6 +576,7 @@ func TestTool_UnlockNeedsTheUsersYesInALaterTurn(t *testing.T) {
 }
 
 func TestTool_UnlockOutsideAChatFails(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.mainSession()
 	_, err := e.exec("unlock", fmt.Sprintf(`{"plate_id":%d}`, p.ID))

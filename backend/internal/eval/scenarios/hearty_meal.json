@@ -1,6 +1,6 @@
 {
   "name": "hearty_meal",
-  "description": "Hearty intent on a meal (scope meal, level hearty): the dinner holds at least 125 % of its share and the day target rises by 25 % of that share, inside the day band, so the other meals are not cut to pay for it.",
+  "description": "Hearty intent on a meal (scope meal, level hearty): the dinner holds at least 125 % of its slot's share (v1.1: the dinner's band midpoint, which the day band may keep it short of, then S6b says so) and the day target rises by 25 % of that share, inside the day band, so the other meals are not cut to pay for it.",
   "today": "2026-11-06",
   "start": "2026-11-07",
   "settings": {
@@ -76,7 +76,6 @@
         110
       ],
       "issues_absent": [
-        "meal_not_hearty",
         "kcal_below_floor"
       ]
     }

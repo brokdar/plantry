@@ -29,6 +29,7 @@ const (
 	CodeMissingPlate          = "missing_plate"
 	CodeExtraPlate            = "extra_plate"
 	CodePlateInNoneCell       = "plate_in_none_cell"
+	CodeCookInNoneCell        = "cook_in_none_cell"
 	CodeTooManyCookOccasions  = "too_many_cook_occasions"
 	CodeDietIncompatible      = "diet_incompatible"
 	CodeMeatDaysExceeded      = "meat_days_exceeded"
@@ -41,13 +42,17 @@ const (
 	CodeSessionFoodMismatch   = "session_food_mismatch"
 	CodeDuplicateSessionKey   = "duplicate_session_key"
 	CodeInvalidPortions       = "invalid_portions"
+	CodePortionsOverCap       = "portions_over_cap"
 	CodePlateWithoutComponent = "plate_without_components"
 	CodePlateOutsideTarget    = "plate_outside_target"
 	CodePlateOnConfirmedCell  = "plate_on_confirmed_cell"
 	CodeVarietyRepeat         = "variety_repeat"
 	CodeVarietyRelaxed        = "variety_relaxed"
 	CodeVarietyRepeatWeek     = "variety_repeat_week"
-	CodeKcalBelowFloor        = "kcal_below_floor"
+	// CodeVarietyRepeatNamed: a dish the user named repeats inside the variety
+	// window; applied with this warning (SF3).
+	CodeVarietyRepeatNamed = "variety_repeat_named"
+	CodeKcalBelowFloor     = "kcal_below_floor"
 	// Soft rules (Evaluate).
 	CodeKcalBelowBand     = "kcal_below_band"
 	CodeKcalAboveBand     = "kcal_above_band"
@@ -60,11 +65,19 @@ const (
 	CodeMealNotLight      = "meal_not_light"
 	CodeMealNotHearty     = "meal_not_hearty"
 	CodeDishRepeats       = "dish_repeats_exceeded"
-	CodeAddOnExcess       = "add_on_excess"
-	CodeWeekMeatAboveDGE  = "week_meat_above_dge"
-	CodeWeekFishBelowDGE  = "week_fish_below_dge"
-	CodeWeekLegumesBelow  = "week_legumes_below_dge"
+	// CodeMealOutsideSlotBand: a lunch or dinner holds less or more of the day's
+	// energy than its slot band (S10, soft, no options).
+	CodeMealOutsideSlotBand = "meal_outside_slot_band"
+	CodeAddOnExcess         = "add_on_excess"
+	CodeWeekMeatAboveDGE    = "week_meat_above_dge"
+	CodeWeekFishBelowDGE    = "week_fish_below_dge"
+	CodeWeekLegumesBelow    = "week_legumes_below_dge"
 )
+
+// MaxDishPortions is the most portions of a cooked dish one eater gets on a
+// generated plate. The way to more energy is a side or an add-on; guests
+// raise the eaters, not the portions per eater. Chat edits are not bound by it.
+const MaxDishPortions = 1.5
 
 // Issue is one finding of the checker (D22). Plates and sessions of a
 // proposal have no id yet: their issues carry the cell, and a proposed
@@ -81,13 +94,20 @@ type Issue struct {
 	// Options are the ways to close a soft rule's gap, computed by
 	// Evaluate (S2/S3 only).
 	Options []Option `json:"options,omitempty"`
+	// NoFixFound is set on an H2 cook issue that has no verified option, with
+	// NoFixReason: the model must not guess a fix.
+	NoFixFound  bool   `json:"no_fix_found,omitempty"`
+	NoFixReason string `json:"no_fix_reason,omitempty"`
 }
 
 // Check applies the hard rules H1–H9 (spec §6.4, D21) to the target of s and
 // returns the issues in rule order. Pass the state after Merge to check a
 // proposal, or the persisted state to check a window as it is.
-func Check(s State, t Target) []Issue {
-	x := newIndex(s, t)
+func Check(s State, t Target) []Issue { return check(newIndex(s, t)) }
+
+// check is Check over an index already built (Evaluate shares its own, so the
+// per-day accounts are computed once).
+func check(x *index) []Issue {
 	out := []Issue{}
 	out = append(out, x.h1()...)
 	out = append(out, x.h2()...)
@@ -224,7 +244,8 @@ func (i Issue) with(k string, v any) Issue {
 }
 
 // h1: every plan or routine cell in the target holds exactly one plate; no
-// plate sits in a none cell.
+// plate sits in a none cell and no uncooked session cooks on one (nobody is
+// home to cook).
 func (x *index) h1() []Issue {
 	var out []Issue
 	for _, c := range x.s.Cells {
@@ -242,6 +263,11 @@ func (x *index) h1() []Issue {
 			out = append(out, issue("H1", CodeMissingPlate, SeverityViolation).atCell(key).with("mode", string(c.Mode)))
 		case len(plates) > 1:
 			out = append(out, issue("H1", CodeExtraPlate, SeverityViolation).atCell(key).with("count", len(plates)))
+		}
+	}
+	for _, ss := range x.s.Sessions {
+		if c, ok := x.cells[idOf(ss.CookCell())]; ok && c.Mode == availability.ModeNone && ss.CookedAt == nil && x.checked(ss) {
+			out = append(out, issue("H1", CodeCookInNoneCell, SeverityViolation).onSession(ss))
 		}
 	}
 	return out
@@ -433,8 +459,13 @@ func (x *index) component(p Plate, c Component) []Issue {
 	// A routine cell's plate copies its preset (D8), leaves included.
 	if p.Proposed() && !x.routine(p.Cell()) {
 		if f.Kind == food.KindComposed {
-			if c.Portions == nil || !(*c.Portions > 0) {
+			switch {
+			case c.Portions == nil || !(*c.Portions > 0):
 				out = append(out, issue("H7", CodeInvalidPortions, SeverityViolation).onPlate(p).with("food_id", c.FoodID))
+			case *c.Portions > MaxDishPortions+epsilon:
+				out = append(out, issue("H7", CodePortionsOverCap, SeverityViolation).onPlate(p).
+					with("food_id", c.FoodID).with("name", f.Name).with("portions", *c.Portions).with("max_portions", MaxDishPortions).
+					with("hint", "Keep the dish at 1.5 portions per eater or less and close the energy gap with a side or a no-cook add-on; the S2/S3 issues of the day list the computed options."))
 			}
 		} else if c.Grams == nil || !(*c.Grams > 0) {
 			// A leaf is allowed with grams (a no-cook item), never with portions.
@@ -519,6 +550,9 @@ func (x *index) h8() []Issue {
 		code, sev := code, sev
 		if !x.merged && code == CodeVarietyRepeat && x.s.Window.Contains(prev) {
 			code, sev = CodeVarietyRepeatWeek, SeverityWarning
+		}
+		if !x.merged && code == CodeVarietyRepeat && x.s.Named[ev.foodID] {
+			code, sev = CodeVarietyRepeatNamed, SeverityWarning
 		}
 		is := issue("H8", code, sev)
 		if ev.session >= 0 {

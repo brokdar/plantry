@@ -15,6 +15,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
@@ -25,6 +26,7 @@ import (
 // B3-AC3: get_plan returns the cells, sessions and issues GET /api/plan reads
 // for the chat's window, field by field on a seeded window.
 func TestToolGetPlan_MatchesPlanReadModel(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := testhelper.NewTestDB(t)
 	insert := func(q string) int64 {
@@ -112,7 +114,7 @@ func TestToolGetPlan_MatchesPlanReadModel(t *testing.T) {
 			FrozenConsumed float64 `json:"frozen_consumed"`
 			Links          []any   `json:"links"`
 			Warnings       []any   `json:"warnings"`
-		} `json:"sessions"`
+		} `json:"batches"`
 		Issues json.RawMessage `json:"issues"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &got))
@@ -157,12 +159,22 @@ func TestToolGetPlan_MatchesPlanReadModel(t *testing.T) {
 		assert.Len(t, g.Links, len(v.Links))
 		assert.Len(t, g.Warnings, len(v.Warnings))
 	}
-	wantIssues, err := json.Marshal(want.Issues)
-	require.NoError(t, err)
-	assert.JSONEq(t, string(wantIssues), string(got.Issues))
+	// The model reads each issue by its plain label, never by rule or code.
+	var gotIssues []map[string]any
+	require.NoError(t, json.Unmarshal(got.Issues, &gotIssues))
+	require.Len(t, gotIssues, len(want.Issues))
+	for i, is := range want.Issues {
+		txt := planning.PlainText(is.Code)
+		assert.Equal(t, txt.Label, gotIssues[i]["label"])
+		assert.Equal(t, txt.Message, gotIssues[i]["message"])
+		assert.Equal(t, string(is.Severity), gotIssues[i]["severity"])
+		assert.NotContains(t, gotIssues[i], "rule")
+		assert.NotContains(t, gotIssues[i], "code")
+	}
 }
 
 func TestToolGetPlan_NeedsAWindow(t *testing.T) {
+	t.Parallel()
 	db := testhelper.NewTestDB(t)
 	ts, err := agent.NewToolSet(agent.Services{PlanView: testsvc.PlanView(db)})
 	require.NoError(t, err)
@@ -173,6 +185,7 @@ func TestToolGetPlan_NeedsAWindow(t *testing.T) {
 }
 
 func TestToolGetPlan_NotRegisteredWithoutPlanView(t *testing.T) {
+	t.Parallel()
 	ts, err := agent.NewToolSet(agent.Services{})
 	require.NoError(t, err)
 	for _, tool := range ts.Describe() {

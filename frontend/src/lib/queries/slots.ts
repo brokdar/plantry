@@ -6,6 +6,11 @@ import {
   createTimeSlot,
   updateTimeSlot,
   deleteTimeSlot,
+  getSlotBands,
+  setSlotBands,
+  applySlotBandPreset,
+  type SlotBand,
+  type SlotBandPreset,
   type TimeSlotInput,
 } from "@/lib/api/slots"
 import { queryClient } from "@/lib/query-client"
@@ -25,7 +30,7 @@ export function useCreateTimeSlot() {
   return useMutation({
     mutationFn: (input: TimeSlotInput) => createTimeSlot(input),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: slotKeys.lists() })
+      void queryClient.invalidateQueries({ queryKey: slotKeys.all })
     },
     onError: (err) => toastError(err, t),
   })
@@ -37,7 +42,7 @@ export function useUpdateTimeSlot() {
     mutationFn: ({ id, data }: { id: number; data: TimeSlotInput }) =>
       updateTimeSlot(id, data),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: slotKeys.lists() })
+      void queryClient.invalidateQueries({ queryKey: slotKeys.all })
     },
     onError: (err) => toastError(err, t),
   })
@@ -48,8 +53,34 @@ export function useDeleteTimeSlot() {
   return useMutation({
     mutationFn: (id: number) => deleteTimeSlot(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: slotKeys.lists() })
+      void queryClient.invalidateQueries({ queryKey: slotKeys.all })
     },
+    onError: (err) => toastError(err, t),
+  })
+}
+
+export function useSlotBands() {
+  return useQuery({ queryKey: slotKeys.bands(), queryFn: getSlotBands })
+}
+
+function refreshBands() {
+  void queryClient.invalidateQueries({ queryKey: slotKeys.all })
+}
+
+export function useSetSlotBands() {
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (items: SlotBand[]) => setSlotBands(items),
+    onSuccess: refreshBands,
+    onError: (err) => toastError(err, t),
+  })
+}
+
+export function useApplySlotBandPreset() {
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (name: SlotBandPreset) => applySlotBandPreset(name),
+    onSuccess: refreshBands,
     onError: (err) => toastError(err, t),
   })
 }

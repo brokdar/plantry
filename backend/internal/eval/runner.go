@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -45,6 +46,11 @@ type Config struct {
 	// written to and left in, as <scenario>-<run>.db; empty uses a scratch
 	// directory that is removed.
 	KeepDB string
+	// Parallel is how many runs go at once (each has its own database); 0 or 1
+	// runs them one after the other, as a live run must. The records keep the
+	// scenario and run order. A live run is always one at a time. Now and
+	// Logger are called from several goroutines.
+	Parallel int
 }
 
 // Live is a real LLM provider's client.
@@ -122,15 +128,58 @@ func Run(ctx context.Context, cfg Config, scenarios []Scenario) ([]Record, error
 		return nil, err
 	}
 	defer func() { _ = d.close() }()
-	var out []Record
+	type job struct {
+		sc Scenario
+		n  int
+	}
+	var jobs []job
 	for _, sc := range scenarios {
 		for n := 1; n <= cfg.Runs; n++ {
-			rec, err := runOnce(ctx, cfg, d, lib, sc, n)
-			if err != nil {
-				return nil, fmt.Errorf("%s run %d: %w", sc.Name, n, err)
-			}
-			out = append(out, rec)
+			jobs = append(jobs, job{sc, n})
 		}
+	}
+	out := make([]Record, len(jobs))
+	parallel := max(cfg.Parallel, 1)
+	if cfg.Live != nil {
+		parallel = 1 // a live run costs money and meets rate limits: one at a time
+	}
+	// The first failure cancels the jobs that have not started. Shared state is
+	// read-only (the library) or locked (dbs); cfg.Now and cfg.Logger are
+	// called from several goroutines and must be safe for that.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var (
+		wg       sync.WaitGroup
+		errOnce  sync.Once
+		firstErr error
+	)
+	sem := make(chan struct{}, parallel)
+	for i, j := range jobs {
+		sem <- struct{}{}
+		if ctx.Err() != nil {
+			<-sem
+			break
+		}
+		wg.Add(1)
+		go func() {
+			defer func() { <-sem; wg.Done() }()
+			rec, err := runOnce(ctx, cfg, d, lib, j.sc, j.n)
+			if err != nil {
+				errOnce.Do(func() {
+					firstErr = fmt.Errorf("%s run %d: %w", j.sc.Name, j.n, err)
+					cancel()
+				})
+				return
+			}
+			out[i] = rec
+		}()
+	}
+	wg.Wait()
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err // cancelled before every job started: no partial records
 	}
 	return out, nil
 }

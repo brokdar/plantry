@@ -19,14 +19,15 @@ const maxFeedbackLines = 10
 // found as rules in plain words with the numbers, the cells and keys
 // involved, and a concrete fix. It reads the merged state the checker saw.
 type repairer struct {
-	in ChooseInput
-	s  State
-	x  *index
+	in   ChooseInput
+	prop Proposal
+	s    State
+	x    *index
 }
 
 func newRepairer(in ChooseInput, prop Proposal) *repairer {
 	s := Merge(in.State, in.Target, prop)
-	return &repairer{in: in, s: s, x: newIndex(s, in.Target)}
+	return &repairer{in: in, prop: prop, s: s, x: newIndex(s, in.Target)}
 }
 
 // advisories are the findings that are no hard rule: a lunch or dinner
@@ -37,7 +38,21 @@ func (r *repairer) advisories() []string {
 	if r.in.Side != nil {
 		return r.sideRoleChanged()
 	}
-	return r.missingMains()
+	// The week's meat and fish are finished in Go (guardWeek): no repair for them.
+	return append(r.missingMains(), r.cookDaysAdvice()...)
+}
+
+// cookDaysAdvice is the advisory for a plan that cooks on more days than the
+// limit the model itself stated (submit_plan max_cook_days).
+func (r *repairer) cookDaysAdvice() []string {
+	limit := r.prop.MaxCookDays
+	if limit <= 0 {
+		return nil
+	}
+	if n := cookDays(Evaluate(r.s, r.in.Target)); n > limit {
+		return []string{fmt.Sprintf("The plan cooks on %d days, but the instruction allows %d. Fix: cook bigger batches on fewer days and let other plates eat them as leftovers (keep days and freezing permitting).", n, limit)}
+	}
+	return nil
 }
 
 // sideRoleChanged reports a side swap whose new side has another role than
@@ -181,6 +196,8 @@ func (r *repairer) describe(v Issue, seen map[string]bool) string {
 		return fmt.Sprintf("H1: %s holds %d plates, exactly one is allowed. Fix: keep one plate for that cell.", where, intParam(v, "count"))
 	case "H1." + CodePlateInNoneCell:
 		return fmt.Sprintf("H1: %s is a no-plate cell. Fix: remove the plate you put there.", where)
+	case "H1." + CodeCookInNoneCell:
+		return fmt.Sprintf("H1: %s is a no-plate cell, nobody is home to cook there. Fix: cook that session on a plan cell instead.", where)
 	case "H2." + CodeTooManyCookOccasions:
 		return r.describeH2(v)
 	case "H3." + plate.WarnDeficit, "H3." + plate.WarnFrozenDeficit, "H4." + plate.WarnLeftoverBeforeCook, "H4." + plate.WarnPastKeepDays:
@@ -211,6 +228,9 @@ func (r *repairer) describe(v Issue, seen map[string]bool) string {
 		return fmt.Sprintf("H7: session key %v is used more than once. Fix: give every session its own key.", v.Params["session_key"])
 	case "H7." + CodeInvalidPortions:
 		return fmt.Sprintf("H7: portions or eaters at %s are not positive, or frozen_portions is negative or above portions. Fix: use positive numbers and 0 <= frozen_portions <= portions.", where)
+	case "H7." + CodePortionsOverCap:
+		return fmt.Sprintf("H7: %s has %s at %v portions per person, the most allowed is %v. Fix: keep the dish at %v or less and close the energy gap with a side or a no-cook add-on (the S2/S3 options of the day list them).",
+			where, foodName(r.s, intParam(v, "food_id")), v.Params["portions"], v.Params["max_portions"], v.Params["max_portions"])
 	case "H7." + CodePlateWithoutComponent:
 		return fmt.Sprintf("H7: the plate at %s has no component. Fix: give it at least one.", where)
 	case "H7." + CodePlateOutsideTarget, "H6." + CodeSessionOutsideTarget:
@@ -379,6 +399,31 @@ const (
 )
 
 func autofix(in ChooseInput, prop Proposal) (Proposal, []string) {
+	prop, gramNotes := recipeGrams(in.State, prop)
+	prop, notes := autofixSessions(in, prop)
+	return prop, append(gramNotes, notes...)
+}
+
+// recipeGrams turns a recipe the plan gave in grams (only leaves take grams)
+// into one portion of it.
+func recipeGrams(st State, prop Proposal) (Proposal, []string) {
+	var notes []string
+	out := prop
+	out.Plates = slices.Clone(prop.Plates)
+	for i, pl := range out.Plates {
+		pl.Components = slices.Clone(pl.Components)
+		for j, c := range pl.Components {
+			if f, ok := st.Foods[c.FoodID]; ok && f.Composed() && c.Grams > 0 && c.Portions == 0 && c.SessionKey == "" && c.SessionID == 0 {
+				pl.Components[j].Grams, pl.Components[j].Portions = 0, 1
+				notes = append(notes, fmt.Sprintf("%s is a recipe: one portion instead of %s g (only single foods take grams).", foodName(st, c.FoodID), num(c.Grams)))
+			}
+		}
+		out.Plates[i] = pl
+	}
+	return out, notes
+}
+
+func autofixSessions(in ChooseInput, prop Proposal) (Proposal, []string) {
 	s := Merge(in.State, in.Target, prop)
 	x := newIndex(s, in.Target)
 	set := s.Settings.BatchSettings
@@ -417,6 +462,42 @@ func autofix(in ChooseInput, prop Proposal) (Proposal, []string) {
 		}
 		notes = append(notes, line+" to cover its plates.")
 		out.Sessions[i].Portions, out.Sessions[i].FrozenPortions = portions, frozen
+	}
+	return out, notes
+}
+
+// capPortions is the last guard before a generated plan is saved: a component
+// above MaxDishPortions is lowered to it, and the proposed session it eats
+// from shrinks by what the plate no longer eats, so coverage (H3) holds. The
+// checker reports the violation first and the repair loop asks the model to
+// fix it; this keeps an unrepaired one out of the saved plan. One user-facing
+// line per change.
+func capPortions(s State, in Proposal) (Proposal, []string) {
+	out := in
+	out.Plates = slices.Clone(in.Plates)
+	out.Sessions = slices.Clone(in.Sessions)
+	var notes []string
+	for i, pl := range out.Plates {
+		pl.Components = slices.Clone(pl.Components)
+		changed := false
+		for j, c := range pl.Components {
+			if c.Portions <= MaxDishPortions+epsilon {
+				continue
+			}
+			for k, ss := range out.Sessions {
+				if c.SessionKey != "" && ss.Key == c.SessionKey {
+					out.Sessions[k].Portions = max(ss.Portions-pl.eaters(s)*(c.Portions-MaxDishPortions), 0)
+					out.Sessions[k].FrozenPortions = min(out.Sessions[k].FrozenPortions, out.Sessions[k].Portions)
+				}
+			}
+			notes = append(notes, fmt.Sprintf("%s: portions lowered from %s to %s on %s (at most %s portions of a dish per person).",
+				foodName(s, c.FoodID), num(c.Portions), num(MaxDishPortions), weekdayDate(pl.Date), num(MaxDishPortions)))
+			pl.Components[j].Portions = MaxDishPortions
+			changed = true
+		}
+		if changed {
+			out.Plates[i] = pl
+		}
 	}
 	return out, notes
 }
