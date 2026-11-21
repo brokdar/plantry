@@ -155,6 +155,12 @@ export function SlotBandsEditor() {
                 min={0}
                 max={100}
                 value={d.min}
+                aria-invalid={sumsInvalid || badRow === d.slot_id || undefined}
+                aria-describedby={
+                  sumsInvalid || badRow === d.slot_id
+                    ? "slot-bands-sums"
+                    : undefined
+                }
                 aria-label={`${name} ${t("settings_page.meals.bands_min")}`}
                 onChange={(e) => update(d.slot_id, "min", e.target.value)}
                 className="pointer-coarse:h-11"
@@ -165,6 +171,12 @@ export function SlotBandsEditor() {
                 min={0}
                 max={100}
                 value={d.max}
+                aria-invalid={sumsInvalid || badRow === d.slot_id || undefined}
+                aria-describedby={
+                  sumsInvalid || badRow === d.slot_id
+                    ? "slot-bands-sums"
+                    : undefined
+                }
                 aria-label={`${name} ${t("settings_page.meals.bands_max")}`}
                 onChange={(e) => update(d.slot_id, "max", e.target.value)}
                 className="pointer-coarse:h-11"
@@ -174,7 +186,9 @@ export function SlotBandsEditor() {
         })}
       </ul>
       <p
-        role={invalid ? "alert" : undefined}
+        id="slot-bands-sums"
+        role="status"
+        aria-live="polite"
         className={
           invalid ? "text-small text-danger" : "text-small text-ink-muted"
         }

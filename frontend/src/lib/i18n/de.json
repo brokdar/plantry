@@ -281,7 +281,7 @@
       "routines_label": "Routinen",
       "routines_effect": "Routinen sind gespeicherte Mahlzeiten, die regelmäßig wiederkehren, etwa dein Frühstück unter der Woche.",
       "bands_label": "Größe der Mahlzeiten",
-      "bands_effect": "Ein Bereich ist der Anteil der Tagesenergie, den eine Mahlzeit haben soll, in Prozent. Plantry zielt bei jeder Mahlzeit auf die Mitte ihres Bereichs, die Grenzen für eine leichtere oder vollere Mahlzeit folgen ihm, und das Tagesminimum sinkt um den Anteil einer Mahlzeit, die ihr auswärts esst. Eine Mahlzeit außerhalb ihres Bereichs wird angezeigt, nie blockiert.",
+      "bands_effect": "Ein Bereich ist der Anteil der Tagesenergie, den eine Mahlzeit haben soll, in Prozent. Plantry zielt bei jeder Mahlzeit auf die Mitte ihres Bereichs, die Grenzen für eine leichtere oder vollere Mahlzeit folgen ihm, und das Tagesminimum sinkt um den Anteil einer Mahlzeit, die du auswärts isst. Eine Mahlzeit außerhalb ihres Bereichs wird angezeigt, nie blockiert.",
       "bands_min": "Min %",
       "bands_max": "Max %",
       "bands_share": "Zielt auf etwa {{pct}} % des Tages",

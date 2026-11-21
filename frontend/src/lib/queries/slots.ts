@@ -30,7 +30,7 @@ export function useCreateTimeSlot() {
   return useMutation({
     mutationFn: (input: TimeSlotInput) => createTimeSlot(input),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: slotKeys.lists() })
+      void queryClient.invalidateQueries({ queryKey: slotKeys.all })
     },
     onError: (err) => toastError(err, t),
   })
@@ -42,7 +42,7 @@ export function useUpdateTimeSlot() {
     mutationFn: ({ id, data }: { id: number; data: TimeSlotInput }) =>
       updateTimeSlot(id, data),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: slotKeys.lists() })
+      void queryClient.invalidateQueries({ queryKey: slotKeys.all })
     },
     onError: (err) => toastError(err, t),
   })
@@ -53,7 +53,7 @@ export function useDeleteTimeSlot() {
   return useMutation({
     mutationFn: (id: number) => deleteTimeSlot(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: slotKeys.lists() })
+      void queryClient.invalidateQueries({ queryKey: slotKeys.all })
     },
     onError: (err) => toastError(err, t),
   })

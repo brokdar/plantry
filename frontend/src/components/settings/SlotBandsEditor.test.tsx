@@ -65,8 +65,8 @@ describe("SlotBandsEditor", () => {
     await userEvent.type(screen.getByLabelText(/lunch.*max/i), "70")
     await userEvent.clear(lunchMin)
     await userEvent.type(lunchMin, "60")
-    const alert = await screen.findByRole("alert")
-    expect(alert.textContent).toMatch(/105 %/)
+    const alert = screen.getByRole("status")
+    await waitFor(() => expect(alert.textContent).toMatch(/105 %/))
     expect(screen.getByRole("button", { name: /save bands/i })).toBeDisabled()
     expect(setSlotBands).not.toHaveBeenCalled()
   })
@@ -80,5 +80,25 @@ describe("SlotBandsEditor", () => {
     await waitFor(() =>
       expect(applySlotBandPreset).toHaveBeenCalledWith("dinner_biggest")
     )
+  })
+
+  it("announces the sums through a live region that is always mounted, and marks the rows at fault", async () => {
+    renderWithRouter(<SlotBandsEditor />)
+    const lunchMin = await screen.findByLabelText(/lunch.*min/i)
+    const region = screen.getByRole("status")
+    expect(region.textContent).toMatch(/75/)
+    expect(lunchMin).not.toHaveAttribute("aria-invalid", "true")
+
+    await userEvent.clear(screen.getByLabelText(/lunch.*max/i))
+    await userEvent.type(screen.getByLabelText(/lunch.*max/i), "70")
+    await userEvent.clear(lunchMin)
+    await userEvent.type(lunchMin, "60")
+
+    // the same element, its text changed
+    expect(screen.getByRole("status")).toBe(region)
+    await waitFor(() => expect(region.textContent).toMatch(/105 %/))
+    expect(lunchMin).toHaveAttribute("aria-invalid", "true")
+    expect(region.id).not.toBe("")
+    expect(lunchMin).toHaveAttribute("aria-describedby", region.id)
   })
 })
