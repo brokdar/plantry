@@ -243,29 +243,32 @@ func (r repeatStub) Choose(ctx context.Context, in planning.ChooseInput) (planni
 	return p, nil
 }
 
-// KR7 (v1 OQ6, signed; v1.2 clarification): a day replan whose result would show
-// the same main at both meals while the variety rule triggers saves nothing, and
-// the reply says so.
-func TestKR7_ReplanWithRepeatedMainSavesNothingAndSaysSo(t *testing.T) {
+// KR7 (v1.2, order of fallbacks): the same dish twice is the third fallback, "only
+// where H8 is not triggered". H8 counts cooks, so one cooking that feeds both meals
+// of the day repeats nothing when the dish was not eaten inside the variety window.
+// That pair is saved. The other end of the order (a pair that H8 does trigger saves
+// nothing and says so, v1 OQ6) is not reachable through this fixture: the day's
+// variety repair swaps any recently eaten main for a fresh one while one exists, and
+// with none left H8 is relaxed (probe on c95064e, 34 libraries from "1 fresh main" to
+// "all fresh": every replan saved). It is covered where the merged plan can be built
+// directly, in the planning package.
+func TestKR7_SameDishTwiceIsSavedWhereH8IsNotTriggered(t *testing.T) {
 	e := newEnv(t, "chat-dev", chatWeek)
 	s := e.st()
 	span := s.Window.Start.AddDate(0, 0, -7*s.Settings.VarietyWeeks)
 	var dish int64
 	for id, f := range s.Foods {
-		if f.Kind == food.KindComposed && f.Role == food.RoleMain && f.NutritionComplete && f.LastEaten != nil && !f.LastEaten.Before(span) && (dish == 0 || id < dish) {
+		if f.Kind == food.KindComposed && f.Role == food.RoleMain && f.NutritionComplete && (f.LastEaten == nil || f.LastEaten.Before(span)) && (dish == 0 || id < dish) {
 			dish = id
 		}
 	}
-	require.NotZero(t, dish, "a recently eaten main")
+	require.NotZero(t, dish, "a main not eaten inside the variety window")
 	date := chatWeek.AddDate(0, 0, 2)
-	// v1.2 KR7 orders the fallbacks: cold plate, extra portion, the same dish twice outside
-	// H8, otherwise no replan. Take the cold plate away (no no-cook leaf in the library) so
-	// that no fallback is left; the only way out is "nothing saved, told".
+	// No cold plate and no spare portion: the same dish twice is what is left.
 	_, err := e.db.Exec(`UPDATE foods SET no_cook = 0 WHERE kind = 'leaf'`)
 	require.NoError(t, err)
 	e.deps.Choosers[airun.ChooserHeuristic] = repeatStub{date: date, dish: dish}
 	e.planner = planning.NewService(e.deps)
-	before := snapshot(s)
 	id, err := e.planner.Regenerate(context.Background(), planning.Request{
 		Start: chatWeek, Today: today,
 		Scope: planning.Scope{Kind: planning.ScopeDay, Date: date}, Chooser: airun.ChooserHeuristic,
@@ -273,6 +276,23 @@ func TestKR7_ReplanWithRepeatedMainSavesNothingAndSaysSo(t *testing.T) {
 	require.NoError(t, err)
 	v, err := e.planner.Run(context.Background(), id)
 	require.NoError(t, err)
-	assert.Equal(t, before, snapshot(e.st()), "the replan must save nothing (status %s, notes %q)", v.Status, v.Notes)
-	assert.Equal(t, "error.plan.day_same_dish", v.ErrorKey, "the reply must say nothing was replanned (notes %q)", v.Notes)
+	assert.NotEqual(t, "error.plan.day_same_dish", v.ErrorKey, "H8 is not triggered, so the pair is saved (notes %q)", v.Notes)
+	assert.Equal(t, airun.StatusOK, v.Status, "notes %q key %q", v.Notes, v.ErrorKey)
+	// The variety repair may have swapped the stub's dish for another that H8 accepts
+	// (the notes say so); what the spec asks is that the day ends with one main twice.
+	st := e.st()
+	count := map[int64]int{}
+	most := 0
+	for _, p := range st.Plates {
+		if !p.Date.Equal(date) {
+			continue
+		}
+		for _, c := range p.Components {
+			if f := st.Foods[c.FoodID]; f.Kind == food.KindComposed && f.Role == food.RoleMain {
+				count[c.FoodID]++
+				most = max(most, count[c.FoodID])
+			}
+		}
+	}
+	assert.Equal(t, 2, most, "one main stands at both meals of the day (notes %q)", v.Notes)
 }
