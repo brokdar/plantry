@@ -15,7 +15,7 @@ import (
 )
 
 // Spec v1.1 SB1/SB2: slot bands and expected shares. The households keep the
-// default bands, so the oracle needs no stored bands.
+// default bands, so the stored bands equal the defaults (the oracle reads the stored ones).
 
 type band struct{ Min, Max float64 }
 
@@ -40,7 +40,13 @@ func defaultBand(name string, kind slot.Kind) band {
 	return band{25, 40}
 }
 
-func bandOfSlot(s planning.State, id int64) band { return defaultBand(s.SlotNames[id], s.SlotKind[id]) }
+// bandOfSlot is the slot's stored band (State.SlotBand, SB1); the default only when none is stored.
+func bandOfSlot(s planning.State, id int64) band {
+	if b, ok := s.SlotBand[id]; ok {
+		return band{b.MinPct, b.MaxPct}
+	}
+	return defaultBand(s.SlotNames[id], s.SlotKind[id])
+}
 
 // shares is SB2: band midpoint over the sum of all configured slots' midpoints.
 func shares(s planning.State) map[int64]float64 {
