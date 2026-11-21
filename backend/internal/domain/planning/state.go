@@ -21,6 +21,20 @@ import (
 // plan window. The caller (the context builder, or a read model) fills it
 // with bounded queries; nothing here does I/O.
 type State struct {
+	// Avoid are foods the user removed earlier in the conversation: no way,
+	// option or alternative adds them again (set by the chat tools).
+	Avoid map[int64]bool
+	// Named are the foods the user's message names (set by the chat tools from
+	// the request text, never from a model argument): a variety repeat of one
+	// is the warning variety_repeat_named, not a violation (SF3).
+	Named map[int64]bool
+	// PairAddOns turns on the add-on pairing rules (addOnFits) for the chat
+	// tools; the planner's own top-ups keep their candidates.
+	PairAddOns bool
+	// CookPile: an away call re-anchors the cooks of a day under CookTogether,
+	// so a move may bring any number of dishes onto one cooking time.
+	CookPile bool
+
 	Window window.Window
 	Today  time.Time
 	// Cells are the window's resolved cells in (date, slot order) order.
@@ -32,6 +46,11 @@ type State struct {
 	// SlotKind maps slot ids to their kind (light or meal); a slot without
 	// an entry is a full meal.
 	SlotKind map[int64]slot.Kind
+	// SlotShare is each active slot's expected share of the day (SB2: the band
+	// midpoint over the sum of midpoints); empty means an even split.
+	SlotShare map[int64]float64
+	// SlotBand is each active slot's effective energy band (SB1).
+	SlotBand map[int64]slot.Band
 	// Plates are the plates in and around the window: the window's own plus
 	// the ones eating from sessions the window's plates eat from. A plate
 	// with a negative ID is proposed (see Merge).

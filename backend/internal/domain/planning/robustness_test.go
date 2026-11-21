@@ -120,18 +120,11 @@ func TestService_RunningRowWithoutARunIsAnError(t *testing.T) {
 	assert.Empty(t, v.Stage)
 }
 
-// readyChooser is an LLM chooser whose provider reports err.
-type readyChooser struct{ err error }
-
-func (readyChooser) Choose(ctx context.Context, in planning.ChooseInput) (planning.Proposal, error) {
-	return planning.Heuristic{}.Choose(ctx, in)
-}
-
-func (c readyChooser) Ready(context.Context) error { return c.err }
-
-// Without a chooser in the request: the LLM when its provider resolves, the
-// heuristic when none is configured, and an error (no silent fallback) when
-// a configured one fails.
+// Without a chooser in the request (PL2): with an extractor, "llm" (the wish
+// read by a model, the plan made by the heuristic) when its provider resolves,
+// the heuristic when none is configured, and an error (no silent fallback)
+// when a configured one fails. Without an extractor a model never plans by
+// default.
 func TestService_DefaultChooser(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -146,7 +139,7 @@ func TestService_DefaultChooser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e := newSvcEnv(t)
-			e.deps.Choosers[airun.ChooserLLM] = readyChooser{err: tt.ready}
+			e.deps.Extractor = &fakeExtractor{readyErr: tt.ready}
 			e.svc = planning.NewService(e.deps)
 
 			id, err := e.svc.Generate(e.ctx, e.req())

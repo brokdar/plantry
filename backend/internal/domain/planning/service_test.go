@@ -82,6 +82,15 @@ func newSvcEnv(t testing.TB) *svcEnv {
 		e.exec(`INSERT INTO food_components (parent_id, child_id, amount, unit, grams) VALUES (?, ?, 400, 'g', 400)`, id, beans)
 		e.sides = append(e.sides, id)
 	}
+	// A cold plate needs a bread, a cheese or spread and a raw vegetable: with
+	// them a day that cannot hold two cooked mains gets one (OQ6 saves nothing
+	// only when nothing else fits).
+	for _, f := range []struct {
+		name, role string
+		kcal, prot float64
+	}{{"Vollkornbrot", "side_starch", 230, 8}, {"Gouda Käse", "", 350, 25}, {"Gurke", "side_veg", 12, 0.6}} {
+		e.insert(`INSERT INTO foods (name, kind, role, source, kcal_100g, protein_100g, fat_100g, carbs_100g) VALUES (?, 'leaf', NULLIF(?, ''), 'manual', ?, ?, 2, 20)`, f.name, f.role, f.kcal, f.prot)
+	}
 	e.oats = e.insert(`INSERT INTO foods (name, kind, role, reference_portions) VALUES ('Oats', 'composed', 'standalone', 1)`)
 	e.exec(`INSERT INTO food_components (parent_id, child_id, amount, unit, grams) VALUES (?, ?, 80, 'g', 80)`, e.oats, beans)
 	preset := e.insert(`INSERT INTO presets (name) VALUES ('Oats')`)

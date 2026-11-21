@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
+
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
@@ -62,12 +64,13 @@ func (e *planToolEnv) emptyOtherSlot(p plate.Plate) int64 {
 	return id
 }
 
+// issueRules are the labels of an issue list: the model reads no rule codes.
 func issueRules(t *testing.T, res map[string]any, key string) []string {
 	t.Helper()
 	issues := res["after"].(map[string]any)["issues"].(map[string]any)
 	var rules []string
 	for _, is := range issues[key].([]any) {
-		rules = append(rules, is.(map[string]any)["rule"].(string))
+		rules = append(rules, is.(map[string]any)["label"].(string))
 	}
 	return rules
 }
@@ -75,6 +78,7 @@ func issueRules(t *testing.T, res map[string]any, key string) []string {
 // A dry run reports the full result and writes nothing: no row of any plan
 // table, no override, no ai_changes row and no change handed to the loop.
 func TestApplyChanges_DryRunLeavesTheDatabaseUnchanged(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, sid := e.freshMain()
@@ -114,6 +118,7 @@ func TestApplyChanges_DryRunLeavesTheDatabaseUnchanged(t *testing.T) {
 // All ops share one transaction: a failing op names itself and rolls back
 // the ops before it.
 func TestApplyChanges_FailingOpRollsBackTheBatch(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.freshMain()
 	before := e.dbCounts()
@@ -132,7 +137,9 @@ func TestApplyChanges_FailingOpRollsBackTheBatch(t *testing.T) {
 // second cooking occasion (H2) unless it is cooked together with the existing
 // batch. cook_at puts it on the existing cook cell, so H2 stays quiet.
 func TestApplyChanges_CookAtSharesTheCookCell(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
+	e.setCookLimit(1)
 	p, _ := e.freshMain()
 	slotID := e.emptyOtherSlot(p)
 	side := e.sides[0]
@@ -140,23 +147,24 @@ func TestApplyChanges_CookAtSharesTheCookCell(t *testing.T) {
 	alone, err := e.exec("apply_changes", fmt.Sprintf(
 		`{"dry_run":true,"ops":[{"op":"add","date":%q,"slot_id":%d,"food_id":%d,"portions":1}]}`, p.DateString(), slotID, side))
 	require.NoError(t, err)
-	assert.Contains(t, issueRules(t, alone, "new"), "H2", "cooking the side in its own cell is a second occasion")
+	assert.Contains(t, issueRules(t, alone, "new"), "cooking times per day", "cooking the side in its own cell is a second occasion")
 
 	shared, err := e.exec("apply_changes", fmt.Sprintf(
 		`{"ops":[{"op":"add","date":%q,"slot_id":%d,"food_id":%d,"portions":1,"cook_at":{"date":%q,"slot_id":%d}}]}`,
 		p.DateString(), slotID, side, p.DateString(), p.SlotID))
 	require.NoError(t, err)
-	assert.NotContains(t, issueRules(t, shared, "new"), "H2")
+	assert.NotContains(t, issueRules(t, shared, "new"), "cooking times per day")
 	days := shared["after"].(map[string]any)["days"].([]any)
 	require.NotEmpty(t, days)
 	day := days[0].(map[string]any)
 	assert.Equal(t, p.DateString(), day["date"])
-	assert.EqualValues(t, 1, day["cook_occasions"], "one cooking occasion that day")
+	assert.EqualValues(t, 1, day["cooking_times"], "one cooking occasion that day")
 }
 
 // find_foods no_cook returns leaves that need no cooking (raw produce) and
 // leaves out cooked ones.
 func TestFindFoods_NoCookReturnsLeaves(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	e.insert(`INSERT INTO foods (name, kind, source, shop_section, kcal_100g, protein_100g, fat_100g, carbs_100g) VALUES ('Gurke', 'leaf', 'manual', 'produce', 15, 0.7, 0.1, 3.6)`)
 	e.insert(`INSERT INTO foods (name, kind, source, kcal_100g, protein_100g, fat_100g, carbs_100g) VALUES ('Reis', 'leaf', 'manual', 130, 2.7, 0.3, 28)`)
@@ -172,4 +180,9 @@ func TestFindFoods_NoCookReturnsLeaves(t *testing.T) {
 		assert.Contains(t, f, "per_100g")
 	}
 	assert.Equal(t, []string{"Gurke"}, names)
+}
+
+func (e *planToolEnv) setCookLimit(n int) {
+	e.t.Helper()
+	require.NoError(e.t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", fmt.Sprint(n)))
 }

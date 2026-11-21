@@ -19,7 +19,7 @@ func proteinNote(s State, t Target) string {
 		return ""
 	}
 	var parts []string
-	for _, is := range Evaluate(s, t).Issues {
+	for _, is := range evaluateLean(s, t).Issues {
 		if is.Code != CodeProteinLow || is.Date == "" {
 			continue
 		}
@@ -73,7 +73,11 @@ func (h *planner) topUpFloors() {
 	y, days := h.dayAccounts()
 	for _, dk := range days {
 		if floor := dk.Floor(y.pol); dk.Kcal < floor {
+			// The safety floor comes before how the plate looks: any verified food.
+			pair := h.s.PairAddOns
+			h.s.PairAddOns = false
 			h.liftDay(dk, floor, true)
+			h.s.PairAddOns = pair
 		}
 	}
 	h.closeProteinGaps()
@@ -125,6 +129,9 @@ func (h *planner) dayAccounts() (*index, []DayKcal) {
 // verified no-cook foods.
 func (h *planner) liftDay(dk DayKcal, limit float64, roundUp bool) {
 	h.topUpDay(dk.Date, limit-dk.Kcal, roundUp)
+	if h.balance {
+		h.addSide(dk.Date, limit)
+	}
 	for h.addNoCook(dk.Date, false, limit) {
 	}
 }
@@ -227,7 +234,7 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 	if dk == nil || !dk.Complete || dk.Away || dk.NutritionMissing || dk.Kcal <= 0 {
 		return false
 	}
-	ev := Evaluate(merged, h.in.Target)
+	ev := evaluateLean(merged, h.in.Target)
 	var d DayEval
 	for _, e := range ev.Days {
 		if e.Date == date.Format(time.DateOnly) {
@@ -283,11 +290,19 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 			return cmp.Or(cmp.Compare(over(a), over(b)), cmp.Compare(b.protein, a.protein), cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal)))
 		}
 		// Sweets are out and the protein pass has its own add, so a filler
-		// is the food that fits the kcal gap best.
+		// is the food that fits the kcal gap best. A model's plan gets, within 25 kcal
+		// of each other, a vegetable or salad before bread before the rest (sideFitRank).
+		if h.balance {
+			if ba, bb := math.Round(math.Abs(need-a.kcal)/25), math.Round(math.Abs(need-b.kcal)/25); ba != bb || sideFitRank(h.s.Foods[a.opt.FoodID]) != sideFitRank(h.s.Foods[b.opt.FoodID]) {
+				return cmp.Or(cmp.Compare(ba, bb), cmp.Compare(sideFitRank(h.s.Foods[a.opt.FoodID]), sideFitRank(h.s.Foods[b.opt.FoodID])))
+			}
+		}
 		return cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal))
 	})
 	for _, c := range cands {
-		if _, ok := y.verify(c, h.in.Target, base, d, band, protein); !ok {
+		o, ok := y.verify(c, h.in.Target, base, d, band, protein)
+		if !ok || (h.balance && o.CookOccasions > len(y.occasions[dayOf(date)])) {
+			// A model's plan keeps its cooking days: an add never cooks anew.
 			continue
 		}
 		at := merged.Plates[c.plate]
@@ -346,6 +361,10 @@ func spreadAdds(y *index, merged State, date time.Time, cands []optCand, used ma
 			if held[c.opt.FoodID] {
 				continue
 			}
+			// The candidates were checked against the day's last plate: each plate has its own fit.
+			if f := merged.Foods[c.opt.FoodID]; !f.Composed() && !merged.addOnFits(merged.Plates[pi], f, slotName(merged, merged.Plates[pi].SlotID)) {
+				continue
+			}
 			c.plate = pi
 			out = append(out, c)
 		}
@@ -355,6 +374,7 @@ func spreadAdds(y *index, merged State, date time.Time, cands []optCand, used ma
 
 // topUpDay adds need kcal per eater to the day's growable components.
 func (h *planner) topUpDay(date time.Time, need float64, roundUp bool) {
+	meatFull := h.balance && h.meatFull()
 	sessions := map[string]int{}
 	for i, ss := range h.prop.Sessions {
 		sessions[ss.Key] = i
@@ -363,6 +383,11 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp bool) {
 	// its keep days (not a frozen link), and the session's index.
 	growable := func(p ProposedPlate, c ProposedComponent) (int, bool) {
 		i, ok := sessions[c.SessionKey]
+		if h.balance && c.SessionKey == "" && c.SessionID == 0 && c.Portions > 0 && !h.s.lightMeal(p.Date, p.SlotID) {
+			// A component cooked fresh for its own plate has no session to grow.
+			f, known := h.s.Foods[c.FoodID]
+			return -1, known && f.Macros.Kcal > 0 && (f.Role == food.RoleMain || f.Role == food.RoleSideStarch) && !(meatFull && f.Groups.MeatG > 0)
+		}
 		if c.SessionKey == "" || !ok || c.Portions <= 0 || h.s.lightMeal(p.Date, p.SlotID) {
 			return 0, false
 		}
@@ -372,7 +397,7 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp bool) {
 			return 0, false
 		}
 		last := ss.CookDate.AddDate(0, 0, h.x.keepDays(c.FoodID))
-		return i, !p.Date.After(last) && f.Macros.Kcal > 0 && (f.Role == food.RoleMain || f.Role == food.RoleSideStarch)
+		return i, !p.Date.After(last) && f.Macros.Kcal > 0 && (f.Role == food.RoleMain || f.Role == food.RoleSideStarch) && !(meatFull && f.Groups.MeatG > 0)
 	}
 	var raisable float64
 	for _, p := range h.prop.Plates {
@@ -411,8 +436,10 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp bool) {
 			if _, seen := h.topUpBase[key]; !seen {
 				h.topUpBase[key] = c.Portions
 			}
-			raised = max(min(raised, math.Floor(h.topUpBase[key]*maxTopUp*4+epsilon)/4), c.Portions)
-			h.prop.Sessions[si].Portions += eaters * (raised - c.Portions)
+			raised = max(min(raised, math.Floor(h.topUpBase[key]*maxTopUp*4+epsilon)/4, MaxDishPortions), c.Portions)
+			if si >= 0 {
+				h.prop.Sessions[si].Portions += eaters * (raised - c.Portions)
+			}
 			c.Portions = raised
 		}
 	}

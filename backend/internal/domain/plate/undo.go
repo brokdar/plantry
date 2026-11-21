@@ -95,6 +95,14 @@ func (s *Service) RevertRange(ctx context.Context, first, last int64) (RowSet, e
 // events: a later write would otherwise be lost (domain.ErrPlanChangeStale).
 // The agent's change undo and the hand revert share it.
 func (s *Service) RevertChecked(ctx context.Context, events []Event) (RowSet, error) {
+	return s.RevertCheckedTolerating(ctx, events, nil)
+}
+
+// RevertCheckedTolerating is RevertChecked that also lets the events whose ids
+// are in tolerated, and every undo event, stand on the rows after events: the
+// writes of newer changes that were undone (undo chain, newest first). Their
+// revert put the rows back as events left them.
+func (s *Service) RevertCheckedTolerating(ctx context.Context, events []Event, tolerated map[int64]bool) (RowSet, error) {
 	if len(events) == 0 {
 		return RowSet{PlateIDs: []int64{}, SessionIDs: []int64{}}, nil
 	}
@@ -106,7 +114,12 @@ func (s *Service) RevertChecked(ctx context.Context, events []Event) (RowSet, er
 			return err
 		}
 		if n != int64(len(events)) {
-			return fmt.Errorf("%w: a row was written after the change", domain.ErrPlanChangeStale)
+			if n < int64(len(events)) || len(tolerated) == 0 {
+				return fmt.Errorf("%w: a row was written after the change", domain.ErrPlanChangeStale)
+			}
+			if err := s.checkTolerated(ctx, events, plateIDs, sessionIDs, tolerated); err != nil {
+				return err
+			}
 		}
 		rows, err = s.Revert(ctx, events)
 		if errors.Is(err, domain.ErrAIChangeStale) {
@@ -118,6 +131,30 @@ func (s *Service) RevertChecked(ctx context.Context, events []Event) (RowSet, er
 		return RowSet{}, err
 	}
 	return rows, nil
+}
+
+// checkTolerated fails with domain.ErrPlanChangeStale when a row has an event
+// after events that is neither one of them, nor tolerated, nor an undo.
+func (s *Service) checkTolerated(ctx context.Context, events []Event, plateIDs, sessionIDs []int64, tolerated map[int64]bool) error {
+	last, err := s.events.LastID(ctx)
+	if err != nil {
+		return err
+	}
+	later, err := s.events.Range(ctx, events[0].ID, last)
+	if err != nil {
+		return err
+	}
+	own := make(map[int64]bool, len(events))
+	for _, e := range events {
+		own[e.ID] = true
+	}
+	for _, e := range later {
+		onRows := e.PlateID != nil && slices.Contains(plateIDs, *e.PlateID) || e.CookSessionID != nil && slices.Contains(sessionIDs, *e.CookSessionID)
+		if onRows && !own[e.ID] && !tolerated[e.ID] && e.Action != ActionUndo {
+			return fmt.Errorf("%w: a row was written after the change", domain.ErrPlanChangeStale)
+		}
+	}
+	return nil
 }
 
 // EventRows returns the plates and the sessions events are about, each

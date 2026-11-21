@@ -170,6 +170,7 @@ func assertCurryPayload(t *testing.T, m map[string]any) {
 }
 
 func TestTool_FindFoods_ByID_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
+	t.Parallel()
 	ts, repo := newPayloadToolSet(t)
 	assertCurryPayload(t, findCurry(t, ts))
 	assert.Equal(t, payloadToday, repo.historyToday, "history is as of the user's today")
@@ -178,6 +179,7 @@ func TestTool_FindFoods_ByID_PayloadIncludesFavoriteHistoryAndMacros(t *testing.
 // B2-AC6 (D10): keep_days is the effective value, the plan default when the
 // recipe sets none.
 func TestTool_Foods_KeepDaysIsEffective(t *testing.T) {
+	t.Parallel()
 	ts, repo := newPayloadToolSet(t)
 	repo.foods[3].KeepDays = nil
 	assert.Equal(t, float64(4), findCurry(t, ts)["keep_days"])
@@ -191,6 +193,7 @@ func TestTool_Foods_KeepDaysIsEffective(t *testing.T) {
 }
 
 func TestTool_FindFoods_ByID_NeverEatenRecipeHasNullHistory(t *testing.T) {
+	t.Parallel()
 	ts, repo := newPayloadToolSet(t)
 	repo.history = nil
 	m := findCurry(t, ts)
@@ -200,6 +203,7 @@ func TestTool_FindFoods_ByID_NeverEatenRecipeHasNullHistory(t *testing.T) {
 }
 
 func TestTool_FindFoods_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
+	t.Parallel()
 	ts, repo := newPayloadToolSet(t)
 	m := execJSON(t, ts, "find_foods", `{"ids":[1,2,3]}`)
 	items, ok := m["items"].([]any)
@@ -241,11 +245,13 @@ func TestTool_FindFoods_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
 }
 
 func TestErrorMessageKey_CellErrors(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "error.plate.cell_unavailable", errorMessageKey(fmt.Errorf("x: %w", domain.ErrCellUnavailable)))
 	assert.Equal(t, "error.plate.cell_occupied", errorMessageKey(fmt.Errorf("x: %w", domain.ErrCellOccupied)))
 }
 
 func TestErrorMessageKey_UsesDomainKeys(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		err  error
 		want string
@@ -270,6 +276,7 @@ func TestErrorMessageKey_UsesDomainKeys(t *testing.T) {
 }
 
 func TestPlateTools_DescriptionsDropSkipped(t *testing.T) {
+	t.Parallel()
 	for _, tool := range defaultTools(Services{}) {
 		assert.NotContains(t, strings.ToLower(tool.Description), "skipped=", tool.Name)
 		assert.NotContains(t, strings.ToLower(tool.Description), "carries skipped", tool.Name)
@@ -280,6 +287,7 @@ func TestPlateTools_DescriptionsDropSkipped(t *testing.T) {
 // The Anthropic Messages API rejects an input_schema with a top-level
 // anyOf, oneOf or allOf, and every registered tool is sent on every turn.
 func TestTools_SchemasHaveNoTopLevelCombinators(t *testing.T) {
+	t.Parallel()
 	for _, tool := range defaultTools(Services{Presets: &stubPresetSvc{}}) {
 		var schema map[string]any
 		require.NoError(t, json.Unmarshal(tool.Schema, &schema), tool.Name)
@@ -290,6 +298,7 @@ func TestTools_SchemasHaveNoTopLevelCombinators(t *testing.T) {
 }
 
 func TestTool_FindFoods_CancelledContextAborts(t *testing.T) {
+	t.Parallel()
 	ts, _ := newPayloadToolSet(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

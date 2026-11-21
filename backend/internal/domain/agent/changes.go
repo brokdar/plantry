@@ -113,6 +113,9 @@ type ChangeStore interface {
 	GetChange(ctx context.Context, id int64) (*Change, error)
 	// ConversationChanges lists the changes of a conversation's runs by id.
 	ConversationChanges(ctx context.Context, conversationID int64) ([]Change, error)
+	// UndoneAfter lists the undone changes whose first event id is above
+	// eventID.
+	UndoneAfter(ctx context.Context, eventID int64) ([]Change, error)
 	// MarkUndone sets undone_at; false when it was set already.
 	MarkUndone(ctx context.Context, id int64, at time.Time) (bool, error)
 }
@@ -449,9 +452,14 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 				return err
 			}
 			// Every event on these rows since the change began must be one of
-			// the change's own: a user edit between its first and last event
-			// has no run id and would otherwise be overwritten.
-			rows, err = c.plates.RevertChecked(ctx, events)
+			// the change's own or of a newer change that is undone now (with
+			// its undo): a user edit between its first and last event has no
+			// run id and would otherwise be overwritten.
+			tolerated, err := c.undoneEvents(ctx, *ch.FirstEventID)
+			if err != nil {
+				return err
+			}
+			rows, err = c.plates.RevertCheckedTolerating(ctx, events, tolerated)
 			if errors.Is(err, domain.ErrPlanChangeStale) {
 				return fmt.Errorf("%w: change %d", domain.ErrAIChangeStale, id)
 			}
@@ -492,6 +500,30 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 		rows.SessionIDs = []int64{}
 	}
 	return rows, nil
+}
+
+// undoneEvents returns the ids of the events of the changes undone after
+// eventID: their rows were put back, so they do not make an older change
+// stale (undoing newest first).
+func (c *Changes) undoneEvents(ctx context.Context, eventID int64) (map[int64]bool, error) {
+	list, err := c.store.UndoneAfter(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	ids := map[int64]bool{}
+	for _, ch := range list {
+		if ch.FirstEventID == nil {
+			continue
+		}
+		events, err := c.store.RunEvents(ctx, *ch.FirstEventID-1, *ch.LastEventID, ch.RunIDs)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range events {
+			ids[e.ID] = true
+		}
+	}
+	return ids, nil
 }
 
 // checkCell fails with domain.ErrAIChangeStale when the cell's override is

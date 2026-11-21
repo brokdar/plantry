@@ -6,6 +6,7 @@ import {
   type AvailabilityGridValue,
 } from "@/components/availability/AvailabilityGrid"
 import { RoutinesEditor } from "@/components/settings/routines/RoutinesEditor"
+import { SlotBandsEditor } from "@/components/settings/SlotBandsEditor"
 import { TimeSlotsEditor } from "@/components/settings/TimeSlotsEditor"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -36,6 +37,15 @@ export function MealsSection() {
       >
         <div className="pt-4">
           <TimeSlotsEditor />
+        </div>
+      </SettingsGroup>
+
+      <SettingsGroup
+        title={t("settings_page.meals.bands_label")}
+        description={t("settings_page.meals.bands_default_note")}
+      >
+        <div className="pt-4">
+          <SlotBandsEditor />
         </div>
       </SettingsGroup>
 

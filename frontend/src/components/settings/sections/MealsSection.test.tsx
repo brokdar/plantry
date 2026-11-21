@@ -21,6 +21,9 @@ vi.mock("@/lib/api/slots", () => ({
   createTimeSlot: vi.fn(),
   updateTimeSlot: vi.fn(),
   deleteTimeSlot: vi.fn(),
+  getSlotBands: vi.fn().mockResolvedValue({ items: [], shares: {} }),
+  setSlotBands: vi.fn(),
+  applySlotBandPreset: vi.fn(),
 }))
 vi.mock("@/lib/api/presets", () => ({
   getPresets: vi.fn(),

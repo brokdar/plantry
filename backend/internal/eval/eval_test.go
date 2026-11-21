@@ -5,6 +5,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -98,7 +99,7 @@ func TestHeuristicHasNoHardViolations(t *testing.T) {
 			assert.Contains(t, names(r.Expectations), ExpectNoViolations)
 			require.NotNil(t, r.Score)
 			assert.Empty(t, r.Score.HardViolations)
-			assert.Equal(t, "h16", r.PromptVersion)
+			assert.Equal(t, "h18", r.PromptVersion)
 			assert.Equal(t, Tokens{}, r.Tokens, "the heuristic calls no model")
 			if r.Scenario == "single_batch_cooker" {
 				// Z5 §17.2: no hard violation covers one cook a day (H2), no
@@ -148,8 +149,16 @@ func TestScriptedLLMPromptHasScenarioDates(t *testing.T) {
 	require.Len(t, recs, len(specScenarios))
 	for _, r := range recs {
 		t.Run(r.Scenario, func(t *testing.T) {
+			if r.Scenario == "unreachable_floor" || r.Scenario == "light_two_meals_floor" {
+				// PL1b: the fake model cannot lift the days over the floor and the
+				// heuristic cannot either: nothing is saved, the run ends in error
+				// naming the open rule.
+				assert.Equal(t, string(airun.StatusError), r.Status)
+				assert.Equal(t, "error.plan.hard_rule_open", r.ErrorKey)
+				return
+			}
 			assert.Empty(t, r.Failed())
-			if r.Scenario == "confirmed_cook_no_surplus" || r.Scenario == "unreachable_floor" || r.Scenario == "light_two_meals_floor" {
+			if r.Scenario == "confirmed_cook_no_surplus" {
 				// The fake model cannot fill the cell or lift the days over
 				// the floor: it ends partial after its repairs, with only the
 				// allowed violation.
@@ -274,4 +283,35 @@ func day(s string) time.Time {
 		panic(err)
 	}
 	return t
+}
+
+// The first failure of a parallel run stops the jobs that have not started and
+// is the error returned; a broken scenario does not seed.
+func TestRunParallelStopsAtTheFirstError(t *testing.T) {
+	all, err := LoadScenarios()
+	require.NoError(t, err)
+	good := all[0]
+	bad := all[1]
+	bad.Name = "broken"
+	bad.Settings = map[string]string{"no.such.setting": "x"}
+	scenarios := []Scenario{bad}
+	for range 30 {
+		scenarios = append(scenarios, good)
+	}
+	var started atomic.Int32
+	cfg := Config{Chooser: airun.ChooserHeuristic, Runs: 1, Parallel: 2, GitSHA: "x", Now: func() time.Time { started.Add(1); return time.Time{} }}
+	_, err = Run(context.Background(), cfg, scenarios)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "broken run 1")
+	assert.Less(t, int(started.Load()), 30, "the jobs after the failure were not started")
+}
+
+func TestRunCancelledBeforeStartIsAnError(t *testing.T) {
+	scs, err := LoadScenarios()
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	recs, err := Run(ctx, Config{Chooser: airun.ChooserHeuristic, Runs: 1}, scs)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Empty(t, recs)
 }

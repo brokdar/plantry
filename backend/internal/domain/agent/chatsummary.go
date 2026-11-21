@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
 
@@ -61,7 +62,7 @@ func chatFacts(st planning.State) string {
 	}
 	slices.Sort(foods)
 	var b strings.Builder
-	b.WriteString("\nFoods on the plan (role, diet class, a recipe's total minutes, kcal and protein per portion, a leaf per 100 g; other foods: find_foods):\n")
+	b.WriteString("\nFoods on the plan (name | id to pass as food_id, never to say | role, diet class, a recipe's total minutes, kcal and protein per portion, a leaf per 100 g; other foods: find_foods):\n")
 	for _, id := range foods {
 		f := st.Foods[id]
 		role := string(f.Role)
@@ -80,7 +81,7 @@ func chatFacts(st planning.State) string {
 		if f.DietClass != "" {
 			class = " | " + string(f.DietClass)
 		}
-		fmt.Fprintf(&b, "food_id %d %s | %s%s%s | %.0f kcal, %.0f g protein %s\n", f.ID, f.Name, role, class, minutes, f.Macros.Kcal, f.Macros.Protein, per)
+		fmt.Fprintf(&b, "%s | id %d | %s%s%s | %.0f kcal, %.0f g protein %s\n", food.Data(f.Name), f.ID, role, class, minutes, f.Macros.Kcal, f.Macros.Protein, per)
 	}
 	// Day figures come from the evaluation; the day's target is scaled to its
 	// planned meals (a "No plate" meal asks less) and moved by light meals.
@@ -93,7 +94,7 @@ func chatFacts(st planning.State) string {
 	for _, p := range ev.Plates {
 		withPlates[p.Date] = true
 	}
-	b.WriteString("\nKcal per eater and day" + target + "; then target if moved, S2 band, H9 floor, room to the band top, cooking slots, light or hearty meals:\n")
+	b.WriteString("\nKcal per eater and day" + target + "; then target if moved, range, minimum, room to the top of the range, cooking slots, light or filling meals:\n")
 	for _, d := range ev.Days {
 		if !withPlates[d.Date] {
 			continue
@@ -106,13 +107,13 @@ func chatFacts(st planning.State) string {
 			fmt.Fprintf(&b, " | target %.0f", *d.TargetKcal)
 		}
 		if d.BandHigh > 0 {
-			fmt.Fprintf(&b, " | band %.0f-%.0f | floor %.0f | room %.0f", d.BandLow, d.BandHigh, d.FloorKcal, d.RoomKcal)
+			fmt.Fprintf(&b, " | range %.0f-%.0f | minimum %.0f | room %.0f", d.BandLow, d.BandHigh, d.FloorKcal, d.RoomKcal)
 		}
 		if len(d.CookSlots) > 0 {
 			b.WriteString(" | cooks " + strings.Join(d.CookSlots, ", "))
 		}
 		if len(d.LightMeals) > 0 {
-			b.WriteString(" | " + strings.Join(d.LightMeals, ", "))
+			b.WriteString(" | " + plainWords(strings.Join(d.LightMeals, ", ")))
 		}
 		b.WriteByte('\n')
 	}

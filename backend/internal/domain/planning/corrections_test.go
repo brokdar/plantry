@@ -45,7 +45,7 @@ func TestBuilder_CorrectionsInPrompt(t *testing.T) {
 	name := st.Foods[fish].Name
 	_, section, found := strings.Cut(prompt, "The user replaced")
 	require.True(t, found)
-	assert.Equal(t, 3, strings.Count(section, name+" -> "+st.Foods[other].Name))
+	assert.Equal(t, 3, strings.Count(section, `"`+name+`" -> "`+st.Foods[other].Name+`"`))
 	assert.NotContains(t, section, "2026-10-05")
 }
 

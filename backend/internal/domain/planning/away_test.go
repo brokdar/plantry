@@ -87,3 +87,43 @@ func TestEvaluate_NoneLunchAndRoutineDinnerIsAway(t *testing.T) {
 	assert.NotContains(t, codeDates(ev.Issues, "S2", planning.CodeKcalBelowBand), mon)
 	assert.Equal(t, 6, ev.Week.Days)
 }
+
+// d3: a day away is never called light, whatever mark is stored for its date.
+func TestEvaluate_AwayDayCarriesNoLightMark(t *testing.T) {
+	s := baseState()
+	s.Profile.KcalTarget = f64(3000)
+	s.SlotKind = map[int64]slot.Kind{breakfast: slot.KindLight}
+	setMode(&s, cell(mon, lunch), availability.ModeNone)
+	setMode(&s, cell(mon, dinner), availability.ModeNone)
+	s.Light = []planning.LightIntent{{Date: mon, Scope: planning.LightScopeMeal, Slot: "lunch"}, {Date: mon, Scope: planning.LightScopeDay}}
+
+	ev, _ := weekOf(s)
+
+	d := dayEval(t, ev, mon)
+	require.True(t, d.Away)
+	assert.Empty(t, d.Light)
+	assert.Empty(t, d.LightLevel)
+	assert.Empty(t, d.LightMeals)
+}
+
+// SF4: a day with a meal away is judged on the floor prorated to the planned
+// meals: max(75 % of the scaled target, the absolute floor x share).
+func TestEvaluate_FloorFollowsThePlannedMeals(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		none  []int64
+		share float64
+	}{{"all meals planned", nil, 1}, {"lunch away", []int64{lunch}, 2.0 / 3}, {"lunch and dinner away", []int64{lunch, dinner}, 1.0 / 3}} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := baseState()
+			s.Profile.KcalTarget = f64(3000)
+			for _, sl := range tc.none {
+				setMode(&s, cell(mon, sl), availability.ModeNone)
+			}
+			ev, _ := weekOf(s)
+			d := dayEval(t, ev, mon)
+			want := 0.75 * 3000 * tc.share
+			assert.InDelta(t, want, d.FloorKcal, 1, "floor = 75 %% of the scaled target (the absolute floor is below it here)")
+		})
+	}
+}

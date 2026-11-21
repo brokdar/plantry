@@ -18,6 +18,7 @@ import (
 // component shows its position and a recipe its batch role, each recipe its
 // minutes. Run with -v for the byte count.
 func TestChatPrompt_PlanPartSize(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	e.sql(`UPDATE foods SET prep_minutes = 10, cook_minutes = 25 WHERE kind = 'composed'`)
 	st, err := testsvc.PlanState(e.db)(context.Background(), window.Window{Start: planStart, End: planStart.AddDate(0, 0, 6)}, planToday)

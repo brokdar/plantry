@@ -62,7 +62,7 @@ func TestCompactEvaluationPayload(t *testing.T) {
 	}))
 	t.Logf("evaluation bytes: full %d, planner evaluate_plan %d, get_plan %d, one-day apply_changes %d (%d plates, %d days)",
 		full, planner, getPlan, one, len(ev.Plates), len(ev.Days))
-	assert.Less(t, planner, full*4/5)
+	assert.Less(t, planner, full*5/6) // v1.1: the day entries carry the slot-band figures
 	assert.Less(t, getPlan, full*4/5) // slim components on every plate
 	assert.Less(t, one, full/4)
 }

@@ -40,6 +40,7 @@ func (e *planToolEnv) lightOf(ctx context.Context, date string) string {
 // evaluates the day as light (and the state the chat prompt is built from
 // carries it); a none entry clears it.
 func TestApplyChanges_LightIsStoredAndCleared(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, _ := e.freshMain()
@@ -60,6 +61,7 @@ func TestApplyChanges_LightIsStoredAndCleared(t *testing.T) {
 }
 
 func TestApplyChanges_LightDryRunStoresNothing(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, _ := e.freshMain()
@@ -70,6 +72,7 @@ func TestApplyChanges_LightDryRunStoresNothing(t *testing.T) {
 
 // A request the plan cannot honour goes back to the model.
 func TestApplyChanges_LightRejected(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, _ := e.freshMain()

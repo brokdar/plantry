@@ -23,6 +23,29 @@ var (
 	templateErr   error
 )
 
+// gooseMu serialises every migration of the test process: goose keeps its
+// filesystem, dialect and logger in package variables, so two migrations
+// (parallel tests, or the template next to a test's own) may not set them at once.
+var gooseMu sync.Mutex
+
+func migrate(conn *sql.DB) error {
+	gooseMu.Lock()
+	defer gooseMu.Unlock()
+	goose.SetLogger(goose.NopLogger())
+	goose.SetBaseFS(db.Migrations)
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		return err
+	}
+	return goose.Up(conn, "migrations")
+}
+
+// Migrate brings conn up to the latest schema. Tests migrate through it, never
+// through goose directly, so the package-level goose state is set under one lock.
+func Migrate(t testing.TB, conn *sql.DB) {
+	t.Helper()
+	require.NoError(t, migrate(conn))
+}
+
 // migratedTemplate runs all migrations once per test process and returns the
 // resulting database file bytes. The scratch directory is removed right away,
 // so nothing is left behind in os.TempDir().
@@ -43,10 +66,7 @@ func migratedTemplate() ([]byte, error) {
 		}
 		conn.SetMaxOpenConns(1)
 
-		goose.SetBaseFS(db.Migrations)
-		if err = goose.SetDialect("sqlite3"); err == nil {
-			err = goose.Up(conn, "migrations")
-		}
+		err = migrate(conn)
 		// Closing the last connection checkpoints and removes the WAL file.
 		if cerr := conn.Close(); err == nil {
 			err = cerr

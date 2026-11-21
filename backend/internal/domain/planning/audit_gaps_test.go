@@ -83,7 +83,7 @@ func TestPrompt_StatesTheFillCellsAndSuitability(t *testing.T) {
 	k := 2200.0
 	in.State.Profile.KcalTarget = &k
 	sys = planning.RenderPrompt(in)
-	assert.Contains(t, sys, "Saturday 2026-11-21: target 733 (band 660-807), floor 550, fixed 0, 1 of 3 meals planned")
+	assert.Contains(t, sys, "Saturday 2026-11-21: target 733 (range 660-807), minimum 550, fixed 0, 1 of 3 meals planned")
 }
 
 // Runs 6 and 7: a fixed session whose portions are all eaten was hidden, so
@@ -334,4 +334,15 @@ func TestHeuristic_NoMainLeavesFullMealCellEmpty(t *testing.T) {
 		}
 	}
 	assert.Equal(t, len(in.Target.Cells), missing)
+}
+
+// NU6: with a body weight the protein target is grams per kg, so the profile
+// block does not also show the profile's protein share.
+func TestPrompt_NoProteinShareWithABodyWeight(t *testing.T) {
+	in := run4Input()
+	pct, w := 30.0, 70.0
+	in.State.Profile.ProteinPct = &pct
+	assert.Contains(t, planning.RenderPrompt(in), "protein target: 30% of kcal")
+	in.State.Profile.WeightKg = &w
+	assert.NotContains(t, planning.RenderPrompt(in), "protein target: 30% of kcal")
 }

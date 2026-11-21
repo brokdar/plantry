@@ -69,6 +69,7 @@ func (failCreate) CreateChange(context.Context, *agent.Change) error { return er
 // DoD go S1 / sfh 2: a regenerate whose caller went away still records its
 // change once the run finished, on a detached ctx, so it can be undone.
 func TestChange_RegenerateRecordedAfterClientDisconnect(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	target, idx := e.sidePlate()
 	old := target.Components[idx]
@@ -100,6 +101,7 @@ func TestChange_RegenerateRecordedAfterClientDisconnect(t *testing.T) {
 // DoD sfh 1: a change that could not be saved is returned unrecorded, the
 // tool result says so, and the call's write stands.
 func TestChange_SaveFailureIsSurfaced(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, _ := e.mainSession()
@@ -128,6 +130,7 @@ func TestChange_SaveFailureIsSurfaced(t *testing.T) {
 
 // DoD sfh 4: a change with nothing to revert is not "undone".
 func TestChange_UndoNothingToRevert(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	empty := &agent.Change{
@@ -148,6 +151,7 @@ func TestChange_UndoNothingToRevert(t *testing.T) {
 // DoD sfh 3: a newer manual edit of the cell makes the availability undo
 // stale; nothing is written.
 func TestChange_UndoAvailabilityStaleAfterManualEdit(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	d := planStart.AddDate(0, 0, 6)
@@ -179,6 +183,7 @@ func TestChange_UndoAvailabilityStaleAfterManualEdit(t *testing.T) {
 
 // DoD go nit 5: an undo is not a user correction.
 func TestChange_UndoIsNotACorrection(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	target, idx := e.sidePlate()

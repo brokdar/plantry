@@ -16,6 +16,7 @@ import (
 // Mutating tools return the state after the write, so the model need not
 // call get_plan to verify.
 func TestTool_MutationsReturnWhatChanged(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, sid := e.mainSession()
 	v := e.session(sid)
@@ -23,7 +24,7 @@ func TestTool_MutationsReturnWhatChanged(t *testing.T) {
 	out := e.mustOp("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":%v}`, sid, v.Consumed+2))
 	after, ok := out["after"].(map[string]any)
 	require.True(t, ok, "set_session_portions carries an after block: %v", out)
-	sessions := after["sessions"].([]any)
+	sessions := after["batches"].([]any)
 	require.Len(t, sessions, 1)
 	s0 := sessions[0].(map[string]any)
 	assert.EqualValues(t, sid, s0["session_id"])
@@ -50,6 +51,7 @@ func TestTool_MutationsReturnWhatChanged(t *testing.T) {
 // Deficit guard (spec §3.4, H3): fewer portions than the plates eat is
 // refused with the numbers, and nothing is written.
 func TestTool_SetSessionPortionsRefusesDeficit(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	_, sid := e.mainSession()
 	v := e.session(sid)
@@ -66,6 +68,7 @@ func TestTool_SetSessionPortionsRefusesDeficit(t *testing.T) {
 // The chat prompt shows H3/H4 (a batch eaten 8 of 6) and each food's role and
 // kcal with the day's kcal.
 func TestChatPrompt_ShowsDeficitAndFacts(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	_, sid := e.mainSession()
 	v := e.session(sid)

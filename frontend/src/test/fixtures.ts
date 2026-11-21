@@ -393,6 +393,9 @@ export const mockTimeSlots: TimeSlot[] = [
     sort_order: 0,
     active: true,
     kind: "light",
+    band_min_pct: 20,
+    band_max_pct: 30,
+    band_custom: false,
   },
   {
     id: 2,
@@ -401,6 +404,9 @@ export const mockTimeSlots: TimeSlot[] = [
     sort_order: 1,
     active: true,
     kind: "meal",
+    band_min_pct: 30,
+    band_max_pct: 40,
+    band_custom: false,
   },
   {
     id: 3,
@@ -409,6 +415,9 @@ export const mockTimeSlots: TimeSlot[] = [
     sort_order: 2,
     active: true,
     kind: "meal",
+    band_min_pct: 25,
+    band_max_pct: 40,
+    band_custom: false,
   },
 ]
 

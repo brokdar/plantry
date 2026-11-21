@@ -1,6 +1,6 @@
 {
   "name": "replan_one_day",
-  "description": "The batch cooker re-plans Tuesday of a generated draft week whose Monday and Wednesday dinners he planned and confirmed himself.",
+  "description": "The batch cooker re-plans Saturday (Tuesday would repeat one main at both meals with no cold plate in this library, so its replan saves nothing, v1 OQ6) of a generated draft week whose Monday and Wednesday dinners he planned and confirmed himself.",
   "today": "2026-11-06",
   "start": "2026-11-07",
   "settings": {
@@ -18,7 +18,7 @@
   ],
   "steps": [
     {"action": "generate"},
-    {"action": "regenerate_day", "date": "2026-11-10"}
+    {"action": "regenerate_day", "date": "2026-11-07"}
   ],
-  "expect": {"kept_confirmed": true, "min_plates": 2, "unchanged_outside": "2026-11-10", "alternatives": true}
+  "expect": {"kept_confirmed": true, "min_plates": 2, "unchanged_outside": "2026-11-07", "alternatives": true}
 }

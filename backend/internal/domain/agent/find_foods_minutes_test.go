@@ -18,6 +18,7 @@ func foodNames(items []any) []string {
 }
 
 func TestFindFoods_Minutes(t *testing.T) {
+	t.Parallel()
 	ts, repo := newPayloadToolSet(t)
 	repo.foods[3].PrepMinutes = ptr(10)
 	repo.foods[3].CookMinutes = ptr(25)
@@ -64,6 +65,7 @@ func TestFindFoods_Minutes(t *testing.T) {
 }
 
 func TestFindFoods_LeafRoles(t *testing.T) {
+	t.Parallel()
 	ts, repo := newPayloadToolSet(t)
 	repo.foods[7] = &food.Food{ID: 7, Name: "Gurke", Kind: food.KindLeaf, ShopSection: ptr(food.SectionProduce)}
 	role := food.RoleSauce

@@ -55,6 +55,9 @@ type LightIntent struct {
 	Scope string `json:"scope"`
 	Slot  string `json:"slot,omitempty"`
 	Level string `json:"level,omitempty"`
+	// TargetKcal is the number the user named for the day (scope day, B-1 P-3):
+	// the day's target while the request stands. 0: the usual 85 % (115 %).
+	TargetKcal float64 `json:"target_kcal,omitempty"`
 }
 
 // Hearty reports whether the intent asks for more instead of less.
@@ -90,6 +93,9 @@ func ValidateLight(in []LightIntent) ([]LightIntent, error) {
 		switch l.Scope {
 		case LightScopeDay:
 			l.Slot = ""
+			if l.TargetKcal < 0 {
+				return nil, fmt.Errorf("light[%d].target_kcal must be positive", i)
+			}
 		case LightScopeNone:
 			l.Level = ""
 			if l.Slot != "" && !slices.Contains(lightSlots, l.Slot) {
@@ -209,7 +215,8 @@ func LightSchema(withClear bool) string {
           "date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
           "scope":{"type":"string","enum":[%s]},
           "slot":{"type":"string","enum":["lunch","dinner"],"description":"Required for scope meal."},
-          "level":{"type":"string","enum":["light","hearty"],"description":"Default light."}
+          "level":{"type":"string","enum":["light","hearty"],"description":"Default light."},
+          "target_kcal":{"type":"number","minimum":1,"description":"scope day only: the kcal the user named for the day; it becomes the day's target."}
         },
         "additionalProperties":false
       }
@@ -229,18 +236,38 @@ func UnionLight(a, b []LightIntent) []LightIntent {
 
 // lightDay reports whether the day of date is a light day.
 func (s State) lightDay(date time.Time) bool {
-	return slices.Contains(s.Light, LightIntent{Date: date.Format(time.DateOnly), Scope: LightScopeDay})
+	return s.dayLevel(date, "")
+}
+
+// dayLevel reports whether the day of date carries a day request of level.
+func (s State) dayLevel(date time.Time, level string) bool {
+	_, ok := s.dayRequest(date, level)
+	return ok
+}
+
+// dayRequest is the day request of level on date, if any.
+func (s State) dayRequest(date time.Time, level string) (LightIntent, bool) {
+	d := date.Format(time.DateOnly)
+	for _, l := range s.Light {
+		if l.Date == d && l.Scope == LightScopeDay && l.Level == level {
+			return l, true
+		}
+	}
+	return LightIntent{}, false
 }
 
 // heartyDay reports whether the day of date is a hearty day.
 func (s State) heartyDay(date time.Time) bool {
-	return slices.Contains(s.Light, LightIntent{Date: date.Format(time.DateOnly), Scope: LightScopeDay, Level: LevelHearty})
+	return s.dayLevel(date, LevelHearty)
 }
 
 // lightMeal reports whether the meal in slot on date is a light meal.
 func (s State) lightMeal(date time.Time, slot int64) bool {
 	return s.mealLevel(date, slot, "")
 }
+
+// LightMealAt reports whether the meal in slot on date carries a light mark.
+func (s State) LightMealAt(date time.Time, slot int64) bool { return s.lightMeal(date, slot) }
 
 // heartyMeal reports whether the meal in slot on date is a hearty meal.
 func (s State) heartyMeal(date time.Time, slot int64) bool {
@@ -260,21 +287,13 @@ func (s State) slotIs(id int64, name string) bool {
 	return ok && strings.TrimPrefix(n, "slot.") == name
 }
 
-// mealCap is the most kcal per eater a light meal may hold: LightMealShare
-// of the day's normal target split evenly over its planned meals.
-func (dk DayKcal) mealCap() float64 {
+// mealCap is the most kcal per eater a light meal of slot id may hold:
+// LightMealShare of the slot's expected share of the day's full target (SB2).
+func (dk DayKcal) mealCap(slotID int64) float64 {
 	if dk.Active() == 0 {
 		return 0
 	}
-	return LightMealShare * dk.normalShare()
-}
-
-// normalShare is one meal's even share of the day's normal target.
-func (dk DayKcal) normalShare() float64 {
-	if dk.Active() == 0 {
-		return 0
-	}
-	return dk.Scaled / float64(dk.Active())
+	return LightMealShare * dk.mealShare(slotID)
 }
 
 // lightIssues reports S6 `meal_not_light` for every light meal whose plate
@@ -300,17 +319,17 @@ func (x *index) lightIssues(ev Evaluation) []Issue {
 			}
 			cell := plate.CellKey{Date: day, SlotID: p.SlotID}
 			if l.Hearty() {
-				if least := HeartyMealShare * dk.normalShare(); p.Kcal < least-1e-9 {
+				if least := HeartyMealShare * dk.mealShare(p.SlotID); p.Kcal < least-1e-9 {
 					out = append(out, issue("S6b", CodeMealNotHearty, SeveritySoft).atCell(cell).
 						with("kcal", math.Round(p.Kcal)).with("min_kcal", math.Round(least)).
-						with("normal_share_kcal", math.Round(dk.normalShare())))
+						with("normal_share_kcal", math.Round(dk.mealShare(p.SlotID))))
 				}
 				continue
 			}
-			if limit := dk.mealCap(); p.Kcal > limit+1e-9 {
+			if limit := dk.mealCap(p.SlotID); p.Kcal > limit+1e-9 {
 				out = append(out, issue("S6", CodeMealNotLight, SeveritySoft).atCell(cell).
 					with("kcal", math.Round(p.Kcal)).with("max_kcal", math.Round(limit)).
-					with("normal_share_kcal", math.Round(dk.normalShare())))
+					with("normal_share_kcal", math.Round(dk.mealShare(p.SlotID))))
 			}
 		}
 	}
@@ -435,10 +454,10 @@ func (x *index) markIntent(pe *PlateEval, p Plate) {
 		return
 	}
 	if level == LevelHearty {
-		pe.MinKcal = math.Round(HeartyMealShare * dk.normalShare())
+		pe.MinKcal = math.Round(HeartyMealShare * dk.mealShare(p.SlotID))
 		return
 	}
-	pe.MaxKcal = math.Round(dk.mealCap())
+	pe.MaxKcal = math.Round(dk.mealCap(p.SlotID))
 }
 
 // mealNote is the run-notes line of the light and hearty meals the plan does

@@ -147,6 +147,22 @@ test.describe("generated week on the heuristic", () => {
       carbs_100g: 20,
     })
     const foods = [base.id]
+    // A bread, a cheese and a raw vegetable: a day that cannot hold two cooked
+    // mains gets a cold plate from them, else its replan saves nothing (OQ6).
+    for (const [name, kcal, protein, fat, carbs] of [
+      ["Vollkornbrot", 230, 8, 2, 40],
+      ["Gouda Käse", 350, 25, 28, 0],
+      ["Gurke", 12, 0.6, 0.1, 2],
+    ] as const) {
+      const cold = await seedLeafFood({
+        name: `${name} ${tag}`,
+        kcal_100g: kcal,
+        protein_100g: protein,
+        fat_100g: fat,
+        carbs_100g: carbs,
+      })
+      foods.push(cold.id)
+    }
     // Generate needs the 10-recipe target (D22) even on a fresh DB. A main
     // for each day (one cook a day) keeps H8 strict (D21): with fewer, a
     // repeat is only a warning while the whole week is chosen, but a

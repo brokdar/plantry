@@ -9,6 +9,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
 
@@ -58,7 +59,11 @@ type effectIssue struct {
 	Session  *int64         `json:"session_id,omitempty"`
 	Params   map[string]any `json:"params,omitempty"`
 	// Options are the computed fixes of a soft issue (planning.Option).
-	Options []planning.Option `json:"options,omitempty"`
+	Options     []planning.Option `json:"options,omitempty"`
+	NoFixFound  bool              `json:"no_fix_found,omitempty"`
+	NoFixReason string            `json:"no_fix_reason,omitempty"`
+	// WasUnderRange marks a day that was under its range before the write too.
+	WasUnderRange bool `json:"was_under_range,omitempty"`
 }
 
 // effectWorsened is an issue open before and after a write whose numbers got
@@ -99,7 +104,7 @@ func changeEffect(ctx context.Context, svc Services, a affected) map[string]any 
 		dates[p.DateString()] = true
 		names := make([]string, len(p.Components))
 		for i, c := range p.Components {
-			names[i] = c.FoodName
+			names[i] = food.Quote(c.FoodName)
 			if c.FoodRole != nil && *c.FoodRole != "" {
 				names[i] += " (" + *c.FoodRole + ")"
 			}
@@ -126,7 +131,7 @@ func changeEffect(ctx context.Context, svc Services, a affected) map[string]any 
 			warn[i] = w.Code
 		}
 		sessions = append(sessions, effectSession{
-			ID: v.ID, Food: v.FoodName, CookDate: v.CookDate.Format(time.DateOnly),
+			ID: v.ID, Food: food.Data(v.FoodName), CookDate: v.CookDate.Format(time.DateOnly),
 			Portions: v.Portions, FrozenPortions: v.FrozenPortions, Consumed: v.Consumed,
 			FrozenConsumed: v.FrozenConsumed, Surplus: v.Surplus, State: string(v.State),
 			Cooked: v.CookedAt != nil, Warnings: warn,
@@ -146,6 +151,18 @@ func issueKey(is planning.Issue) string {
 			return 0
 		}
 		return *p
+	}
+	// A warning is the same warning wherever its plate went: an extra is
+	// identified by its food and reason, a repeated dish by its food, a light
+	// or filling meal by its cell. Plate and batch ids are not part of it, so
+	// a move or an undo (new ids) does not make an old warning new.
+	switch is.Rule {
+	case "S9":
+		return fmt.Sprintf("S9|%s|%v|%v", is.Code, is.Params["food_id"], is.Params["reason"])
+	case "S8":
+		return fmt.Sprintf("S8|%s|%v", is.Code, is.Params["food_id"])
+	case "S6", "S6b":
+		return fmt.Sprintf("%s|%s|%s|%d", is.Rule, is.Code, is.Date, n(is.SlotID))
 	}
 	return fmt.Sprintf("%s|%s|%s|%d|%d|%d", is.Rule, is.Code, is.Date, n(is.SlotID), n(is.PlateID), n(is.SessionID))
 }
@@ -221,6 +238,11 @@ func issueDelta(ctx context.Context, svc Services, out map[string]any) {
 // when there are any), each list capped at maxEffectIssues, with the open
 // total.
 func deltaOf(base, now map[string]planning.Issue) map[string]any {
+	noOptions := func(is planning.Issue) effectIssue {
+		e := toEffectIssue(is)
+		e.Options = nil // a resolved issue offers nothing: its options were checked against the old plan
+		return e
+	}
 	newIs, resolved := []effectIssue{}, []effectIssue{}
 	var worse []effectWorsened
 	for k, is := range now {
@@ -237,7 +259,7 @@ func deltaOf(base, now map[string]planning.Issue) map[string]any {
 	}
 	for k, is := range base {
 		if _, still := now[k]; !still {
-			resolved = append(resolved, toEffectIssue(is))
+			resolved = append(resolved, noOptions(is))
 		}
 	}
 	res := map[string]any{"total_open": len(now)}
@@ -310,20 +332,40 @@ func badness(is planning.Issue) (float64, bool) {
 	return 0, false
 }
 
-// worsened reports whether an issue open before and after got worse.
+// worseStep is the smallest step in badness's unit that counts as "got
+// worse" for an issue that was already open: a share moving 0.2 points or the
+// week's meat 4 g further out is the same warning, not a new one. Day and meal
+// kcal: 50 kcal; protein grams: 5 g; week meat: 25 g; shares (weekly energy,
+// carbs, fat): 1 percentage point; counts (meat days, cooking times, dish
+// repeats): 1.
+func worseStep(code string) float64 {
+	switch code {
+	case planning.CodeKcalBelowBand, planning.CodeKcalAboveBand, planning.CodeKcalBelowFloor, planning.CodeMealNotLight, planning.CodeMealNotHearty:
+		return 50
+	case planning.CodeProteinLow, planning.CodeWeekProteinLow:
+		return 5
+	case planning.CodeWeekMeatAboveDGE:
+		return 25
+	}
+	return 1
+}
+
+// worsened reports whether an issue open before and after got worse by at
+// least its worseStep.
 func worsened(before, after planning.Issue) bool {
 	b, ok := badness(before)
 	if !ok {
 		return false
 	}
 	a, ok := badness(after)
-	return ok && a > b+1e-9
+	return ok && a >= b+worseStep(after.Code)-1e-9
 }
 
 func toEffectIssue(is planning.Issue) effectIssue {
 	return effectIssue{
 		Rule: is.Rule, Code: is.Code, Severity: string(is.Severity), Date: is.Date,
 		SlotID: is.SlotID, PlateID: is.PlateID, Session: is.SessionID, Params: is.Params, Options: is.Options,
+		NoFixFound: is.NoFixFound, NoFixReason: is.NoFixReason,
 	}
 }
 
@@ -337,4 +379,14 @@ func withEffect(ctx context.Context, svc Services, result any, a affected) json.
 	}
 	obj["after"] = mustJSON(changeEffect(ctx, svc, a))
 	return mustJSON(obj)
+}
+
+// awayDay is a day as the model reads it: a day away is not counted, so it
+// carries no target, range or minimum next to that.
+func awayDay(d planning.DayEval) planning.DayEval {
+	if d.Away {
+		d.TargetKcal, d.NormalTargetKcal = nil, 0
+		d.BandLow, d.BandHigh, d.FloorKcal, d.RoomKcal = 0, 0, 0, 0
+	}
+	return d
 }

@@ -279,7 +279,20 @@
       "grid_effect": "Plantry plant die Mahlzeiten mit „Planen“, lässt „Kein Essen“ frei und füllt Routinen aus einer gespeicherten Routine.",
       "grid_no_slots": "Lege zuerst eine Mahlzeit an, dann deine übliche Woche.",
       "routines_label": "Routinen",
-      "routines_effect": "Routinen sind gespeicherte Mahlzeiten, die regelmäßig wiederkehren, etwa dein Frühstück unter der Woche."
+      "routines_effect": "Routinen sind gespeicherte Mahlzeiten, die regelmäßig wiederkehren, etwa dein Frühstück unter der Woche.",
+      "bands_label": "Größe der Mahlzeiten",
+      "bands_effect": "Ein Bereich ist der Anteil der Tagesenergie, den eine Mahlzeit haben soll, in Prozent. Plantry zielt bei jeder Mahlzeit auf die Mitte ihres Bereichs, die Grenzen für eine leichtere oder vollere Mahlzeit folgen ihm, und das Tagesminimum sinkt um den Anteil einer Mahlzeit, die du auswärts isst. Eine Mahlzeit außerhalb ihres Bereichs wird angezeigt, nie blockiert.",
+      "bands_min": "Min %",
+      "bands_max": "Max %",
+      "bands_share": "Zielt auf etwa {{pct}} % des Tages",
+      "bands_sum": "Die Minima ergeben {{min}} %, die Maxima {{max}} %.",
+      "bands_invalid": "Die Minima ergeben {{min}} % (höchstens 100), die Maxima {{max}} % (mindestens 100). Passe die Bereiche an, um zu speichern.",
+      "bands_row_invalid": "{{name}}: Das Minimum darf nicht über dem Maximum liegen, beide bleiben zwischen 0 und 100.",
+      "bands_save": "Bereiche speichern",
+      "bands_saved": "Bereiche gespeichert",
+      "bands_preset_lunch": "Mittagessen ist die größte Mahlzeit",
+      "bands_preset_dinner": "Abendessen ist die größte Mahlzeit",
+      "bands_default_note": "Ohne Änderung gilt: Frühstück 20-30, Mittagessen 30-40, Abendessen 25-40 %."
     },
     "cooking": {
       "cooking_group": "Kochen",
@@ -1049,6 +1062,7 @@
       "not_found": "Dieses Vorkochen gibt es nicht mehr."
     },
     "plan": {
+      "hard_rule_open": "Der Plan wurde gespeichert, aber eine feste Regel ist darin noch verletzt. Die Hinweise sagen, welche.",
       "cell_occupied": "Wiederherstellen nicht möglich: Dort ist schon etwas geplant.",
       "invalid_start": "Diese Woche lässt sich nicht öffnen: Eine Planwoche beginnt an deinem Einkaufstag.",
       "generation_running": "Für diese Woche wird schon ein Plan erstellt. Warte, bis er fertig ist.",
@@ -1063,10 +1077,12 @@
       "nothing_to_accept": "In dieser Woche gibt es keine Entwürfe.",
       "state_mismatch": "Einige dieser Essen haben sich inzwischen geändert, deshalb lässt sich das nicht rückgängig machen.",
       "changed_during_run": "Der Plan hat sich währenddessen geändert, deshalb wurde nichts übernommen. Bitte versuch es noch einmal.",
-      "timeout": "Der Plan hat zu lange gedauert. Bitte versuch es noch einmal."
+      "timeout": "Der Plan hat zu lange gedauert. Bitte versuch es noch einmal.",
+      "day_same_dish": "Für diesen Tag passt kein anderes Hauptgericht und kein kalter Teller, er hätte dasselbe Hauptgericht zu beiden Mahlzeiten. Es wurde nichts geändert."
     },
     "slot": {
-      "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden."
+      "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden.",
+      "invalid_bands": "Die Bereiche passen nicht zusammen: Die Minima dürfen höchstens 100 % ergeben, die Maxima mindestens 100 %."
     },
     "image": {
       "upload_failed": "Bildvorgang fehlgeschlagen. Bitte versuche es erneut.",
@@ -1101,6 +1117,11 @@
       "change_not_undoable": "Diese Änderung hat nichts verändert, es gibt nichts rückgängig zu machen.",
       "iterations_exceeded": "Die AI hat zu viele Schritte gemacht — bitte formuliere die Anfrage einfacher.",
       "rate_limit_exceeded": "Zu viele AI-Anfragen. Bitte warte eine Minute.",
+      "rate_limited": "Der AI-Anbieter ist ausgelastet oder sein Limit ist erreicht, deshalb wurde nichts geändert. Warte eine Minute und versuche es erneut.",
+      "key_rejected": "Der AI-Anbieter hat den API-Schlüssel abgelehnt, deshalb wurde nichts geändert. Prüfe den Schlüssel in den Einstellungen.",
+      "timeout": "Der Assistent hat zu lange gebraucht, deshalb wurde nichts weiter geändert. Bitte versuche es erneut.",
+      "cut_off": "Die Antwort wurde am Längenlimit abgeschnitten. Frag nach dem Rest oder kürze die Anfrage.",
+      "refused": "Der Assistent hat diese Anfrage abgelehnt, deshalb wurde nichts geändert. Formuliere sie um oder plane ohne den Assistenten.",
       "invalid_date": "Ein Chat-Datum ist kein gültiges Datum im Format JJJJ-MM-TT."
     },
     "import": {

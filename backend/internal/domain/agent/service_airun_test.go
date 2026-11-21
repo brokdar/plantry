@@ -49,7 +49,7 @@ func newChatServiceWithClient(t *testing.T, fc *fake.Client) (*agent.Service, *s
 	return buildChatService(t, fc, nil)
 }
 
-func buildChatService(t *testing.T, fc *fake.Client, wrap func(call int, st planning.State, err error) (planning.State, error)) (*agent.Service, *sql.DB) {
+func buildChatService(t *testing.T, fc llm.Client, wrap func(call int, st planning.State, err error) (planning.State, error)) (*agent.Service, *sql.DB) {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)
@@ -221,6 +221,7 @@ func endTurn(usage fake.ScriptedUsage) fake.Turn {
 }
 
 func TestChat_RecordsChatRun(t *testing.T) {
+	t.Parallel()
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{
 		toolUseTurn(fake.ScriptedUsage{InputTokens: 100, OutputTokens: 10, CacheReadTokens: 40, CacheWriteTokens: 4}, "find_foods", "no_such_tool"),
 		endTurn(fake.ScriptedUsage{InputTokens: 200, OutputTokens: 20, CacheReadTokens: 60, CacheWriteTokens: 6}),
@@ -262,6 +263,7 @@ func TestChat_RecordsChatRun(t *testing.T) {
 // A chat run records the plan before the turn and after it, also when the
 // turn is cancelled.
 func TestChat_RecordsPlanEvaluationBeforeAndAfter(t *testing.T) {
+	t.Parallel()
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{InputTokens: 1})}})
 	_, err := chat(context.Background(), svc, "hi", nil)
 	require.NoError(t, err)
@@ -272,6 +274,7 @@ func TestChat_RecordsPlanEvaluationBeforeAndAfter(t *testing.T) {
 }
 
 func TestChat_RecordsPlanEvaluationOnCancel(t *testing.T) {
+	t.Parallel()
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{{
 		StopReason: "end_turn",
 		Events: []fake.ScriptedEvent{
@@ -291,6 +294,7 @@ func TestChat_RecordsPlanEvaluationOnCancel(t *testing.T) {
 }
 
 func TestChat_IterationsExceededStatus(t *testing.T) {
+	t.Parallel()
 	// The fake replays the last (tool_use) turn forever.
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{
 		toolUseTurn(fake.ScriptedUsage{InputTokens: 1, OutputTokens: 1}, "find_foods"),
@@ -318,6 +322,7 @@ func TestChat_IterationsExceededStatus(t *testing.T) {
 }
 
 func TestChat_ErrorStatusAndKey(t *testing.T) {
+	t.Parallel()
 	// An empty script makes every Stream call fail.
 	svc, db := newChatService(t, &fake.Script{})
 
@@ -335,6 +340,7 @@ func TestChat_ErrorStatusAndKey(t *testing.T) {
 }
 
 func TestChat_CancelledStatus(t *testing.T) {
+	t.Parallel()
 	// The test cancels on the first delta, once the loop (and so the run) has
 	// started; the second scripted event waits long enough for that.
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{{
@@ -360,6 +366,7 @@ func TestChat_CancelledStatus(t *testing.T) {
 }
 
 func TestChat_NoRecorderRecordsNothing(t *testing.T) {
+	t.Parallel()
 	db := testhelper.NewTestDB(t)
 	foodRepo := sqlite.NewFoodRepo(db)
 	tools, err := agent.NewToolSet(agent.Services{Foods: food.NewService(foodRepo)})
@@ -377,6 +384,7 @@ func TestChat_NoRecorderRecordsNothing(t *testing.T) {
 }
 
 func TestChat_ProviderMissingRecordsNothing(t *testing.T) {
+	t.Parallel()
 	db := testhelper.NewTestDB(t)
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)
 	tools, err := agent.NewToolSet(agent.Services{Foods: food.NewService(sqlite.NewFoodRepo(db))})
@@ -393,6 +401,7 @@ func TestChat_ProviderMissingRecordsNothing(t *testing.T) {
 }
 
 func TestChat_RunStoresConversationID(t *testing.T) {
+	t.Parallel()
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}})
 
 	evts, err := chat(context.Background(), svc, "first", nil)
@@ -450,6 +459,7 @@ func evaluationSteps(t *testing.T, db *sql.DB) (results []planning.Evaluation, e
 // before and after describe the plan at their moment: the plan that changed
 // during the turn shows in the pair.
 func TestChat_EvaluationBeforeAndAfterDiffer(t *testing.T) {
+	t.Parallel()
 	limit := 1
 	svc, db := newChatServiceWith(t, &fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{InputTokens: 1})}},
 		func(call int, st planning.State, err error) (planning.State, error) {
@@ -470,6 +480,7 @@ func TestChat_EvaluationBeforeAndAfterDiffer(t *testing.T) {
 
 // A plan that cannot be read when the turn ends leaves a failed after step.
 func TestChat_EvaluationAfterReadErrorIsRecorded(t *testing.T) {
+	t.Parallel()
 	svc, db := newChatServiceWith(t, &fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{InputTokens: 1})}},
 		func(call int, st planning.State, err error) (planning.State, error) {
 			if call > 1 {

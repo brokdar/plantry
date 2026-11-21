@@ -73,10 +73,17 @@ type ToolSet struct {
 	byName  map[string]*Tool
 	schemas map[string]*gojsonschema.Schema
 	changes ChangeStore // nil: changes are not recorded
+	offered *offeredMemo
 }
 
 // Services aggregates the domain services the default tool set depends on.
 type Services struct {
+	// Removed remembers the foods the user had removed in a conversation, so
+	// no way, option or alternative adds one back (set by NewToolSet).
+	Removed *removedMemo
+	// Offered remembers the ops the tools offered, so an offer is not applied
+	// in the turn that made it (set by NewToolSet).
+	Offered           *offeredMemo
 	Foods             *food.Service
 	NutritionResolver *food.NutritionResolver
 	Plates            *plate.Service
@@ -104,14 +111,44 @@ type Services struct {
 	// apply to that call only.
 	Light planning.LightStore
 	Tx    domain.Transactor
+	// Undo may be nil: undo_last_change is then not registered.
+	Undo *Changes
 }
 
 // NewToolSet builds the default tool set wired to the given services.
 func NewToolSet(svc Services) (*ToolSet, error) {
+	if svc.Removed == nil {
+		svc.Removed = &removedMemo{}
+	}
+	if svc.Offered == nil {
+		svc.Offered = &offeredMemo{}
+	}
+	if svc.Plates != nil && svc.Offered.cell == nil {
+		plates := svc.Plates
+		svc.Offered.cell = func(ctx context.Context, id int64) (string, int64, bool) {
+			p, err := plates.Get(ctx, id)
+			if err != nil || p == nil {
+				return "", 0, false
+			}
+			return p.Date.Format("2006-01-02"), p.SlotID, true
+		}
+	}
+	if state := svc.State; state != nil {
+		// The foods the user named are part of the state every check reads
+		// (SF3); they come from the request text, never from a tool argument.
+		svc.State = func(ctx context.Context, w window.Window, today time.Time) (planning.State, error) {
+			st, err := state(ctx, w, today)
+			if t, ok := turnFrom(ctx); ok && len(t.named) > 0 {
+				st.Named = t.named
+			}
+			return st, err
+		}
+	}
 	ts := &ToolSet{
 		byName:  map[string]*Tool{},
 		schemas: map[string]*gojsonschema.Schema{},
 		changes: svc.Changes,
+		offered: svc.Offered,
 	}
 	for _, t := range defaultTools(svc) {
 		if err := ts.register(t); err != nil {
@@ -125,7 +162,11 @@ func (s *ToolSet) register(t Tool) error {
 	if _, exists := s.byName[t.Name]; exists {
 		return fmt.Errorf("duplicate tool %q", t.Name)
 	}
-	schema, err := gojsonschema.NewSchema(gojsonschema.NewBytesLoader(t.Schema))
+	t.Description = plainWords(t.Description)
+	t.Schema = json.RawMessage(plainWords(string(t.Schema)))
+	// The model reads the level "filling"; the stored word "hearty" stays valid.
+	check := strings.ReplaceAll(string(t.Schema), `"enum":["light","filling"]`, `"enum":["light","filling","hearty"]`)
+	schema, err := gojsonschema.NewSchema(gojsonschema.NewStringLoader(check))
 	if err != nil {
 		return fmt.Errorf("compile schema: %w", err)
 	}
@@ -176,6 +217,9 @@ func (s *ToolSet) Execute(ctx context.Context, name string, input json.RawMessag
 	ctx, note := withChangeNote(ctx)
 	mark := s.watermark(ctx, run.ID())
 	output, effect, err := s.execute(ctx, name, input)
+	if err == nil {
+		s.offered.record(ctx, name, output)
+	}
 	result := output
 	if err != nil {
 		result = mustMarshal(map[string]string{"error": err.Error()})
@@ -247,7 +291,12 @@ func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessag
 		}
 		return nil, ToolEffectNone, fmt.Errorf("%w: %s", domain.ErrInvalidInput, msg)
 	}
-	return t.Handler(ctx, input)
+	input = fillingToHearty(input)
+	out, effect, err := t.Handler(ctx, input)
+	if err != nil {
+		err = plainError{err}
+	}
+	return dropAfterWeek(addDerived(name, plainRules(out))), effect, err
 }
 
 // unwrapParams returns the object inside a sole {"params": {...}} input: a
@@ -282,6 +331,7 @@ func defaultTools(svc Services) []Tool {
 		toolFindFoods(svc),
 		toolApplyChanges(svc),
 		toolFindAlternatives(svc),
+		toolFindWays(svc),
 		toolConfirm(svc),
 		toolUnlock(svc),
 		toolRecordPreference(svc),
@@ -295,14 +345,29 @@ func defaultTools(svc Services) []Tool {
 	if svc.Planner != nil {
 		tools = append(tools, toolRegenerate(svc))
 	}
+	if svc.Undo != nil {
+		tools = append(tools, toolUndoLastChange(svc))
+	}
 	for i := range tools {
 		tools[i].CodeCallable = codeCallableTools[tools[i].Name]
+		if tools[i].Name == "undo_last_change" || tools[i].Name == "regenerate" {
+			tools[i].Handler = withReport(svc, tools[i].Handler, tools[i].Name == "undo_last_change")
+		}
+		if tools[i].Name == applyChangesName || tools[i].Name == "undo_last_change" || tools[i].Name == "regenerate" {
+			tools[i].Description += reportNote
+		}
+		if tools[i].Name == "find_ways" || tools[i].Name == "find_alternatives" {
+			tools[i].Handler = withIssueSentences(svc, tools[i].Handler)
+		}
 		if effectTools[tools[i].Name] {
 			tools[i].Handler = withIssueBaseline(svc, tools[i].Handler)
 		}
 	}
 	return tools
 }
+
+// reportNote documents the report a plan-changing tool returns.
+const reportNote = " Also returns report, the computed facts of the change in plain words: tell (the ordered sentences your reply says: meals changed, protein, days, cooking and what moved, portions left over, the week, new and worse warnings, one offer), and for follow-up questions changed, days, cooking, earlier_warnings_unaffected (a count: do not list them), not_covered. Your reply states the tell items and nothing else about the plan."
 
 // --- read tools ---
 
@@ -453,7 +518,7 @@ func round1(v float64) float64 {
 func plateComponentMap(pc *plate.PlateComponent) map[string]any {
 	out := map[string]any{
 		"id": pc.ID, "plate_id": pc.PlateID, "food_id": pc.FoodID,
-		"sort_order": pc.SortOrder, "name": pc.FoodName,
+		"sort_order": pc.SortOrder, "name": food.Data(pc.FoodName),
 	}
 	if pc.FoodRole != nil && *pc.FoodRole != "" {
 		out["role"] = *pc.FoodRole
@@ -558,4 +623,49 @@ func sessionIDOf(pc *plate.PlateComponent) []int64 {
 // the window's issues snapshotted before they run.
 var effectTools = map[string]bool{
 	"confirm": true, "unlock": true, "regenerate": true, "apply_preset": true,
+}
+
+// withIssueSentences gives every new_issues entry of a find_ways or
+// find_alternatives result a ready sentence ("said") that names the dish and
+// the meals, so the reply need not work out which days a warning is about.
+func withIssueSentences(svc Services, h ToolHandler) ToolHandler {
+	return func(ctx context.Context, in json.RawMessage) (json.RawMessage, ToolEffect, error) {
+		out, eff, err := h(ctx, in)
+		w, ok := windowFrom(ctx)
+		if err != nil || !ok || svc.State == nil {
+			return out, eff, err
+		}
+		var obj map[string]any
+		if json.Unmarshal(out, &obj) != nil {
+			return out, eff, err
+		}
+		st, serr := svc.State(ctx, w, todayFrom(ctx))
+		if serr != nil {
+			return out, eff, err
+		}
+		changed := false
+		for _, key := range []string{"ways", "offer", "alternatives"} {
+			list, _ := obj[key].([]any)
+			for _, e := range list {
+				m, _ := e.(map[string]any)
+				issues, _ := m["new_issues"].([]any)
+				for _, x := range issues {
+					im, _ := x.(map[string]any)
+					raw, merr := json.Marshal(im)
+					var is planning.Issue
+					if merr != nil || json.Unmarshal(raw, &is) != nil || is.Code == "" {
+						continue
+					}
+					im["said"], changed = issueSentence(is, st), true
+				}
+			}
+		}
+		if !changed {
+			return out, eff, err
+		}
+		if b, merr := json.Marshal(obj); merr == nil {
+			return b, eff, err
+		}
+		return out, eff, err
+	}
 }

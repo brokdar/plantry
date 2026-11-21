@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
@@ -196,6 +198,9 @@ func opReplace(ctx context.Context, svc Services, op changeOp, b *batch) (map[st
 		if err != nil {
 			return nil, err
 		}
+		if err := checkCookCell(ctx, svc, k); err != nil {
+			return nil, err
+		}
 		src.CookAt = &k
 	}
 	var qty *plate.PlateComponent
@@ -220,15 +225,18 @@ func opReplace(ctx context.Context, svc Services, op changeOp, b *batch) (map[st
 	b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(pc)...)
 	oldName := ""
 	if old != nil {
-		oldName = old.FoodName
+		oldName = food.Data(old.FoodName)
 		b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(old)...)
 	}
 	if src.CookAt != nil {
 		b.aff.Dates = append(b.aff.Dates, op.CookAt.Date)
 	}
-	b.note(op, map[string]any{"food": oldName, "to": pc.FoodName, "date": after.DateString()})
+	b.note(op, map[string]any{"food": oldName, "to": food.Data(pc.FoodName), "date": after.DateString()})
 	out := opResult(op, after, pc)
 	out["position"] = string(pc.Position)
+	if pc.Position == plate.PositionMain {
+		refitOrKeep(ctx, svc, after.ID, b, out)
+	}
 	return mealResult(out, res, b), nil
 }
 
@@ -332,6 +340,67 @@ func firstDate(line []map[string]any) string {
 	return line[0]["date"].(string)
 }
 
+// maxCookCellSuggestions is how many valid cells an unavailable cook cell's
+// error names.
+const maxCookCellSuggestions = 3
+
+// checkCookCell refuses a cook cell that is marked No plate (nobody is home
+// to cook; only "plan" and "routine" cells allow a cook session) and names up
+// to three valid cells nearby (plan mode, today or later), nearest first. It
+// reads the availability in ctx's unit of work, so an away op earlier in the
+// same call counts.
+func checkCookCell(ctx context.Context, svc Services, k plate.CellKey) error {
+	if svc.Availability == nil {
+		return nil
+	}
+	cells, err := svc.Availability.Resolve(ctx, k.Date, k.Date)
+	if err != nil {
+		return err
+	}
+	for _, c := range cells {
+		if c.SlotID == k.SlotID && c.Mode != availability.ModeNone {
+			return nil
+		}
+	}
+	near, err := svc.Availability.Resolve(ctx, k.Date.AddDate(0, 0, -3), k.Date.AddDate(0, 0, 3))
+	if err != nil {
+		return err
+	}
+	order := map[int64]int{}
+	names := map[int64]string{}
+	if slots, err := svc.Slots.List(ctx, true); err == nil {
+		for _, sl := range slots {
+			order[sl.ID], names[sl.ID] = sl.SortOrder, sl.NameKey
+		}
+	}
+	today := todayFrom(ctx)
+	var valid []availability.Cell
+	for _, c := range near {
+		if c.Mode == availability.ModePlan && !c.Date.Before(today) {
+			valid = append(valid, c)
+		}
+	}
+	dist := func(c availability.Cell) float64 { return math.Abs(c.Date.Sub(k.Date).Hours()) }
+	sort.SliceStable(valid, func(i, j int) bool {
+		if di, dj := dist(valid[i]), dist(valid[j]); di != dj {
+			return di < dj
+		}
+		if !valid[i].Date.Equal(valid[j].Date) {
+			return valid[i].Date.Before(valid[j].Date)
+		}
+		return order[valid[i].SlotID] < order[valid[j].SlotID]
+	})
+	var hint []string
+	for _, c := range valid[:min(len(valid), maxCookCellSuggestions)] {
+		hint = append(hint, fmt.Sprintf("%s slot_id %d (%s)", c.Date.Format(time.DateOnly), c.SlotID, names[c.SlotID]))
+	}
+	suffix := ""
+	if len(hint) > 0 {
+		suffix = "; cook on one of these instead: " + strings.Join(hint, ", ")
+	}
+	return fmt.Errorf("%w: nobody is home to cook on %s slot_id %d (marked No plate)%s", domain.ErrCellUnavailable, k.Date.Format(time.DateOnly), k.SlotID, suffix)
+}
+
 func opMoveCook(ctx context.Context, svc Services, op changeOp, b *batch) (map[string]any, error) {
 	if op.SessionID == 0 || op.CookAt == nil {
 		return nil, fmt.Errorf("%w: move_cook needs session_id and cook_at {date, slot_id}", domain.ErrInvalidInput)
@@ -347,6 +416,9 @@ func opMoveCook(ctx context.Context, svc Services, op changeOp, b *batch) (map[s
 	if err != nil {
 		return nil, err
 	}
+	if err := checkCookCell(ctx, svc, k); err != nil {
+		return nil, err
+	}
 	res, err := svc.Plates.MoveCook(ctx, op.SessionID, k)
 	if err != nil {
 		return nil, err
@@ -356,7 +428,7 @@ func opMoveCook(ctx context.Context, svc Services, op changeOp, b *batch) (map[s
 	b.aff.Dates = append(b.aff.Dates, from, op.CookAt.Date)
 	name := ""
 	if v, err := svc.Plates.Session(ctx, op.SessionID); err == nil {
-		name = v.FoodName
+		name = food.Data(v.FoodName)
 	}
 	b.note(op, map[string]any{
 		"food": name, "date": op.CookAt.Date, "from_date": from,
@@ -421,7 +493,7 @@ func opCopy(ctx context.Context, svc Services, op changeOp, b *batch) (map[strin
 // names a field the op does not know.
 var opFields = map[string]string{
 	"add":              "food_id, plate_id or date + slot_id, portions or amount + unit, optional session_id, cook_at {date, slot_id}, position (main|side|extra)",
-	"swap":             "plate_component_id, food_id, optional portions or amount + unit",
+	"swap":             "plate_component_id, food_id, optional portions or amount + unit, optional session_id (eat from that batch), cook_at {date, slot_id}",
 	"set_quantity":     "plate_component_id, portions or amount + unit",
 	"remove":           "plate_component_id",
 	"create_plate":     "date, slot_id, optional eaters, note",
@@ -430,7 +502,7 @@ var opFields = map[string]string{
 	"set_eaters":       "plate_id, eaters",
 	"set_availability": "date, slot_id, mode, optional preset_id, note",
 	"move":             "plate_id, to {date, slot_id}, optional occupant (\"swap\" | \"drop\" | {date, slot_id})",
-	"replace":          "plate_id, position (main|side) or plate_component_id, food_id, optional session_id, cook_at {date, slot_id}, portions or amount + unit",
+	"replace":          "plate_id (optional with plate_component_id), position (main|side) or plate_component_id, food_id, optional session_id, cook_at {date, slot_id}, portions or amount + unit",
 	"away":             "cells [{date, slot_id}] or date (the whole day) or date + slot_id (that one cell), optional note",
 	"move_cook":        "session_id, cook_at {date, slot_id}",
 	"copy":             "plate_id, to [{date, slot_id}], as (leftover|fresh)",
@@ -439,7 +511,7 @@ var opFields = map[string]string{
 // opKeys are the JSON keys of each op (besides "op").
 var opKeys = map[string][]string{
 	"add":              {"food_id", "plate_id", "date", "slot_id", "portions", "amount", "unit", "session_id", "cook_at", "position"},
-	"swap":             {"plate_component_id", "food_id", "portions", "amount", "unit"},
+	"swap":             {"plate_component_id", "food_id", "portions", "amount", "unit", "session_id", "cook_at"},
 	"set_quantity":     {"plate_component_id", "portions", "amount", "unit"},
 	"remove":           {"plate_component_id"},
 	"create_plate":     {"date", "slot_id", "eaters", "note"},

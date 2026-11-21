@@ -10,6 +10,13 @@ import (
 // Service holds business logic for time slots.
 type Service struct {
 	repo Repository
+	tx   domain.Transactor
+}
+
+// WithTx makes SetBands one unit of work.
+func (s *Service) WithTx(tx domain.Transactor) *Service {
+	s.tx = tx
+	return s
 }
 
 // NewService creates a slot service.
@@ -51,6 +58,13 @@ func (s *Service) Update(ctx context.Context, t *TimeSlot) error {
 	if err := s.validate(t); err != nil {
 		return err
 	}
+	// The band is changed only through SetBands and ApplyPreset: an update of
+	// the slot keeps it.
+	old, err := s.repo.Get(ctx, t.ID)
+	if err != nil {
+		return err
+	}
+	t.BandMinPct, t.BandMaxPct = old.BandMinPct, old.BandMaxPct
 	return s.repo.Update(ctx, t)
 }
 

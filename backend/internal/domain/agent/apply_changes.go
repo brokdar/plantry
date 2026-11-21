@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -25,12 +26,12 @@ var errDryRun = errors.New("dry run")
 
 var applyChangesSchema = `{
   "type":"object",
-  "required":["ops"],
   "properties":{
-    "dry_run":{"type":"boolean","description":"true: run every op, report the result and roll everything back (nothing is saved). Use it first for multi-step changes."},
+    "goal":{"type":"object","required":["kind"],"description":"the relative request this call serves (lighter, heartier, more_protein) with its target; take it as find_ways returned it","properties":{"kind":{"type":"string","enum":["lighter","heartier","more_protein","lower_day","raise_day"]},"plate_id":{"type":"integer","minimum":1},"date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"target_kcal":{"type":"number","minimum":1,"description":"lower_day, raise_day: the kcal the user named for the day"}},"additionalProperties":false},
+    "dry_run":{"type":"boolean","description":"true: run every op, report the result and roll everything back (nothing is saved). Only for a what-if question: an explicit request is saved at once (saved says whether it was)."},
     ` + lightSchema + `,
     "ops":{
-      "type":"array","minItems":1,"maxItems":40,
+      "type":"array","maxItems":40,
       "items":{
         "type":"object",
         "required":["op"],
@@ -47,7 +48,7 @@ var applyChangesSchema = `{
           "session_id":{"type":"integer","minimum":1},
           "cook_at":{"type":"object","required":["date","slot_id"],"properties":{"date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"slot_id":{"type":"integer","minimum":1}},"additionalProperties":false},
           "frozen_portions":{"type":"number","minimum":0,"maximum":100},
-          "eaters":{"type":"number","exclusiveMinimum":0,"maximum":100},
+          "eaters":{"type":"number","exclusiveMinimum":0,"maximum":100,"description":"the total number of people eating the plate, guests included"},
           "mode":{"type":"string","enum":["plan","none","routine","default"]},
           "preset_id":{"type":"integer","minimum":1},
           "note":{"type":"string","maxLength":200},
@@ -64,24 +65,26 @@ var applyChangesSchema = `{
   "additionalProperties":false
 }`
 
-const applyChangesDescription = `Change the plan in one call: a list of ops that run in order in ONE transaction (any failing op rolls everything back and names it, numbered from 1). With dry_run true nothing is saved: you get the same result so you can check the rule effects first. Rows a dry run creates do not exist afterwards: their ids are left out everywhere (applied, after, issues and an option's op) and marked "provisional": true, an option whose op uses one is marked too, so never use them in a later call; to apply, send the full op list again with dry_run false (the result then has the real ids; a dry run says so in dry_run_note). A field an op does not take is refused (the error names the fields it takes), except plate_id, plate_component_id, food_id, date, slot_id, note and eaters: those are ignored and listed in that op's applied entry as ignored_fields (the op did not use them). Quantities are per eater: a recipe takes portions (usually 1), a leaf takes amount + unit (e.g. 100 + "g") and rejects portions.
+const applyChangesDescription = `Change the plan in one call: a list of ops that run in order in ONE transaction (any failing op rolls everything back and names it, numbered from 1). With dry_run true nothing is saved: you get the same result (saved is false): use it only for a what-if question; an explicit request is saved at once with dry_run false, no check first. Rows a checked change creates do not exist afterwards: their ids are left out everywhere (applied, after, issues and an option's op) and marked "provisional": true, an option whose op uses one is marked too, so never use them in a later call; to apply, send the full op list again with dry_run false (the result then has the real ids; a checked change says so in dry_run_note). A field an op does not take is refused (the error names the fields it takes), except plate_id, plate_component_id, food_id, date, slot_id, note and eaters: those are ignored and listed in that op's applied entry as ignored_fields (the op did not use them). Quantities are per eater: a recipe takes portions (usually 1), a leaf takes amount + unit (e.g. 100 + "g") and rejects portions.
 Ops (fields):
 - add: food_id, the plate by plate_id OR by date + slot_id (the plate is created when the cell is empty), portions | amount+unit. Optional position main|side|extra (else derived). Optional session_id: a recipe component eats from that existing cook session (leftover, no new cooking). Optional cook_at {date, slot_id}: a recipe is cooked on that other cell (a new session cooking there, e.g. with the lunch batch) and the plate eats it (portions = eaters x portions).
-- swap: plate_component_id, food_id (the new food), optional portions | amount+unit (else the current one is kept).
+- swap: plate_component_id, food_id (the new food), optional portions | amount+unit (else the current one is kept), optional session_id (eat from that batch) or cook_at {date, slot_id} (then it is a replace).
 - set_quantity: plate_component_id + portions | amount+unit.
 - remove: plate_component_id.
 - create_plate: date, slot_id, optional eaters, note.
 - delete_plate: plate_id.
 - set_portions: session_id, portions (total the batch cooks), optional frozen_portions. Refused below what the plates eat.
-- set_eaters: plate_id, eaters (the batches it eats from are resized).
+- set_eaters: plate_id, eaters = how many people eat that plate in total, guests included (a friend joins a plate of 1: eaters 2, do it at once). Each person's portion stays the same; the batches it eats from are resized to cover them, and nothing else changes.
 - set_availability: date, slot_id, mode plan|none|routine|default, preset_id (routine), note (none). none removes the cell's plate and moves a cook off it.
 - move: plate_id, to {date, slot_id}. A taken target needs occupant: "swap" (the other plate takes this plate's cell), "drop" (the other plate is removed) or {date, slot_id} (it moves on to that empty cell); without one the op fails naming the plate there. Batches follow (the cook moves with its meal or to the earliest meal still eating it).
-- replace: plate_id, position main|side OR plate_component_id, food_id (the new food); optional session_id (eat from that batch), cook_at {date, slot_id} (cook it there), portions | amount+unit (else the current quantity is kept). Keeps the position.
+- replace: plate_component_id (the plate is known from it), or plate_id + position main|side, and food_id (the new food); optional session_id (eat from that batch), cook_at {date, slot_id} (cook it there), portions | amount+unit (else the current quantity is kept). Keeps the position.
 - away: cells [{date, slot_id}] OR date (every planned meal of that day) OR date + slot_id (that one cell), optional note. Marks the cells "no plate", removes their plates and moves cooks off them. A day away is not judged for calories.
 - move_cook: session_id, cook_at {date, slot_id}: the batch cooks there instead (on or before every meal eating it, within keep days).
 - copy: plate_id, to [{date, slot_id}], as leftover (eat from the same batches) | fresh (cook again on each cell).
 Only draft plates in the future are changeable; a confirmed one needs the user to unlock it.
-Returns compact JSON (numbers rounded: kcal whole, other figures one decimal; a field that is 0, false or empty is left out, so absent means 0 / false / none; complete shows only when false) {dry_run, dry_run_note? (dry runs only), applied:[{op, plate_id?, plate_component_id?, session_id?, ..., also_changed?:[{what cook_moved|became_cooking_meal|cooks_fresh|batch_resized, session_id, plate_id, date, slot_id, from_date, from_slot_id, why?}]}] (move: date, slot_id, from_date, from_slot_id, occupant?, occupant_plate_id?; away: cells, removed_plates; move_cook: cook_date, cook_slot_id; copy: copies [{plate_id, date, slot_id}]; also_changed lists what else the op changed, tell the user in plain words), after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),intent? (light|hearty) with max_kcal? (light cap) or min_kcal? (hearty minimum),component_details (only these touched plates):[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,band_low,band_high (the day band, kcal),floor_kcal (H9 floor),room_kcal (kcal left to the band top),protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,light_meals? (e.g. "light dinner"),complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only),meat_g? (per week, extrapolated to 7 days),fish_meals?,legume_meals?,produce_g_per_day? (DGE food groups per eater, display only)} (the weekly kcal ledger of the whole window: complete days only, per eater), issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],worsened:[{rule,code,severity,date?,slot_id?,plate_id?,before:{params},after:{params}}] (open before and after, the numbers got worse, e.g. meat 321 to 471 g),total_open,new_more?,resolved_more?,worsened_more?}, change_id? (not on dry runs)}}. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). An S3 option raises the day's protein; an S2 option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (H1-H9; H9 is a day below its kcal safety floor) are hard rules: fix them. Soft issues (S2 day kcal outside the day band, S3 protein under 90% of the day target (g/kg) or the share under target or the weekly average under target, S4 weekly average outside the week band, S5 weekly carb or fat share outside its range, S6 a light meal over its cap (max_kcal), S6b a hearty meal under its minimum (min_kcal), S7 a DGE food rule missed (week_meat_above_dge over 300 g, week_fish_below_dge, week_legumes_below_dge), S8 a dish as main of too many meals) never block saving. Options (computed, verified, each with a ready op; ops when it needs several): S2 below band and S3 add or raise food (action add|raise); S6/S6b portions (a smaller or larger portion, 0.75-1.5), remove (an add-on, S6 only) or swap (a lighter or heartier main or side); H2 move_cook (cook the batch on another cell) or swap (a leftover or no-cook food). An S6/S6b option may leave the day under its band (a light or hearty request ranks above the day and week bands) but never under the H9 floor. Pass light (the user's light requests, meal unless they explicitly ask to eat less for the day) to judge the result under them; stored light requests apply without passing them again. A call that is not a dry run and succeeds saves the light you pass (a date replaces that date's request, scope none clears it); a dry run saves nothing: days then show light and normal_target_kcal, week.target_kcal is the target after them and week.normal_target_kcal the normal one. Your request is not done while a hard issue (violation) it caused is open, unless you tell the user why; a soft issue you report and offer the fix for, without applying it.`
+Returns compact JSON (numbers rounded: kcal whole, other figures one decimal; a field that is 0, false or empty is left out, so absent means 0 / false / none; complete shows only when false) {dry_run, dry_run_note? (checks only), applied:[{op, plate_id?, plate_component_id?, session_id?, ..., also_changed?:[{what cook_moved|became_cooking_meal|cooks_fresh|batch_resized, session_id, plate_id, date, slot_id, from_date, from_slot_id, why?}]}] (move: date, slot_id, from_date, from_slot_id, occupant?, occupant_plate_id?; away: cells, removed_plates; move_cook: cook_date, cook_slot_id; copy: copies [{plate_id, date, slot_id}]; also_changed lists what else the op changed, tell the user in plain words), after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),intent? (light|hearty) with max_kcal? (the most a light meal holds) or min_kcal? (the least a filling meal holds),component_details (only these touched plates):[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,band_low,band_high (the day band, kcal),floor_kcal (the day energy minimum),room_kcal (kcal left to the band top),protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,light_meals? (e.g. "light dinner"),complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],worsened:[{label,message,severity,date?,slot_id?,plate_id?,before:{params},after:{params}}] (open before and after, the numbers got worse, e.g. meat 321 to 471 g),total_open,new_more?,resolved_more?,worsened_more?}, change_id? (not when dry_run is true)}}. An issue is {label (the rule in plain words), message (one plain sentence), severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). A "day protein" option raises the day's protein; a "day energy" option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (the "day energy minimum" is a day below its kcal safety floor) are hard rules: fix them. Soft issues (label "day energy": day kcal outside the day band; "day protein" and "weekly protein": protein under 90% of the day target (g/kg) or the weekly average under target; "weekly energy": weekly average outside the week band; "weekly carbs" and "weekly fat": the share outside its range; "light meal": a light meal over its cap (max_kcal); "hearty meal": a hearty meal under its minimum (min_kcal); "weekly meat" (over 300 g), "weekly fish" and "weekly legumes": a DGE food rule missed; "dish as main too often": a dish as main of too many meals) never block saving. Options (computed, verified, each with a ready op; ops when it needs several): "day energy" below band and "day protein" add or raise food (action add|raise); "light meal" and "hearty meal" portions (a smaller or larger portion, three quarters to 1.5), remove (an add-on, light meal only) or swap (a lighter or heartier main or side); "cooking occasions per day" move_cook (cook the batch on another cell) or swap (a leftover or no-cook food). A light meal or hearty meal option may leave the day under its band (a light or hearty request ranks above the day and week bands) but never under the day energy minimum. Pass light (the user's light requests, meal unless they explicitly ask to eat less for the day) to judge the result under them; stored light requests apply without passing them again. A call with dry_run false that succeeds saves the light you pass (a date replaces that date's request, scope none clears it); a call with dry_run true saves nothing: days then show light and normal_target_kcal. Your request is not done while a hard issue (violation) it caused is open, unless you tell the user why; a soft issue you report and offer the fix for, without applying it. An away call that would leave a day with a second cooking occasion (cooking occasions per day) moves cooks itself: each such move is an applied entry with auto_fix (op move_cook, cook_date, cook_slot_id, from_date, from_slot_id); tell the user which dish now cooks where. An issue with no_fix_found true has no verified fix (no_fix_reason says why): tell the user, do not guess one.
+A relative request ("lighter", "heartier", "more protein"): take the ops, light and goal of a way from find_ways and pass them as returned; goal {kind lighter|heartier|more_protein|lower_day|raise_day, plate_id (a meal) | date (the day: more_protein, lower_day, raise_day)}. The result then has request:{goal, target, before, after (meal_kcal, meal_protein_g, day_kcal, day_protein_g; a day request only the day's), max_kcal? (the most a light meal holds) or min_kcal? (the least a filling meal holds), satisfied, reached_light (lighter), reached_hearty (heartier) or reached_band (lower_day, raise_day), why?}: satisfied is true when the food changed in the asked direction by a meaningful amount (at least 10% of the meal; protein at least 10 g); reached_light/reached_hearty say whether the meal also is at its cap or minimum (false: lighter, but not a light meal yet). A meal that already meets its cap or minimum still has to change. A light or hearty entry for a meal that misses its cap (minimum) after the ops is refused with the numbers, and so is one passed with a goal when the food did not change; a goal needs ops, a call that only sets light may leave ops out.
+Every list of options carries one marked recommended: true: present it as your recommendation. Alternatives for a requested change are the request: apply the recommended one at once and name one other; an offer (a step beyond the request) is applied only when the user says yes. A call without a goal whose ops made issues new, left a day under its minimum or made a dish repeat has next (report what is new, offer the recommended fix as a question) and, for a repeat, offers (a verified replacement, recommended).`
 
 // changeOp is one op of apply_changes.
 type changeOp struct {
@@ -119,6 +122,11 @@ func (o changeOp) quantity() quantityInput {
 // batch collects what a call's ops touched.
 type batch struct {
 	aff affected
+	// removed are the foods the ops took off a plate.
+	removed []int64
+	// made are the plate components the ops added or replaced in: an offer
+	// never takes back what the user just asked for.
+	made []int64
 	// ops is one entry per op for the change line's params (the frontend
 	// writes the sentence): op, food, to, date, slot_id, slot_key, mode,
 	// portions, amount, unit, eaters.
@@ -156,6 +164,39 @@ func (b *batch) plate(p *plate.Plate) {
 	b.aff.Dates = append(b.aff.Dates, p.DateString())
 }
 
+// applyGoal is the relative request an apply_changes call serves (lighter,
+// heartier or more_protein) with its target: a plate (a meal) or a date (the
+// day, more_protein only).
+type applyGoal struct {
+	Kind    string `json:"kind"`
+	PlateID int64  `json:"plate_id,omitempty"`
+	Date    string `json:"date,omitempty"`
+	// TargetKcal is the number the user named for a day (lower_day, raise_day):
+	// it becomes the day's target (P-3).
+	TargetKcal float64 `json:"target_kcal,omitempty"`
+}
+
+// applyInput is one apply_changes call.
+type applyInput struct {
+	Ops    []changeOp
+	DryRun bool
+	Light  []planning.LightIntent
+	Goal   *applyGoal
+	// quiet leaves the run log out: find_ways checks its ways with it.
+	quiet bool
+	// keepSides leaves a side that clashes with a swapped-in main where it is
+	// (the user named only the main): the result carries the clash and an offer.
+	keepSides bool
+}
+
+// applyRun is what a call computed: the result the model reads and the
+// evaluations before and after.
+type applyRun struct {
+	result map[string]any
+	before planning.Evaluation
+	after  planning.Evaluation
+}
+
 func toolApplyChanges(svc Services) Tool {
 	return Tool{
 		Name:        applyChangesName,
@@ -167,6 +208,7 @@ func toolApplyChanges(svc Services) Tool {
 				Ops    []changeOp             `json:"ops"`
 				DryRun bool                   `json:"dry_run"`
 				Light  []planning.LightIntent `json:"light"`
+				Goal   *applyGoal             `json:"goal"`
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
@@ -185,74 +227,255 @@ func toolApplyChanges(svc Services) Tool {
 			if hint := applyChangesHint(input); hint != "" {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %s", domain.ErrInvalidInput, hint)
 			}
+			if len(in.Ops) == 0 && (len(light) == 0 || in.Goal != nil) {
+				return nil, ToolEffectNone, fmt.Errorf("%w: ops is empty: a change needs at least one op (only a call that sets light without a goal may leave ops out); for a relative request take the ops of a way from find_ways", domain.ErrInvalidInput)
+			}
 			w, ok := windowFrom(ctx)
 			if !ok {
 				return nil, ToolEffectNone, fmt.Errorf("%w: no plan window in this conversation turn", domain.ErrInvalidInput)
 			}
-			if err := checkLight(ctx, svc, w, light); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			ws := windowsFor(w, opDates(in.Ops))
-			// The baseline stands under the stored light only: an intent this
-			// call adds must show its own S6/S6b as new (audit B2).
-			before, err := evalWindows(withLight(ctx, nil), svc, ws, false, nil)
-			if err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("read the plan before the change: %w", err)
-			}
-			var (
-				applied []map[string]any
-				after   map[string]any
-				afterEv planning.Evaluation
-				b       batch
-			)
-			ignored := ignoredFields(input)
-			run := func(ctx context.Context) error {
+			if !in.DryRun {
+				// SC2: nothing is added that was not asked for: an offered add is
+				// applied only on a yes, in a later turn.
 				for i, op := range in.Ops {
-					res, err := applyOp(ctx, svc, op, &b)
-					if err != nil {
-						return fmt.Errorf("op %d of %d (%s): %w", i+1, len(in.Ops), op.Op, err)
+					if op.Op == "add" && svc.Offered.offeredNow(ctx, op) {
+						return nil, ToolEffectNone, fmt.Errorf("%w: op %d (%s) is an offer made in this turn: nothing is added that was not asked for, so offer it and apply it only when the user says yes", domain.ErrInvalidInput, i+1, op.Op)
 					}
-					if ign := ignored[i]; len(ign) > 0 {
-						res["ignored_fields"] = ign
-					}
-					applied = append(applied, res)
 				}
-				var err error
-				after, afterEv, err = batchAfter(ctx, svc, ws, b, before)
-				return err
 			}
-			err = svc.Tx.InTx(ctx, func(ctx context.Context) error {
-				if err := run(ctx); err != nil {
-					return err
+			// A replace that names its component needs no plate_id: the component knows it.
+			for i, op := range in.Ops {
+				// A swap that names its source (a batch to eat from, a cell to cook in)
+				// is a replace: the models send it that way.
+				if op.Op == "swap" && (op.SessionID != 0 || op.CookAt != nil) && op.PlateComponentID != 0 {
+					in.Ops[i].Op = "replace"
+					op.Op = "replace"
 				}
-				if in.DryRun {
-					return errDryRun
+				if op.Op == "replace" && op.PlateID == 0 && op.PlateComponentID != 0 {
+					if pc, err := svc.Plates.GetComponent(ctx, op.PlateComponentID); err == nil {
+						in.Ops[i].PlateID = pc.PlateID
+					}
 				}
-				return saveLight(ctx, svc, light)
-			})
-			if err != nil && !errors.Is(err, errDryRun) {
+			}
+			run, err := runGuarded(ctx, svc, w, applyInput{Ops: in.Ops, DryRun: in.DryRun, Light: light, Goal: in.Goal, keepSides: true}, ignoredFields(input))
+			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			if in.DryRun {
-				// Rolled back: the dry run is a step of the run log too.
-				planning.RecordEvaluation(ctx, planning.PhaseDryRun, func() planning.Evaluation { return afterEv })
-			} else {
-				noteChange(ctx, "apply_changes", map[string]any{"count": len(in.Ops), "ops": b.ops})
-				noteDates(ctx, b.aff.Dates)
-			}
-			result := map[string]any{"dry_run": in.DryRun, "applied": applied, "after": after}
-			if in.DryRun {
-				// The rollback is done: a row that is gone now was created by the dry run.
-				markProvisional(applied, after, rowGone(ctx, svc))
-				result["dry_run_note"] = dryRunNote
-			}
-			return mustJSON(result), ToolEffectNone, nil
+			run.result["saved"], run.result["status"] = saveStatus(run.result)
+			return mustJSON(run.result), ToolEffectNone, nil
 		},
 	}
 }
 
+// saveStatus says whether anything was saved and in one sentence what that
+// means: the first two fields of the result the model reads (dryRunView).
+func saveStatus(res map[string]any) (bool, string) {
+	switch {
+	case res["dry_run"] == true:
+		return false, "Nothing changed: this was only a check, say what would change and never that it was added, changed or removed."
+	case res["saved"] == false:
+		return false, "Nothing changed: refused, the plan is unchanged."
+	}
+	return true, "Saved: the change is in the plan (the user can undo it)."
+}
+
+// runApply runs the ops of one apply_changes call in one transaction (rolled
+// back for a dry run), checks the marks and the goal, and builds the result.
+func runApply(ctx context.Context, svc Services, w window.Window, in applyInput, ignored map[int][]string) (applyRun, error) {
+	light := in.Light
+	if in.keepSides {
+		ctx = context.WithValue(ctx, keepSidesKey{}, true)
+	}
+	if err := checkLight(ctx, svc, w, light); err != nil {
+		return applyRun{}, err
+	}
+	ws := windowsFor(w, opDates(in.Ops))
+	// The baseline stands under the stored light only: an intent this
+	// call adds must show its own S6/S6b as new (audit B2).
+	before, err := evalWindows(withLight(ctx, nil), svc, ws, false, nil)
+	if err != nil {
+		return applyRun{}, fmt.Errorf("read the plan before the change: %w", err)
+	}
+	// The plan as it is before the ops, for the change report.
+	beforeSt, beforeErr := svc.State(withLight(ctx, nil), w, todayFrom(ctx))
+	var (
+		applied []map[string]any
+		after   map[string]any
+		afterEv planning.Evaluation
+		request map[string]any
+		b       batch
+		rep     *changeReport
+		// cookFacts says where the away call put the day's cooks.
+		cookFacts map[string]any
+	)
+	run := func(ctx context.Context) error {
+		for i, op := range in.Ops {
+			res, err := applyOp(ctx, svc, op, &b)
+			if err != nil {
+				return fmt.Errorf("op %d of %d (%s): %w", i+1, len(in.Ops), op.Op, err)
+			}
+			if id, ok := res["plate_component_id"].(int64); ok && (op.Op == "add" || op.Op == "replace") {
+				b.made = append(b.made, id)
+			}
+			if ign := ignored[i]; len(ign) > 0 {
+				res["ignored_fields"] = ign
+			}
+			applied = append(applied, res)
+		}
+		fixed, err := settleCooks(ctx, svc, ws, in.Ops, &b, before)
+		if err != nil {
+			return err
+		}
+		applied = append(applied, fixed...)
+		cookFacts = cookingMoved(ctx, svc, w, fixed, in.Ops)
+		b.aff.Dates = append(b.aff.Dates, planning.LightDates(light)...)
+		after, afterEv, err = batchAfter(withExtraAvoid(withDirectional(ctx, in.Goal), b.removed), svc, ws, b, before)
+		if err != nil {
+			return err
+		}
+		if len(light) > 0 {
+			st, err := svc.State(ctx, w, todayFrom(ctx))
+			if err != nil {
+				return err
+			}
+			if err := checkMarks(st, light, afterEv); err != nil {
+				return err
+			}
+		}
+		rep = reportOf(ctx, svc, w, beforeSt, beforeErr, before, afterEv, applied)
+		if in.Goal != nil {
+			if request, err = judgeGoal(ctx, svc, w, *in.Goal, light, before, afterEv); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	err = svc.Tx.InTx(ctx, func(ctx context.Context) error {
+		if err := run(ctx); err != nil {
+			return err
+		}
+		if in.DryRun {
+			return errDryRun
+		}
+		return saveLight(ctx, svc, light)
+	})
+	if err != nil && !errors.Is(err, errDryRun) {
+		return applyRun{}, err
+	}
+	switch {
+	case in.quiet:
+	case in.DryRun:
+		// Rolled back: the dry run is a step of the run log too.
+		planning.RecordEvaluation(ctx, planning.PhaseDryRun, func() planning.Evaluation { return afterEv })
+	default:
+		noteChange(ctx, "apply_changes", map[string]any{"count": len(in.Ops), "ops": b.ops})
+		noteDates(ctx, b.aff.Dates)
+	}
+	result := map[string]any{"dry_run": in.DryRun, "applied": applied, "after": after}
+	if request != nil {
+		result["request"] = request
+	}
+	if !in.quiet && !in.DryRun {
+		svc.Removed.add(ctx, b.removed)
+	}
+	if in.Goal == nil && !in.quiet {
+		next, offers := adviceFor(ctx, svc, w, before, afterEv, in.DryRun, applied)
+		if o := sideClashOffer(ctx, svc, w, in, applied); o != nil {
+			offers = append([]map[string]any{o}, offers...)
+			next = clashNext(next, o, in.DryRun)
+			if rep != nil {
+				rep.Tell = append(rep.Tell, fmt.Sprint(o["clash"])+"; offer: "+fmt.Sprint(o["what"])+", only if the user says yes")
+			}
+		}
+		if next != "" {
+			result["next"] = next
+			if len(offers) > 0 {
+				result["offers"] = offers
+			}
+		}
+	}
+	if cookFacts != nil {
+		result["cooking_moved"] = cookFacts
+	}
+	if rep != nil {
+		result["report"] = rep
+	}
+	if in.DryRun {
+		// The rollback is done: a row that is gone now was created by the dry run.
+		markProvisional(applied, after, rowGone(ctx, svc))
+		result["dry_run_note"] = dryRunNote
+	}
+	return applyRun{result: result, before: before, after: afterEv}, nil
+}
+
+// maxSettleRounds bounds the cook moves settleCooks makes after one call.
+const maxSettleRounds = 3
+
+// settleCooks keeps an away from creating a second cooking occasion: marking
+// cells away hands a cook to the first meal that still eats it, which can push
+// that day over the H2 limit. For each H2 issue the ops made new, it applies
+// the first verified move_cook option (the least disruptive: one cook, or all
+// of the day's cooks into one cell) and reports each move as an applied
+// entry with auto_fix, so the model tells the user. An issue without a
+// verified option stays, marked no_fix_found.
+// fixDateKey asks the write check for the options of that date's below-range
+// day energy issue even when it is not new (find_ways' fix).
+type fixDateKey struct{}
+
+// cookPileKey marks the context of the away guard's re-anchoring.
+type cookPileKey struct{}
+
+func settleCooks(ctx context.Context, svc Services, ws []window.Window, ops []changeOp, b *batch, before planning.Evaluation) ([]map[string]any, error) {
+	if !slices.ContainsFunc(ops, func(op changeOp) bool { return op.Op == "away" }) || planning.CookPolicy == planning.CookTwoTimes {
+		return nil, nil
+	}
+	was := issueMap(before.Issues)
+	isNew := func(is planning.Issue) bool {
+		_, ok := was[issueKey(is)]
+		return !ok && is.Rule == "H2" && is.Code == planning.CodeTooManyCookOccasions
+	}
+	var out []map[string]any
+	for range maxSettleRounds {
+		ev, err := evalWindows(context.WithValue(ctx, cookPileKey{}, true), svc, ws, true, isNew)
+		if err != nil {
+			return nil, fmt.Errorf("read the plan after the away: %w", err)
+		}
+		i := slices.IndexFunc(ev.Issues, func(is planning.Issue) bool {
+			return isNew(is) && len(is.Options) > 0 && is.Options[0].Op.Op == "move_cook"
+		})
+		if i < 0 {
+			return out, nil
+		}
+		is, opt := ev.Issues[i], ev.Issues[i].Options[0]
+		opOps := opt.Ops
+		if len(opOps) == 0 {
+			opOps = []planning.OptionOp{opt.Op}
+		}
+		for _, o := range opOps {
+			raw, err := json.Marshal(o)
+			if err != nil {
+				return nil, err
+			}
+			var op changeOp
+			if err := json.Unmarshal(raw, &op); err != nil {
+				return nil, err
+			}
+			res, err := applyOp(ctx, svc, op, b)
+			if err != nil {
+				return nil, fmt.Errorf("move the cook after the away (%s): %w", food.Quote(opt.Name), err)
+			}
+			res["auto_fix"] = fmt.Sprintf("moved so that %s does not get a second cooking time from the away", dayLabelStr(is.Date))
+			if o.Op != "move_cook" {
+				res["auto_fix"] = fmt.Sprintf("so that %s keeps one cooking time with at most two dishes: %s", dayLabelStr(is.Date), opt.Name)
+			}
+			out = append(out, res)
+		}
+	}
+	return out, nil
+}
+
 // dryRunNote closes a dry run's result: its new rows never existed.
-const dryRunNote = "Nothing was saved. Ids marked provisional (plates, components, sessions; in issues and in an option's op too) do not exist after the dry run: do not use them in a later call. An option whose op uses one is marked provisional too. To apply, send the full op list again with dry_run false."
+const dryRunNote = "Nothing was saved. Ids marked provisional (plates, components, sessions; in issues and in an option's op too) do not exist after the check: do not use them in a later call. An option whose op uses one is marked provisional too. To apply, send the full op list again with dry_run false."
 
 // markProvisional replaces, anywhere in a rolled-back dry run's result (the
 // applied list, after's plates, sessions and issue deltas with their options'
@@ -351,6 +574,25 @@ func idOf(v any) (int64, bool) {
 	return 0, false
 }
 
+// keepSidesKey marks a run of the user's own ops: a replaced main changes no
+// other component.
+type keepSidesKey struct{}
+
+// refitOrKeep handles the sides after a main was replaced. A way's or an
+// alternative's check refits them inside its change (they are in its ops); the
+// user's own write leaves them and records the clash for the offer.
+func refitOrKeep(ctx context.Context, svc Services, plateID int64, b *batch, out map[string]any) {
+	if ctx.Value(keepSidesKey{}) == true {
+		if c := sideClash(ctx, svc, plateID); c != nil {
+			out["side_clash"] = c
+		}
+		return
+	}
+	if steps := refitSides(ctx, svc, plateID, b); len(steps) > 0 {
+		out["refit"] = steps
+	}
+}
+
 // applyOp runs one op through plate.Service (and the availability writer).
 func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[string]any, error) {
 	switch op.Op {
@@ -379,8 +621,12 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		}
 		b.plate(p)
 		b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(old)...)
-		b.note(op, map[string]any{"food": old.FoodName, "to": pc.FoodName, "date": p.DateString()})
-		return opResult(op, p, pc), nil
+		b.note(op, map[string]any{"food": food.Data(old.FoodName), "to": food.Data(pc.FoodName), "date": p.DateString()})
+		out := opResult(op, p, pc)
+		if pc.Position == plate.PositionMain {
+			refitOrKeep(ctx, svc, p.ID, b, out)
+		}
+		return out, nil
 	case "set_quantity":
 		q := op.quantity()
 		if q.empty() {
@@ -398,7 +644,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 			return nil, err
 		}
 		b.plate(p)
-		b.note(op, map[string]any{"food": pc.FoodName, "date": p.DateString()})
+		b.note(op, map[string]any{"food": food.Data(pc.FoodName), "date": p.DateString()})
 		return opResult(op, p, pc), nil
 	case "remove":
 		p, pc, err := componentOnPlate(ctx, svc, op.PlateComponentID)
@@ -409,9 +655,10 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 			return nil, err
 		}
 		b.plate(p)
+		b.removed = append(b.removed, pc.FoodID)
 		b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(pc)...)
-		b.note(op, map[string]any{"food": pc.FoodName, "date": p.DateString()})
-		return map[string]any{"op": op.Op, "plate_component_id": op.PlateComponentID, "removed": true}, nil
+		b.note(op, map[string]any{"food": food.Data(pc.FoodName), "date": p.DateString()})
+		return map[string]any{"op": op.Op, "plate_component_id": op.PlateComponentID, "removed": true, "food": pc.FoodName, "date": p.DateString()}, nil
 	case "create_plate":
 		d, err := parseOpDate(op.Date)
 		if err != nil {
@@ -540,6 +787,9 @@ func opAdd(ctx context.Context, svc Services, op changeOp, b *batch) (map[string
 	default:
 		return nil, fmt.Errorf("%w: add needs plate_id or date + slot_id", domain.ErrInvalidInput)
 	}
+	if err := sameKindRefusal(ctx, svc, p, op.FoodID); err != nil {
+		return nil, err
+	}
 	comp := op.quantity().component(op.FoodID)
 	comp.Position = plate.Position(op.Position)
 	if op.SessionID != 0 {
@@ -562,7 +812,7 @@ func opAdd(ctx context.Context, svc Services, op changeOp, b *batch) (map[string
 		b.aff.Dates = append(b.aff.Dates, op.CookAt.Date)
 	}
 	b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(added)...)
-	b.note(op, map[string]any{"food": added.FoodName, "date": got.DateString()})
+	b.note(op, map[string]any{"food": food.Data(added.FoodName), "date": got.DateString()})
 	return opResult(op, got, added), nil
 }
 
@@ -578,12 +828,15 @@ func addCookedElsewhere(ctx context.Context, svc Services, p *plate.Plate, comp 
 	if err := guardDate(ctx, cd); err != nil {
 		return nil, err
 	}
+	if err := checkCookCell(ctx, svc, plate.CellKey{Date: cd, SlotID: op.CookAt.SlotID}); err != nil {
+		return nil, err
+	}
 	f, err := svc.Foods.Get(ctx, op.FoodID)
 	if err != nil {
 		return nil, err
 	}
 	if f.Kind != food.KindComposed {
-		return nil, fmt.Errorf("%w: cook_at needs a recipe, %s is a leaf food (eat it without cooking)", domain.ErrInvalidInput, f.Name)
+		return nil, fmt.Errorf("%w: cook_at needs a recipe, %s is a leaf food (eat it without cooking)", domain.ErrInvalidInput, food.Quote(f.Name))
 	}
 	portions := 1.0
 	if comp.Portions != nil {
@@ -628,7 +881,7 @@ func opSetPortions(ctx context.Context, svc Services, op changeOp, b *batch) (ma
 	if plate.Exceeds(cur.Consumed, *op.Portions) || plate.Exceeds(cur.FrozenConsumed, frozen) {
 		return nil, fmt.Errorf("%w: %s would cook %s portions (%s frozen) but its plates eat %s (%s from the freezer); "+
 			"set at least %s portions (%s frozen), or reduce the plates' eaters or portions first",
-			domain.ErrInvalidInput, cur.FoodName, fnum(*op.Portions), fnum(frozen), fnum(cur.Consumed), fnum(cur.FrozenConsumed), fnum(cur.Consumed), fnum(cur.FrozenConsumed))
+			domain.ErrInvalidInput, food.Quote(cur.FoodName), fnum(*op.Portions), fnum(frozen), fnum(cur.Consumed), fnum(cur.FrozenConsumed), fnum(cur.Consumed), fnum(cur.FrozenConsumed))
 	}
 	v, err := svc.Plates.SetSessionPortions(ctx, op.SessionID, plate.SessionPortions{Portions: *op.Portions, FrozenPortions: frozen, Note: sess.Note})
 	if err != nil {
@@ -636,7 +889,7 @@ func opSetPortions(ctx context.Context, svc Services, op changeOp, b *batch) (ma
 	}
 	b.aff.Sessions = append(b.aff.Sessions, v.ID)
 	b.aff.Dates = append(b.aff.Dates, v.CookDate.Format(time.DateOnly))
-	b.note(op, map[string]any{"food": v.FoodName, "date": v.CookDate.Format(time.DateOnly), "portions": v.Portions})
+	b.note(op, map[string]any{"food": food.Data(v.FoodName), "date": v.CookDate.Format(time.DateOnly), "portions": v.Portions})
 	return map[string]any{"op": op.Op, "session_id": v.ID, "portions": v.Portions, "frozen_portions": v.FrozenPortions}, nil
 }
 
@@ -698,9 +951,16 @@ func evalWindow(ctx context.Context, svc Services, w window.Window, withOptions 
 		return planning.Evaluation{}, err
 	}
 	st.Light = planning.MergeLight(st.Light, lightFrom(ctx))
+	st.Avoid, st.PairAddOns = svc.Removed.avoid(ctx), true
+	st.CookPile, _ = ctx.Value(cookPileKey{}).(bool)
 	ev := chatView(st)
 	if withOptions {
 		ev.Issues = planning.IssueOptions(st, planning.WindowTarget(st), ev, ev.Issues, keep)
+		for _, is := range ev.Issues {
+			for j := range is.Options {
+				is.Options[j].Slot = strings.TrimPrefix(st.SlotNames[is.Options[j].SlotID], "slot.")
+			}
+		}
 	}
 	return ev, nil
 }
@@ -709,16 +969,28 @@ func evalWindow(ctx context.Context, svc Services, w window.Window, withOptions 
 // sessions, the evaluation's days for the touched dates and the issues the
 // ops made new or resolved against before.
 func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, before planning.Evaluation) (map[string]any, planning.Evaluation, error) {
+	bAff := b.aff
 	// Options only for the issues this call made new or worse.
 	was := issueMap(before.Issues)
 	changed := func(is planning.Issue) bool {
 		b, ok := was[issueKey(is)]
+		if d, _ := ctx.Value(fixDateKey{}).(string); d != "" && is.Date == d && is.Code == planning.CodeKcalBelowBand {
+			return true // find_ways looks for the one fix of this day, new or not
+		}
+		if is.Code == planning.CodeKcalBelowBand && slices.Contains(bAff.Dates, is.Date) {
+			return true // a touched day left under its range gets its one fix, new or not
+		}
 		return !ok || worsened(b, is)
 	}
 	now, err := evalWindows(ctx, svc, ws, true, changed)
 	if err != nil {
 		return nil, planning.Evaluation{}, fmt.Errorf("read the plan after the change: %w", err)
 	}
+	now.Issues = withoutUndoOptions(now.Issues, b.made)
+	if directional(ctx) {
+		now.Issues = withoutRegressOptions(before, now, now.Issues)
+	}
+	now.Issues = lowerInstead(ctx, svc, ws[0], now.Issues, b.made)
 	reader := svc
 	reader.PlanView = nil // the evaluation, not the plan read model, supplies the issues
 	out := changeEffect(ctx, reader, b.aff)
@@ -740,7 +1012,7 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 	days := []planning.DayEval{}
 	for _, d := range now.Days {
 		if dates[d.Date] {
-			days = append(days, d)
+			days = append(days, awayDay(d))
 		}
 	}
 	out["days"] = planning.Compact(days)
@@ -767,6 +1039,34 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 	for _, k := range []string{"new", "resolved", "worsened"} {
 		if _, ok := delta[k]; ok {
 			delta[k] = planning.Compact(delta[k])
+		}
+	}
+	// A touched day that ends under its range, new issue or not, carries the one
+	// fix that brings it inside (the reply offers it).
+	var fixes []effectIssue
+	for _, is := range now.Issues {
+		if o := fixOption(is); o != nil && dates[is.Date] {
+			e := toEffectIssue(is)
+			o.Recommended, o.Because = true, "brings the day inside its range, no new problem"
+			e.Options = []planning.Option{*o}
+			for _, b := range before.Issues {
+				if b.Code == planning.CodeKcalBelowBand && b.Date == is.Date {
+					e.WasUnderRange = true
+				}
+			}
+			fixes = append(fixes, e)
+		}
+	}
+	if len(fixes) > 0 {
+		delta["day_fix"] = planning.Compact(fixes)
+		// The day's one fix is the recommended option: the same issue listed as
+		// new carries none, so the reply has a single one to state.
+		news, _ := delta["new"].([]any)
+		for _, n := range news {
+			m, _ := n.(map[string]any)
+			if slices.ContainsFunc(fixes, func(f effectIssue) bool { return m["date"] == f.Date && m["code"] == f.Code }) {
+				delete(m, "options")
+			}
 		}
 	}
 	out["issues"] = delta
@@ -858,4 +1158,235 @@ func issueMap(issues []planning.Issue) map[string]planning.Issue {
 		m[issueKey(is)] = is
 	}
 	return m
+}
+
+// withoutUndoOptions drops the options that would change a component the call
+// just made (remove the bread that was asked for): the day over its range
+// after an explicit add is brought back by something else that fits. The first
+// option left is the recommended one.
+func withoutUndoOptions(issues []planning.Issue, made []int64) []planning.Issue {
+	if len(made) == 0 {
+		return issues
+	}
+	out := slices.Clone(issues)
+	for i, is := range out {
+		if len(is.Options) == 0 {
+			continue
+		}
+		var keep []planning.Option
+		for _, o := range is.Options {
+			ops := o.Ops
+			if len(ops) == 0 {
+				ops = []planning.OptionOp{o.Op}
+			}
+			if !slices.ContainsFunc(ops, func(op planning.OptionOp) bool {
+				return op.PlateComponentID != nil && slices.Contains(made, *op.PlateComponentID)
+			}) {
+				keep = append(keep, o)
+			}
+		}
+		if len(keep) == len(is.Options) {
+			continue
+		}
+		recommended := slices.ContainsFunc(keep, func(o planning.Option) bool { return o.Recommended })
+		if len(keep) > 0 && !recommended {
+			keep[0].Recommended, keep[0].Because = true, "the best-ranked option that was checked: no new problem"
+		}
+		out[i].Options = keep
+	}
+	return out
+}
+
+type directionalKey struct{}
+
+// withDirectional marks a call that carries a lighter or heartier goal: only
+// there does a reply never offer to move the meal back.
+func withDirectional(ctx context.Context, g *applyGoal) context.Context {
+	return context.WithValue(ctx, directionalKey{}, g != nil && (g.Kind == planning.GoalLighter || g.Kind == planning.GoalHeartier))
+}
+
+func directional(ctx context.Context) bool {
+	v, _ := ctx.Value(directionalKey{}).(bool)
+	return v
+}
+
+// withoutRegressOptions drops the options that move a meal back against the
+// change this call made to it: food added to a meal the call made lighter,
+// food taken from a meal it made heartier. A reply never offers to undo what
+// it just did (G3). The first option left is the recommended one.
+func withoutRegressOptions(before, now planning.Evaluation, issues []planning.Issue) []planning.Issue {
+	cell := func(date string, slot int64) string { return fmt.Sprintf("%s|%d", date, slot) }
+	was := map[string]float64{}
+	for _, p := range before.Plates {
+		was[cell(p.Date, p.SlotID)] = p.Kcal
+	}
+	dir := map[string]float64{} // per cell: the sign of the call's change
+	for _, p := range now.Plates {
+		if k, ok := was[cell(p.Date, p.SlotID)]; ok && math.Abs(p.Kcal-k) >= 1 {
+			dir[cell(p.Date, p.SlotID)] = p.Kcal - k
+		}
+	}
+	if len(dir) == 0 {
+		return issues
+	}
+	out := slices.Clone(issues)
+	for i, is := range out {
+		var keep []planning.Option
+		for _, o := range is.Options {
+			if d := dir[cell(o.Date, o.SlotID)]; d != 0 && o.KcalDelta*d < 0 {
+				continue
+			}
+			keep = append(keep, o)
+		}
+		if len(keep) == len(is.Options) {
+			continue
+		}
+		if len(keep) > 0 && !slices.ContainsFunc(keep, func(o planning.Option) bool { return o.Recommended }) {
+			keep[0].Recommended, keep[0].Because = true, "the best-ranked option that was checked: no new problem"
+		}
+		out[i].Options = keep
+	}
+	return out
+}
+
+// lowerInstead gives a day pushed over its range by an explicit add the one
+// option that remains once undoing the add is off the table: a verified way to
+// lower the day inside its range by changing something else.
+func lowerInstead(ctx context.Context, svc Services, w window.Window, issues []planning.Issue, made []int64) []planning.Issue {
+	if len(made) == 0 || svc.State == nil {
+		return issues
+	}
+	out := slices.Clone(issues)
+	for i, is := range out {
+		if is.Code != planning.CodeKcalAboveBand || len(is.Options) > 0 {
+			continue
+		}
+		st, err := svc.State(ctx, w, todayFrom(ctx))
+		if err != nil {
+			return out
+		}
+		st.Avoid = svc.Removed.avoid(ctx)
+		res, err := planning.Ways(st, planning.WindowTarget(st), planning.WayRequest{Date: is.Date, Goal: planning.GoalLowerDay, Limit: 8})
+		if err != nil {
+			continue
+		}
+		for _, way := range res.Ways {
+			if len(way.Ops) == 0 || slices.ContainsFunc(way.Ops, func(op planning.OptionOp) bool {
+				return op.PlateComponentID != nil && slices.Contains(made, *op.PlateComponentID)
+			}) {
+				continue
+			}
+			out[i].Options = []planning.Option{{
+				Action: "lower", Name: way.What, Date: is.Date, Op: way.Ops[0], Ops: way.Ops, DayKcal: way.After.DayKcal,
+				Recommended: true, Because: "brings the day back into its range by changing something else, the added food stays",
+			}}
+			break
+		}
+	}
+	return out
+}
+
+// cookingMoved are the facts of the cooks an away call re-anchored, for the
+// reply: per day and cooking time the dishes cooked there and the meals each
+// feeds, and whether nothing else changed. nil when no cook was moved.
+func cookingMoved(ctx context.Context, svc Services, w window.Window, fixed []map[string]any, ops []changeOp) map[string]any {
+	var moved []int64
+	cell := map[int64][2]any{}
+	onlyMoves := true
+	for _, f := range fixed {
+		if f["op"] != "move_cook" {
+			onlyMoves = false
+			continue
+		}
+		if id, ok := f["session_id"].(int64); ok {
+			moved = append(moved, id)
+			cell[id] = [2]any{f["cook_date"], f["cook_slot_id"]}
+		}
+	}
+	if len(moved) == 0 || svc.State == nil {
+		return nil
+	}
+	st, err := svc.State(ctx, w, todayFrom(ctx))
+	if err != nil {
+		return nil
+	}
+	type at struct {
+		date string
+		slot int64
+	}
+	var order []at
+	seen := map[at]bool{}
+	for _, id := range moved {
+		k := at{fmt.Sprint(cell[id][0]), 0}
+		switch v := cell[id][1].(type) {
+		case int64:
+			k.slot = v
+		case int:
+			k.slot = int64(v)
+		}
+		if !seen[k] {
+			seen[k] = true
+			order = append(order, k)
+		}
+	}
+	// Every dish cooked there now, the ones the away handed over included.
+	groups := map[at][]map[string]any{}
+	for _, k := range order {
+		for _, ss := range st.Sessions {
+			if ss.CookDate.Format(time.DateOnly) != k.date || ss.CookSlotID != k.slot {
+				continue
+			}
+			var feeds []string
+			for _, p := range st.Plates {
+				for _, c := range p.Components {
+					if c.SessionID == ss.ID {
+						feeds = append(feeds, mealName(st, p))
+					}
+				}
+			}
+			if len(feeds) > 0 {
+				groups[k] = append(groups[k], map[string]any{"dish": food.Quote(st.Foods[ss.FoodID].Name), "feeds": feeds})
+			}
+		}
+	}
+	onlyAway := !slices.ContainsFunc(ops, func(o changeOp) bool { return o.Op != "away" })
+	var out []map[string]any
+	for _, k := range order {
+		day := dayLabelStr(k.date)
+		out = append(out, map[string]any{"day": day, "cooking_time": strings.TrimPrefix(st.SlotNames[k.slot], "slot."), "dishes": groups[k]})
+	}
+	facts := map[string]any{"cooked_now": out}
+	if onlyMoves && onlyAway {
+		facts["nothing_else_changed"] = true
+	}
+	return facts
+}
+
+// sameKindRefusal refuses an add that would put a second food of the same kind
+// on the plate (skyr on top of yogurt, bread beside potatoes) and says what to
+// do: raise the one there, or pick another kind.
+func sameKindRefusal(ctx context.Context, svc Services, p *plate.Plate, foodID int64) error {
+	w, ok := windowFrom(ctx)
+	if !ok || svc.State == nil {
+		return nil
+	}
+	st, err := svc.State(ctx, w, todayFrom(ctx))
+	if err != nil {
+		return nil
+	}
+	f, ok := st.Foods[foodID]
+	pi := indexPlate(st, p.ID)
+	if !ok || pi < 0 {
+		return nil
+	}
+	existing, kind, same := st.SameKind(st.Plates[pi], f)
+	if !same {
+		return nil
+	}
+	hint := "add another kind of food"
+	if existing.ID > 0 {
+		hint = fmt.Sprintf("raise it instead (set_quantity on plate_component_id %d, within its usual serving) or add another kind of food", existing.ID)
+		return fmt.Errorf("%w: %s would be a second %s on this plate beside %s: %s", domain.ErrInvalidInput, food.Quote(f.Name), kind, food.Quote(st.Foods[existing.FoodID].Name), hint)
+	}
+	return fmt.Errorf("%w: %s would be a second %s on this plate: %s", domain.ErrInvalidInput, food.Quote(f.Name), kind, hint)
 }

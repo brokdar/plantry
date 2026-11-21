@@ -279,7 +279,20 @@
       "grid_effect": "Plantry plans the Plan meals, leaves No plate meals empty and fills Routine meals from a saved routine.",
       "grid_no_slots": "Add a meal slot first, then set up your usual week.",
       "routines_label": "Routines",
-      "routines_effect": "Routines are saved plates for recurring meals, such as your weekday breakfast."
+      "routines_effect": "Routines are saved plates for recurring meals, such as your weekday breakfast.",
+      "bands_label": "Meal sizes",
+      "bands_effect": "A band is the share of the day's energy a meal should hold, in percent. Plantry aims each meal at the middle of its band, the limits for a lighter or a fuller meal follow it, and the day's minimum shrinks by the share of a meal you are away for. A meal outside its band is pointed out, never blocked.",
+      "bands_min": "Min %",
+      "bands_max": "Max %",
+      "bands_share": "Aims at about {{pct}} % of the day",
+      "bands_sum": "Minimums add up to {{min}} %, maximums to {{max}} %.",
+      "bands_invalid": "Minimums add up to {{min}} % (at most 100), maximums to {{max}} % (at least 100). Adjust the bands to save.",
+      "bands_row_invalid": "{{name}}: the minimum must not be above the maximum, and both stay between 0 and 100.",
+      "bands_save": "Save bands",
+      "bands_saved": "Bands saved",
+      "bands_preset_lunch": "Lunch is the biggest meal",
+      "bands_preset_dinner": "Dinner is the biggest meal",
+      "bands_default_note": "Without a change, breakfast is 20-30, lunch 30-40 and dinner 25-40 %."
     },
     "cooking": {
       "cooking_group": "Cooking",
@@ -1022,6 +1035,7 @@
       "not_found": "That batch no longer exists."
     },
     "plan": {
+      "hard_rule_open": "The plan was saved, but a hard rule is still broken in it. The notes say which one.",
       "cell_occupied": "Couldn't restore: a meal is already planned there.",
       "invalid_start": "That week can't open: a plan week starts on your shopping day.",
       "generation_running": "A plan is already being made for this week. Wait for it to finish.",
@@ -1036,10 +1050,12 @@
       "nothing_to_accept": "This week has no draft plates.",
       "state_mismatch": "Some of these plates changed in the meantime, so this can't be undone.",
       "changed_during_run": "That plan changed while it was being made, so nothing was applied. Please try again.",
-      "timeout": "Making the plan took too long. Please try again."
+      "timeout": "Making the plan took too long. Please try again.",
+      "day_same_dish": "No other main or cold plate fits this day, so it would have the same main at both meals. Nothing was changed."
     },
     "slot": {
-      "in_use": "This time slot is used by plates and cannot be deleted."
+      "in_use": "This time slot is used by plates and cannot be deleted.",
+      "invalid_bands": "The meal bands do not add up: minimums must total at most 100 % and maximums at least 100 %."
     },
     "image": {
       "upload_failed": "Image operation failed. Please try again.",
@@ -1074,6 +1090,11 @@
       "change_not_undoable": "This change did not alter anything, so there is nothing to undo.",
       "iterations_exceeded": "The AI ran too many tool steps — try a simpler request.",
       "rate_limit_exceeded": "You're sending too many AI requests. Please wait a minute.",
+      "rate_limited": "The AI provider is busy or its limit is reached, so nothing was changed. Wait a minute and try again.",
+      "key_rejected": "The AI provider rejected the API key, so nothing was changed. Check the key in Settings.",
+      "timeout": "The assistant took too long to answer, so nothing more was changed. Please try again.",
+      "cut_off": "The answer was cut off at the length limit. Ask for the rest or shorten the request.",
+      "refused": "The assistant declined this request, so nothing was changed. Rephrase it or plan without the assistant.",
       "invalid_date": "A chat date is not a valid YYYY-MM-DD date."
     },
     "import": {

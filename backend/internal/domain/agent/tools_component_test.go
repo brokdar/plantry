@@ -11,6 +11,7 @@ import (
 )
 
 func TestComponentByID(t *testing.T) {
+	t.Parallel()
 	p := &plate.Plate{ID: 3, Components: []plate.PlateComponent{{ID: 7, PlateID: 3, FoodID: 1}, {ID: 8, PlateID: 3, FoodID: 2}}}
 
 	pc, err := componentByID(p, 8)

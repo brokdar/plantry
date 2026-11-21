@@ -12,6 +12,7 @@ import (
 // B4-AC3 (D6): a preview counts only for a later turn of its conversation,
 // for exactly its rows, for 30 minutes and once.
 func TestPendingUnlocks(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
 	p := newPendingUnlocks(func() time.Time { return now })
 	rows := plate.RowSet{PlateIDs: []int64{1, 2}, SessionIDs: []int64{3}}

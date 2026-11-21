@@ -28,6 +28,7 @@ export const slotKeys = {
   all: ["slots"] as const,
   lists: () => [...slotKeys.all, "list"] as const,
   list: (activeOnly: boolean) => [...slotKeys.lists(), { activeOnly }] as const,
+  bands: () => [...slotKeys.all, "bands"] as const,
 }
 
 // Read models (D23). Every plan mutation invalidates planKeys.all,

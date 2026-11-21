@@ -166,7 +166,16 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			if last != nil {
 				partial = *last
 			}
-			return partial, fmt.Errorf("%w: %w", domain.ErrAIProviderFailed, err)
+			return partial, fmt.Errorf("%w: %w", failureSentinel(err), err)
+		}
+		if resp.StopReason == llm.StopReasonRefusal {
+			// The model declined: no repair can change that, and nothing is
+			// run or saved.
+			var partial Proposal
+			if last != nil {
+				partial = *last
+			}
+			return partial, fmt.Errorf("%w: the model refused the request", domain.ErrAIRefused)
 		}
 		continuation = false
 		if resp.StopReason == llm.StopReasonPauseTurn && !hasToolUse(resp) {
@@ -267,7 +276,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			}
 			noted := withNotes(prop, allFixes, advice, "")
 			last = &noted
-			feedback = rep.feedback(findings{violations, advice, fixes, sig == lastSig}) + evaluationFeedback(merged, in.Target)
+			feedback = rep.feedback(findings{violations, advice, fixes, sig == lastSig}) + evaluationFeedback(in, prop)
 			lastSig = sig
 		} else {
 			logAttempt(ctx, in.Logger, attempt, nil, perr)
@@ -286,6 +295,21 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		}
 		req.Messages = append(req.Messages, repairMessage(resp.Message, feedback))
 	}
+}
+
+// failureSentinel is the domain error for a failed provider call: a limit and
+// a rejected key get their own (the user acts differently on each), a
+// timeout stays ErrAIProviderFailed and ends the run as a timeout when it is
+// a deadline.
+func failureSentinel(err error) error {
+	switch llm.FailureOf(err) {
+	case llm.FailureRateLimited:
+		return domain.ErrAIRateLimited
+	case llm.FailureKeyRejected:
+		return domain.ErrAIKeyRejected
+	case llm.FailureTimeout, llm.FailureOther:
+	}
+	return domain.ErrAIProviderFailed
 }
 
 // skeleton reports whether the first reply is a plan still to complete:
@@ -412,14 +436,23 @@ type submitPlan struct {
 		} `json:"components"`
 		Reason string `json:"reason"`
 	} `json:"plates"`
-	Light []LightIntent `json:"light"`
-	Notes string        `json:"notes"`
+	Light       []LightIntent `json:"light"`
+	Notes       string        `json:"notes"`
+	MaxCookDays int           `json:"max_cook_days"`
 }
 
 // parseProposal maps submit_plan's input to a Proposal. Ids are not
 // checked here: an unknown one is an H7 violation the repair fixes. A plate
 // without eaters gets the day's guests (D16), else the household's portions.
 func parseProposal(input json.RawMessage, in ChooseInput) (Proposal, error) {
+	// A reply that wraps the plan in {"params": {...}} is read as the plan.
+	var wrapped struct {
+		Params json.RawMessage `json:"params"`
+		Plates json.RawMessage `json:"plates"`
+	}
+	if json.Unmarshal(input, &wrapped) == nil && len(wrapped.Params) > 0 && len(wrapped.Plates) == 0 {
+		input = wrapped.Params
+	}
 	var sp submitPlan
 	if err := json.Unmarshal(input, &sp); err != nil {
 		var te *json.UnmarshalTypeError
@@ -435,7 +468,7 @@ func parseProposal(input json.RawMessage, in ChooseInput) (Proposal, error) {
 	if err != nil {
 		return Proposal{}, err
 	}
-	p := Proposal{Notes: strings.TrimSpace(sp.Notes), Light: light}
+	p := Proposal{Notes: strings.TrimSpace(sp.Notes), Own: strings.TrimSpace(sp.Notes), OwnSet: true, Light: light, MaxCookDays: max(sp.MaxCookDays, 0)}
 	for i, s := range sp.Sessions {
 		if strings.TrimSpace(s.Key) == "" {
 			return Proposal{}, fmt.Errorf("sessions[%d].key is required", i)
@@ -579,10 +612,8 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 		return fail("error: " + err.Error() + "\nCall evaluate_plan again with the complete plan as valid JSON matching its schema.")
 	}
 	prop, fixes := autofix(in, prop)
-	merged := Merge(in.State, in.Target, prop)
-	ev := Evaluate(merged, in.Target)
+	view, ev, _ := plannerView(in, prop, n > 1)
 	RecordDryRun(ctx, n, func() Evaluation { return ev })
-	view := ev.Compact(ev.ProposedView())
 	if len(fixes) > 0 {
 		view["autofix"] = fixes
 	}
@@ -590,18 +621,18 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 	if err != nil {
 		return fail("error: encode evaluation")
 	}
-	res.ToolResultContent = out
+	res.ToolResultContent = kitchenJSON(out)
 	return res
 }
 
 // evaluationFeedback is the evaluate_plan result of a submitted plan, which
 // goes after the repair text so the model sees every rule, soft ones
 // included.
-func evaluationFeedback(merged State, t Target) string {
-	ev := Evaluate(merged, t)
-	out, err := json.Marshal(ev.Compact(ev.ProposedView()))
+func evaluationFeedback(in ChooseInput, prop Proposal) string {
+	view, _, _ := plannerView(in, prop, true)
+	out, err := json.Marshal(view)
 	if err != nil {
 		return ""
 	}
-	return "\nEvaluation of this plan (the same result evaluate_plan returns): " + string(out)
+	return "\nEvaluation of this plan (the same result evaluate_plan returns): " + string(kitchenJSON(out))
 }

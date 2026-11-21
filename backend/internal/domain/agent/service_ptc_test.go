@@ -15,6 +15,7 @@ import (
 // D4 (audit F10): the chat agent never offers code execution or allowed
 // callers, whatever ai.programmatic_tools says (the planner keeps it).
 func TestChat_NeverUsesProgrammaticToolCalling(t *testing.T) {
+	t.Parallel()
 	for _, setting := range []string{"true", "false"} {
 		script := &fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{InputTokens: 1, OutputTokens: 1})}}
 		client := fake.NewFromScript(script)

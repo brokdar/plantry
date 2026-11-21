@@ -29,6 +29,7 @@ func mainOf(t *testing.T, p plate.Plate) plate.PlateComponent {
 // A dry-run copy creates plates that are gone after the rollback: their ids in
 // copies[*] are replaced by provisional: true (the real run keeps them).
 func TestApplyChanges_DryRunCopyIdsAreProvisional(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.twoDinners()
 	lunch := e.slotID("lunch")
@@ -57,6 +58,7 @@ func TestApplyChanges_DryRunCopyIdsAreProvisional(t *testing.T) {
 // away's cells are built as a typed list too; a dry run leaves nothing
 // provisional there (cells carry no ids), but the list must survive the walk.
 func TestApplyChanges_DryRunAwayKeepsCells(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	day := planStart.AddDate(0, 0, 2).Format(time.DateOnly)
 	dry, _, _ := e.mealOp(fmt.Sprintf(`[{"op":"away","date":%q}]`, day))
@@ -68,6 +70,7 @@ func TestApplyChanges_DryRunAwayKeepsCells(t *testing.T) {
 // A field that is on no op stays refused; a harmless one the op does not take
 // is ignored and reported; any other foreign field is refused.
 func TestApplyChanges_ForeignFields(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.twoDinners()
 	old := mainOf(t, p)
@@ -102,15 +105,16 @@ func TestApplyChanges_ForeignFields(t *testing.T) {
 		})
 	}
 
-	t.Run("swap with session_id is refused", func(t *testing.T) {
+	t.Run("swap with session_id is a replace, not a refused field", func(t *testing.T) {
 		_, err := e.exec("apply_changes", fmt.Sprintf(`{"ops":[{"op":"swap","plate_component_id":%d,"food_id":%d,"session_id":3}]}`, old.ID, food))
-		require.ErrorIs(t, err, domain.ErrInvalidInput)
-		assert.Contains(t, err.Error(), `op 1 (swap): unknown field "session_id"`)
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "unknown field")
 	})
 }
 
 // away with date + slot_id and no cells is that one cell.
 func TestApplyChanges_AwayDateAndSlotIsOneCell(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	day := planStart.AddDate(0, 0, 2).Format(time.DateOnly)
 	lunch, dinner := e.slotID("lunch"), e.slotID("dinner")
@@ -134,6 +138,7 @@ func TestApplyChanges_AwayDateAndSlotIsOneCell(t *testing.T) {
 // Copying FROM a meal that is already past is allowed (repeat last week's
 // meal); the targets stay guarded.
 func TestApplyChanges_CopyFromPastMeal(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.twoDinners()
 	lunch := e.slotID("lunch")
@@ -160,6 +165,7 @@ func TestApplyChanges_CopyFromPastMeal(t *testing.T) {
 // A change line lists the exact cells the board pulses ("pulse"): a move's
 // source and target (and the occupant's cell), an away cell, copy targets.
 func TestApplyChanges_LinesListPulseCells(t *testing.T) {
+	t.Parallel()
 	cellsOf := func(ch *agent.Change) [][2]any {
 		var out [][2]any
 		for _, op := range opsOf(ch) {
@@ -217,6 +223,7 @@ func TestApplyChanges_LinesListPulseCells(t *testing.T) {
 // A change written before a change could hold several cells stores the single
 // cell object in availability_before_json; its undo still restores the cell.
 func TestApplyChanges_UndoLegacySingleCellChange(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	p, _ := e.twoDinners()
 	dump := e.planDump()

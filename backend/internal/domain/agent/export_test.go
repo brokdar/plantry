@@ -1,5 +1,10 @@
 package agent
 
+import (
+	"context"
+	"errors"
+)
+
 // WithToday lets the external tests pin the chat's today, which the past-date
 // guard (D7) reads.
 var WithToday = withToday
@@ -38,3 +43,46 @@ var IssueKey = issueKey
 
 // PromptCharBudget is the prompt budget, for the size tests.
 const PromptCharBudget = promptCharBudget
+
+// PlainRules is the rewrite of a tool result for the model (no rule codes).
+var PlainRules = plainRules
+
+// WithTurn puts a chat turn of the conversation in ctx, as Service.Chat does.
+func WithTurn(ctx context.Context, conversationID int64) context.Context {
+	return withTurn(ctx, chatTurn{conversationID: conversationID})
+}
+
+// WithTurnSeq is WithTurn for the seq-th turn of the conversation: offers made
+// in one turn are not the next turn's.
+func WithTurnSeq(ctx context.Context, conversationID int64, seq uint64) context.Context {
+	return withTurn(ctx, chatTurn{conversationID: conversationID, seq: seq})
+}
+
+// Worsened, ModelView and AddDerived expose the report's "worse" rule and the
+// model-facing views of a tool result.
+var (
+	Worsened   = worsened
+	ModelView  = modelView
+	AddDerived = addDerived
+)
+
+// NewWarnings exposes the guard's set of warnings a write makes.
+var NewWarnings = newWarnings
+
+// PlainReply exposes the final-reply rewriter.
+var PlainReply = plainReply
+
+// DropAfterWeek exposes the trimming of the after block.
+var DropAfterWeek = dropAfterWeek
+
+// RefusalTell is the tell of a refused mark, nil for any other error.
+func RefusalTell(err error) []string {
+	var r markRefusal
+	if errors.As(err, &r) {
+		return r.tell
+	}
+	return nil
+}
+
+// MarkChange exposes the cause sentence of a day target that moved.
+var MarkChange = markChange

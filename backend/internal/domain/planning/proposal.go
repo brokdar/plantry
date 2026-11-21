@@ -16,6 +16,14 @@ type Proposal struct {
 	Plates   []ProposedPlate
 	// Notes is the chooser's short summary for the user.
 	Notes string
+	// Own is Notes without the lines the code appended: the chooser's own
+	// words (the model's note, the heuristic's explore and no-main lines).
+	// The saved note is Own plus lines computed from the plan as saved.
+	Own string
+	// OwnSet says the chooser filled Own (it may be empty).
+	OwnSet bool
+	// MaxCookDays is the days of cooking the instruction allows (0: no limit stated).
+	MaxCookDays int
 	// RepairAttempts is how many repair turns the chooser took (LLM, D12).
 	RepairAttempts int
 	// Light are the light requests the chooser was given, as it states them

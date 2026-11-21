@@ -170,7 +170,8 @@ func TestHeuristic_ProteinGapClosing(t *testing.T) {
 		for _, pl := range p.Plates {
 			n := 0
 			for _, c := range pl.Components {
-				if c.FoodID == skyr || c.FoodID == tofu {
+				// The protein add is the skyr; tofu may also come as a filler now that cheese and nuts fit fewer plates.
+				if c.FoodID == skyr {
 					n++
 				}
 			}

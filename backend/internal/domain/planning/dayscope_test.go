@@ -31,6 +31,7 @@ func newDayEnv(t *testing.T) *svcEnv {
 	e.plates, e.avail = plates, avail
 	e.deps.Plates, e.deps.Cells, e.deps.Overrides = plates, avail, avail
 	e.svc = planning.NewService(e.deps)
+	e.svc = planning.NewService(e.deps)
 	return e
 }
 
@@ -76,7 +77,7 @@ func findDayShape(t *testing.T, e *svcEnv, plates map[string]plate.Plate) daySha
 func finished(t *testing.T, e *svcEnv, id int64) planning.RunEnd {
 	t.Helper()
 	end := e.runs.end(id)
-	require.Contains(t, []airun.Status{airun.StatusOK, airun.StatusPartial}, end.Status, "error key %q", end.ErrorKey)
+	require.Contains(t, []airun.Status{airun.StatusOK, airun.StatusPartial}, end.Status, "error key %q notes %q", end.ErrorKey, end.Notes)
 	return end
 }
 

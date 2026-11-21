@@ -18,6 +18,7 @@ import (
 // light back (here: none before, one day intent after), and refuses with
 // change_stale when the rows were edited since.
 func TestChange_UndoRestoresLight(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, _ := e.freshMain()
@@ -44,6 +45,7 @@ func TestChange_UndoRestoresLight(t *testing.T) {
 }
 
 func TestChange_UndoLightStale(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, _ := e.freshMain()
@@ -64,6 +66,7 @@ func TestChange_UndoLightStale(t *testing.T) {
 // Undo prunes from the real today, not from the change's earliest date: an
 // untouched light row on an earlier day that is not past must survive.
 func TestChange_UndoKeepsUntouchedEarlierLight(t *testing.T) {
+	t.Parallel()
 	e := newPlanToolEnv(t)
 	ctx, _ := e.chat()
 	p, _ := e.freshMain()
