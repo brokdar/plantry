@@ -54,7 +54,7 @@ jobs:
       - name: Run e2e tests
         run: PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/e2e.json bun run e2e -- --reporter=list,json
       - name: Wall budget
-        run: TEST_BUDGET_SEED=1 TEST_BUDGET_CALIB="$(go run ../scripts/calibrate.go)" python3 ../scripts/test-budget.py e2e /tmp/e2e.json
+        run: TEST_BUDGET_CALIB="$(go run ../scripts/calibrate.go)" python3 ../scripts/test-budget.py e2e /tmp/e2e.json
       - name: Upload test results
         if: failure()
         uses: actions/upload-artifact@v4

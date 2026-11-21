@@ -2,6 +2,195 @@
   "_doc": "Test-time ratchet, checked by scripts/test-budget.py in scripts/gate.sh and CI. Tests may get slower only in proportion to the tests added (allowed = budget*(1+tolerance) + new_tests*budget/tests), or with a reason under 'reasons' saying why it costs this much and why it can't be faster. Go budgets are CPU seconds of each package's test binary (no race; the race tier as a whole), vitest/e2e are wall seconds. 'ci' is GitHub's 4-vCPU runner (the reference), 'local' the dev box. Timeouts are frozen tripwires: any change needs reasons['timeouts:<file>']. See 'Test speed contract' in CLAUDE.md.",
   "e2e_serial_projects_max": 4,
   "machines": {
+    "ci": {
+      "calib_s": 0.784,
+      "e2e": {
+        "tests": 186,
+        "wall_s": 257.7
+      },
+      "go": {
+        "cmd/plantry": {
+          "cpu_s": 0.2,
+          "tests": 6
+        },
+        "cmd/plantry-eval": {
+          "cpu_s": 28.0,
+          "tests": 6
+        },
+        "db/migrations": {
+          "cpu_s": 0.0,
+          "tests": 1
+        },
+        "internal/adapters/anthropic": {
+          "cpu_s": 0.1,
+          "tests": 53
+        },
+        "internal/adapters/crypto": {
+          "cpu_s": 0.0,
+          "tests": 5
+        },
+        "internal/adapters/fake": {
+          "cpu_s": 0.0,
+          "tests": 10
+        },
+        "internal/adapters/fdc": {
+          "cpu_s": 0.0,
+          "tests": 21
+        },
+        "internal/adapters/httpfetch": {
+          "cpu_s": 0.0,
+          "tests": 14
+        },
+        "internal/adapters/imagestore": {
+          "cpu_s": 0.5,
+          "tests": 15
+        },
+        "internal/adapters/jsonld": {
+          "cpu_s": 0.0,
+          "tests": 12
+        },
+        "internal/adapters/llmresolver": {
+          "cpu_s": 0.0,
+          "tests": 5
+        },
+        "internal/adapters/off": {
+          "cpu_s": 0.0,
+          "tests": 9
+        },
+        "internal/adapters/openai": {
+          "cpu_s": 0.0,
+          "tests": 12
+        },
+        "internal/adapters/sqlite": {
+          "cpu_s": 13.5,
+          "tests": 215
+        },
+        "internal/config": {
+          "cpu_s": 0.0,
+          "tests": 15
+        },
+        "internal/domain": {
+          "cpu_s": 0.0,
+          "tests": 2
+        },
+        "internal/domain/actor": {
+          "cpu_s": 0.0,
+          "tests": 4
+        },
+        "internal/domain/agent": {
+          "cpu_s": 253.6,
+          "tests": 318
+        },
+        "internal/domain/airun": {
+          "cpu_s": 0.4,
+          "tests": 72
+        },
+        "internal/domain/availability": {
+          "cpu_s": 0.0,
+          "tests": 16
+        },
+        "internal/domain/diet": {
+          "cpu_s": 0.0,
+          "tests": 7
+        },
+        "internal/domain/discovery": {
+          "cpu_s": 0.7,
+          "tests": 63
+        },
+        "internal/domain/food": {
+          "cpu_s": 0.3,
+          "tests": 63
+        },
+        "internal/domain/importer": {
+          "cpu_s": 0.4,
+          "tests": 27
+        },
+        "internal/domain/llm": {
+          "cpu_s": 0.0,
+          "tests": 6
+        },
+        "internal/domain/planning": {
+          "cpu_s": 29.8,
+          "tests": 375
+        },
+        "internal/domain/planview": {
+          "cpu_s": 0.0,
+          "tests": 23
+        },
+        "internal/domain/plate": {
+          "cpu_s": 4.5,
+          "tests": 182
+        },
+        "internal/domain/preset": {
+          "cpu_s": 0.6,
+          "tests": 40
+        },
+        "internal/domain/profile": {
+          "cpu_s": 0.0,
+          "tests": 15
+        },
+        "internal/domain/settings": {
+          "cpu_s": 0.0,
+          "tests": 23
+        },
+        "internal/domain/setup": {
+          "cpu_s": 0.0,
+          "tests": 3
+        },
+        "internal/domain/shopping": {
+          "cpu_s": 0.0,
+          "tests": 14
+        },
+        "internal/domain/slot": {
+          "cpu_s": 0.0,
+          "tests": 11
+        },
+        "internal/domain/units": {
+          "cpu_s": 0.0,
+          "tests": 10
+        },
+        "internal/domain/window": {
+          "cpu_s": 0.0,
+          "tests": 6
+        },
+        "internal/eval": {
+          "cpu_s": 42.1,
+          "tests": 14
+        },
+        "internal/testhelper": {
+          "cpu_s": 0.2,
+          "tests": 1
+        },
+        "internal/transport/http": {
+          "cpu_s": 0.3,
+          "tests": 1
+        },
+        "internal/transport/http/handlers": {
+          "cpu_s": 5.1,
+          "tests": 256
+        },
+        "internal/transport/http/middleware": {
+          "cpu_s": 0.0,
+          "tests": 10
+        },
+        "internal/transport/http/sse": {
+          "cpu_s": 0.0,
+          "tests": 4
+        },
+        "internal/webui": {
+          "cpu_s": 0.0,
+          "tests": 1
+        }
+      },
+      "go_race": {
+        "cpu_s": 1083.2,
+        "tests": 1963
+      },
+      "vitest": {
+        "tests": 1551,
+        "wall_s": 109.7
+      }
+    },
     "local": {
       "calib_s": 0.505,
       "e2e": {

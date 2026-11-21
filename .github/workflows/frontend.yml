@@ -61,4 +61,4 @@ jobs:
           go-version: "1.25"
           cache: false
       - name: Wall budget
-        run: TEST_BUDGET_SEED=1 TEST_BUDGET_CALIB="$(go run ../scripts/calibrate.go)" python3 ../scripts/test-budget.py vitest /tmp/vitest.json
+        run: TEST_BUDGET_CALIB="$(go run ../scripts/calibrate.go)" python3 ../scripts/test-budget.py vitest /tmp/vitest.json
