@@ -131,6 +131,10 @@ type batch struct {
 	// writes the sentence): op, food, to, date, slot_id, slot_key, mode,
 	// portions, amount, unit, eaters.
 	ops []map[string]any
+	// unmark clears the stored light or filling mark of a meal an away op
+	// took off the plan: a meal that is not eaten at home carries no mark
+	// (as a day away carries none), so no offer leans on it (RL9).
+	unmark []planning.LightIntent
 }
 
 // note records op's line entry; quantity fields are added when the op sets them.
@@ -357,7 +361,7 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 		if in.DryRun {
 			return errDryRun
 		}
-		return saveLight(ctx, svc, light)
+		return saveLight(ctx, svc, append(slices.Clone(light), b.unmark...))
 	})
 	if err != nil && !errors.Is(err, errDryRun) {
 		return applyRun{}, err

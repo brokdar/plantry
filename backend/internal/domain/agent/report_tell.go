@@ -351,8 +351,9 @@ func dayFacts(in reportInput, r changeReport) {
 				de += fmt.Sprintf(" und unter dem Mindestwert von %d kcal", d.MinimumKcal)
 			}
 		}
-		// A day told as worse must be worse: further from its range than before.
-		if class == classWorse && !dayWorse(d) && !in.dayKcal {
+		// A day told as worse must be worse: further from its range than before;
+		// a day the change left under its minimum is always told (G4.4, SF1(c)).
+		if class == classWorse && !dayWorse(d) && !in.dayKcal && d.MinimumKcal == 0 {
 			continue
 		}
 		if class == classChanged && !in.dayKcal && !in.undo {
