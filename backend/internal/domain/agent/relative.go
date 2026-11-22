@@ -400,6 +400,14 @@ func checkWay(ctx context.Context, svc Services, w window.Window, goal applyGoal
 	// lists that step too (first, so the write has nothing left to fix).
 	if applied, ok := run.result["applied"].([]map[string]any); ok {
 		if extra, said := refitOpsOf(applied); len(extra) > 0 {
+			// RL2/KR5: a heartier meal grows its main, a starch or a protein
+			// food; a refit that brings a vegetable side in for the starch
+			// is no heartier way.
+			if goal.Kind == planning.GoalHeartier {
+				if name := notHeartierFood(run.after, way.PlateID, extra); name != "" {
+					return way, fmt.Sprintf("%s: it brings in %s, which is no main, starch or protein food", way.What, food.Quote(name))
+				}
+			}
 			way.Ops = append(extra, way.Ops...)
 			way.What += "; " + strings.Join(said, "; ")
 		}
@@ -812,3 +820,30 @@ func (e markRefusal) block() *replyBlock {
 
 func (e markRefusal) Error() string { return e.err.Error() }
 func (e markRefusal) Unwrap() error { return e.err }
+
+// notHeartierFood is the name of the first food the ops put on plate plateID
+// whose role (as the evaluation after the write reads it) is no main, starch or
+// protein food (KR5), or "".
+func notHeartierFood(after planning.Evaluation, plateID int64, ops []planning.OptionOp) string {
+	for _, p := range after.Plates {
+		if p.PlateID != plateID {
+			continue
+		}
+		for _, op := range ops {
+			if op.FoodID == 0 {
+				continue
+			}
+			for _, c := range p.Components {
+				if c.FoodID != op.FoodID {
+					continue
+				}
+				switch food.Role(c.Role) {
+				case food.RoleMain, food.RoleSideStarch, food.RoleSideProtein:
+				default:
+					return c.Name
+				}
+			}
+		}
+	}
+	return ""
+}

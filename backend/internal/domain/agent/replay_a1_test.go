@@ -32,6 +32,11 @@ func migrateCopy(t *testing.T, conn *sql.DB) {
 
 // replayEnv wires the tool set over a COPY of a start database.
 func replayEnv(t *testing.T, src string) *planToolEnv {
+	return replayEnvAt(t, src, time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC))
+}
+
+// replayEnvAt is replayEnv with the chat window starting on start.
+func replayEnvAt(t *testing.T, src string, start time.Time) *planToolEnv {
 	data, err := os.ReadFile(src)
 	require.NoError(t, err)
 	path := filepath.Join(t.TempDir(), "r.db")
@@ -43,7 +48,6 @@ func replayEnv(t *testing.T, src string) *planToolEnv {
 	migrateCopy(t, db)
 	t.Cleanup(func() { _ = db.Close() })
 	today := time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)
-	start := time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC)
 	e := &planToolEnv{t: t, db: db}
 	set := testsvc.Settings(db)
 	e.deps = testsvc.PlanningDeps(db)
