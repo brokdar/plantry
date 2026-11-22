@@ -74,6 +74,15 @@ func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 			require.NoError(t, err, "plate %d %s", p.ID, goal)
 			var res map[string]any
 			require.NoError(t, json.Unmarshal(out, &res))
+			if goal == "more_protein" && strings.Contains(fmt.Sprint(res["empty_reason"]), "further over its range top") {
+				// KR6: the fixture's days sit just over their top (2250 of 2200
+				// kcal), so no protein add is a way; the reason says so.
+				assert.Greater(t, res["before"].(map[string]any)["day_kcal"], res["range_high"])
+				mu.Lock()
+				goals[goal]++
+				mu.Unlock()
+				continue
+			}
 			var all []map[string]any
 			// Exactly one way or offer is recommended, with its reason.
 			rec := 0

@@ -10,3 +10,8 @@
   version 53. The replay tests open a copy of it directly. After a schema change, either keep it
   (the tests only read the tables they use) or rebuild it from a newer round start database with
   the script, then re-check the pinned numbers in `replay_e048c_test.go` (Ciabatta, 1934 kcal).
+- `m3_dev_start.db`, `m3_vg_start.db`: the M3 eval's frozen start databases of the dev and vg
+  households (`~/.local/share/plantry-dev/loop/m3/data/`, as copied into the tune runs), slimmed
+  by `slim_chat_start.py`; `replayEnvAt` opens a copy with the run's window.
+- `m3tune/`: stored tool results of M3 tune runs (series tune2, new arm), the inputs of the
+  reply-block regression tests in `waysblock_test.go`.

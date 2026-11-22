@@ -51,6 +51,9 @@ func waysBlock(output json.RawMessage) *replyBlock {
 	case kind == planning.GoalHeartier && top > 0:
 		en = fmt.Sprintf("This meal cannot get heartier on its own: the day holds %.0f kcal and a good amount for it ends at %.0f kcal.", day, top)
 		de = fmt.Sprintf("Diese Mahlzeit kann allein nicht reichhaltiger werden: der Tag hat %.0f kcal und ein passender Bereich endet bei %.0f kcal.", day, top)
+	case kind == planning.GoalMoreProtein && top > 0 && day >= top:
+		en = fmt.Sprintf("No protein food fits on its own: the day holds %.0f kcal, already over a good amount for it (up to %.0f kcal).", day, top)
+		de = fmt.Sprintf("Kein eiweißreiches Essen passt allein dazu: der Tag hat %.0f kcal, schon über dem passenden Bereich (bis %.0f kcal).", day, top)
 	default:
 		en = "No checked change does this on its own."
 		de = "Keine geprüfte Änderung schafft das allein."

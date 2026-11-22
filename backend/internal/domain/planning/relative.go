@@ -437,7 +437,7 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 			return
 		}
 		r := w.check(e.s)
-		if r.other || w.leavesRange(r.ev) {
+		if r.other || w.leavesRange(r.ev) || w.proteinOverBand(r.ev) {
 			return
 		}
 		way := w.way(e, r, intent)
@@ -638,6 +638,18 @@ func FiguresOf(ev Evaluation, plateID int64, date string) WayFigures {
 	return f
 }
 
+// proteinOverBand: a more_protein way that ends the day over its range top
+// with more energy than it had (the day band ranks above protein, section 2.5;
+// KR6): a day already over its top takes only a swap that does not raise it.
+func (w *waySearch) proteinOverBand(ev Evaluation) bool {
+	if w.goal != GoalMoreProtein {
+		return false
+	}
+	d, ok := w.dayEval(ev)
+	before, okB := w.dayEval(w.base)
+	return ok && okB && d.BandHigh > 0 && d.Kcal > d.BandHigh+1e-9 && d.Kcal > before.Kcal+0.5
+}
+
 // outOfBand: the day is outside the band the goal moved it to (lighter: under
 // it; heartier: over it).
 func (w *waySearch) outOfBand(ev Evaluation) bool {
@@ -800,6 +812,9 @@ func (w *waySearch) noWayWhy(res WayResult) string {
 		return fmt.Sprintf("This meal cannot get meaningfully heartier on its own without taking the day (%.0f kcal) over its band top of %.0f kcal.", res.Before.DayKcal, res.BandHigh)
 	case GoalLowerDay, GoalRaiseDay:
 		return fmt.Sprintf("No single change of one meal brings the day (%.0f kcal) into its adjusted range of %.0f to %.0f kcal without breaking the energy floor of %.0f kcal.", res.Before.DayKcal, res.BandLow, res.BandHigh, res.FloorKcal)
+	}
+	if res.BandHigh > 0 && res.Before.DayKcal >= res.BandHigh {
+		return fmt.Sprintf("No protein food fits without taking the day (%.0f kcal) further over its range top of %.0f kcal.", res.Before.DayKcal, res.BandHigh)
 	}
 	return "no verified change adds enough protein without breaking a hard rule"
 }
