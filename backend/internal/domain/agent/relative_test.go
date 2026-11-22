@@ -251,7 +251,10 @@ func TestFindWays_ApplyFirstWayStoresMarkAndSatisfies(t *testing.T) {
 	e := relEnv(t)
 	ctx, _ := e.chat()
 	for _, p := range e.draftMeals() {
-		out, _, _, err := e.ts.Execute(ctx, "find_ways", json.RawMessage(fmt.Sprintf(`{"goal":"lighter","plate_id":%d}`, p.ID)))
+		// SC3: only a request for a light meal itself (to_limit) stores a mark;
+		// a comparative way carries none, so without to_limit every meal was
+		// searched and the test skipped (F7: 86 s under race on CI).
+		out, _, _, err := e.ts.Execute(ctx, "find_ways", json.RawMessage(fmt.Sprintf(`{"goal":"lighter","plate_id":%d,"to_limit":true}`, p.ID)))
 		require.NoError(t, err)
 		var res map[string]any
 		require.NoError(t, json.Unmarshal(out, &res))
