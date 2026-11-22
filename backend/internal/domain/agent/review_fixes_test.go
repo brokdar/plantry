@@ -99,11 +99,11 @@ func TestRun_ToolCallTextIsLintedBeforeItIsStoredOrShown(t *testing.T) {
 }
 
 // G4 (review 2): any numeral is a digit, not only ASCII ones.
-func TestLint_AnyNumeralIsADigit(t *testing.T) {
+func TestLint_AnyNumeralMustBeBacked(t *testing.T) {
 	t.Parallel()
 	turn := replyTurn{write: true, block: &replyBlock{facts: []fact{{Class: classChanged, EN: "x", DE: "x"}}}}
 	for _, text := range []string{"Half a portion, ½ more.", "A quarter ¼ less.", "Squared ².", "Fullwidth ３ portions."} {
-		assert.Equal(t, "digit", lintModelText(text, turn, langEN), text)
+		assert.Equal(t, "number", lintModelText(text, turn, langEN), text)
 	}
 }
 
@@ -131,7 +131,7 @@ func TestLint_NumbersComeFromToolResultsOnly(t *testing.T) {
 	assert.False(t, nums["5"], "an id is no figure")
 	assert.False(t, nums["2026"], "no ISO date fragment")
 	assert.True(t, nums["1698"])
-	assert.True(t, nums["26"], "a day label's number")
+	assert.False(t, nums["26"], "a date's day number is no figure")
 	turn := replyTurn{user: "what is on Friday?", numbers: nums}
 	assert.Equal(t, fallbackEN, composeReply("That is about 5 days away.", turn))
 	assert.Equal(t, "Dinner holds 1698 kcal.", composeReply("Dinner holds 1698 kcal.", turn))

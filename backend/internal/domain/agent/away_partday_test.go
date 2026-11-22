@@ -69,3 +69,42 @@ func TestAway_FullyAwayDayIsNotCounted(t *testing.T) {
 	assert.NotContains(t, facts, "minimum", "a fully away day has no minimum")
 	assert.NotContains(t, facts, "not counted")
 }
+
+// SF1(c)/P-1 (tune3 g-away-08): the away leaves Thursday under its prorated
+// minimum and no checked change lifts it, so the block tells the day under its
+// minimum (a must line, never cut) and, in code, that nothing lifts it, with
+// no offer.
+func TestAway_DayUnderItsMinimumWithNoLeverIsToldInCode(t *testing.T) {
+	t.Parallel()
+	e := replayEnvAt(t, m3DevStartDB, time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC))
+	ctx, _ := e.chat()
+	out, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(`{"ops": [{"op":"away","cells":[{"date":"2026-11-26","slot_id":2},{"date":"2026-11-26","slot_id":3}]}]}`))
+	require.NoError(t, err)
+	var res struct {
+		Offers []any `json:"offers"`
+		Report struct {
+			Offer *struct{ EN string } `json:"offer"`
+			Facts []struct {
+				EN   string
+				Must bool
+			} `json:"facts"`
+		} `json:"report"`
+	}
+	require.NoError(t, json.Unmarshal(out, &res))
+	assert.Empty(t, res.Offers, "no lever: no offer")
+	assert.Nil(t, res.Report.Offer, "no lever: the reply carries no offer at all")
+	var day, noLever bool
+	for _, f := range res.Report.Facts {
+		if strings.Contains(f.EN, "under the day's minimum of 446 kcal") {
+			day = f.Must
+		}
+		if strings.Contains(f.EN, "under the day's minimum of 446 kcal") && strings.HasSuffix(f.EN, " No checked change of a planned meal brings Thu 26 Nov up to its minimum.") {
+			noLever = f.Must
+		}
+	}
+	assert.True(t, day, "the day under its minimum is a must line: %+v", res.Report.Facts)
+	assert.True(t, noLever, "P-1's plain no-lever sentence is merged into the day's line: %+v", res.Report.Facts)
+	for _, f := range res.Report.Facts {
+		assert.False(t, strings.HasPrefix(f.EN, "No checked change"), "one line per day: %+v", res.Report.Facts)
+	}
+}

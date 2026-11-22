@@ -131,6 +131,7 @@ type replyTurn struct {
 	earlier []string        // the earlier user messages, newest first: the language when this one has no marker word
 	locale  string          // the profile's locale, the last word on the language
 	numbers map[string]bool // numbers the turn's tool results hold (see toolNumbers)
+	state   map[string]bool // numbers of the prompt's plan state: back a read-only answer, never a write's text (v1.4 P-7)
 	foods   []string        // the names of the foods of the plan: a write's text names none the block does not
 	write   bool            // a plan-writing tool was called (also as a check)
 	block   *replyBlock     // the facts and the offer of the turn's writes
@@ -194,7 +195,6 @@ const (
 
 var (
 	numberRe    = regexp.MustCompile(`\d[\d.,]*\d|\d`)
-	digitRe     = regexp.MustCompile(`\p{N}`)
 	isoAnywhere = regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)
 	thousand    = regexp.MustCompile(`^(\d{1,3})([.,]\d{3})+$`)
 	banned      = regexp.MustCompile(`(?i)\b(batch(es)?|eaters?|light days?|hearty minimum|cap|caps|band|bands|floor|soft|drafts?|extras?)\b|\b[HS]\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b|the tool only allows`)
@@ -208,8 +208,28 @@ func normNumber(s string) string {
 	if thousand.MatchString(s) {
 		s = strings.NewReplacer(".", "", ",", "").Replace(s)
 	}
-	return strings.Replace(s, ",", ".", 1)
+	s = strings.Replace(s, ",", ".", 1)
+	if strings.Contains(s, ".") {
+		s = strings.TrimRight(strings.TrimRight(s, "0"), ".")
+	}
+	return s
 }
+
+// deDecimalComma is a German number whose comma has three digits after it
+// ("1,250 kg"): there the comma is the decimal mark, not a thousands separator.
+var deDecimalComma = regexp.MustCompile(`^\d+,\d{3}$`)
+
+// normModelNumber is normNumber for a number of the model's text in language lg.
+func normModelNumber(s string, lg lang) string {
+	if lg == langDE && deDecimalComma.MatchString(s) {
+		return strings.TrimRight(strings.TrimRight(strings.Replace(s, ",", ".", 1), "0"), ".")
+	}
+	return normNumber(s)
+}
+
+// dateInText is a date written in a sentence ("Wed 25 Nov", "25. Dezember"):
+// its day number is no figure a tool result tells.
+var dateInText = regexp.MustCompile(`(?i)\b\d{1,2}\.?\s*(jan(uar|uary)?|feb(ruar|ruary)?|m[äa]r(z|ch)?|apr(il)?|mai|may|jun[ie]?|jul[iy]?|aug(ust)?|sept?(ember)?|o[ck]t(ober)?|nov(ember)?|de[cz](ember)?)\b`)
 
 // numbersIn collects the numbers of a text into set.
 func numbersIn(text string, set map[string]bool) {
@@ -219,13 +239,17 @@ func numbersIn(text string, set map[string]bool) {
 }
 
 // sentences splits a text into its sentences (a sentence ends on . ! or ? and a
-// space or the end; a decimal point is no end).
+// space or the end; a decimal point is no end, and neither is the dot of a
+// German date, "8. Dezember", "25. Nov. Abendessen": RP7).
 func sentences(s string) []string {
 	var out []string
 	var cur []rune
 	rs := []rune(strings.TrimSpace(s))
 	for i, r := range rs {
 		cur = append(cur, r)
+		if r == '.' && i < len(rs)-1 && dateDot(rs, i) {
+			continue
+		}
 		if (r == '.' || r == '!' || r == '?') && (i == len(rs)-1 || unicode.IsSpace(rs[i+1])) {
 			out = append(out, strings.TrimSpace(string(cur)))
 			cur = nil
@@ -235,6 +259,55 @@ func sentences(s string) []string {
 		out = append(out, t)
 	}
 	return out
+}
+
+// monthWord is a month name or its abbreviation, German or English.
+var monthWord = regexp.MustCompile(`(?i)^(jan(uar|uary)?|feb(ruar|ruary)?|m[äa]r(z|ch)?|apr(il)?|mai|may|jun[ie]?|jul[iy]?|aug(ust)?|sept?(ember)?|o[ck]t(ober)?|nov(ember)?|de[cz](ember)?)$`)
+
+// monthFull is a month's own word ("Mai", "Juni"): its dot ends a sentence.
+var monthFull = regexp.MustCompile(`(?i)^(mai|may|jun[ie]?|jul[iy]?|m[äa]rz|march|apr(il)?)$`)
+
+// dateDot reports whether the dot at rs[i] belongs to a date: the dot of a 1-2
+// digit day number before a month word ("8. Dezember"), or of a month's
+// abbreviation ("Dez.") that a date goes on after: a day number before it
+// ("7. Dez. Abendessen") or a lowercase letter, a digit or a comma after it.
+// The dot of a full month word ("im Mai. Der Tag") ends the sentence.
+func dateDot(rs []rune, i int) bool {
+	start := i
+	for start > 0 && !unicode.IsSpace(rs[start-1]) {
+		start--
+	}
+	word := string(rs[start:i])
+	if monthWord.MatchString(word) && len([]rune(word)) <= 4 && !monthFull.MatchString(word) {
+		p := start
+		for p > 0 && unicode.IsSpace(rs[p-1]) {
+			p--
+		}
+		q := p
+		for q > 0 && !unicode.IsSpace(rs[q-1]) {
+			q--
+		}
+		if prev := strings.TrimSuffix(string(rs[q:p]), "."); p > q && len(prev) <= 2 && prev != "" && strings.Trim(prev, "0123456789") == "" {
+			return true // "7. Dez."
+		}
+		n := i + 1
+		for n < len(rs) && unicode.IsSpace(rs[n]) {
+			n++
+		}
+		return n < len(rs) && (unicode.IsLower(rs[n]) || unicode.IsDigit(rs[n]) || rs[n] == ',')
+	}
+	if n := len([]rune(word)); n == 0 || n > 2 || strings.Trim(word, "0123456789") != "" {
+		return false
+	}
+	end := i + 1
+	for end < len(rs) && unicode.IsSpace(rs[end]) {
+		end++
+	}
+	next := end
+	for next < len(rs) && unicode.IsLetter(rs[next]) {
+		next++
+	}
+	return end > i+1 && monthWord.MatchString(string(rs[end:next]))
 }
 
 // Claims the model text may make about the four classes of fact; a claim the
@@ -308,8 +381,8 @@ func contradicts(text string, facts []fact, nothingSaved bool) bool {
 
 // lintModelText reports why the model's text cannot go out next to the block, or
 // "" when it can: a planner word, a number the block or the tool results do not
-// back (on a write turn: any digit at all), a weekday the block does not name, or
-// a claim the block contradicts.
+// back (v1.4 P-7; on a turn without a block the user's message backs one too), a
+// weekday the block does not name, or a claim the block contradicts.
 func lintModelText(text string, t replyTurn, lg lang) string {
 	if text == "" {
 		return ""
@@ -319,21 +392,32 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 		if banned.MatchString(text) {
 			return "planner_word"
 		}
-		if digitRe.MatchString(text) {
-			return "digit"
-		}
-		if modelCookingWords.MatchString(text) {
-			return "cooking_claim"
-		}
-		if modelOptionWords.MatchString(text) {
-			return "option"
-		}
 		blockText := ""
 		for _, f := range t.block.facts {
 			blockText += " " + f.line(lg)
 		}
 		if t.block.offer != nil {
 			blockText += " " + t.block.offer.EN + " " + t.block.offer.DE
+		}
+		// v1.4 P-7 (G4/RP4): a number of the model's text equals one of the
+		// facts block or of the turn's tool results; any other is dropped.
+		for _, r := range text {
+			if unicode.IsNumber(r) && (r < '0' || r > '9') {
+				return "number" // ½, ², a full-width digit: no tool result writes one
+			}
+		}
+		backed := map[string]bool{}
+		numbersIn(isoAnywhere.ReplaceAllString(blockText, " "), backed)
+		for _, m := range numberRe.FindAllString(text, -1) {
+			if n := normModelNumber(m, lg); !backed[n] && !t.numbers[n] {
+				return "number"
+			}
+		}
+		if modelCookingWords.MatchString(text) {
+			return "cooking_claim"
+		}
+		if modelOptionWords.MatchString(text) {
+			return "option"
 		}
 		lower := strings.ToLower(blockText)
 		// A dish is named in the block or not at all: a quoted span, or the
@@ -365,8 +449,8 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 	have := map[string]bool{}
 	numbersIn(t.user, have)
 	for _, m := range numberRe.FindAllString(text, -1) {
-		n := normNumber(m)
-		if !t.numbers[n] && !have[n] {
+		n := normModelNumber(m, lg)
+		if !t.numbers[n] && !t.state[n] && !have[n] {
 			return "number"
 		}
 	}
@@ -475,7 +559,7 @@ func composeReply(model string, t replyTurn) string {
 }
 
 // lintDrop is a sentence of the model's final text the reply left out, with
-// the reason: a lint reason of lintModelText (planner_word, digit,
+// the reason: a lint reason of lintModelText (planner_word,
 // cooking_claim, option, dish, weekday, contradiction, number), "question" (a
 // write turn's trailing question) or "third_sentence" (past the two a write's
 // text may have).
@@ -587,8 +671,8 @@ func startsWithLetter(s string) bool {
 }
 
 // toolNumbers collects the figures a tool result holds into set: its numbers and
-// the numbers inside its sentences and day labels, but not the ids and not ISO
-// dates, which are no figures anyone told.
+// the numbers inside its sentences, but not the ids and not dates (ISO or
+// "Wed 25 Nov"), which are no figures anyone told.
 func toolNumbers(raw []byte, set map[string]bool) {
 	var v any
 	dec := json.NewDecoder(strings.NewReader(string(raw)))
@@ -608,7 +692,7 @@ func toolNumbers(raw []byte, set map[string]bool) {
 				walk(e, key)
 			}
 		case json.Number:
-			if key == "id" || strings.HasSuffix(key, "_id") || strings.HasSuffix(key, "_ids") {
+			if key == "id" || key == "ids" || strings.HasSuffix(key, "_id") || strings.HasSuffix(key, "_ids") {
 				return
 			}
 			set[normNumber(x.String())] = true
@@ -616,7 +700,7 @@ func toolNumbers(raw []byte, set map[string]bool) {
 			if key == "id" || strings.HasSuffix(key, "_id") {
 				return
 			}
-			numbersIn(isoAnywhere.ReplaceAllString(x, " "), set)
+			numbersIn(dateInText.ReplaceAllString(isoAnywhere.ReplaceAllString(x, " "), " "), set)
 		}
 	}
 	walk(v, "")
@@ -651,7 +735,7 @@ func earlierUserTexts(history []llm.Message) []string {
 }
 
 // sanitizeToolMessage keeps, of the text a model writes before a tool call, only
-// what a write's reply may say: a text that breaks the rules (a digit, a weekday
+// what a write's reply may say: a text that breaks the rules (an unbacked number, a weekday
 // or a dish the block does not name, a planner word) is dropped, never stored
 // nor shown.
 func sanitizeToolMessage(m *llm.Message, t replyTurn) {

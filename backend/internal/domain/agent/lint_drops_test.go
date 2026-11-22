@@ -23,7 +23,7 @@ func TestReplyLint_DroppedSentencesAreStoredWithTheirReason(t *testing.T) {
 		"question: Want more?",
 		"third_sentence: The leftovers stay.",
 		"weekday: Done on Tuesday.",
-		"digit: It now has 800 kcal.",
+		"number: It now has 800 kcal.",
 	}, got)
 
 	var result string
