@@ -22,9 +22,9 @@ const promptCharBudget = 24_000
 // bytes the cut took (0: the prompt fits), for the caller to log.
 func ComposePrompt(p *profile.Profile, facts, summary string, today time.Time) (prompt string, cut int) {
 	var b strings.Builder
-	tail := plainWords(toolRules)
+	tail := plainStatic(toolRules)
 
-	b.WriteString(plainWords(rolePrefix))
+	b.WriteString(plainStatic(rolePrefix))
 	if p != nil {
 		writeProfileSection(&b, p)
 	}
