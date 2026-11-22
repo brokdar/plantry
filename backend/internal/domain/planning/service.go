@@ -449,6 +449,47 @@ func hardKey(is Issue) string {
 
 func openHard(merged State, t Target) []Issue { return violationsOf(Check(merged, t)) }
 
+// movedCookH2 are the H2 issues (too many cooking times) on the days a
+// removal's cook moves (AlsoCookMoved) landed on, other than the day they left,
+// that the same plan with those cooks back on their old cells does not have.
+func movedCookH2(merged State, moved []plate.AlsoChanged) []Issue {
+	back := merged
+	back.Sessions = slices.Clone(merged.Sessions)
+	dates := map[string]bool{}
+	for _, m := range moved {
+		if m.What != plate.AlsoCookMoved || m.Date == m.FromDate {
+			continue
+		}
+		dates[m.Date] = true
+		from, err := time.Parse(time.DateOnly, m.FromDate)
+		if err != nil {
+			continue
+		}
+		for i := range back.Sessions {
+			if back.Sessions[i].ID == m.SessionID {
+				back.Sessions[i].CookDate, back.Sessions[i].CookSlotID = from, m.FromSlotID
+			}
+		}
+	}
+	if len(dates) == 0 {
+		return nil
+	}
+	var t Target
+	for _, c := range merged.Cells {
+		if dates[c.Date.Format(time.DateOnly)] {
+			t.Cells = append(t.Cells, c.Key())
+		}
+	}
+	h2 := func(s State) []Issue {
+		return slices.DeleteFunc(Check(s, t), func(is Issue) bool { return is.Rule != "H2" })
+	}
+	before := map[string]bool{}
+	for _, is := range h2(back) {
+		before[is.Date] = true
+	}
+	return slices.DeleteFunc(h2(merged), func(is Issue) bool { return before[is.Date] })
+}
+
 // ready reports whether a chooser can run now: one with a Ready method (the
 // LLM's provider must resolve) says so, any other always can.
 func ready(ctx context.Context, c Chooser) error {
@@ -636,8 +677,10 @@ func (s *Service) dryRun(ctx context.Context, fn func(ctx context.Context) error
 
 // removeDay removes a day scope's draft plates through RemoveMeals, so the
 // batches they leave re-anchor (R1) and shrink (D11). A plate that is gone
-// or no longer a draft means the plan changed since the scope resolved.
-func (s *Service) removeDay(ctx context.Context, ids []int64) (plate.MealResult, error) {
+// or no longer a draft means the plan changed since the scope resolved. A
+// re-anchored cook that would make its new day cook more often than allowed
+// goes back to its cell on the replanned day (keepCooks, B-3).
+func (s *Service) removeDay(ctx context.Context, ids []int64, w window.Window, today time.Time) (plate.MealResult, error) {
 	if len(ids) == 0 {
 		return plate.MealResult{}, nil
 	}
@@ -653,7 +696,48 @@ func (s *Service) removeDay(ctx context.Context, ids []int64) (plate.MealResult,
 			return plate.MealResult{}, fmt.Errorf("%w: plate %d is confirmed", domain.ErrStateMismatch, id)
 		}
 	}
-	return s.d.Plates.RemoveMeals(ctx, ids)
+	res, err := s.d.Plates.RemoveMeals(ctx, ids)
+	if err != nil {
+		return res, err
+	}
+	return s.keepCooks(ctx, res, w, today)
+}
+
+// keepCooks moves back to its old cell every cook the removal re-anchored
+// (R1) onto a day that then has more cooking times than allowed (H2, B-3:
+// a replanned day adds no hard issue): the batch is cooked where it was, on
+// the replanned day, for the later meals that eat it. Such a move is dropped
+// from res.AlsoChanged. A cook that cannot go back stays moved (the save's
+// gate refuses the run then).
+func (s *Service) keepCooks(ctx context.Context, res plate.MealResult, w window.Window, today time.Time) (plate.MealResult, error) {
+	if !slices.ContainsFunc(res.AlsoChanged, func(m plate.AlsoChanged) bool { return m.What == plate.AlsoCookMoved }) {
+		return res, nil
+	}
+	st, err := s.d.Builder.Build(ctx, w, today, w.Start, w.End)
+	if err != nil {
+		return res, err
+	}
+	full := map[string]bool{}
+	for _, is := range movedCookH2(st, res.AlsoChanged) {
+		full[is.Date] = true
+	}
+	if len(full) == 0 {
+		return res, nil
+	}
+	kept := res.AlsoChanged[:0:0]
+	for _, m := range res.AlsoChanged {
+		if m.What == plate.AlsoCookMoved && full[m.Date] {
+			from, err := time.Parse(time.DateOnly, m.FromDate)
+			if err == nil {
+				if _, err := s.d.Plates.MoveCook(ctx, m.SessionID, plate.CellKey{Date: from, SlotID: m.FromSlotID}); err == nil {
+					continue
+				}
+			}
+		}
+		kept = append(kept, m)
+	}
+	res.AlsoChanged = kept
+	return res, nil
 }
 
 // movedNotes is a run note per batch the save moved, in plain words
@@ -935,7 +1019,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		// are gone: batches re-anchored, shrunk or deleted. The removal is
 		// rolled back; the save repeats it, so a failed run changes nothing.
 		err = s.dryRun(ctx, func(ctx context.Context) error {
-			res, err := s.removeDay(ctx, j.rows.PlateIDs)
+			res, err := s.removeDay(ctx, j.rows.PlateIDs, j.w, j.today)
 			if err != nil {
 				return changedDuringRun(err)
 			}
@@ -1076,6 +1160,19 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 			}
 		}
 	}
+	// B-3: removing the day's plates re-anchors the batches they cooked for
+	// later meals (R1). A cook that lands on a day which then cooks more often
+	// than allowed is an H2 the target's Check never sees (it judges the
+	// replanned day only): the run saves nothing and says so.
+	if j.scope.Kind == ScopeDay && j.side == nil {
+		if moved := movedCookH2(Merge(base, j.target, prop), dryRemoval.AlsoChanged); len(moved) > 0 {
+			closeStatus, closeStage = "error", "checking"
+			return RunEnd{
+				Status: airun.StatusError, ErrorKey: keyHardRuleOpen,
+				Notes: "A hard rule is still open, so nothing was saved: " + openRules(moved) + ".",
+			}
+		}
+	}
 	// PL1b/CC14: when the plan is final and a hard rule is still open the run
 	// does not save it, whichever chooser planned it: it ends in error naming
 	// the rule, and the drafts stay as they are. An empty cell nothing can fill
@@ -1111,7 +1208,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	undo, err := s.d.Plates.Recorded(gen, func(ctx context.Context) error {
 		switch {
 		case j.scope.Kind == ScopeDay:
-			res, err := s.removeDay(ctx, j.rows.PlateIDs)
+			res, err := s.removeDay(ctx, j.rows.PlateIDs, j.w, j.today)
 			if err != nil {
 				return err
 			}

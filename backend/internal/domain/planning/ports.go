@@ -153,6 +153,7 @@ type PlateService interface {
 	PlateClosure(ctx context.Context, plateID int64) (plate.RowSet, []plate.Plate, error)
 	RemoveDrafts(ctx context.Context, rows plate.RowSet) (plate.PlanSnapshot, error)
 	RemoveMeals(ctx context.Context, ids []int64) (plate.MealResult, error)
+	MoveCook(ctx context.Context, sessionID int64, to plate.CellKey) (plate.MealResult, error)
 	Recorded(ctx context.Context, fn func(ctx context.Context) error) (plate.Undo, error)
 	RemovePlates(ctx context.Context, r plate.Removal) (plate.PlanSnapshot, error)
 	Apply(ctx context.Context, snap plate.PlanSnapshot, opts plate.ApplyOptions) (*plate.ApplyResult, error)

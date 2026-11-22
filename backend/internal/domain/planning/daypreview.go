@@ -48,7 +48,7 @@ func (s *Service) PreviewDay(ctx context.Context, start, today, date time.Time) 
 		for _, p := range dayDrafts(plates, d) {
 			out.Replaced = append(out.Replaced, p.ID)
 		}
-		res, err := s.removeDay(ctx, out.Replaced)
+		res, err := s.removeDay(ctx, out.Replaced, window.Containing(start, sd), dateOnly(today))
 		if err != nil {
 			return err
 		}
