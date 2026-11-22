@@ -15,8 +15,9 @@ import (
 // percent of the day's full target) while the day stays inside its own band
 // and above its floor. A recipe's batch grows or shrinks by the same amount (H3
 // holds). The best combination of a day is kept only when it adds no hard or
-// soft issue. A light or hearty meal (marked, or on a light or hearty day) and
-// a main that eats a persisted batch stay as they are.
+// soft issue. A light or hearty meal (marked, or on a light or hearty day) is
+// exempt from the band (NU11): it is neither fitted nor a source or target of
+// a moved add-on. A main that eats a persisted batch stays as it is.
 func (h *planner) fitMealsToBands() {
 	k := h.s.Profile.KcalTarget
 	if k == nil || *k <= 0 || len(h.s.SlotBand) == 0 {
@@ -78,16 +79,11 @@ func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 		}
 		b, ok := h.s.SlotBand[p.SlotID]
 		if !ok || h.x.mealOf(p.SlotID) != mealFull || h.x.routine(plate.CellKey{Date: p.Date, SlotID: p.SlotID}) ||
-			h.s.lightDay(p.Date) || h.s.heartyDay(p.Date) {
+			h.s.lightDay(p.Date) || h.s.heartyDay(p.Date) ||
+			h.s.lightMeal(p.Date, p.SlotID) || h.s.heartyMeal(p.Date, p.SlotID) { // NU11: a marked meal is exempt from the band
 			continue
 		}
 		lo, hi := dk.bandKcal(b, p.SlotID)
-		switch {
-		case h.s.lightMeal(p.Date, p.SlotID): // the explicit request outranks the band: the cap
-			lo, hi = 0, LightMealShare*dk.mealShare(p.SlotID)
-		case h.s.heartyMeal(p.Date, p.SlotID): // the filling minimum
-			lo, hi = HeartyMealShare*dk.mealShare(p.SlotID), math.Inf(1)
-		}
 		id := int64(-(pi + 1))
 		m := bandMeal{pi: pi, kcal: plateKcal[id], lo: lo, hi: hi, eaters: p.eaters(h.s), moves: []bandMove{{ci: -1}}, addOns: map[int]float64{}}
 		for ci, c := range p.Components {
@@ -180,11 +176,29 @@ func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 		reloc  *bandReloc
 		in     int
 		dayGap float64
+		seq    int // the order found
 	}
 	// Every combination that puts more meals into their band is a candidate;
 	// the best are tried in turn, since a check after applying (a soft rule the
 	// plan had closed, such as the day's protein) can refuse the first.
+	// Only the maxBandTries best are kept as they are found.
 	var picks []pick
+	found := 0
+	size := func(p pick) int {
+		n := 0
+		for _, o := range p.mv {
+			n += len(o)
+		}
+		if p.reloc != nil {
+			n++
+		}
+		return n
+	}
+	// The most meals in band first, then the day nearest its band, then the
+	// smallest change (the fewest moves), in the order found.
+	better := func(a, b pick) int {
+		return cmp.Or(cmp.Compare(b.in, a.in), cmp.Compare(a.dayGap, b.dayGap), cmp.Compare(size(a), size(b)), cmp.Compare(a.seq, b.seq))
+	}
 	for _, rl := range relocs {
 		var walk func(i int, mv [][]bandMove)
 		walk = func(i int, mv [][]bandMove) {
@@ -218,7 +232,17 @@ func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 				// A day brought into its own band (PL3) counts too, while no meal
 				// leaves its band.
 				if in > startIn || (left == 0 && in == startIn && dayDist(dk.Kcal) > epsilon && dayDist(day) <= epsilon) {
-					picks = append(picks, pick{mv: slices.Clone(mv), reloc: rl, in: in, dayGap: dayDist(day)})
+					picks = append(picks, pick{mv: slices.Clone(mv), reloc: rl, in: in, dayGap: dayDist(day), seq: found})
+					found++
+					if len(picks) > maxBandTries {
+						worst := 0
+						for i := range picks {
+							if better(picks[i], picks[worst]) > 0 {
+								worst = i
+							}
+						}
+						picks = slices.Delete(picks, worst, worst+1)
+					}
 				}
 				return
 			}
@@ -231,26 +255,10 @@ func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 		}
 		walk(0, nil)
 	}
-	// The most meals in band first, then the day nearest its band, then the
-	// smallest change (the fewest moves), in the order found.
-	size := func(p pick) int {
-		n := 0
-		for _, o := range p.mv {
-			n += len(o)
-		}
-		if p.reloc != nil {
-			n++
-		}
-		return n
-	}
-	slices.SortStableFunc(picks, func(a, b pick) int {
-		return cmp.Or(cmp.Compare(b.in, a.in), cmp.Compare(a.dayGap, b.dayGap), cmp.Compare(size(a), size(b)))
-	})
-	for i, p := range picks {
-		if i == maxBandTries {
-			return
-		}
-		if h.applyMoves(meals, p.mv, p.reloc) {
+	slices.SortFunc(picks, better)
+	was, wasSoft := h.openIssues()
+	for _, p := range picks {
+		if h.applyMoves(meals, p.mv, p.reloc, was, wasSoft) {
 			day := dk.Kcal
 			for _, o := range p.mv {
 				for _, x := range o {
@@ -267,15 +275,21 @@ func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 // (each check re-evaluates the plan).
 const maxBandTries = 8
 
+// openIssues are the number of open hard issues and the soft issues of the
+// proposal.
+func (h *planner) openIssues() (int, map[string]Issue) {
+	merged := Merge(h.s, h.in.Target, h.prop)
+	return len(openHard(merged, h.in.Target)), softIssues(evaluateLean(merged, h.in.Target).Issues)
+}
+
 // applyMoves applies each meal's moves (a recipe's batch by the same amount)
-// and the add-on move, and keeps them when no hard or soft issue is added;
-// else it restores the proposal.
-func (h *planner) applyMoves(meals []bandMeal, moves [][]bandMove, reloc *bandReloc) bool {
+// and the add-on move, and keeps them when no hard or soft issue is added to
+// was and wasSoft (the issues before: openIssues); else it restores the
+// proposal.
+func (h *planner) applyMoves(meals []bandMeal, moves [][]bandMove, reloc *bandReloc, was int, wasSoft map[string]Issue) bool {
 	saved := h.prop
 	plates := slices.Clone(h.prop.Plates)
 	sessions := slices.Clone(h.prop.Sessions)
-	was := len(openHard(Merge(h.s, h.in.Target, h.prop), h.in.Target))
-	wasSoft := softIssues(evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target).Issues)
 	h.prop.Sessions = slices.Clone(h.prop.Sessions)
 	for i, m := range meals {
 		for _, mv := range moves[i] {
