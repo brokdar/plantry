@@ -14,7 +14,7 @@ Context decides what "extraordinary" means. A particle system on a creative port
 This command has the highest potential to misfire. Do NOT jump straight into implementation. You MUST:
 
 1. **Think through 2-3 different directions**: consider different techniques, levels of ambition, and aesthetic approaches. For each direction, briefly describe what the result would look and feel like.
-2. **Get the user's pick before writing any code.** Ask with Codex's structured user-input/question tool when available, or directly in chat if it is not, and wait for the answer before continuing. Carry each direction's description and its trade-offs (browser support, performance cost, complexity) inside the option itself, so the user is choosing between things they can read. A structured question blocks the message it rides in until the user answers, so directions written alongside the question stay invisible while the user is being asked to choose between them.
+2. **Get the user's pick before writing any code.** Ask with the AskUserQuestion tool and wait for the answer before continuing. Carry each direction's description and its trade-offs (browser support, performance cost, complexity) inside the option itself, so the user is choosing between things they can read. A structured question blocks the message it rides in until the user answers, so directions written alongside the question stay invisible while the user is being asked to choose between them.
 3. Only proceed with the direction the user confirms.
 
 Skipping this step risks building something embarrassing that needs to be thrown away.
@@ -57,7 +57,7 @@ Organized by what you're trying to achieve, not by technology name.
 
 ### Render beyond CSS
 - **WebGL** (all browsers): shader effects, post-processing, particle systems. Libraries: Three.js, OGL (lightweight), regl. Use for effects CSS can't express.
-- **WebGPU** (Chrome/Edge; Safari 26+; Firefox on Windows/macOS; flag only on Firefox Linux/Android): next-gen GPU compute, more powerful than WebGL. Always fall back to WebGL2.
+- **WebGPU** (Chrome/Edge; Safari 26+; Firefox on Windows/macOS; flag only on Firefox Linux/Android): next-gen GPU compute, more powerful than WebGL. Always fall back to WebGL2; gate it behind API detection plus a `navigator.gpu.requestAdapter()` null check, so a blocklisted or headless GPU still reaches the fallback.
 - **Canvas 2D / OffscreenCanvas**: custom rendering, pixel manipulation, or moving heavy rendering off the main thread entirely via Web Workers + OffscreenCanvas.
 - **SVG filter chains**: displacement maps, turbulence, morphology for organic distortion effects. CSS-animatable.
 
@@ -94,7 +94,7 @@ Every technique must degrade gracefully. The experience without the enhancement 
 ```
 
 ```javascript
-if ('gpu' in navigator) { /* WebGPU */ }
+if ('gpu' in navigator && await navigator.gpu.requestAdapter()) { /* WebGPU */ }
 else if (canvas.getContext('webgl2')) { /* WebGL2 fallback */ }
 /* CSS-only fallback must still look good */
 ```
