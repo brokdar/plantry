@@ -209,7 +209,11 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		// ends: the UI refetches the conversation) in kitchen terms; the run log
 		// keeps what the model wrote.
 		if len(extractToolUses(res.resp.Message)) == 0 {
-			finalizeMessage(&res.resp.Message, turnReply.final())
+			var drops []lintDrop
+			final := turnReply.final()
+			final.drops = &drops
+			finalizeMessage(&res.resp.Message, final)
+			recordLintDrops(ctx, drops)
 		} else {
 			sanitizeToolMessage(&res.resp.Message, turnReply)
 		}
@@ -403,6 +407,22 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 
 	err := fmt.Errorf("%w: %d model turns, %d requests", ErrIterationsExceeded, turns, requests)
 	return fail("error.ai.iterations_exceeded", err)
+}
+
+// recordLintDrops logs each sentence of the final model text the reply left
+// out (agent.reply.lint, with the reason) and stores them all as the run's
+// "reply.lint" step, result {dropped: [{sentence, reason}]}, so an eval reads
+// the exact reasons of a turn from its run (F6). Nothing when none was dropped.
+func recordLintDrops(ctx context.Context, drops []lintDrop) {
+	if len(drops) == 0 {
+		return
+	}
+	run := airun.FromContext(ctx)
+	for _, d := range drops {
+		// run_id (the turn), request_id and conversation_id come with the run.
+		slog.InfoContext(ctx, "agent.reply.lint", append(run.LogAttrs(), "reason", d.Reason, "chars", len(d.Sentence))...)
+	}
+	run.ToolStep(ctx, "reply.lint", json.RawMessage(`{}`), mustMarshal(map[string]any{"dropped": drops}), false, 0)
 }
 
 // send writes evt to out unless ctx is done. Returns false if the context was

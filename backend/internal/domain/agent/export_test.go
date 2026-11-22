@@ -111,3 +111,20 @@ func ComposeReply(model, user string, write bool, output json.RawMessage) string
 	}
 	return composeReply(model, t)
 }
+
+// ComposeDrops composes a final reply for user and model text and returns the
+// sentences it left out with their reasons, as "reason: sentence".
+func ComposeDrops(ctx context.Context, user, model string, write bool) []string {
+	var drops []lintDrop
+	t := replyTurn{user: user, write: write, numbers: map[string]bool{}, drops: &drops}
+	if write {
+		t.block = &replyBlock{facts: []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: "Fri 27 Nov dinner: A replaced by B.", DE: "Freitag, 27. Nov. Abendessen: A ersetzt durch B."}}}
+	}
+	composeReply(model, t)
+	recordLintDrops(ctx, drops)
+	out := make([]string, 0, len(drops))
+	for _, d := range drops {
+		out = append(out, d.Reason+": "+d.Sentence)
+	}
+	return out
+}

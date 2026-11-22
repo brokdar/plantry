@@ -134,6 +134,9 @@ type replyTurn struct {
 	foods   []string        // the names of the foods of the plan: a write's text names none the block does not
 	write   bool            // a plan-writing tool was called (also as a check)
 	block   *replyBlock     // the facts and the offer of the turn's writes
+	// drops, when set, collects every sentence of the model's final text the
+	// reply leaves out, with the reason (F6: agent.reply.lint).
+	drops *[]lintDrop
 	// ways is the block of the turn's last find_ways when it found nothing to
 	// apply on its own (waysBlock): told only when no write of the turn has a block.
 	ways *replyBlock
@@ -376,6 +379,11 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 func composeReply(model string, t replyTurn) string {
 	text := strings.TrimSpace(plainReply(model))
 	lg := t.lang(text)
+	drop := func(sentence, reason string) {
+		if t.drops != nil {
+			*t.drops = append(*t.drops, lintDrop{Sentence: sentence, Reason: reason})
+		}
+	}
 	if t.write {
 		// A write turn ends on the block or the offer, never on a question.
 		ss := sentences(text)
@@ -384,11 +392,17 @@ func composeReply(model string, t replyTurn) string {
 			kept = kept[:len(kept)-1]
 		}
 		if len(kept) > 0 || t.block != nil {
+			for _, q := range ss[len(kept):] {
+				drop(q, "question")
+			}
 			text = strings.Join(kept, " ")
 		}
 	}
 	if t.block != nil && t.write {
 		if ss := sentences(text); len(ss) > 2 {
+			for _, x := range ss[2:] {
+				drop(x, "third_sentence")
+			}
 			text = strings.Join(ss[:2], " ")
 		}
 	}
@@ -397,7 +411,9 @@ func composeReply(model string, t replyTurn) string {
 		// is dropped, not the whole text (G4 lint per sentence, v1.3 P-6; RP4).
 		var kept []string
 		for _, s := range sentences(text) {
-			if lintModelText(s, t, lg) == "" {
+			if why := lintModelText(s, t, lg); why != "" {
+				drop(s, why)
+			} else {
 				kept = append(kept, s)
 			}
 		}
@@ -409,7 +425,10 @@ func composeReply(model string, t replyTurn) string {
 		}
 		return fallbackEN
 	}
-	if lintModelText(text, t, lg) != "" {
+	if why := lintModelText(text, t, lg); why != "" {
+		// The kept sentences pass alone but not together (a weekday or a
+		// number one names and another needs).
+		drop(text, why)
 		text = ""
 		if t.block == nil {
 			if lg == langDE {
@@ -453,6 +472,16 @@ func composeReply(model string, t replyTurn) string {
 		return "Done."
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// lintDrop is a sentence of the model's final text the reply left out, with
+// the reason: a lint reason of lintModelText (planner_word, digit,
+// cooking_claim, option, dish, weekday, contradiction, number), "question" (a
+// write turn's trailing question) or "third_sentence" (past the two a write's
+// text may have).
+type lintDrop struct {
+	Sentence string `json:"sentence"`
+	Reason   string `json:"reason"`
 }
 
 // finalizeMessage puts the composed reply into the model's final message: the
