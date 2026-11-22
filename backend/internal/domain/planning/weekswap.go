@@ -57,9 +57,7 @@ func MeatBudgetOf(s State, t Target) (MeatBudget, bool) {
 	}
 	counted := map[int]bool{}
 	for _, dk := range x.dayAccounts(days) {
-		if !dk.Away {
-			counted[dayOf(dk.Date)] = true
-		}
+		counted[dayOf(dk.Date)] = true
 	}
 	b := MeatBudget{Days: len(counted)}
 	if b.Days < minDGEDays {
@@ -109,7 +107,7 @@ func weekCounted(ev Evaluation) map[string]bool {
 	}
 	out := map[string]bool{}
 	for _, d := range ev.Days {
-		if d.Complete && !d.Away && withPlate[d.Date] && !d.NutritionMissing && d.Kcal > 0 && d.TargetKcal != nil && *d.TargetKcal > 0 {
+		if d.Complete && withPlate[d.Date] && !d.NutritionMissing && d.Kcal > 0 && d.TargetKcal != nil && *d.TargetKcal > 0 {
 			out[d.Date] = true
 		}
 	}

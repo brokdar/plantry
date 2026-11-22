@@ -52,11 +52,6 @@ type DayKcal struct {
 	// Unplated counts routine cells without a plate: they hold no kcal to
 	// count, so like a No-plate cell they ask nothing of the day.
 	Unplated int
-	// Away: every cell of a meal-kind slot (lunch, dinner) that is not
-	// routine is No plate, so the user eats elsewhere. H9, S2, the day S3
-	// and the weekly averages do not judge the day (light and routine cells
-	// do not count).
-	Away bool
 	// shares are the expected shares of the day's slots (SB2) and share the
 	// planned part of the day: 1 minus the shares of the slots not planned (away,
 	// default no plate, or routine without a plate). Zero share means an even
@@ -165,7 +160,7 @@ func (x *index) computeAccounts(days []time.Time) []DayKcal {
 	}
 	for _, d := range days {
 		dk := DayKcal{Date: d, Target: k, Complete: true}
-		meals, away, lightBase, heartyBase := 0, 0, 0.0, 0.0
+		lightBase, heartyBase := 0.0, 0.0
 		cells, dayPlates := cellsBy[dayOf(d)], platesBy[dayOf(d)]
 		dk.shares, dk.shareTotal = daySlotShares(s, cells)
 		dk.shift = x.routineShift(&dk, cells, dayPlates)
@@ -173,12 +168,6 @@ func (x *index) computeAccounts(days []time.Time) []DayKcal {
 		for _, c := range cells {
 			dk.Meals++
 			totalShare += dk.shares[c.SlotID]
-			if c.Mode != availability.ModeRoutine && s.SlotKind[c.SlotID] != slot.KindLight {
-				meals++
-				if c.Mode == availability.ModeNone {
-					away++
-				}
-			}
 			if c.Mode == availability.ModeNone {
 				unplanned += dk.shares[c.SlotID]
 				continue
@@ -206,7 +195,6 @@ func (x *index) computeAccounts(days []time.Time) []DayKcal {
 			dk.share = (totalShare - unplanned) / totalShare
 			dk.AwayShare = unplanned / totalShare
 		}
-		dk.Away = meals > 0 && away == meals
 		dk.Scaled = k * dk.Share()
 		dk.Adjusted = dk.Scaled
 		lightReq, isLight := s.dayRequest(d, "")
@@ -317,7 +305,7 @@ func writeDayBudgets(b *strings.Builder, x *index) {
 	first := true
 	for _, dk := range x.dayAccounts(x.days) {
 		meals := open[dayOf(dk.Date)]
-		if dk.Away || (len(meals) == 0 && dk.Active() == dk.Meals) {
+		if len(meals) == 0 && dk.Active() == dk.Meals {
 			continue
 		}
 		if first {
@@ -355,7 +343,7 @@ func kcalNote(s State, t Target) string {
 	var parts []string
 	pol := PolicyOf(s.Profile)
 	for _, d := range DayKcals(s, t) {
-		if d.Complete && !d.Away && d.Proposed && !d.NutritionMissing && !s.lightDay(d.Date) && d.Kcal < d.Adjusted*pol.DayLow {
+		if d.Complete && d.Proposed && !d.NutritionMissing && !s.lightDay(d.Date) && d.Kcal < d.Adjusted*pol.DayLow {
 			parts = append(parts, fmt.Sprintf("%s −%.0f kcal", d.Date.Weekday().String()[:3], d.Gap))
 		}
 	}

@@ -214,7 +214,7 @@ func awayEnergy(in reportInput, r changeReport, awayDays map[string]bool) {
 	for _, d := range in.after.Days {
 		day := dayLabelStr(d.Date)
 		meals := goneMeals[day]
-		if len(meals) == 0 || d.Away || d.AwayKcal <= 0 {
+		if len(meals) == 0 || d.AwayKcal <= 0 {
 			continue
 		}
 		var de []string
@@ -231,7 +231,7 @@ func awayEnergy(in reportInput, r changeReport, awayDays map[string]bool) {
 func proteinFacts(in reportInput, r changeReport) {
 	for _, a := range in.after.Days {
 		for _, b := range in.before.Days {
-			if b.Date != a.Date || a.Away || absf(a.ProteinG-b.ProteinG) < 5 || !touchedDate(r, a.Date) {
+			if b.Date != a.Date || absf(a.ProteinG-b.ProteinG) < 5 || !touchedDate(r, a.Date) {
 				continue
 			}
 			day := dayLabelStr(a.Date)
@@ -311,7 +311,7 @@ func targetMoved(in reportInput, r changeReport) {
 				before, beforeMarks, known = x.TargetKcal, x.LightMeals, true
 			}
 		}
-		if known && before != nil && !d.Away && absf(*d.TargetKcal-*before) >= 5 {
+		if known && before != nil && absf(*d.TargetKcal-*before) >= 5 {
 			day := dayLabelStr(d.Date)
 			en, de := markChange(beforeMarks, d.LightMeals, langEN), markChange(beforeMarks, d.LightMeals, langDE)
 			in.facts.add(classChanged, kindDay, statusOK,
@@ -351,8 +351,9 @@ func dayFacts(in reportInput, r changeReport) {
 				de += fmt.Sprintf(" und unter dem Mindestwert von %d kcal", d.MinimumKcal)
 			}
 		}
-		// A day told as worse must be worse: further from its range than before.
-		if class == classWorse && !dayWorse(d) && !in.dayKcal {
+		// A day told as worse must be worse: further from its range than before;
+		// a day the change left under its minimum is always told (G4.4, SF1(c)).
+		if class == classWorse && !dayWorse(d) && !in.dayKcal && d.MinimumKcal == 0 {
 			continue
 		}
 		if class == classChanged && !in.dayKcal && !in.undo {

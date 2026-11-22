@@ -241,9 +241,7 @@ func buildReport(in reportInput) changeReport {
 			continue
 		}
 		day := reportDay{Day: dayLabelStr(date), KcalBefore: int(math.Round(bd[date].Kcal)), KcalAfter: int(math.Round(a.Kcal))}
-		if a.Away {
-			day.Status = "away: the day is not counted"
-		} else if a.BandHigh > 0 {
+		if a.BandHigh > 0 {
 			day.Range = fmt.Sprintf("%.0f-%.0f kcal", a.BandLow, a.BandHigh)
 			switch {
 			case a.Kcal < a.BandLow-0.5:

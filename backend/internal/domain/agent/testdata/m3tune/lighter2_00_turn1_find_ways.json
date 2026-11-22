@@ -1,0 +1,19 @@
+{
+ "before": {
+  "day_kcal": 1137,
+  "day_protein_g": 42.6,
+  "meal_kcal": 831,
+  "meal_protein_g": 31.1
+ },
+ "empty_reason": "every way failed the check against the real plan: leave out \"Steamed rice\" and \"Cucumber\": it adds a problem (cooking times per day); \"Egg fried rice\": 0.75 portions (was 1), swap \"Steamed rice\" for \"Carrot salad\": it adds a problem (cooking times per day); \"Egg fried rice\": 0.75 portions (was 1), leave out Cucumber, swap \"Steamed rice\" for \"Carrot salad\": it adds a problem (cooking times per day); \"Cucumber yogurt salad\": 0.75 portions (was 1), leave out \"Steamed rice\" and \"Cucumber\": it adds a problem (cooking times per day); \"Egg fried rice\": 0.75 portions (was 1), swap \"Steamed rice\" for \"Green salad\": op 2 of 2 (replace): row is confirmed: session 98 (Green salad, cooks 2026-11-20 slot 2); ask the user to unlock first; \"Cucumber yogurt salad\": 0.5 portions (was 1), leave out \"Steamed rice\" and \"Cucumber\": it adds a problem (cooking times per day); \"Egg fried rice\": 0.75 portions (was 1), leave out Cucumber, swap \"Steamed rice\" for \"Green salad\": op 3 of 3 (replace): row is confirmed: session 98 (Green salad, cooks 2026-11-20 slot 2); ask the user to unlock first; \"Egg fried rice\": 0.75 portions (was 1), swap \"Steamed rice\" for \"Steamed broccoli\": it adds a problem (cooking times per day)",
+ "goal": {
+  "kind": "lighter",
+  "plate_id": 108
+ },
+ "max_kcal": 563,
+ "minimum_kcal": 793,
+ "next": "nothing to apply: explain why with the numbers and what the user could change",
+ "range_high": 1110,
+ "range_low": 951,
+ "ways": []
+}

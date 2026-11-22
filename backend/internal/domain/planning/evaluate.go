@@ -145,9 +145,6 @@ type DayEval struct {
 	// NutritionMissing: a food of the day lacks nutrition data, so kcal
 	// and the shares understate the day (the board warns the same).
 	NutritionMissing bool `json:"nutrition_missing"`
-	// Away: the day's lunch and dinner are No plate (DayKcal.Away); H9, S2,
-	// the day S3 and the week do not judge it.
-	Away bool `json:"away,omitempty"`
 	// AwayKcal is the energy the slots that are not planned are assumed to hold
 	// (the day's full target x their expected shares, SB3) and PlannedTargetKcal
 	// the day's target less it; both only on a day with a slot not planned.
@@ -267,7 +264,7 @@ func evaluateWith(s State, t Target, weekOpts, noOptions bool) Evaluation {
 	for _, dk := range x.dayAccounts(days) {
 		de := DayEval{
 			Date: dk.Date.Format(time.DateOnly), Kcal: dk.Kcal, ProteinG: dk.ProteinG,
-			MeatFoods: []string{}, Complete: dk.Complete, NutritionMissing: dk.NutritionMissing, Away: dk.Away,
+			MeatFoods: []string{}, Complete: dk.Complete, NutritionMissing: dk.NutritionMissing,
 			CookOccasions: len(x.occasions[dayOf(dk.Date)]),
 		}
 		for _, c := range s.Cells {
@@ -291,11 +288,8 @@ func evaluateWith(s State, t Target, weekOpts, noOptions bool) Evaluation {
 			}
 			de.RoomKcal = math.Max(0, de.BandHigh-math.Round(dk.Kcal))
 		}
-		// A day away is not judged and is never called light.
-		if !dk.Away {
-			de.Light, de.LightLevel = x.lightOf(dk.Date)
-			de.LightMeals = x.lightMeals(dk.Date)
-		}
+		de.Light, de.LightLevel = x.lightOf(dk.Date)
+		de.LightMeals = x.lightMeals(dk.Date)
 		if t := x.pol.ProteinTargetG(dk.Share()); t > 0 {
 			de.ProteinTargetG = t
 		}

@@ -162,8 +162,8 @@ func (s *ToolSet) register(t Tool) error {
 	if _, exists := s.byName[t.Name]; exists {
 		return fmt.Errorf("duplicate tool %q", t.Name)
 	}
-	t.Description = plainWords(t.Description)
-	t.Schema = json.RawMessage(plainWords(string(t.Schema)))
+	t.Description = plainStatic(t.Description)
+	t.Schema = json.RawMessage(plainStatic(string(t.Schema)))
 	// The model reads the level "filling"; the stored word "hearty" stays valid.
 	check := strings.ReplaceAll(string(t.Schema), `"enum":["light","filling"]`, `"enum":["light","filling","hearty"]`)
 	schema, err := gojsonschema.NewSchema(gojsonschema.NewStringLoader(check))

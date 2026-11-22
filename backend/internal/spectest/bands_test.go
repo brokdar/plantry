@@ -277,7 +277,7 @@ func TestNU11_SlotBandIssueMatchesOracle(t *testing.T) {
 			T := fullTarget(s)
 			complete := map[string]bool{}
 			for _, d := range ev.Days {
-				complete[d.Date] = d.Complete && !d.Away
+				complete[d.Date] = d.Complete
 			}
 			marked := map[string]bool{}
 			for _, l := range s.Light {

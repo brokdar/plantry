@@ -82,7 +82,7 @@ func plannerView(in ChooseInput, prop Proposal, offered bool) (map[string]any, E
 	// A day a few kcal under its band is rounding, not a gap: not shown as one.
 	near := map[string]bool{}
 	for _, d := range ev.Days {
-		if d.Complete && !d.Away && d.Kcal < d.BandLow-0.5 && d.Kcal >= d.BandLow-gapTolerance(d.BandLow) {
+		if d.Complete && d.Kcal < d.BandLow-0.5 && d.Kcal >= d.BandLow-gapTolerance(d.BandLow) {
 			near[d.Date] = true
 		}
 	}
@@ -149,7 +149,7 @@ func gapTolerance(bandLow float64) float64 { return math.Max(25, 0.015*bandLow) 
 func gapDays(ev Evaluation) []gapDay {
 	var out []gapDay
 	for _, d := range ev.Days {
-		if d.Away || !d.Complete || d.TargetKcal == nil || d.Kcal >= d.BandLow-gapTolerance(d.BandLow) {
+		if !d.Complete || d.TargetKcal == nil || d.Kcal >= d.BandLow-gapTolerance(d.BandLow) {
 			continue
 		}
 		out = append(out, gapDay{d.Date, *d.TargetKcal - d.Kcal, d.BandLow - d.Kcal})

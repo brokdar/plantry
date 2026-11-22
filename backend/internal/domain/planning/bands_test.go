@@ -34,7 +34,6 @@ func TestBands_AwayProratesFloorAndTargetByTheSlotShare(t *testing.T) {
 	ev, _ := weekOf(s)
 
 	d := dayEval(t, ev, mon)
-	assert.False(t, d.Away)
 	assert.InDelta(t, 2000*0.351, d.AwayKcal, 1, "the dinner out is assumed at 35.1 % of 2000")
 	assert.InDelta(t, 2000-2000*0.351, d.PlannedTargetKcal, 1)
 	require.NotNil(t, d.TargetKcal)

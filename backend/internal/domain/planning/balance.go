@@ -139,7 +139,7 @@ func cookDays(ev Evaluation) int {
 func (h *planner) blockers(ev Evaluation) []string {
 	var out []string
 	for _, d := range ev.Days {
-		if d.Away || !d.Complete || d.TargetKcal == nil || d.Kcal >= d.BandLow-0.5 {
+		if !d.Complete || d.TargetKcal == nil || d.Kcal >= d.BandLow-0.5 {
 			continue
 		}
 		var why []string
@@ -239,7 +239,7 @@ func (h *planner) addSide(date time.Time, limit float64) {
 	for _, a := range y.dayAccounts([]time.Time{date}) {
 		dk = &a
 	}
-	if dk == nil || !dk.Complete || dk.Away || dk.NutritionMissing || dk.Kcal <= 0 || limit-dk.Kcal < minAddGrams*2 {
+	if dk == nil || !dk.Complete || dk.NutritionMissing || dk.Kcal <= 0 || limit-dk.Kcal < minAddGrams*2 {
 		return
 	}
 	need := limit - dk.Kcal

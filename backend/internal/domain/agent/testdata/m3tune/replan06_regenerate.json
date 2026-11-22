@@ -1,0 +1,14 @@
+{
+ "changed": [],
+ "counts": {
+  "batches": 0,
+  "cook_days": 0,
+  "kept_confirmed": 0,
+  "plates": 0
+ },
+ "error_key": "error.plan.hard_rule_open",
+ "issues": [],
+ "notes": "A hard rule is still open, so nothing was saved: dish variety (2026-12-07).",
+ "run_id": 7,
+ "status": "error"
+}

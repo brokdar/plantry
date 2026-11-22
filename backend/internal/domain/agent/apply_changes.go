@@ -131,6 +131,10 @@ type batch struct {
 	// writes the sentence): op, food, to, date, slot_id, slot_key, mode,
 	// portions, amount, unit, eaters.
 	ops []map[string]any
+	// unmark clears the stored light or filling mark of a meal an away op
+	// took off the plan: a meal that is not eaten at home carries no mark
+	// (as a day away carries none), so no offer leans on it (RL9).
+	unmark []planning.LightIntent
 }
 
 // note records op's line entry; quantity fields are added when the op sets them.
@@ -357,7 +361,7 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 		if in.DryRun {
 			return errDryRun
 		}
-		return saveLight(ctx, svc, light)
+		return saveLight(ctx, svc, append(slices.Clone(light), b.unmark...))
 	})
 	if err != nil && !errors.Is(err, errDryRun) {
 		return applyRun{}, err
@@ -1013,7 +1017,7 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 	days := []planning.DayEval{}
 	for _, d := range now.Days {
 		if dates[d.Date] {
-			days = append(days, awayDay(d))
+			days = append(days, d)
 		}
 	}
 	out["days"] = planning.Compact(days)
@@ -1365,8 +1369,12 @@ func cookingMoved(ctx context.Context, svc Services, w window.Window, fixed []ma
 
 // sameKindRefusal refuses an add that would put a second food of the same kind
 // on the plate (skyr on top of yogurt, bread beside potatoes) and says what to
-// do: raise the one there, or pick another kind.
+// do: raise the one there, or pick another kind. A food the user's message
+// names is added as asked (C-4: the named food is on every named meal).
 func sameKindRefusal(ctx context.Context, svc Services, p *plate.Plate, foodID int64) error {
+	if t, ok := turnFrom(ctx); ok && t.named[foodID] {
+		return nil
+	}
 	w, ok := windowFrom(ctx)
 	if !ok || svc.State == nil {
 		return nil

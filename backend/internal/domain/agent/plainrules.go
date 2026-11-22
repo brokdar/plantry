@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -291,6 +292,22 @@ func plainWords(s string) string {
 		s = w.re.ReplaceAllString(s, w.to)
 	}
 	return s
+}
+
+// staticPlain caches plainWords of the fixed texts every tool set and prompt
+// rewrites again (tool descriptions and schemas, the prompt's rule blocks):
+// the rewrite is pure and its regex pass was a third of the agent's CPU when
+// a tool set is built per chat turn.
+var staticPlain sync.Map // string -> string
+
+// plainStatic is plainWords for a fixed text, computed once per process.
+func plainStatic(s string) string {
+	if v, ok := staticPlain.Load(s); ok {
+		return v.(string)
+	}
+	out := plainWords(s)
+	staticPlain.Store(s, out)
+	return out
 }
 
 // plainKeys renames the model-facing result keys that carry planner words.

@@ -323,6 +323,9 @@ func opAway(ctx context.Context, svc Services, op changeOp, b *batch) (map[strin
 			return nil, err
 		}
 		b.aff.Dates = append(b.aff.Dates, d)
+		if err := unmarkAway(ctx, svc, c.Date, key, b); err != nil {
+			return nil, err
+		}
 		cells = append(cells, map[string]any{"date": d, "slot_id": c.SlotID})
 		line = append(line, map[string]any{"date": d, "slot_key": key})
 		pulse = append(pulse, pulseCell(d, c.SlotID))
@@ -607,4 +610,21 @@ func quoteAll(ss []string) string {
 		q[i] = fmt.Sprintf("%q", s)
 	}
 	return strings.Join(q, ", ")
+}
+
+// unmarkAway notes the clearing of a stored meal mark on the lunch or dinner
+// cell an away op took off the plan (slot is the slot's name key).
+func unmarkAway(ctx context.Context, svc Services, date time.Time, slot string, b *batch) error {
+	name := strings.TrimPrefix(slot, "slot.")
+	if svc.Light == nil || (name != "lunch" && name != "dinner") {
+		return nil
+	}
+	stored, err := svc.Light.List(ctx, date, date)
+	if err != nil {
+		return err
+	}
+	if slices.ContainsFunc(stored, func(l planning.LightIntent) bool { return l.Scope == planning.LightScopeMeal && l.Slot == name }) {
+		b.unmark = append(b.unmark, planning.LightIntent{Date: date.Format(time.DateOnly), Scope: planning.LightScopeNone, Slot: name})
+	}
+	return nil
 }

@@ -143,7 +143,7 @@ func dayGapLines(in ChooseInput, ev Evaluation, final Proposal) []string {
 	}
 	var light, heavy []string
 	for _, d := range ev.Days {
-		if !inTarget[d.Date] || d.Away || !d.Complete || d.TargetKcal == nil || *d.TargetKcal <= 0 {
+		if !inTarget[d.Date] || !d.Complete || d.TargetKcal == nil || *d.TargetKcal <= 0 {
 			continue
 		}
 		part := func() string {

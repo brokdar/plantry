@@ -134,6 +134,22 @@ type replyTurn struct {
 	foods   []string        // the names of the foods of the plan: a write's text names none the block does not
 	write   bool            // a plan-writing tool was called (also as a check)
 	block   *replyBlock     // the facts and the offer of the turn's writes
+	// drops, when set, collects every sentence of the model's final text the
+	// reply leaves out, with the reason (F6: agent.reply.lint).
+	drops *[]lintDrop
+	// ways is the block of the turn's last find_ways when it found nothing to
+	// apply on its own (waysBlock): told only when no write of the turn has a block.
+	ways *replyBlock
+}
+
+// final is the turn as its closing reply is composed: a turn that saved nothing
+// after a find_ways that found nothing says so in code, with the reason and its
+// numbers and the search's one offer (G4.1, SF2, C-11).
+func (t replyTurn) final() replyTurn {
+	if t.ways != nil && t.block == nil {
+		t.write, t.block = true, t.ways
+	}
+	return t
 }
 
 // lang is the language of the reply: the user's message, else the earlier
@@ -363,6 +379,11 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 func composeReply(model string, t replyTurn) string {
 	text := strings.TrimSpace(plainReply(model))
 	lg := t.lang(text)
+	drop := func(sentence, reason string) {
+		if t.drops != nil {
+			*t.drops = append(*t.drops, lintDrop{Sentence: sentence, Reason: reason})
+		}
+	}
 	if t.write {
 		// A write turn ends on the block or the offer, never on a question.
 		ss := sentences(text)
@@ -371,11 +392,17 @@ func composeReply(model string, t replyTurn) string {
 			kept = kept[:len(kept)-1]
 		}
 		if len(kept) > 0 || t.block != nil {
+			for _, q := range ss[len(kept):] {
+				drop(q, "question")
+			}
 			text = strings.Join(kept, " ")
 		}
 	}
 	if t.block != nil && t.write {
 		if ss := sentences(text); len(ss) > 2 {
+			for _, x := range ss[2:] {
+				drop(x, "third_sentence")
+			}
 			text = strings.Join(ss[:2], " ")
 		}
 	}
@@ -384,7 +411,9 @@ func composeReply(model string, t replyTurn) string {
 		// is dropped, not the whole text (G4 lint per sentence, v1.3 P-6; RP4).
 		var kept []string
 		for _, s := range sentences(text) {
-			if lintModelText(s, t, lg) == "" {
+			if why := lintModelText(s, t, lg); why != "" {
+				drop(s, why)
+			} else {
 				kept = append(kept, s)
 			}
 		}
@@ -396,7 +425,10 @@ func composeReply(model string, t replyTurn) string {
 		}
 		return fallbackEN
 	}
-	if lintModelText(text, t, lg) != "" {
+	if why := lintModelText(text, t, lg); why != "" {
+		// The kept sentences pass alone but not together (a weekday or a
+		// number one names and another needs).
+		drop(text, why)
 		text = ""
 		if t.block == nil {
 			if lg == langDE {
@@ -440,6 +472,16 @@ func composeReply(model string, t replyTurn) string {
 		return "Done."
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// lintDrop is a sentence of the model's final text the reply left out, with
+// the reason: a lint reason of lintModelText (planner_word, digit,
+// cooking_claim, option, dish, weekday, contradiction, number), "question" (a
+// write turn's trailing question) or "third_sentence" (past the two a write's
+// text may have).
+type lintDrop struct {
+	Sentence string `json:"sentence"`
+	Reason   string `json:"reason"`
 }
 
 // finalizeMessage puts the composed reply into the model's final message: the
@@ -665,10 +707,39 @@ func savedBlock(tool string, output json.RawMessage) *replyBlock {
 			de += " Übersprungene Zellen: " + strings.Join(skippedDE, ", ") + "."
 		}
 	case "regenerate":
+		if obj["status"] == "error" {
+			return regenerateRefused(obj)
+		}
 		en, de = "The plan was made again.", "Der Plan wurde neu gemacht."
 	}
 	return &replyBlock{facts: []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: en, DE: de}}}
 }
+
+// regenerateRefused is the block of a regenerate run that ended in error and
+// saved nothing (KR7: a day replan that would break a rule saves nothing and
+// says so): "nothing changed" and the reason, never "the plan was made again".
+func regenerateRefused(obj map[string]any) *replyBlock {
+	en := "Nothing was planned again: the run could not finish, so nothing was saved."
+	de := "Nichts wurde neu geplant: die Planung konnte nicht abgeschlossen werden, deshalb wurde nichts gespeichert."
+	switch key, _ := obj["error_key"].(string); key {
+	case "error.plan.hard_rule_open":
+		en = "Nothing was planned again: the new plan would still break a rule of the plan, so nothing was saved."
+		de = "Nichts wurde neu geplant: der neue Plan hätte noch eine Regel des Plans verletzt, deshalb wurde nichts gespeichert."
+		notes, _ := obj["notes"].(string)
+		if _, rules, ok := strings.Cut(notes, "nothing was saved: "); ok {
+			if rules = strings.TrimSuffix(strings.TrimSpace(isoInParens.ReplaceAllString(rules, "")), "."); rules != "" {
+				en = fmt.Sprintf("Nothing was planned again: the new plan would still break a rule of the plan (%s), so nothing was saved.", rules)
+			}
+		}
+	case "error.plan.day_same_dish":
+		en = "Nothing was planned again: the same main dish would be at both meals of the day and no other fits, so nothing was saved."
+		de = "Nichts wurde neu geplant: dasselbe Hauptgericht wäre bei beiden Mahlzeiten des Tages und kein anderes passt, deshalb wurde nichts gespeichert."
+	}
+	return &replyBlock{facts: []fact{{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: en, DE: de}}, nothingSaved: true}
+}
+
+// isoInParens is a parenthesised list of ISO dates in a run note ("(2026-12-07)").
+var isoInParens = regexp.MustCompile(`\s*\(\d{4}-\d{2}-\d{2}(?:, \d{4}-\d{2}-\d{2})*\)`)
 
 var (
 	// cellID is the slot id in a cell line ("Fri 2026-11-27 | 3 dinner | ...").

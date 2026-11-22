@@ -148,19 +148,30 @@ func selectBlock(all []fact) []fact {
 		}
 	}
 	if len(rest) > maxBlock {
-		prio := func(c int) int {
-			switch c {
-			case classWorse:
+		// What the household must hear first when the block is cut: the meals
+		// that changed and the cooking that moved (G4.2/G4.3; a day whose cooking
+		// changed is always named), then the day outside its range or under its
+		// minimum, the other worse figures, new warnings, and last the side
+		// figures of a changed meal (protein, the day's moved target, meat).
+		prio := func(f fact) int {
+			switch {
+			case f.Class == classChanged && (f.Kind == kindMeal || f.Kind == kindAway):
 				return 0
-			case classWarn:
+			case f.Class == classMoved && (f.Kind == kindCook || f.Kind == kindLeftover):
 				return 1
-			case classChanged:
+			case f.Class == classWorse && f.Kind == kindDay:
 				return 2
+			case f.Class == classWorse:
+				return 3
+			case f.Class == classWarn:
+				return 4
+			case f.Class == classMoved:
+				return 5
 			}
-			return 3
+			return 6
 		}
 		keep := slices.Clone(rest)
-		slices.SortStableFunc(keep, func(a, b fact) int { return prio(a.Class) - prio(b.Class) })
+		slices.SortStableFunc(keep, func(a, b fact) int { return prio(a) - prio(b) })
 		keep = keep[:maxBlock]
 		rest = slices.DeleteFunc(rest, func(f fact) bool { return !slices.Contains(keep, f) })
 	}

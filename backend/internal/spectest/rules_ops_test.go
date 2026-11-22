@@ -217,7 +217,7 @@ func TestSF4_PartAwayFloorProrated(t *testing.T) {
 				day = &ev.Days[i]
 			}
 		}
-		if day == nil || day.Away || day.FloorKcal <= 0 {
+		if day == nil || day.FloorKcal <= 0 {
 			t.Skip("day not judged")
 		}
 		want := fullFloor(r.After) * (1 - unplanned(r.After, date))
