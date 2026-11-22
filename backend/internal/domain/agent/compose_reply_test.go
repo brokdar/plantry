@@ -35,7 +35,7 @@ func TestComposeReply_BlockAndOfferAreCodeRendered(t *testing.T) {
 		assert.True(t, strings.HasSuffix(got, "sag Bescheid, wenn du das möchtest."))
 	})
 	for name, text := range map[string]string{
-		"a digit":                "Dinner now holds 1500 kcal.",
+		"an unbacked number":     "Dinner now holds 1700 kcal.",
 		"a weekday not in block": "I moved it to Monday.",
 		"a planner word":         "The draft is ready.",
 		"denies the open issue":  "Everything fits and there are no problems.",

@@ -1,0 +1,380 @@
+{
+ "after": {
+  "batches": [
+   {
+    "consumed": 1.8,
+    "cook_date": "2026-11-21",
+    "food": "Pasta with pesto and peas",
+    "portions": 1.8,
+    "session_id": 82,
+    "state": "pending",
+    "warnings": []
+   },
+   {
+    "consumed": 1.8,
+    "cook_date": "2026-11-21",
+    "food": "Steamed rice",
+    "portions": 1.8,
+    "session_id": 83,
+    "state": "pending",
+    "warnings": []
+   }
+  ],
+  "days": [
+   {
+    "away_kcal": 1297,
+    "carbs_pct": 66.4,
+    "cooking_times": 1,
+    "date": "2026-11-21",
+    "fat_pct": 19.5,
+    "kcal": 638,
+    "minimum_kcal": 527,
+    "planned_target_kcal": 703,
+    "protein_g": 20.6,
+    "protein_pct": 12.9,
+    "range_high": 773,
+    "range_low": 632,
+    "room_kcal": 135,
+    "target_kcal": 703
+   }
+  ],
+  "issues": {
+   "new": [],
+   "resolved": [
+    {
+     "date": "2026-11-21",
+     "label": "meal outside its share of the day",
+     "message": "A meal holds less or more of the day's energy than its time slot is meant to.",
+     "params": {
+      "kcal": 850,
+      "max_kcal": 800,
+      "min_kcal": 500,
+      "range_max_pct": 40,
+      "range_min_pct": 25,
+      "side": "above"
+     },
+     "severity": "warning",
+     "slot_id": 3
+    },
+    {
+     "date": "2026-11-21",
+     "label": "day energy",
+     "message": "The day's energy is above its target range.",
+     "params": {
+      "gap_to_range_kcal": -77,
+      "gap_to_target_kcal": -148,
+      "kcal": 850,
+      "range_high_kcal": 773,
+      "range_low_kcal": 632,
+      "target_kcal": 703
+     },
+     "severity": "warning"
+    }
+   ],
+   "total_open": 13,
+   "worsened": [
+    {
+     "after": {
+      "avg_kcal": 1209,
+      "days": 7,
+      "pct": 89.4,
+      "range_high_pct": 105,
+      "range_low_pct": 95,
+      "target_kcal": 1351
+     },
+     "before": {
+      "avg_kcal": 1239,
+      "days": 7,
+      "pct": 91.7,
+      "range_high_pct": 105,
+      "range_low_pct": 95,
+      "target_kcal": 1351
+     },
+     "label": "weekly energy",
+     "message": "The week's average energy is below its target range.",
+     "severity": "warning"
+    }
+   ]
+  },
+  "issues_checked": true,
+  "plates": [
+   {
+    "component_details": [
+     {
+      "kcal": 441,
+      "name": "Pasta with pesto and peas",
+      "plate_component_id": 1,
+      "portions": 0.8,
+      "protein_g": 16.1
+     },
+     {
+      "kcal": 197,
+      "name": "Steamed rice",
+      "plate_component_id": 2,
+      "portions": 0.8,
+      "protein_g": 4.5
+     }
+    ],
+    "components": [
+     "\"Pasta with pesto and peas\" (main)",
+     "\"Steamed rice\" (side_starch)"
+    ],
+    "date": "2026-11-21",
+    "eaters": 1,
+    "kcal": 638,
+    "plate_id": 81,
+    "protein_g": 20.6,
+    "slot_id": 3,
+    "state": "pending"
+   }
+  ]
+ },
+ "applied": [
+  {
+   "food_id": 165,
+   "id": 1,
+   "name": "Pasta with pesto and peas",
+   "op": "set_quantity",
+   "plate_component_id": 1,
+   "plate_id": 81,
+   "portions": 0.75,
+   "role": "main",
+   "session_id": 82,
+   "sort_order": 0
+  },
+  {
+   "food_id": 124,
+   "id": 2,
+   "name": "Steamed rice",
+   "op": "set_quantity",
+   "plate_component_id": 2,
+   "plate_id": 81,
+   "portions": 0.75,
+   "role": "side_starch",
+   "session_id": 83,
+   "sort_order": 1
+  }
+ ],
+ "dry_run": false,
+ "report": {
+  "changed": [
+   {
+    "after": [
+     "Pasta with pesto and peas 0.75 portions",
+     "Steamed rice 0.75 portions"
+    ],
+    "before": [
+     "Pasta with pesto and peas 1 portion",
+     "Steamed rice 1 portion"
+    ],
+    "day": "Sat 21 Nov",
+    "kcal_after": 638,
+    "kcal_before": 850,
+    "meal": "dinner"
+   }
+  ],
+  "check": {
+   "after_days": [
+    {
+     "date": "2026-11-21",
+     "plate_ids": [
+      81
+     ],
+     "plates": [
+      {
+       "components": [
+        {
+         "food_id": 165,
+         "name": "Pasta with pesto and peas",
+         "portions": 0.75,
+         "session_id": 82
+        },
+        {
+         "food_id": 124,
+         "name": "Steamed rice",
+         "portions": 0.75,
+         "session_id": 83
+        }
+       ],
+       "eaters": 1,
+       "meal": "dinner",
+       "plate_id": 81,
+       "slot_id": 3
+      }
+     ],
+     "sessions": [
+      {
+       "cook_date": "2026-11-21",
+       "cook_slot_id": 3,
+       "food_id": 165,
+       "name": "Pasta with pesto and peas",
+       "portions": 1.75,
+       "session_id": 82
+      },
+      {
+       "cook_date": "2026-11-21",
+       "cook_slot_id": 3,
+       "food_id": 124,
+       "name": "Steamed rice",
+       "portions": 1.75,
+       "session_id": 83
+      }
+     ]
+    }
+   ],
+   "before_days": [
+    {
+     "date": "2026-11-21",
+     "plate_ids": [
+      81
+     ],
+     "plates": [
+      {
+       "components": [
+        {
+         "food_id": 165,
+         "name": "Pasta with pesto and peas",
+         "portions": 1,
+         "session_id": 82
+        },
+        {
+         "food_id": 124,
+         "name": "Steamed rice",
+         "portions": 1,
+         "session_id": 83
+        }
+       ],
+       "eaters": 1,
+       "meal": "dinner",
+       "plate_id": 81,
+       "slot_id": 3
+      }
+     ],
+     "sessions": [
+      {
+       "cook_date": "2026-11-21",
+       "cook_slot_id": 3,
+       "food_id": 165,
+       "name": "Pasta with pesto and peas",
+       "portions": 2,
+       "session_id": 82
+      },
+      {
+       "cook_date": "2026-11-21",
+       "cook_slot_id": 3,
+       "food_id": 124,
+       "name": "Steamed rice",
+       "portions": 2,
+       "session_id": 83
+      }
+     ]
+    }
+   ]
+  },
+  "cooking": [
+   {
+    "cooked": [
+     {
+      "at": "dinner",
+      "dish": "Pasta with pesto and peas",
+      "eaten": [
+       "Sat 21 Nov dinner",
+       "Sun 22 Nov lunch"
+      ]
+     },
+     {
+      "at": "dinner",
+      "dish": "Steamed rice",
+      "eaten": [
+       "Sat 21 Nov dinner",
+       "Sun 22 Nov lunch"
+      ]
+     }
+    ],
+    "cooking_times": 1,
+    "day": "Sat 21 Nov"
+   }
+  ],
+  "days": [
+   {
+    "day": "Sat 21 Nov",
+    "healthy_range": "632-773 kcal",
+    "kcal_after": 638,
+    "kcal_before": 850,
+    "status": "inside its range"
+   }
+  ],
+  "earlier_warnings_unaffected": 12,
+  "facts": [
+   {
+    "class": 2,
+    "de": "Samstag, 21. Nov. Abendessen: „Pasta with pesto and peas“ von 1 Portion auf 0,75 Portionen (eine Viertelportion weniger); „Steamed rice“ von 1 Portion auf 0,75 Portionen (eine Viertelportion weniger) (850 → 638 kcal).",
+    "en": "Sat 21 Nov dinner: \"Pasta with pesto and peas\" from 1 portion to 0.75 portions (a quarter portion less); \"Steamed rice\" from 1 portion to 0.75 portions (a quarter portion less) (850 → 638 kcal).",
+    "kind": "meal",
+    "status": "ok"
+   },
+   {
+    "class": 2,
+    "de": "Samstag, 21. Nov.: Eiweiß 27 g → 21 g.",
+    "en": "Sat 21 Nov: protein 27 g → 21 g.",
+    "kind": "protein",
+    "status": "unknown"
+   },
+   {
+    "class": 3,
+    "de": "Samstag, 21. Nov.: 1,75 Portionen von „Pasta with pesto and peas“ kochen (statt 2).",
+    "en": "Sat 21 Nov: cook 1.75 portions of the \"Pasta with pesto and peas\" (was 2).",
+    "kind": "leftover",
+    "status": "ok"
+   },
+   {
+    "class": 3,
+    "de": "Samstag, 21. Nov.: 1,75 Portionen von „Steamed rice“ kochen (statt 2).",
+    "en": "Sat 21 Nov: cook 1.75 portions of the \"Steamed rice\" (was 2).",
+    "kind": "leftover",
+    "status": "ok"
+   },
+   {
+    "class": 4,
+    "de": "Schlimmer: Der Wochendurchschnitt liegt bei 1209 kcal pro Tag, 89 % des Ziels; der Bereich der Woche liegt bei 95–105 %. Es war schon offen und ist schlimmer geworden: vorher 3,3 Punkte über der Grenze, jetzt 5,6 Punkte.",
+    "en": "Worse: The week's average is 1209 kcal a day, 89% of the target; the week's range is 95-105%. It was already open and got worse: 3.3 points beyond its limit before, 5.6 points now.",
+    "key": "week:energy",
+    "kind": "warning",
+    "status": "under"
+   }
+  ],
+  "tell": [
+   "Sat 21 Nov dinner: \"Pasta with pesto and peas\" from 1 portion to 0.75 portions (a quarter portion less); \"Steamed rice\" from 1 portion to 0.75 portions (a quarter portion less) (850 → 638 kcal).",
+   "Sat 21 Nov: protein 27 g → 21 g.",
+   "Sat 21 Nov: cook 1.75 portions of the \"Pasta with pesto and peas\" (was 2).",
+   "Sat 21 Nov: cook 1.75 portions of the \"Steamed rice\" (was 2).",
+   "Worse: The week's average is 1209 kcal a day, 89% of the target; the week's range is 95-105%. It was already open and got worse: 3.3 points beyond its limit before, 5.6 points now."
+  ]
+ },
+ "request": {
+  "after": {
+   "day_kcal": 638,
+   "day_protein_g": 20.6,
+   "meal_kcal": 638,
+   "meal_protein_g": 20.6
+  },
+  "before": {
+   "day_kcal": 850,
+   "day_protein_g": 27.5,
+   "meal_kcal": 850,
+   "meal_protein_g": 27.5
+  },
+  "goal": "lighter",
+  "max_kcal": 527.0270270270271,
+  "meal_vs_limit": "111 kcal more than a light meal should hold",
+  "reached_light": false,
+  "satisfied": true,
+  "target": {
+   "date": "2026-11-21",
+   "plate_id": 81
+  },
+  "why": "lighter, but not a light meal yet: it now holds 638 kcal (was 850), a light meal should stay under 527 kcal"
+ },
+ "saved": true,
+ "status": "Saved: the change is in the plan (the user can undo it)."
+}

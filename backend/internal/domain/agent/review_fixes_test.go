@@ -99,11 +99,11 @@ func TestRun_ToolCallTextIsLintedBeforeItIsStoredOrShown(t *testing.T) {
 }
 
 // G4 (review 2): any numeral is a digit, not only ASCII ones.
-func TestLint_AnyNumeralIsADigit(t *testing.T) {
+func TestLint_AnyNumeralMustBeBacked(t *testing.T) {
 	t.Parallel()
 	turn := replyTurn{write: true, block: &replyBlock{facts: []fact{{Class: classChanged, EN: "x", DE: "x"}}}}
 	for _, text := range []string{"Half a portion, ½ more.", "A quarter ¼ less.", "Squared ².", "Fullwidth ３ portions."} {
-		assert.Equal(t, "digit", lintModelText(text, turn, langEN), text)
+		assert.Equal(t, "number", lintModelText(text, turn, langEN), text)
 	}
 }
 

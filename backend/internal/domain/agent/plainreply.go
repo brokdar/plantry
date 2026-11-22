@@ -194,7 +194,6 @@ const (
 
 var (
 	numberRe    = regexp.MustCompile(`\d[\d.,]*\d|\d`)
-	digitRe     = regexp.MustCompile(`\p{N}`)
 	isoAnywhere = regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)
 	thousand    = regexp.MustCompile(`^(\d{1,3})([.,]\d{3})+$`)
 	banned      = regexp.MustCompile(`(?i)\b(batch(es)?|eaters?|light days?|hearty minimum|cap|caps|band|bands|floor|soft|drafts?|extras?)\b|\b[HS]\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b|the tool only allows`)
@@ -219,13 +218,17 @@ func numbersIn(text string, set map[string]bool) {
 }
 
 // sentences splits a text into its sentences (a sentence ends on . ! or ? and a
-// space or the end; a decimal point is no end).
+// space or the end; a decimal point is no end, and neither is the dot of a
+// German date, "8. Dezember", "25. Nov. Abendessen": RP7).
 func sentences(s string) []string {
 	var out []string
 	var cur []rune
 	rs := []rune(strings.TrimSpace(s))
 	for i, r := range rs {
 		cur = append(cur, r)
+		if r == '.' && i < len(rs)-1 && dateDot(rs, i) {
+			continue
+		}
 		if (r == '.' || r == '!' || r == '?') && (i == len(rs)-1 || unicode.IsSpace(rs[i+1])) {
 			out = append(out, strings.TrimSpace(string(cur)))
 			cur = nil
@@ -235,6 +238,34 @@ func sentences(s string) []string {
 		out = append(out, t)
 	}
 	return out
+}
+
+// monthWord is a month name or its abbreviation, German or English.
+var monthWord = regexp.MustCompile(`(?i)^(jan(uar|uary)?|feb(ruar|ruary)?|m[äa]r(z|ch)?|apr(il)?|mai|may|jun[ie]?|jul[iy]?|aug(ust)?|sept?(ember)?|o[ck]t(ober)?|nov(ember)?|de[cz](ember)?)$`)
+
+// dateDot reports whether the dot at rs[i] belongs to a date: the dot of a day
+// number ("8." before a month) or of a month's abbreviation ("Dez.").
+func dateDot(rs []rune, i int) bool {
+	start := i
+	for start > 0 && !unicode.IsSpace(rs[start-1]) {
+		start--
+	}
+	word := string(rs[start:i])
+	if monthWord.MatchString(word) && len([]rune(word)) <= 4 {
+		return true // an abbreviation: "Dez.", "Nov.", "Sept."
+	}
+	if n := len([]rune(word)); n == 0 || n > 2 || strings.Trim(word, "0123456789") != "" {
+		return false
+	}
+	end := i + 1
+	for end < len(rs) && unicode.IsSpace(rs[end]) {
+		end++
+	}
+	next := end
+	for next < len(rs) && unicode.IsLetter(rs[next]) {
+		next++
+	}
+	return end > i+1 && monthWord.MatchString(string(rs[end:next]))
 }
 
 // Claims the model text may make about the four classes of fact; a claim the
@@ -308,8 +339,8 @@ func contradicts(text string, facts []fact, nothingSaved bool) bool {
 
 // lintModelText reports why the model's text cannot go out next to the block, or
 // "" when it can: a planner word, a number the block or the tool results do not
-// back (on a write turn: any digit at all), a weekday the block does not name, or
-// a claim the block contradicts.
+// back (v1.4 P-7; on a turn without a block the user's message backs one too), a
+// weekday the block does not name, or a claim the block contradicts.
 func lintModelText(text string, t replyTurn, lg lang) string {
 	if text == "" {
 		return ""
@@ -319,21 +350,32 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 		if banned.MatchString(text) {
 			return "planner_word"
 		}
-		if digitRe.MatchString(text) {
-			return "digit"
-		}
-		if modelCookingWords.MatchString(text) {
-			return "cooking_claim"
-		}
-		if modelOptionWords.MatchString(text) {
-			return "option"
-		}
 		blockText := ""
 		for _, f := range t.block.facts {
 			blockText += " " + f.line(lg)
 		}
 		if t.block.offer != nil {
 			blockText += " " + t.block.offer.EN + " " + t.block.offer.DE
+		}
+		// v1.4 P-7 (G4/RP4): a number of the model's text equals one of the
+		// facts block or of the turn's tool results; any other is dropped.
+		for _, r := range text {
+			if unicode.IsNumber(r) && (r < '0' || r > '9') {
+				return "number" // ½, ², a full-width digit: no tool result writes one
+			}
+		}
+		backed := map[string]bool{}
+		numbersIn(isoAnywhere.ReplaceAllString(blockText, " "), backed)
+		for _, m := range numberRe.FindAllString(text, -1) {
+			if n := normNumber(m); !backed[n] && !t.numbers[n] {
+				return "number"
+			}
+		}
+		if modelCookingWords.MatchString(text) {
+			return "cooking_claim"
+		}
+		if modelOptionWords.MatchString(text) {
+			return "option"
 		}
 		lower := strings.ToLower(blockText)
 		// A dish is named in the block or not at all: a quoted span, or the
@@ -475,7 +517,7 @@ func composeReply(model string, t replyTurn) string {
 }
 
 // lintDrop is a sentence of the model's final text the reply left out, with
-// the reason: a lint reason of lintModelText (planner_word, digit,
+// the reason: a lint reason of lintModelText (planner_word,
 // cooking_claim, option, dish, weekday, contradiction, number), "question" (a
 // write turn's trailing question) or "third_sentence" (past the two a write's
 // text may have).
@@ -651,7 +693,7 @@ func earlierUserTexts(history []llm.Message) []string {
 }
 
 // sanitizeToolMessage keeps, of the text a model writes before a tool call, only
-// what a write's reply may say: a text that breaks the rules (a digit, a weekday
+// what a write's reply may say: a text that breaks the rules (an unbacked number, a weekday
 // or a dish the block does not name, a planner word) is dropped, never stored
 // nor shown.
 func sanitizeToolMessage(m *llm.Message, t replyTurn) {

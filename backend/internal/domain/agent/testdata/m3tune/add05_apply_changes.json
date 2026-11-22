@@ -1,0 +1,440 @@
+{
+ "after": {
+  "batches": [
+   {
+    "consumed": 1,
+    "cook_date": "2026-12-11",
+    "food": "Chicken and vegetable traybake",
+    "portions": 1,
+    "session_id": 117,
+    "state": "pending",
+    "warnings": []
+   },
+   {
+    "consumed": 1,
+    "cook_date": "2026-12-11",
+    "food": "Green salad",
+    "portions": 1,
+    "session_id": 118,
+    "state": "pending",
+    "warnings": []
+   }
+  ],
+  "days": [
+   {
+    "away_kcal": 541,
+    "carbs_pct": 42.4,
+    "cooking_times": 1,
+    "date": "2026-12-11",
+    "fat_pct": 36.5,
+    "kcal": 1500,
+    "meat": true,
+    "meat_foods": [
+     "Chicken and vegetable traybake"
+    ],
+    "minimum_kcal": 1095,
+    "planned_target_kcal": 1459,
+    "protein_g": 88.5,
+    "protein_pct": 23.6,
+    "range_high": 1605,
+    "range_low": 1314,
+    "room_kcal": 105,
+    "target_kcal": 1459
+   }
+  ],
+  "issues": {
+   "new": [
+    {
+     "date": "2026-12-11",
+     "label": "meal outside its share of the day",
+     "message": "A meal holds less or more of the day's energy than its time slot is meant to.",
+     "params": {
+      "kcal": 843,
+      "max_kcal": 800,
+      "min_kcal": 500,
+      "range_max_pct": 40,
+      "range_min_pct": 25,
+      "side": "above"
+     },
+     "severity": "warning",
+     "slot_id": 3
+    }
+   ],
+   "resolved": [
+    {
+     "label": "weekly energy",
+     "message": "The week's average energy is below its target range.",
+     "params": {
+      "avg_kcal": 1258,
+      "days": 7,
+      "pct": 93.1,
+      "range_high_pct": 105,
+      "range_low_pct": 95,
+      "target_kcal": 1351
+     },
+     "severity": "warning"
+    },
+    {
+     "date": "2026-12-11",
+     "label": "day energy",
+     "message": "The day's energy is below its target range.",
+     "params": {
+      "gap_to_range_kcal": 63,
+      "gap_to_target_kcal": 209,
+      "kcal": 1250,
+      "range_high_kcal": 1605,
+      "range_low_kcal": 1314,
+      "target_kcal": 1459
+     },
+     "severity": "warning"
+    }
+   ],
+   "total_open": 20
+  },
+  "issues_checked": true,
+  "plates": [
+   {
+    "component_details": [
+     {
+      "kcal": 334,
+      "name": "Chicken and vegetable traybake",
+      "plate_component_id": 91,
+      "portions": 1,
+      "protein_g": 36.7
+     },
+     {
+      "kcal": 92,
+      "name": "Green salad",
+      "plate_component_id": 92,
+      "portions": 1,
+      "protein_g": 1.4
+     },
+     {
+      "grams": 180,
+      "kcal": 167,
+      "name": "Banana",
+      "plate_component_id": 93,
+      "protein_g": 2
+     },
+     {
+      "grams": 100,
+      "kcal": 250,
+      "name": "Hummus",
+      "plate_component_id": 94,
+      "protein_g": 7.9
+     }
+    ],
+    "components": [
+     "\"Chicken and vegetable traybake\" (main)",
+     "\"Green salad\" (side_veg)",
+     "\"Banana\"",
+     "\"Hummus\""
+    ],
+    "date": "2026-12-11",
+    "eaters": 1,
+    "kcal": 843,
+    "plate_id": 119,
+    "protein_g": 48,
+    "slot_id": 3,
+    "state": "pending"
+   }
+  ]
+ },
+ "applied": [
+  {
+   "amount": 100,
+   "food_id": 135,
+   "grams": 100,
+   "grams_source": "direct",
+   "id": 94,
+   "name": "Hummus",
+   "op": "add",
+   "plate_component_id": 94,
+   "plate_id": 119,
+   "sort_order": 3,
+   "unit": "g"
+  }
+ ],
+ "dry_run": false,
+ "next": "the change is done as asked and made new issues: report them plainly",
+ "report": {
+  "changed": [
+   {
+    "after": [
+     "Chicken and vegetable traybake 1 portion",
+     "Green salad 1 portion",
+     "Banana 180 g",
+     "Hummus 100 g"
+    ],
+    "before": [
+     "Chicken and vegetable traybake 1 portion",
+     "Green salad 1 portion",
+     "Banana 180 g"
+    ],
+    "day": "Fri 11 Dec",
+    "kcal_after": 843,
+    "kcal_before": 593,
+    "meal": "dinner"
+   }
+  ],
+  "check": {
+   "after_days": [
+    {
+     "date": "2026-12-11",
+     "plate_ids": [
+      118,
+      119
+     ],
+     "plates": [
+      {
+       "components": [
+        {
+         "food_id": 123,
+         "name": "Tofu stir-fry",
+         "portions": 1,
+         "session_id": 115
+        },
+        {
+         "food_id": 124,
+         "name": "Steamed rice",
+         "portions": 1,
+         "session_id": 116
+        },
+        {
+         "food_id": 12,
+         "grams": 120,
+         "name": "Carrot"
+        }
+       ],
+       "eaters": 1,
+       "meal": "lunch",
+       "plate_id": 118,
+       "slot_id": 2
+      },
+      {
+       "components": [
+        {
+         "food_id": 177,
+         "name": "Chicken and vegetable traybake",
+         "portions": 1,
+         "session_id": 117
+        },
+        {
+         "food_id": 125,
+         "name": "Green salad",
+         "portions": 1,
+         "session_id": 118
+        },
+        {
+         "food_id": 131,
+         "grams": 180,
+         "name": "Banana"
+        },
+        {
+         "food_id": 135,
+         "grams": 100,
+         "name": "Hummus"
+        }
+       ],
+       "eaters": 1,
+       "meal": "dinner",
+       "plate_id": 119,
+       "slot_id": 3
+      }
+     ],
+     "sessions": [
+      {
+       "cook_date": "2026-12-10",
+       "cook_slot_id": 3,
+       "food_id": 123,
+       "name": "Tofu stir-fry",
+       "portions": 2,
+       "session_id": 115
+      },
+      {
+       "cook_date": "2026-12-10",
+       "cook_slot_id": 3,
+       "food_id": 124,
+       "name": "Steamed rice",
+       "portions": 2,
+       "session_id": 116
+      },
+      {
+       "cook_date": "2026-12-11",
+       "cook_slot_id": 3,
+       "food_id": 177,
+       "name": "Chicken and vegetable traybake",
+       "portions": 1,
+       "session_id": 117
+      },
+      {
+       "cook_date": "2026-12-11",
+       "cook_slot_id": 3,
+       "food_id": 125,
+       "name": "Green salad",
+       "portions": 1,
+       "session_id": 118
+      }
+     ]
+    }
+   ],
+   "before_days": [
+    {
+     "date": "2026-12-11",
+     "plate_ids": [
+      118,
+      119
+     ],
+     "plates": [
+      {
+       "components": [
+        {
+         "food_id": 123,
+         "name": "Tofu stir-fry",
+         "portions": 1,
+         "session_id": 115
+        },
+        {
+         "food_id": 124,
+         "name": "Steamed rice",
+         "portions": 1,
+         "session_id": 116
+        },
+        {
+         "food_id": 12,
+         "grams": 120,
+         "name": "Carrot"
+        }
+       ],
+       "eaters": 1,
+       "meal": "lunch",
+       "plate_id": 118,
+       "slot_id": 2
+      },
+      {
+       "components": [
+        {
+         "food_id": 177,
+         "name": "Chicken and vegetable traybake",
+         "portions": 1,
+         "session_id": 117
+        },
+        {
+         "food_id": 125,
+         "name": "Green salad",
+         "portions": 1,
+         "session_id": 118
+        },
+        {
+         "food_id": 131,
+         "grams": 180,
+         "name": "Banana"
+        }
+       ],
+       "eaters": 1,
+       "meal": "dinner",
+       "plate_id": 119,
+       "slot_id": 3
+      }
+     ],
+     "sessions": [
+      {
+       "cook_date": "2026-12-10",
+       "cook_slot_id": 3,
+       "food_id": 123,
+       "name": "Tofu stir-fry",
+       "portions": 2,
+       "session_id": 115
+      },
+      {
+       "cook_date": "2026-12-10",
+       "cook_slot_id": 3,
+       "food_id": 124,
+       "name": "Steamed rice",
+       "portions": 2,
+       "session_id": 116
+      },
+      {
+       "cook_date": "2026-12-11",
+       "cook_slot_id": 3,
+       "food_id": 177,
+       "name": "Chicken and vegetable traybake",
+       "portions": 1,
+       "session_id": 117
+      },
+      {
+       "cook_date": "2026-12-11",
+       "cook_slot_id": 3,
+       "food_id": 125,
+       "name": "Green salad",
+       "portions": 1,
+       "session_id": 118
+      }
+     ]
+    }
+   ]
+  },
+  "cooking": [
+   {
+    "cooked": [
+     {
+      "at": "dinner",
+      "dish": "Chicken and vegetable traybake",
+      "eaten": [
+       "Fri 11 Dec dinner"
+      ]
+     },
+     {
+      "at": "dinner",
+      "dish": "Green salad",
+      "eaten": [
+       "Fri 11 Dec dinner"
+      ]
+     }
+    ],
+    "cooking_times": 1,
+    "day": "Fri 11 Dec"
+   }
+  ],
+  "days": [
+   {
+    "day": "Fri 11 Dec",
+    "healthy_range": "1314-1605 kcal",
+    "kcal_after": 1500,
+    "kcal_before": 1250,
+    "status": "inside its range"
+   }
+  ],
+  "earlier_warnings_unaffected": 19,
+  "facts": [
+   {
+    "class": 2,
+    "de": "Freitag, 11. Dez. Abendessen: hinzugefügt: „Hummus“ (593 → 843 kcal).",
+    "en": "Fri 11 Dec dinner: added \"Hummus\" (593 → 843 kcal).",
+    "kind": "meal",
+    "status": "ok"
+   },
+   {
+    "class": 2,
+    "de": "Freitag, 11. Dez.: Eiweiß 81 g → 88 g.",
+    "en": "Fri 11 Dec: protein 81 g → 88 g.",
+    "kind": "protein",
+    "status": "unknown"
+   },
+   {
+    "class": 5,
+    "de": "Neue Warnung: Freitag, 11. Dez. Abendessen: Eine Mahlzeit hat mehr oder weniger von der Tagesenergie, als für diese Zeit gedacht ist.",
+    "en": "New warning: Fri 11 Dec dinner: A meal holds less or more of the day's energy than its time slot is meant to.",
+    "kind": "warning",
+    "status": "unknown"
+   }
+  ],
+  "tell": [
+   "Fri 11 Dec dinner: added \"Hummus\" (593 → 843 kcal).",
+   "Fri 11 Dec: protein 81 g → 88 g.",
+   "New warning: Fri 11 Dec dinner: A meal holds less or more of the day's energy than its time slot is meant to."
+  ]
+ },
+ "saved": true,
+ "status": "Saved: the change is in the plan (the user can undo it)."
+}
