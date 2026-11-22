@@ -1,6 +1,7 @@
 package planning
 
 import (
+	"cmp"
 	"math"
 	"slices"
 
@@ -8,13 +9,14 @@ import (
 )
 
 // fitMealsToBands is PL7: after the day passes, the proposed lunches and
-// dinners of a day get the portions of their mains moved on the quarter grid so
-// as many as possible land inside their slot band (SB1, percent of the day's
-// full target) while the day stays inside its own band and above its floor. A
-// main's batch grows or shrinks by the same amount (H3 holds). The best
-// combination of a day is kept only when it adds no hard issue. A light or
-// hearty meal (marked, or on a light or hearty day) and a main that eats a
-// persisted batch stay as they are.
+// dinners of a day get the portions of their mains and sides moved on the
+// quarter grid (up to two components a meal) and an add-on may move to another
+// meal of the day, so as many as possible land inside their slot band (SB1/SB5,
+// percent of the day's full target) while the day stays inside its own band
+// and above its floor. A recipe's batch grows or shrinks by the same amount (H3
+// holds). The best combination of a day is kept only when it adds no hard or
+// soft issue. A light or hearty meal (marked, or on a light or hearty day) and
+// a main that eats a persisted batch stay as they are.
 func (h *planner) fitMealsToBands() {
 	k := h.s.Profile.KcalTarget
 	if k == nil || *k <= 0 || len(h.s.SlotBand) == 0 {
@@ -41,6 +43,15 @@ type bandMeal struct {
 	lo, hi float64 // its band in kcal
 	eaters float64
 	moves  []bandMove // the changes to try: none first
+	// addOns are the components (index) of no-cook leaves that may move to
+	// another meal of the day, with their kcal per eater.
+	addOns map[int]float64
+}
+
+// bandReloc moves the add-on ci of meal from to meal to (the same grams).
+type bandReloc struct {
+	from, to, ci int
+	kcal         float64
 }
 
 // bandMove changes one component of a plate: a recipe's portions (its batch
@@ -60,6 +71,7 @@ func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 		plateKcal[pe.PlateID] = pe.Kcal
 	}
 	var meals []bandMeal
+	var platesOf []Plate // the merged plate of each meal
 	for pi, p := range h.prop.Plates {
 		if dayOf(p.Date) != dayOf(dk.Date) {
 			continue
@@ -76,7 +88,8 @@ func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 		case h.s.heartyMeal(p.Date, p.SlotID): // the filling minimum
 			lo, hi = HeartyMealShare*dk.mealShare(p.SlotID), math.Inf(1)
 		}
-		m := bandMeal{pi: pi, kcal: plateKcal[int64(-(pi + 1))], lo: lo, hi: hi, eaters: p.eaters(h.s), moves: []bandMove{{ci: -1}}}
+		id := int64(-(pi + 1))
+		m := bandMeal{pi: pi, kcal: plateKcal[id], lo: lo, hi: hi, eaters: p.eaters(h.s), moves: []bandMove{{ci: -1}}, addOns: map[int]float64{}}
 		for ci, c := range p.Components {
 			f, ok := h.s.Foods[c.FoodID]
 			if !ok || f.Macros.Kcal <= 0 || c.SessionID != 0 {
@@ -93,7 +106,11 @@ func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 						m.moves = append(m.moves, bandMove{ci: ci, portions: n, dKcal: (n - c.Portions) * f.Macros.Kcal})
 					}
 				}
-			case !f.Composed() && c.Grams > 0 && f.Macros.Protein < 10: // protein stays: it carries the week target
+			case !f.Composed() && c.Grams > 0:
+				m.addOns[ci] = f.Macros.Kcal * c.Grams / 100
+				if f.Macros.Protein >= 10 { // protein stays: it carries the week target
+					continue
+				}
 				for _, k := range []float64{0.5, 0.75} {
 					g := math.Round(c.Grams*k/roundGrams) * roundGrams
 					if g < c.Grams {
@@ -102,7 +119,14 @@ func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 				}
 			}
 		}
+		var at Plate
+		for _, mp := range merged.Plates {
+			if mp.ID == id {
+				at = mp
+			}
+		}
 		meals = append(meals, m)
+		platesOf = append(platesOf, at)
 		if len(meals) == 3 {
 			break
 		}
@@ -110,99 +134,187 @@ func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 	if len(meals) == 0 {
 		return
 	}
-	inBand := func(m bandMeal, mv bandMove) bool {
-		v := m.kcal + mv.dKcal
-		return v >= m.lo && v <= m.hi
+	// The options of a meal: no change, one move, or two moves on different
+	// components.
+	opts := make([][][]bandMove, len(meals))
+	for i, m := range meals {
+		opts[i] = [][]bandMove{nil}
+		for a := 1; a < len(m.moves); a++ {
+			opts[i] = append(opts[i], []bandMove{m.moves[a]})
+			for b := a + 1; b < len(m.moves); b++ {
+				if m.moves[b].ci != m.moves[a].ci {
+					opts[i] = append(opts[i], []bandMove{m.moves[a], m.moves[b]})
+				}
+			}
+		}
 	}
+	// An add-on may move to another meal of the day that fits it and does not
+	// hold that food yet.
+	relocs := []*bandReloc{nil}
+	for i, m := range meals {
+		for ci, k := range m.addOns {
+			f := h.s.Foods[h.prop.Plates[m.pi].Components[ci].FoodID]
+			for j := range meals {
+				if j == i || slices.ContainsFunc(h.prop.Plates[meals[j].pi].Components, func(c ProposedComponent) bool { return c.FoodID == f.ID }) ||
+					!merged.addOnFits(platesOf[j], f, slotName(merged, platesOf[j].SlotID)) {
+					continue
+				}
+				relocs = append(relocs, &bandReloc{from: i, to: j, ci: ci, kcal: k})
+			}
+		}
+	}
+	slices.SortStableFunc(relocs[1:], func(a, b *bandReloc) int {
+		return cmp.Or(cmp.Compare(a.from, b.from), cmp.Compare(a.ci, b.ci), cmp.Compare(a.to, b.to))
+	})
 	dayLo, dayHi := dk.Adjusted*y.pol.DayLow, dk.Adjusted*y.pol.DayHigh
 	floor := dk.Floor(y.pol)
 	dayDist := func(v float64) float64 { return math.Max(0, math.Max(dayLo-v, v-dayHi)) }
 	startIn := 0
 	for _, m := range meals {
-		if inBand(m, m.moves[0]) {
+		if m.kcal >= m.lo && m.kcal <= m.hi {
 			startIn++
 		}
 	}
 	type pick struct {
-		mv     []bandMove
+		mv     [][]bandMove
+		reloc  *bandReloc
 		in     int
 		dayGap float64
 	}
-	best := pick{in: startIn, dayGap: dayDist(dk.Kcal)}
-	var walk func(i int, mv []bandMove)
-	walk = func(i int, mv []bandMove) {
-		if i == len(meals) {
-			day := dk.Kcal
-			in := 0
-			for j, m := range meals {
-				day += mv[j].dKcal
-				if inBand(m, mv[j]) {
-					in++
+	// Every combination that puts more meals into their band is a candidate;
+	// the best are tried in turn, since a check after applying (a soft rule the
+	// plan had closed, such as the day's protein) can refuse the first.
+	var picks []pick
+	for _, rl := range relocs {
+		var walk func(i int, mv [][]bandMove)
+		walk = func(i int, mv [][]bandMove) {
+			if i == len(meals) {
+				day := dk.Kcal
+				in, left := 0, 0
+				for j, m := range meals {
+					v := m.kcal
+					for _, x := range mv[j] {
+						v += x.dKcal
+						day += x.dKcal
+					}
+					if rl != nil && rl.from == j {
+						v -= rl.kcal
+					}
+					if rl != nil && rl.to == j {
+						v += rl.kcal
+					}
+					if v >= m.lo && v <= m.hi {
+						in++
+					} else if m.kcal >= m.lo && m.kcal <= m.hi {
+						left++
+					}
 				}
-			}
-			// A change never takes the day below its target when it was above it: the
-			// week outweighs a meal's place in its band (priority 2 over 7).
-			// A day gives up kcal only down to its own band and while the week has room.
-			if day < floor || day < dayLo-epsilon && day < dk.Kcal || dk.Kcal-day > *room+epsilon || dayDist(day) > dayDist(dk.Kcal)+epsilon {
+				// A day gives up kcal only down to its own band and while the
+				// week has room (the week outweighs a meal's place in its band,
+				// priority 2 over 7), and it never moves further from its band.
+				if day < floor || day < dayLo-epsilon && day < dk.Kcal || dk.Kcal-day > *room+epsilon || dayDist(day) > dayDist(dk.Kcal)+epsilon {
+					return
+				}
+				// A day brought into its own band (PL3) counts too, while no meal
+				// leaves its band.
+				if in > startIn || (left == 0 && in == startIn && dayDist(dk.Kcal) > epsilon && dayDist(day) <= epsilon) {
+					picks = append(picks, pick{mv: slices.Clone(mv), reloc: rl, in: in, dayGap: dayDist(day)})
+				}
 				return
 			}
-			if in > best.in || (in == best.in && in > startIn && dayDist(day) < best.dayGap-epsilon) {
-				best = pick{mv: slices.Clone(mv), in: in, dayGap: dayDist(day)}
+			for _, o := range opts[i] {
+				if rl != nil && rl.from == i && slices.ContainsFunc(o, func(x bandMove) bool { return x.ci == rl.ci }) {
+					continue // the add-on that moves is not also shrunk
+				}
+				walk(i+1, append(mv, o))
 			}
+		}
+		walk(0, nil)
+	}
+	// The most meals in band first, then the day nearest its band, then the
+	// smallest change (the fewest moves), in the order found.
+	size := func(p pick) int {
+		n := 0
+		for _, o := range p.mv {
+			n += len(o)
+		}
+		if p.reloc != nil {
+			n++
+		}
+		return n
+	}
+	slices.SortStableFunc(picks, func(a, b pick) int {
+		return cmp.Or(cmp.Compare(b.in, a.in), cmp.Compare(a.dayGap, b.dayGap), cmp.Compare(size(a), size(b)))
+	})
+	for i, p := range picks {
+		if i == maxBandTries {
 			return
 		}
-		for _, x := range meals[i].moves {
-			walk(i+1, append(mv, x))
+		if h.applyMoves(meals, p.mv, p.reloc) {
+			day := dk.Kcal
+			for _, o := range p.mv {
+				for _, x := range o {
+					day += x.dKcal
+				}
+			}
+			*room -= dk.Kcal - day
+			return
 		}
-	}
-	walk(0, nil)
-	if best.in <= startIn {
-		return
-	}
-	if h.applyMoves(meals, best.mv) {
-		day := dk.Kcal
-		for _, mv := range best.mv {
-			day += mv.dKcal
-		}
-		*room -= dk.Kcal - day
 	}
 }
 
-// applyMoves applies one move per meal (the recipe's batch by the same amount)
-// and keeps them when no hard issue is added; else it restores the proposal.
-func (h *planner) applyMoves(meals []bandMeal, moves []bandMove) bool {
+// maxBandTries bounds the combinations fitDay applies and checks per day
+// (each check re-evaluates the plan).
+const maxBandTries = 8
+
+// applyMoves applies each meal's moves (a recipe's batch by the same amount)
+// and the add-on move, and keeps them when no hard or soft issue is added;
+// else it restores the proposal.
+func (h *planner) applyMoves(meals []bandMeal, moves [][]bandMove, reloc *bandReloc) bool {
 	saved := h.prop
 	plates := slices.Clone(h.prop.Plates)
 	sessions := slices.Clone(h.prop.Sessions)
 	was := len(openHard(Merge(h.s, h.in.Target, h.prop), h.in.Target))
-	wasSoft := softKeys(evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target).Issues)
+	wasSoft := softIssues(evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target).Issues)
+	h.prop.Sessions = slices.Clone(h.prop.Sessions)
 	for i, m := range meals {
-		mv := moves[i]
-		if mv.ci < 0 {
-			continue
-		}
-		p := &h.prop.Plates[m.pi]
-		p.Components = slices.Clone(p.Components)
-		c := &p.Components[mv.ci]
-		if mv.grams > 0 || (mv.portions == 0 && c.Grams > 0) {
-			c.Grams = mv.grams
-			continue
-		}
-		if c.SessionKey != "" {
-			for si := range h.prop.Sessions {
-				if h.prop.Sessions[si].Key == c.SessionKey {
-					h.prop.Sessions[si].Portions += m.eaters * (mv.portions - c.Portions)
+		for _, mv := range moves[i] {
+			p := &h.prop.Plates[m.pi]
+			p.Components = slices.Clone(p.Components)
+			c := &p.Components[mv.ci]
+			if mv.grams > 0 || (mv.portions == 0 && c.Grams > 0) {
+				c.Grams = mv.grams
+				continue
+			}
+			if c.SessionKey != "" {
+				for si := range h.prop.Sessions {
+					if h.prop.Sessions[si].Key == c.SessionKey {
+						h.prop.Sessions[si].Portions += m.eaters * (mv.portions - c.Portions)
+					}
 				}
 			}
+			c.Portions = mv.portions
 		}
-		c.Portions = mv.portions
 	}
-	// No move may open a soft rule the plan had closed (the week's protein, say).
+	if reloc != nil {
+		from, to := &h.prop.Plates[meals[reloc.from].pi], &h.prop.Plates[meals[reloc.to].pi]
+		c := from.Components[reloc.ci]
+		from.Components = slices.Delete(slices.Clone(from.Components), reloc.ci, reloc.ci+1)
+		to.Components = append(slices.Clone(to.Components), c)
+	}
+	// No move may open a soft rule the plan had closed (the week's protein,
+	// say), except a day's protein (priority 4) on a day the move brings back
+	// into its kcal range (priority 3, spec section 2.5).
+	nowSoft := softIssues(evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target).Issues)
 	opened := false
-	for k := range softKeys(evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target).Issues) {
-		if !wasSoft[k] {
-			opened = true
+	for k, is := range nowSoft {
+		if _, had := wasSoft[k]; had {
+			continue
 		}
+		if is.Code == CodeProteinLow && is.Date != "" && closedDayBand(wasSoft, nowSoft, is.Date) {
+			continue
+		}
+		opened = true
 	}
 	if opened || len(openHard(Merge(h.s, h.in.Target, h.prop), h.in.Target)) > was {
 		saved.Plates, saved.Sessions = plates, sessions
@@ -210,4 +322,26 @@ func (h *planner) applyMoves(meals []bandMeal, moves []bandMove) bool {
 		return false
 	}
 	return true
+}
+
+// softIssues are the soft issues of a list by softKey.
+func softIssues(issues []Issue) map[string]Issue {
+	m := map[string]Issue{}
+	for _, is := range issues {
+		if is.Severity == SeveritySoft {
+			m[softKey(is)] = is
+		}
+	}
+	return m
+}
+
+// closedDayBand reports whether the day date had a kcal range issue (S2) in
+// was that now is gone.
+func closedDayBand(was, now map[string]Issue, date string) bool {
+	for k, is := range was {
+		if _, still := now[k]; !still && is.Date == date && (is.Code == CodeKcalAboveBand || is.Code == CodeKcalBelowBand) {
+			return true
+		}
+	}
+	return false
 }
