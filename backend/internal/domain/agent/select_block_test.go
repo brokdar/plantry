@@ -50,3 +50,28 @@ func TestSelectBlock_KeepsChangedMealsAndCookingWhenCut(t *testing.T) {
 		assert.LessOrEqual(t, got[i-1].Class, got[i].Class)
 	}
 }
+
+// SF1(c)/G4.4: the day an away left under its minimum is told whatever the
+// cap of five lines: it takes one of the places and is never the line cut.
+func TestSelectBlock_DayUnderItsMinimumIsNeverCut(t *testing.T) {
+	t.Parallel()
+	f := func(class int, kind, en string) fact {
+		return fact{Class: class, Kind: kind, Status: statusOK, EN: en, DE: en}
+	}
+	under := fact{
+		Class: classWorse, Kind: kindDay, Status: statusUnder, Must: true, Key: "day:Thu 26 Nov",
+		EN: "Thu 26 Nov holds 306 kcal (was 2010), below a good amount for the day (535-654 kcal) and under the day's minimum of 446 kcal.", DE: "x",
+	}
+	all := []fact{
+		f(classChanged, kindMeal, "Thu 26 Nov lunch: no meal any more."),
+		f(classChanged, kindMeal, "Thu 26 Nov dinner: no meal any more."),
+		f(classMoved, kindLeftover, `Wed 25 Nov: cook 3 portions of the "Tofu stir-fry" (was 4).`),
+		f(classMoved, kindLeftover, `Mon 23 Nov: cook 2 portions of the "Curry" (was 3).`),
+		f(classMoved, kindCook, "Thu 26 Nov: nothing is cooked."),
+		f(classMoved, kindAway, "Thu 26 Nov: lunch and dinner out, about 1605 kcal is assumed for it."),
+		under,
+	}
+	got := selectBlock(all)
+	assert.Len(t, got, maxBlock)
+	assert.Contains(t, got, under)
+}

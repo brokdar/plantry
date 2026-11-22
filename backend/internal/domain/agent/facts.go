@@ -68,6 +68,9 @@ type fact struct {
 	// Key names the figure the line states ("day:Sat 21 Nov", "week:meat"): two
 	// lines of one key are one fact, told once, in the earlier class.
 	Key string `json:"key,omitempty"`
+	// Must marks a line the reply always tells, outside the cap of classes 2
+	// to 5: a day the change left under its minimum (SF1(c), G4.4).
+	Must bool `json:"must,omitempty"`
 }
 
 // lang is the language of a reply.
@@ -113,7 +116,7 @@ var emptyFact = regexp.MustCompile(`^([^:]*:)?\s*[.;,]*\s*$`)
 // or are new warnings stay first, then the changed meals, then what moved; the
 // result is in class order. Class 1 is never cut and comes first.
 func selectBlock(all []fact) []fact {
-	var refused, rest []fact
+	var refused, must, rest []fact
 	seen := map[string]bool{}
 	// One fact per figure: of several lines with one key the one of the earliest class stays.
 	best := map[string]int{}
@@ -121,8 +124,12 @@ func selectBlock(all []fact) []fact {
 		if f.Key == "" {
 			continue
 		}
-		if c, ok := best[f.Key]; !ok || f.Class < c {
-			best[f.Key] = f.Class
+		c := f.Class
+		if f.Must {
+			c = 0 // a must line is the one of its figure that stays
+		}
+		if b, ok := best[f.Key]; !ok || c < b {
+			best[f.Key] = c
 		}
 	}
 	keyed := map[string]bool{}
@@ -136,18 +143,27 @@ func selectBlock(all []fact) []fact {
 		}
 		seen[key] = true
 		if f.Key != "" {
-			if f.Class != best[f.Key] || keyed[f.Key] {
+			c := f.Class
+			if f.Must {
+				c = 0
+			}
+			if c != best[f.Key] || keyed[f.Key] {
 				continue
 			}
 			keyed[f.Key] = true
 		}
-		if f.Class == classRefused {
+		switch {
+		case f.Class == classRefused:
 			refused = append(refused, f)
-		} else {
+		case f.Must:
+			must = append(must, f)
+		default:
 			rest = append(rest, f)
 		}
 	}
-	if len(rest) > maxBlock {
+	// A must line takes one of the capped places and is never the one cut.
+	room := max(0, maxBlock-len(must))
+	if len(rest) > room {
 		// What the household must hear first when the block is cut: the meals
 		// that changed and the cooking that moved (G4.2/G4.3; a day whose cooking
 		// changed is always named), then the day outside its range or under its
@@ -172,9 +188,10 @@ func selectBlock(all []fact) []fact {
 		}
 		keep := slices.Clone(rest)
 		slices.SortStableFunc(keep, func(a, b fact) int { return prio(a) - prio(b) })
-		keep = keep[:maxBlock]
+		keep = keep[:room]
 		rest = slices.DeleteFunc(rest, func(f fact) bool { return !slices.Contains(keep, f) })
 	}
+	rest = append(rest, must...)
 	slices.SortStableFunc(rest, func(a, b fact) int { return a.Class - b.Class })
 	return append(refused, rest...)
 }
