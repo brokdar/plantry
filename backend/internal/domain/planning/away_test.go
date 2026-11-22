@@ -46,9 +46,8 @@ func TestEvaluate_DayAwayIsNotJudged(t *testing.T) {
 
 	ev, issues := weekOf(s)
 
-	if d, ok := findDay(ev, mon); ok {
-		assert.True(t, d.Away, "a day with no meal planned is not judged")
-	}
+	_, ok := findDay(ev, mon)
+	assert.False(t, ok, "a day with no slot planned is not accounted at all (SB3)")
 	assert.NotContains(t, codeDates(issues, "H9", planning.CodeKcalBelowFloor), mon)
 	for _, is := range ev.Issues {
 		if is.Date == mon {
@@ -68,7 +67,6 @@ func TestEvaluate_HalfAwayDayIsStillJudged(t *testing.T) {
 	ev, issues := weekOf(s)
 
 	d := dayEval(t, ev, mon)
-	assert.False(t, d.Away)
 	require.NotNil(t, d.TargetKcal)
 	assert.InDelta(t, 2000, *d.TargetKcal, 0.01, "scaled to the planned meals")
 	assert.Contains(t, codeDates(issues, "H9", planning.CodeKcalBelowFloor), mon)
@@ -93,7 +91,6 @@ func TestEvaluate_RoutineBreakfastLeftIsJudgedOnItsPart(t *testing.T) {
 	ev, issues := weekOf(s)
 
 	d := dayEval(t, ev, mon)
-	assert.False(t, d.Away)
 	assert.InDelta(t, 500, d.Kcal, 0.01)
 	assert.Positive(t, d.FloorKcal)
 	assert.Less(t, d.FloorKcal, 1500.0, "the minimum is prorated to the planned part")
@@ -113,7 +110,6 @@ func TestEvaluate_NoneLunchAndUnplatedRoutineDinnerIsJudged(t *testing.T) {
 	ev, _ := weekOf(s)
 
 	d := dayEval(t, ev, mon)
-	assert.False(t, d.Away)
 	assert.Positive(t, d.Kcal, "the breakfast counts on the day")
 	assert.Equal(t, 7, ev.Week.Days)
 }
@@ -129,14 +125,13 @@ func TestEvaluate_AwayDayCarriesNoLightMark(t *testing.T) {
 
 	ev, _ := weekOf(s)
 
-	d, ok := findDay(ev, mon)
-	if !ok {
-		return // not listed at all: nothing calls it light
+	_, ok := findDay(ev, mon)
+	assert.False(t, ok, "a day away is not listed, so nothing calls it light")
+	for _, is := range ev.Issues {
+		if is.Date == mon {
+			assert.NotContains(t, []string{"H9", "S2", "S3"}, is.Rule, "no %s on a day away", is.Code)
+		}
 	}
-	require.True(t, d.Away)
-	assert.Empty(t, d.Light)
-	assert.Empty(t, d.LightLevel)
-	assert.Empty(t, d.LightMeals)
 }
 
 // SF4: a day with a meal away is judged on the floor prorated to the planned

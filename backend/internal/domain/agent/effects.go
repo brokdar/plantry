@@ -380,13 +380,3 @@ func withEffect(ctx context.Context, svc Services, result any, a affected) json.
 	obj["after"] = mustJSON(changeEffect(ctx, svc, a))
 	return mustJSON(obj)
 }
-
-// awayDay is a day as the model reads it: a day away is not counted, so it
-// carries no target, range or minimum next to that.
-func awayDay(d planning.DayEval) planning.DayEval {
-	if d.Away {
-		d.TargetKcal, d.NormalTargetKcal = nil, 0
-		d.BandLow, d.BandHigh, d.FloorKcal, d.RoomKcal = 0, 0, 0, 0
-	}
-	return d
-}

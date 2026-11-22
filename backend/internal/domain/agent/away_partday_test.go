@@ -50,6 +50,22 @@ func TestAway_FullyAwayDayIsNotCounted(t *testing.T) {
 	ctx, _ := e.chat()
 	out, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(`{"ops": [{"op":"away","cells":[{"date":"2026-11-26","slot_id":1},{"date":"2026-11-26","slot_id":2},{"date":"2026-11-26","slot_id":3}]}]}`))
 	require.NoError(t, err)
-	assert.NotContains(t, string(out), "day energy minimum", "a fully away day has no minimum")
-	assert.NotContains(t, string(out), "under the day's minimum")
+	var res struct {
+		Saved  bool `json:"saved"`
+		Report struct {
+			Facts []struct{ EN string } `json:"facts"`
+		} `json:"report"`
+	}
+	require.NoError(t, json.Unmarshal(out, &res))
+	assert.True(t, res.Saved, "the away op is saved")
+	var lines []string
+	for _, f := range res.Report.Facts {
+		lines = append(lines, f.EN)
+	}
+	facts := strings.Join(lines, "\n")
+	for _, want := range []string{"Thu 26 Nov breakfast: no meal any more.", "Thu 26 Nov lunch: no meal any more.", "Thu 26 Nov dinner: no meal any more.", "Thu 26 Nov: nothing is cooked."} {
+		assert.Contains(t, facts, want)
+	}
+	assert.NotContains(t, facts, "minimum", "a fully away day has no minimum")
+	assert.NotContains(t, facts, "not counted")
 }

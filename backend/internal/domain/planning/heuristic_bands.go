@@ -30,9 +30,6 @@ func (h *planner) fitMealsToBands() {
 	}
 	room := sumKcal - y.pol.WeekLow*1.01*sumTarget
 	for _, dk := range days {
-		if dk.Away {
-			continue
-		}
 		h.fitDay(y, dk, &room)
 	}
 }
