@@ -678,10 +678,39 @@ func savedBlock(tool string, output json.RawMessage) *replyBlock {
 			de += " Übersprungene Zellen: " + strings.Join(skippedDE, ", ") + "."
 		}
 	case "regenerate":
+		if obj["status"] == "error" {
+			return regenerateRefused(obj)
+		}
 		en, de = "The plan was made again.", "Der Plan wurde neu gemacht."
 	}
 	return &replyBlock{facts: []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: en, DE: de}}}
 }
+
+// regenerateRefused is the block of a regenerate run that ended in error and
+// saved nothing (KR7: a day replan that would break a rule saves nothing and
+// says so): "nothing changed" and the reason, never "the plan was made again".
+func regenerateRefused(obj map[string]any) *replyBlock {
+	en := "Nothing was planned again: the run could not finish, so nothing was saved."
+	de := "Nichts wurde neu geplant: die Planung konnte nicht abgeschlossen werden, deshalb wurde nichts gespeichert."
+	switch key, _ := obj["error_key"].(string); key {
+	case "error.plan.hard_rule_open":
+		en = "Nothing was planned again: the new plan would still break a rule of the plan, so nothing was saved."
+		de = "Nichts wurde neu geplant: der neue Plan hätte noch eine Regel des Plans verletzt, deshalb wurde nichts gespeichert."
+		notes, _ := obj["notes"].(string)
+		if _, rules, ok := strings.Cut(notes, "nothing was saved: "); ok {
+			if rules = strings.TrimSuffix(strings.TrimSpace(isoInParens.ReplaceAllString(rules, "")), "."); rules != "" {
+				en = fmt.Sprintf("Nothing was planned again: the new plan would still break a rule of the plan (%s), so nothing was saved.", rules)
+			}
+		}
+	case "error.plan.day_same_dish":
+		en = "Nothing was planned again: the same main dish would be at both meals of the day and no other fits, so nothing was saved."
+		de = "Nichts wurde neu geplant: dasselbe Hauptgericht wäre bei beiden Mahlzeiten des Tages und kein anderes passt, deshalb wurde nichts gespeichert."
+	}
+	return &replyBlock{facts: []fact{{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: en, DE: de}}, nothingSaved: true}
+}
+
+// isoInParens is a parenthesised list of ISO dates in a run note ("(2026-12-07)").
+var isoInParens = regexp.MustCompile(`\s*\(\d{4}-\d{2}-\d{2}(?:, \d{4}-\d{2}-\d{2})*\)`)
 
 var (
 	// cellID is the slot id in a cell line ("Fri 2026-11-27 | 3 dinner | ...").

@@ -118,3 +118,33 @@ func TestWaysBlock_NilWhenAWayExists(t *testing.T) {
 	assert.Nil(t, waysBlock(json.RawMessage(`{"ways":[]}`)))
 	assert.Nil(t, waysBlock(json.RawMessage(`not json`)))
 }
+
+// KR7/G4.1: a regenerate run that ended in error saved nothing; the reply says
+// so with the reason (tune2 g-replan-06 told "Der Plan wurde neu gemacht." and
+// the lint dropped the model's correct "nichts geändert").
+func TestRun_RegenerateErrorIsToldAsNothingSaved(t *testing.T) {
+	t.Parallel()
+	result, err := os.ReadFile("testdata/m3tune/replan06_regenerate.json")
+	require.NoError(t, err)
+	ts := minimalToolSet(t, "regenerate", result, ToolEffectNone, nil)
+	model := "Ich konnte den Montag nicht neu planen: Die Planung wurde abgebrochen, und deshalb ist nichts geändert worden."
+	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{scriptToolUseTurn("t1", "regenerate"), scriptEndTurn(model)}})
+	req := makeReq(1)
+	req.UserText = "Könntest du bitte den Montag noch einmal mit anderen Gerichten planen? Danke."
+	req.Tools = ts.Describe()
+	repo := &memRepo{}
+	require.NoError(t, runLoopRepo(t, req, client, ts, repo))
+
+	msgs, _ := repo.ListMessages(context.Background(), 1)
+	var blocks []struct{ Type, Text string }
+	require.NoError(t, json.Unmarshal(msgs[len(msgs)-1].Content, &blocks))
+	reply := blocks[len(blocks)-1].Text
+	assert.NotContains(t, reply, "Der Plan wurde neu gemacht.")
+	assert.Contains(t, reply, "- "+nothingChangedDE)
+	assert.Contains(t, reply, "- Nichts wurde neu geplant: der neue Plan hätte noch eine Regel des Plans verletzt, deshalb wurde nichts gespeichert.")
+
+	b := savedBlock("regenerate", result)
+	require.NotNil(t, b)
+	assert.True(t, b.nothingSaved)
+	assert.Equal(t, "Nothing was planned again: the new plan would still break a rule of the plan (dish variety), so nothing was saved.", b.facts[0].EN)
+}
