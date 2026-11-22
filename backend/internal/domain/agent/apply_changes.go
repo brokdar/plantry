@@ -1365,8 +1365,12 @@ func cookingMoved(ctx context.Context, svc Services, w window.Window, fixed []ma
 
 // sameKindRefusal refuses an add that would put a second food of the same kind
 // on the plate (skyr on top of yogurt, bread beside potatoes) and says what to
-// do: raise the one there, or pick another kind.
+// do: raise the one there, or pick another kind. A food the user's message
+// names is added as asked (C-4: the named food is on every named meal).
 func sameKindRefusal(ctx context.Context, svc Services, p *plate.Plate, foodID int64) error {
+	if t, ok := turnFrom(ctx); ok && t.named[foodID] {
+		return nil
+	}
 	w, ok := windowFrom(ctx)
 	if !ok || svc.State == nil {
 		return nil

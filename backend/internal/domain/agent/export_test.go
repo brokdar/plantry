@@ -53,6 +53,15 @@ func WithTurn(ctx context.Context, conversationID int64) context.Context {
 	return withTurn(ctx, chatTurn{conversationID: conversationID})
 }
 
+// WithTurnNamed is WithTurn for a message that names the foods ids (SF3, C-4).
+func WithTurnNamed(ctx context.Context, conversationID int64, ids ...int64) context.Context {
+	named := map[int64]bool{}
+	for _, id := range ids {
+		named[id] = true
+	}
+	return withTurn(ctx, chatTurn{conversationID: conversationID, named: named})
+}
+
 // WithTurnSeq is WithTurn for the seq-th turn of the conversation: offers made
 // in one turn are not the next turn's.
 func WithTurnSeq(ctx context.Context, conversationID int64, seq uint64) context.Context {
