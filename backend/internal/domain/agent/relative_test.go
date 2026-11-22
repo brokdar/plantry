@@ -64,24 +64,37 @@ func (e *planToolEnv) applyWay(res, way map[string]any, dryRun bool) (map[string
 // compound kind, and it never adds a filler (only a side recipe or bread).
 func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 	t.Parallel()
-	var checked, offers atomic.Int64
+	var checked, offers, overTop, inRange atomic.Int64
 	var mu sync.Mutex
 	goals := map[string]int{}
 	eachDraftMeal(t, func(t *testing.T, e *planToolEnv, p plate.Plate) {
 		ctx, _ := e.chat()
-		for _, goal := range []string{"lighter", "heartier", "more_protein"} {
+		// The fixture's days sit just over their top (2250 of 2200 kcal): the
+		// last pass raises the target to 2200 kcal (range 1980-2420), so the
+		// same day is inside its range and more_protein ways are dry-run too.
+		for _, pass := range []string{"lighter", "heartier", "more_protein", "more_protein_in_range"} {
+			goal := pass
+			if pass == "more_protein_in_range" {
+				goal = "more_protein"
+				e.sql(`UPDATE user_profile SET kcal_target = 2200 WHERE id = 1`)
+			}
 			out, _, _, err := e.ts.Execute(ctx, "find_ways", json.RawMessage(fmt.Sprintf(`{"goal":%q,"plate_id":%d}`, goal, p.ID)))
 			require.NoError(t, err, "plate %d %s", p.ID, goal)
 			var res map[string]any
 			require.NoError(t, json.Unmarshal(out, &res))
-			if goal == "more_protein" && strings.Contains(fmt.Sprint(res["empty_reason"]), "further over its range top") {
-				// KR6: the fixture's days sit just over their top (2250 of 2200
-				// kcal), so no protein add is a way; the reason says so.
-				assert.Greater(t, res["before"].(map[string]any)["day_kcal"], res["range_high"])
-				mu.Lock()
-				goals[goal]++
-				mu.Unlock()
-				continue
+			if goal == "more_protein" {
+				over := res["before"].(map[string]any)["day_kcal"].(float64) > res["range_high"].(float64)
+				if pass == "more_protein" {
+					// KR6: a day over its top takes no protein add; the reason says so.
+					require.True(t, over, "plate %d: the fixture day is over its top", p.ID)
+					assert.Empty(t, res["ways"])
+					assert.Contains(t, fmt.Sprint(res["empty_reason"]), "further over its range top")
+					overTop.Add(1)
+					continue
+				}
+				require.False(t, over, "plate %d: the raised target puts the day inside its range", p.ID)
+				require.NotEmpty(t, res["ways"], "plate %d: a day inside its range has protein ways: %v", p.ID, res["empty_reason"])
+				inRange.Add(1)
 			}
 			var all []map[string]any
 			// Exactly one way or offer is recommended, with its reason.
@@ -148,6 +161,10 @@ func TestFindWays_EveryWayAndOfferPassesItsOwnDryRun(t *testing.T) {
 		}
 	})
 	assert.Positive(t, checked.Load())
+	// Both more_protein paths ran, on every plate: over the top and inside the range.
+	assert.Positive(t, inRange.Load(), "more_protein ways were dry-run")
+	assert.Equal(t, overTop.Load(), inRange.Load())
+	t.Logf("more_protein: %d plates over their top, %d inside their range", overTop.Load(), inRange.Load())
 	if wholeWeek() {
 		for _, g := range []string{"lighter", "heartier", "more_protein"} {
 			assert.Positive(t, goals[g], "ways for %s", g)
