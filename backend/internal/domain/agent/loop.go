@@ -114,8 +114,8 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 
 	requests, turns, conts, continuation, wrapUp := 0, 0, 0, false, false
 	// What the final reply is judged against and completed with (see composeReply).
-	turnReply := replyTurn{user: req.UserText, numbers: map[string]bool{}, locale: req.Locale, foods: req.FoodNames, earlier: earlierUserTexts(req.History)}
-	stateNumbers(req.SystemPrompt, turnReply.numbers)
+	turnReply := replyTurn{user: req.UserText, numbers: map[string]bool{}, locale: req.Locale, foods: req.FoodNames, earlier: earlierUserTexts(req.History), state: map[string]bool{}}
+	stateNumbers(req.SystemPrompt, turnReply.state)
 	for {
 		if requests++; requests > MaxRequests {
 			break

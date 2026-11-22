@@ -108,6 +108,18 @@ func (s *factSink) addKey(key string, class int, kind, status, en, de string) {
 	s.items = append(s.items, fact{Class: class, Kind: kind, Status: status, EN: en, DE: de, Key: key})
 }
 
+// addMust adds a must line (always told) for the figure key.
+func (s *factSink) addMust(key string, class int, kind, status, en, de string) {
+	if s == nil {
+		return
+	}
+	n := len(s.items)
+	s.addKey(key, class, kind, status, en, de)
+	if len(s.items) > n {
+		s.items[n].Must = true
+	}
+}
+
 // emptyFact matches a line with nothing after its label ("Thu 26 Nov breakfast: ").
 var emptyFact = regexp.MustCompile(`^([^:]*:)?\s*[.;,]*\s*$`)
 
@@ -161,7 +173,19 @@ func selectBlock(all []fact) []fact {
 			rest = append(rest, f)
 		}
 	}
-	// A must line takes one of the capped places and is never the one cut.
+	// A must line takes one of the capped places and is cut only past the cap.
+	// Bounded: the block never exceeds the cap, and a changed meal keeps a place
+	// when there is one (G4.2).
+	changedMeal := func(f fact) bool {
+		return f.Class == classChanged && (f.Kind == kindMeal || f.Kind == kindAway)
+	}
+	mustRoom := maxBlock
+	if slices.ContainsFunc(rest, changedMeal) {
+		mustRoom--
+	}
+	if len(must) > mustRoom {
+		must = must[:mustRoom]
+	}
 	room := max(0, maxBlock-len(must))
 	if len(rest) > room {
 		// What the household must hear first when the block is cut: the meals
@@ -171,7 +195,7 @@ func selectBlock(all []fact) []fact {
 		// figures of a changed meal (protein, the day's moved target, meat).
 		prio := func(f fact) int {
 			switch {
-			case f.Class == classChanged && (f.Kind == kindMeal || f.Kind == kindAway):
+			case changedMeal(f):
 				return 0
 			case f.Class == classMoved && (f.Kind == kindCook || f.Kind == kindLeftover):
 				return 1

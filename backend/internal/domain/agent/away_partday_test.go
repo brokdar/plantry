@@ -83,6 +83,7 @@ func TestAway_DayUnderItsMinimumWithNoLeverIsToldInCode(t *testing.T) {
 	var res struct {
 		Offers []any `json:"offers"`
 		Report struct {
+			Offer *struct{ EN string } `json:"offer"`
 			Facts []struct {
 				EN   string
 				Must bool
@@ -91,15 +92,19 @@ func TestAway_DayUnderItsMinimumWithNoLeverIsToldInCode(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(out, &res))
 	assert.Empty(t, res.Offers, "no lever: no offer")
+	assert.Nil(t, res.Report.Offer, "no lever: the reply carries no offer at all")
 	var day, noLever bool
 	for _, f := range res.Report.Facts {
 		if strings.Contains(f.EN, "under the day's minimum of 446 kcal") {
 			day = f.Must
 		}
-		if f.EN == "No checked change of a planned meal brings Thu 26 Nov up to its minimum." {
+		if strings.Contains(f.EN, "under the day's minimum of 446 kcal") && strings.HasSuffix(f.EN, " No checked change of a planned meal brings Thu 26 Nov up to its minimum.") {
 			noLever = f.Must
 		}
 	}
 	assert.True(t, day, "the day under its minimum is a must line: %+v", res.Report.Facts)
-	assert.True(t, noLever, "P-1's plain no-lever sentence is code-rendered: %+v", res.Report.Facts)
+	assert.True(t, noLever, "P-1's plain no-lever sentence is merged into the day's line: %+v", res.Report.Facts)
+	for _, f := range res.Report.Facts {
+		assert.False(t, strings.HasPrefix(f.EN, "No checked change"), "one line per day: %+v", res.Report.Facts)
+	}
 }

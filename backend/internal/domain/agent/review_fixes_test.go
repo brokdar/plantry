@@ -131,7 +131,7 @@ func TestLint_NumbersComeFromToolResultsOnly(t *testing.T) {
 	assert.False(t, nums["5"], "an id is no figure")
 	assert.False(t, nums["2026"], "no ISO date fragment")
 	assert.True(t, nums["1698"])
-	assert.True(t, nums["26"], "a day label's number")
+	assert.False(t, nums["26"], "a date's day number is no figure")
 	turn := replyTurn{user: "what is on Friday?", numbers: nums}
 	assert.Equal(t, fallbackEN, composeReply("That is about 5 days away.", turn))
 	assert.Equal(t, "Dinner holds 1698 kcal.", composeReply("Dinner holds 1698 kcal.", turn))

@@ -359,9 +359,10 @@ func dayFacts(in reportInput, r changeReport) {
 		if class == classChanged && !in.dayKcal && !in.undo {
 			continue
 		}
-		in.facts.addKey("day:"+d.Day, class, kindDay, status, dot(en), dot(de))
-		if d.MinimumKcal > 0 && in.facts != nil && len(in.facts.items) > 0 {
-			in.facts.items[len(in.facts.items)-1].Must = true // SF1(c): always told
+		if d.MinimumKcal > 0 {
+			in.facts.addMust("day:"+d.Day, class, kindDay, status, dot(en), dot(de)) // SF1(c): always told
+		} else {
+			in.facts.addKey("day:"+d.Day, class, kindDay, status, dot(en), dot(de))
 		}
 	}
 }

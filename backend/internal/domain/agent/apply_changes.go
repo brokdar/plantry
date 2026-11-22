@@ -394,9 +394,9 @@ func runApply(ctx context.Context, svc Services, w window.Window, in applyInput,
 		}
 		// P-1 (SF1(c)): a day left under its minimum with no offer to lift it is
 		// told so in code, not left to the model's text.
-		if !in.DryRun && rep != nil && len(offers) == 0 {
+		if !in.DryRun && rep != nil && replyOffer(offers, after) == nil {
 			if extra := noLeverFacts(before, afterEv); len(extra) > 0 {
-				rep.Facts = selectBlock(append(rep.Facts, extra...))
+				rep.Facts = selectBlock(mergeNoLever(rep.Facts, extra))
 				rep.Tell = tellOf(rep.Facts)
 			}
 		}
@@ -1426,10 +1426,40 @@ func noLeverFacts(before, after planning.Evaluation) []fact {
 		had[is.Date] = true
 		day := dayLabelStr(is.Date)
 		out = append(out, fact{
-			Class: classWorse, Kind: kindDay, Status: statusUnder, Must: true,
+			Class: classWorse, Kind: kindDay, Status: statusUnder, Must: true, Key: "day:" + day,
 			EN: fmt.Sprintf("No checked change of a planned meal brings %s up to its minimum.", day),
 			DE: fmt.Sprintf("Keine geprüfte Änderung einer geplanten Mahlzeit bringt %s auf seinen Mindestwert.", deDay(day)),
 		})
 	}
 	return out
+}
+
+// replyOffer is the offer the reply of this result carries (offerOf on the
+// result as the reply reads it), or nil.
+func replyOffer(offers []map[string]any, after map[string]any) *offerLine {
+	raw, err := json.Marshal(map[string]any{"offers": offers, "after": after})
+	if err != nil {
+		return nil
+	}
+	var obj map[string]any
+	if json.Unmarshal(raw, &obj) != nil {
+		return nil
+	}
+	return offerOf(obj)
+}
+
+// mergeNoLever puts each no-lever sentence into the must line of its day (one
+// line per day); a day with no such line gets the sentence as a line of its own.
+func mergeNoLever(facts, extra []fact) []fact {
+	facts = slices.Clone(facts)
+	for _, x := range extra {
+		i := slices.IndexFunc(facts, func(f fact) bool { return f.Must && f.Key == x.Key && f.Key != "" })
+		if i < 0 {
+			facts = append(facts, x)
+			continue
+		}
+		facts[i].EN += " " + x.EN
+		facts[i].DE += " " + x.DE
+	}
+	return facts
 }
