@@ -209,7 +209,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		// ends: the UI refetches the conversation) in kitchen terms; the run log
 		// keeps what the model wrote.
 		if len(extractToolUses(res.resp.Message)) == 0 {
-			finalizeMessage(&res.resp.Message, turnReply)
+			finalizeMessage(&res.resp.Message, turnReply.final())
 		} else {
 			sanitizeToolMessage(&res.resp.Message, turnReply)
 		}
@@ -353,6 +353,9 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			// The facts come from the result itself, not from the model's
 			// view, which rewrites words.
 			toolNumbers(view, turnReply.numbers)
+			if call.ToolUseName == findWaysName {
+				turnReply.ways = waysBlock(output)
+			}
 			if writeTools[call.ToolUseName] {
 				turnReply.write = true
 				if b, check := blockOf(output); !check {

@@ -134,6 +134,19 @@ type replyTurn struct {
 	foods   []string        // the names of the foods of the plan: a write's text names none the block does not
 	write   bool            // a plan-writing tool was called (also as a check)
 	block   *replyBlock     // the facts and the offer of the turn's writes
+	// ways is the block of the turn's last find_ways when it found nothing to
+	// apply on its own (waysBlock): told only when no write of the turn has a block.
+	ways *replyBlock
+}
+
+// final is the turn as its closing reply is composed: a turn that saved nothing
+// after a find_ways that found nothing says so in code, with the reason and its
+// numbers and the search's one offer (G4.1, SF2, C-11).
+func (t replyTurn) final() replyTurn {
+	if t.ways != nil && t.block == nil {
+		t.write, t.block = true, t.ways
+	}
+	return t
 }
 
 // lang is the language of the reply: the user's message, else the earlier

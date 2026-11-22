@@ -1,0 +1,77 @@
+{
+ "before": {
+  "day_kcal": 1699,
+  "day_protein_g": 90.9,
+  "meal_kcal": 0,
+  "meal_protein_g": 0
+ },
+ "closing": "I can also take Fri 27 Nov down to 1299 kcal, the lowest it goes inside its range: \"Linsen-Bolognese aus dem Slow Cooker\": 0.5 portions (was 1), \"Couscous\": 0.75 portions (was 1), leave out \"Low-fat quark\", \"Romaine lettuce\": 50 g (was 100 g) (the day would then hold 1299 kcal): say so if you want it.",
+ "empty_reason": "900 kcal is below the day's minimum of 1275 kcal",
+ "goal": {
+  "date": "2026-11-27",
+  "kind": "lower_day",
+  "target_kcal": 900
+ },
+ "max_kcal": 1339,
+ "min_kcal": 1275,
+ "minimum_kcal": 1275,
+ "next": "change nothing: say why with the numbers (900 kcal is below the day's minimum of 1275 kcal); END YOUR REPLY with offer[0] as your one recommendation, the lowest the day goes (1299 kcal) and how, and ask whether to do it",
+ "offer": [
+  {
+   "after": {
+    "day_kcal": 1299,
+    "day_protein_g": 53.3,
+    "meal_kcal": 0,
+    "meal_protein_g": 0
+   },
+   "before": {
+    "day_kcal": 1699,
+    "day_protein_g": 90.9,
+    "meal_kcal": 0,
+    "meal_protein_g": 0
+   },
+   "day_vs_range": "inside its range",
+   "kind": "day",
+   "light": [
+    {
+     "date": "2026-11-27",
+     "scope": "day",
+     "target_kcal": 900
+    }
+   ],
+   "meal_vs_limit": "within what a light meal should hold",
+   "ops": [
+    {
+     "op": "set_quantity",
+     "plate_component_id": 78,
+     "portions": 0.5
+    },
+    {
+     "op": "set_quantity",
+     "plate_component_id": 79,
+     "portions": 0.75
+    },
+    {
+     "op": "remove",
+     "plate_component_id": 80
+    },
+    {
+     "amount": 50,
+     "op": "set_quantity",
+     "plate_component_id": 77,
+     "unit": "g"
+    }
+   ],
+   "plate_id": 0,
+   "range_high": 1339,
+   "range_low": 1275,
+   "reaches_limit": false,
+   "recommended": true,
+   "recommended_because": "the only way to reach it that keeps the day in its range, no new warning",
+   "what": "take Fri 27 Nov down to 1299 kcal, the lowest it goes inside its range: \"Linsen-Bolognese aus dem Slow Cooker\": 0.5 portions (was 1), \"Couscous\": 0.75 portions (was 1), leave out \"Low-fat quark\", \"Romaine lettuce\": 50 g (was 100 g)"
+  }
+ ],
+ "range_high": 1339,
+ "range_low": 1275,
+ "ways": []
+}

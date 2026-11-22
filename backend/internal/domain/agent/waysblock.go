@@ -1,0 +1,106 @@
+package agent
+
+import (
+	"encoding/json"
+	"fmt"
+	"math"
+	"regexp"
+	"strings"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+)
+
+// waysBlock is the reply block of a find_ways call that found no way to apply
+// on its own: nothing changes, the reason with its numbers is a code-rendered
+// refused fact (G4.1, SF2; a day number under the minimum names the minimum and
+// the asked number, C-11), and the search's one offer is the offer (G3). Nil
+// for a result with a way or one that does not parse. It reaches the reply only
+// when no write of the turn saved anything (see replyTurn.final).
+func waysBlock(output json.RawMessage) *replyBlock {
+	var obj map[string]any
+	if json.Unmarshal(output, &obj) != nil || obj == nil {
+		return nil
+	}
+	if ways, _ := obj["ways"].([]any); len(ways) > 0 {
+		return nil
+	}
+	why, _ := obj["empty_reason"].(string)
+	if why == "" {
+		return nil
+	}
+	goal, _ := obj["goal"].(map[string]any)
+	kind, _ := goal["kind"].(string)
+	date, _ := goal["date"].(string)
+	before, _ := obj["before"].(map[string]any)
+	meal, day := math.Round(num(before["meal_kcal"])), math.Round(num(before["day_kcal"]))
+	floor, top := math.Round(num(obj["minimum_kcal"])), math.Round(num(obj["range_high"]))
+	failed := strings.HasPrefix(why, "every way failed the check")
+	var en, de string
+	switch {
+	case kind == planning.GoalLowerDay && num(goal["target_kcal"]) > 0 && num(goal["target_kcal"]) < floor:
+		asked := math.Round(num(goal["target_kcal"]))
+		label := dayLabelStr(date)
+		en = fmt.Sprintf("%s stays as it is: %.0f kcal is under the day's minimum of %.0f kcal.", label, asked, floor)
+		de = fmt.Sprintf("%s bleibt, wie er ist: %.0f kcal liegen unter dem Mindestwert des Tages von %.0f kcal.", deDay(label), asked, floor)
+	case failed:
+		en = "No change of this meal on its own passed the check: each one would add a problem to the plan."
+		de = "Keine Änderung dieser Mahlzeit allein hat die Prüfung bestanden: jede würde dem Plan ein Problem hinzufügen."
+	case kind == planning.GoalLighter && floor > 0:
+		en = fmt.Sprintf("This meal cannot get lighter on its own: it holds %.0f kcal and the day holds %.0f kcal, only %.0f kcal above its minimum of %.0f kcal.", meal, day, math.Max(0, day-floor), floor)
+		de = fmt.Sprintf("Diese Mahlzeit kann allein nicht leichter werden: sie hat %.0f kcal und der Tag %.0f kcal, nur %.0f kcal über seinem Mindestwert von %.0f kcal.", meal, day, math.Max(0, day-floor), floor)
+	case kind == planning.GoalHeartier && top > 0:
+		en = fmt.Sprintf("This meal cannot get heartier on its own: the day holds %.0f kcal and a good amount for it ends at %.0f kcal.", day, top)
+		de = fmt.Sprintf("Diese Mahlzeit kann allein nicht reichhaltiger werden: der Tag hat %.0f kcal und ein passender Bereich endet bei %.0f kcal.", day, top)
+	default:
+		en = "No checked change does this on its own."
+		de = "Keine geprüfte Änderung schafft das allein."
+	}
+	b := &replyBlock{facts: []fact{{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: en, DE: de}}, nothingSaved: true}
+	if list, _ := obj["offer"].([]any); len(list) > 0 {
+		if o, _ := list[0].(map[string]any); o != nil {
+			if what, _ := o["what"].(string); what != "" {
+				enO, deO := what, deWayWhat(what)
+				if after, _ := o["after"].(map[string]any); after != nil && num(after["day_kcal"]) > 0 && !strings.Contains(what, "kcal") {
+					enO += fmt.Sprintf(" (the day would then hold %.0f kcal)", math.Round(num(after["day_kcal"])))
+					deO += fmt.Sprintf(" (der Tag hätte dann %.0f kcal)", math.Round(num(after["day_kcal"])))
+				}
+				b.offer = makeOffer(enO, deO)
+			}
+		}
+	}
+	return b
+}
+
+var (
+	wayDayDown  = regexp.MustCompile(`^take (\w{3} \d{1,2} \w{3}) down to (\d+) kcal, the lowest it goes inside its range: (.+)$`)
+	wayCell     = regexp.MustCompile(`^(\w{3} \d{1,2} \w{3} \w+): (.+)$`)
+	wayPortions = regexp.MustCompile(`^"([^"]+)": ([\d.]+) portions \(was ([\d.]+)\)$`)
+	wayGrams    = regexp.MustCompile(`^"([^"]+)": (\d+) g \(was (\d+) g\)$`)
+	wayLeave    = regexp.MustCompile(`^leave out (.+)$`)
+)
+
+// deWayWhat says a find_ways way's "what" in German: the day or meal it is
+// about and its portion, gram and leave-out steps; any other shape is told as a
+// checked change.
+func deWayWhat(en string) string {
+	prefix := ""
+	rest := en
+	if m := wayDayDown.FindStringSubmatch(en); m != nil {
+		prefix, rest = fmt.Sprintf("%s auf %s kcal senken, so tief es innerhalb seines Bereichs geht: ", deDay(m[1]), m[2]), m[3]
+	} else if m := wayCell.FindStringSubmatch(en); m != nil {
+		prefix, rest = "bei "+deCell(m[1])+": ", m[2]
+	}
+	var parts []string
+	for _, p := range strings.Split(rest, ", ") {
+		if m := wayPortions.FindStringSubmatch(p); m != nil {
+			parts = append(parts, fmt.Sprintf("%s: %s Portionen (vorher %s)", deQuote(m[1]), strings.Replace(m[2], ".", ",", 1), strings.Replace(m[3], ".", ",", 1)))
+		} else if m := wayGrams.FindStringSubmatch(p); m != nil {
+			parts = append(parts, fmt.Sprintf("%s: %s g (vorher %s g)", deQuote(m[1]), m[2], m[3]))
+		} else if m := wayLeave.FindStringSubmatch(p); m != nil {
+			parts = append(parts, deQuoted(m[1])+" weglassen")
+		} else {
+			return "eine geprüfte Änderung anwenden"
+		}
+	}
+	return prefix + strings.Join(parts, ", ")
+}
