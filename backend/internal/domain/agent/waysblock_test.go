@@ -134,6 +134,22 @@ func TestReplyTurnFinal_WriteBlockWinsOverEmptyWays(t *testing.T) {
 	assert.True(t, got.block.nothingSaved)
 }
 
+// Round 8 P3: each more-protein reason of the search is told in German clause
+// by clause; a reason the parser does not know keeps the generic line.
+func TestWaysBlock_ProteinReasonsInGerman(t *testing.T) {
+	t.Parallel()
+	for why, de := range map[string]string{
+		"No checked change adds 10 g of protein or more.":                        "Keine geprüfte Änderung bringt 10 g Eiweiß oder mehr.",
+		"No checked change adds 10 g of protein or more and passes every check.": "Keine Änderung bringt 10 g Eiweiß oder mehr und besteht jede Prüfung.",
+		"No change adds 10 g of protein or more without breaking a hard rule.":   "Keine Änderung bringt 10 g Eiweiß oder mehr, ohne eine feste Regel zu brechen.",
+		"No change adds 10 g of protein or more without dancing.":                "Keine geprüfte Änderung schafft das allein.",
+	} {
+		b := waysBlock(json.RawMessage(`{"ways":[],"goal":{"kind":"more_protein","date":"2026-11-22"},"empty_reason":"` + why + `"}`))
+		require.NotNil(t, b, why)
+		assert.Equal(t, de, b.facts[0].DE, why)
+	}
+}
+
 func TestWaysBlock_NilWhenAWayExists(t *testing.T) {
 	t.Parallel()
 	assert.Nil(t, waysBlock(json.RawMessage(`{"ways":[{"what":"x"}],"empty_reason":"y"}`)))

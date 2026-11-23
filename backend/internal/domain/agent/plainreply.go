@@ -345,12 +345,12 @@ func messageLang(texts, foods []string, locale string) (lang, bool) {
 	return langEN, false
 }
 
-// The question words and short words of a message, besides the shared marker
-// words; none is a word of the other language ("was", "will", "so", "in" stay
-// out).
+// The question words, short replies and short words of a message, besides the
+// shared marker words; none is a word of the other language ("was", "will",
+// "so", "in", "ok", "okay" stay out).
 var (
-	englishAsk = regexp.MustCompile(`(?i)\b(how|what|when|why|which|where|who|does|do|did|much|many|long|take|takes|it|this|that|there|have|has|for|at|today|tomorrow|would|could|should|me|i|we|our|make|less|more)\b`)
-	germanAsk  = regexp.MustCompile(`(?i)\b(wie|wann|warum|wieso|weshalb|wo|woher|wohin|welche\w*|wieviel\w*|dauer\w*|gibt|kostet|brauch\w*|kann|soll|sollte|hat|habe|haben|sind|lange|viel|viele|heute|morgen|gestern|schon|etwas|bei|von|zu|uns|wir|es|sie|er|essen)\b`)
+	englishAsk = regexp.MustCompile(`(?i)\b(how|what|when|why|which|where|who|does|do|did|much|many|long|take|takes|it|this|that|there|have|has|for|at|today|tomorrow|would|could|should|me|i|we|our|make|less|more|thanks|thank|sure|save|great|fine|perfect)\b`)
+	germanAsk  = regexp.MustCompile(`(?i)\b(wie|wann|warum|wieso|weshalb|wo|woher|wohin|welche\w*|wieviel\w*|dauer\w*|gibt|kostet|brauch\w*|kann|soll|sollte|hat|habe|haben|sind|lange|viel|viele|heute|morgen|gestern|schon|etwas|bei|von|zu|uns|wir|es|sie|er|essen|danke|passt|gerne?|genau|prima|mach\w*|speicher\w*)\b`)
 )
 
 // languageLine is the prompt's last line: the turn's language, computed in

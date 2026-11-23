@@ -86,6 +86,19 @@ func TestMessageLang_ShortQuestionsDecide(t *testing.T) {
 		{[]string{"Overnight oats?", "wie sieht mein Plan aus"}, "en", "de"},
 		{[]string{"Overnight oats?"}, "de", "de"},
 		{[]string{"Overnight oats?"}, "", ""},
+		// Review of #184 (L1): short replies decide too, also with a dish
+		// name the plan does not have.
+		{[]string{"Danke", "Make Friday lighter"}, "en", "de"},
+		{[]string{"Passt", "Make Friday lighter"}, "en", "de"},
+		{[]string{"Okay, speichern", "Make Friday lighter"}, "en", "de"},
+		{[]string{"Mach das", "Make Friday lighter"}, "en", "de"},
+		{[]string{"Ja, bitte", "Make Friday lighter"}, "en", "de"},
+		{[]string{"gerne, genau so, prima"}, "en", "de"},
+		{[]string{"Ja, bitte Pulled pork burger", "Make Friday lighter"}, "en", "de"},
+		{[]string{"Thanks", "Mach den Freitag leichter"}, "de", "en"},
+		{[]string{"Sure, save it", "Mach den Freitag leichter"}, "de", "en"},
+		{[]string{"yes please, Käsespätzle on Friday", "Mach den Freitag leichter"}, "de", "en"},
+		{[]string{"Okay", "Mach den Freitag leichter"}, "en", "de"}, // ok/okay decide nothing: the earlier message does
 	} {
 		assert.Equal(t, c.want, agent.MessageLangCode(c.texts, foods, c.locale), c.texts[0])
 	}

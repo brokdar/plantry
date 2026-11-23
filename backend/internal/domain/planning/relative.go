@@ -281,6 +281,9 @@ type waySearch struct {
 	// RelMinProteinG or more, for the reason told when no way is left
 	// (noWayWhy).
 	blocked map[wayBlock]bool
+	// unexplained: such a candidate was dropped by a check with no clause, so
+	// noWayWhy names no clause and claims nothing absolute.
+	unexplained bool
 }
 
 // wayBlock is a check that drops a candidate, in the order noWayWhy names
@@ -479,18 +482,23 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 				if over {
 					w.blockedBy(blockOverTop)
 				}
+				w.unexplained = w.unexplained || (len(r.blocks) == 0 && !over)
 			}
 			return
 		}
 		way := w.way(e, r, intent)
+		explained := false
 		if w.goal == GoalMoreProtein && way.Meaningful {
 			switch {
 			case r.floor:
 				w.blockedBy(r.blocks...)
+				explained = len(r.blocks) > 0
 			case w.wastesKcal(way):
 				w.blockedBy(blockWaste)
+				explained = true
 			}
 		}
+		kept := len(found)
 		switch {
 		case r.floor:
 			// The meal alone would break the floor: only a way that makes
@@ -510,6 +518,9 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 			// comparative step from a search without to_limit.)
 		case way.Meaningful && (way.Reaches || !w.dayGoal()) && !w.wastesKcal(way):
 			found = append(found, way)
+		}
+		if w.goal == GoalMoreProtein && way.Meaningful && len(found) == kept && !explained {
+			w.unexplained = true
 		}
 	}
 	for _, e := range w.primary(s) {
@@ -905,7 +916,12 @@ func (w *waySearch) noWayWhy(res WayResult) string {
 			why = append(why, clauses[b])
 		}
 	}
-	if len(why) == 0 {
+	switch {
+	case w.unexplained:
+		// A candidate adding enough protein was dropped by a check that has
+		// no clause: only what holds for every candidate is told.
+		return fmt.Sprintf("No checked change adds %.0f g of protein or more and passes every check.", RelMinProteinG)
+	case len(why) == 0:
 		return fmt.Sprintf("No checked change adds %.0f g of protein or more.", RelMinProteinG)
 	}
 	return fmt.Sprintf("No change adds %.0f g of protein or more without %s.", RelMinProteinG, strings.Join(why, " or "))

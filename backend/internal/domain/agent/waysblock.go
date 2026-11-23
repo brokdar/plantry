@@ -82,6 +82,7 @@ func waysBlock(output json.RawMessage) *replyBlock {
 var (
 	proteinNoWay  = regexp.MustCompile(`^No change adds (\d+) g of protein or more without (.+)\.$`)
 	proteinNone   = regexp.MustCompile(`^No checked change adds (\d+) g of protein or more\.$`)
+	proteinPass   = regexp.MustCompile(`^No checked change adds (\d+) g of protein or more and passes every check\.$`)
 	proteinOver   = regexp.MustCompile(`^taking the day \((\d+) kcal\) over its range top of (\d+) kcal$`)
 	proteinCook   = regexp.MustCompile(`^putting more than (\d+) dishes on one cooking time$`)
 	proteinWaste  = regexp.MustCompile(`^adding over (\d+) kcal for under (\d+) g of protein$`)
@@ -98,6 +99,9 @@ var (
 func proteinWhyDE(why string) string {
 	if m := proteinNone.FindStringSubmatch(why); m != nil {
 		return fmt.Sprintf("Keine geprüfte Änderung bringt %s g Eiweiß oder mehr.", m[1])
+	}
+	if m := proteinPass.FindStringSubmatch(why); m != nil {
+		return fmt.Sprintf("Keine Änderung bringt %s g Eiweiß oder mehr und besteht jede Prüfung.", m[1])
 	}
 	m := proteinNoWay.FindStringSubmatch(why)
 	if m == nil {
