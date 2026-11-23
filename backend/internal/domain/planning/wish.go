@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // PL2: the heuristic places every meal. A model only reads the free-text wish
@@ -38,8 +40,19 @@ type Constraints struct {
 	Avoid []int64
 	// Eaters is the number of eaters per date (guests).
 	Eaters map[string]float64
+	// Quick is a time limit on meals (quick dinners on weekdays); nil: none.
+	Quick *QuickLimit
 	// Ignored says, in words, what of the wish could not be used.
 	Ignored []string
+}
+
+// QuickLimit is a wish's time limit: the main of every planned cell of Slot
+// (every slot when empty) on Weekdays (mon..sun; every day when empty) takes at
+// most Minutes (prep + cook), cooked there or eaten from a batch.
+type QuickLimit struct {
+	Minutes  int
+	Slot     string
+	Weekdays []string
 }
 
 // Extractor reads a wish into Constraints.
@@ -86,6 +99,7 @@ func wishSchema() string {
   ` + LightSchema(false) + `,
   "max_cook_days":{"type":"integer","minimum":1,"maximum":7,"description":"Only when the wish limits the days on which anything is cooked (for example: I can only cook on two days): that number."},
   "avoid_foods":{"type":"array","maxItems":10,"items":{"type":"string"},"description":"Names of dishes the wish says to leave out (I do not want the lentil curry), exactly as named."},
+  "quick":{"type":"object","required":["minutes"],"properties":{"minutes":{"type":"integer","minimum":5,"maximum":180},"slot":{"type":"string","description":"lunch or dinner; leave out for every meal"},"weekdays":{"type":"array","items":{"type":"string","enum":["mon","tue","wed","thu","fri","sat","sun"]},"description":"the days of the week it applies to (Monday to Friday: mon to fri); leave out for every day"}},"description":"Only when the wish limits how long meals may take (quick weekday dinners, at most 30 minutes): the minutes, the slot and the weekdays."},
   "eaters":{"type":"array","maxItems":14,"items":{"type":"object","required":["date","count"],"properties":{"date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"count":{"type":"number","minimum":1,"maximum":20}}},"description":"The number of people eating on a date when the wish names guests."}
 }}`
 }
@@ -93,7 +107,7 @@ func wishSchema() string {
 func wishTool() llm.Tool {
 	return llm.Tool{
 		Name:        wishToolName,
-		Description: "Record what the user's wish for the week asks for, only what it states: light or filling meals or days, a limit on cooking days, dishes to leave out, guests. Leave a field out when the wish does not say it. You never plan meals.",
+		Description: "Record what the user's wish for the week asks for, only what it states: light or filling meals or days, a limit on cooking days, how long meals may take, dishes to leave out, guests. Leave a field out when the wish does not say it. You never plan meals.",
 		Schema:      json.RawMessage(wishSchema()),
 	}
 }
@@ -147,6 +161,11 @@ func ParseConstraints(s State, raw json.RawMessage) Constraints {
 			Date  string  `json:"date"`
 			Count float64 `json:"count"`
 		} `json:"eaters"`
+		Quick *struct {
+			Minutes  int      `json:"minutes"`
+			Slot     string   `json:"slot"`
+			Weekdays []string `json:"weekdays"`
+		} `json:"quick"`
 	}
 	var c Constraints
 	if err := json.Unmarshal(raw, &in); err != nil {
@@ -191,5 +210,49 @@ func ParseConstraints(s State, raw json.RawMessage) Constraints {
 		}
 		c.Eaters[e.Date] = e.Count
 	}
+	if q := in.Quick; q != nil {
+		limit := QuickLimit{Minutes: q.Minutes, Slot: q.Slot, Weekdays: q.Weekdays}
+		if len(quickCells(s, limit)) == 0 {
+			c.Ignored = append(c.Ignored, fmt.Sprintf("meals of at most %d minutes", q.Minutes))
+		} else {
+			c.Quick = &limit
+		}
+	}
 	return c
+}
+
+// quickCells is the cells of the window a time limit applies to: the planned
+// cells of slot (every slot when empty) on the weekdays (every day when none).
+func quickCells(s State, q QuickLimit) map[cellID]int {
+	minutes, slotName := q.Minutes, q.Slot
+	if minutes < 5 || minutes > 180 {
+		return nil
+	}
+	days := map[string]bool{}
+	for _, w := range q.Weekdays {
+		days[strings.ToLower(w)] = true
+	}
+	slotName = strings.ToLower(strings.TrimSpace(slotName))
+	out := map[cellID]int{}
+	for _, c := range s.Cells {
+		if !s.Window.Contains(c.Date) || c.Mode != availability.ModePlan {
+			continue
+		}
+		if slotName != "" && strings.TrimPrefix(s.SlotNames[c.SlotID], "slot.") != slotName {
+			continue
+		}
+		if len(days) > 0 && !days[strings.ToLower(c.Date.Weekday().String()[:3])] {
+			continue
+		}
+		out[idOf(c.Key())] = minutes
+	}
+	return out
+}
+
+// tooSlow reports whether f may not be cooked in c under a wish's time
+// limit: a recipe over the minutes, or with unknown minutes. A leftover eaten
+// in c costs no time there.
+func (s State) tooSlow(f FoodFacts, c plate.CellKey) bool {
+	limit, ok := s.MaxMinutes[idOf(c)]
+	return ok && f.Composed() && (f.Minutes <= 0 || f.Minutes > limit)
 }

@@ -734,3 +734,54 @@ func TestCheck_H8NamedDishRepeatIsAWarning(t *testing.T) {
 	assert.Equal(t, planning.CodeVarietyRepeatNamed, got[0].Code)
 	assert.Equal(t, planning.SeverityWarning, got[0].Severity)
 }
+
+// V72 T1b (tune-v2 g2-planner-09/-14, h2-planner-02): a main the plan cooked
+// in a week before the window (a draft, never eaten) is no more eligible than
+// one eaten then. When every main was cooked within the variety weeks, the
+// eligible count is 0 and H8 relaxes to a warning instead of refusing a
+// feasible week as "dish variety".
+func TestCheck_H8CountsEarlierCooksAgainstEligibility(t *testing.T) {
+	s := baseState()
+	before := sat // the window starts on sat; a week earlier is within 3 variety weeks
+	prev := day(before).AddDate(0, 0, -7).Format("2006-01-02")
+	var id int64 = 900
+	for fid, f := range s.Foods {
+		if !f.Composed() || f.Role != "main" {
+			continue
+		}
+		s.Sessions = append(s.Sessions, persistedSession(id, fid, prev, dinner, 1, false))
+		s.Plates = append(s.Plates, persisted(id, prev, dinner, false, fid, id))
+		id++
+	}
+	got := only(check(s, targetCells(cell(sun, dinner), cell(mon, dinner)), planning.Proposal{
+		Plates: []planning.ProposedPlate{pplate(sun, dinner, fresh(chili)), pplate(mon, dinner, fresh(curry))},
+	}), "H8")
+	require.NotEmpty(t, got)
+	for _, is := range got {
+		assert.Equal(t, planning.CodeVarietyRelaxed, is.Code, "every main was cooked within the variety weeks: no eligible main is left")
+		assert.Equal(t, planning.SeverityWarning, is.Severity)
+	}
+}
+
+// Review fix (S1): the start plan's dish-variety repeats are counted the way a
+// run's merged state judges them. An in-window repeat is a warning on the
+// persisted plan but a violation after the merge, so it counts at the start.
+func TestStartVarietyRepeats_CountsAnInWindowRepeat(t *testing.T) {
+	s := baseState()
+	manyMains(&s, 5)
+	s.Sessions = []planning.Session{
+		persistedSession(1, chili, fri, dinner, 1, false),
+		persistedSession(2, chili, sat, dinner, 1, false),
+	}
+	s.Plates = []planning.Plate{
+		persisted(10, fri, dinner, false, chili, 1),
+		persisted(11, sat, dinner, false, chili, 2),
+	}
+	tgt := windowTarget(s)
+	h8 := only(planning.Check(s, tgt), "H8")
+	require.NotEmpty(t, h8, "the persisted plan reports the repeat")
+	for _, is := range h8 {
+		assert.Equal(t, planning.SeverityWarning, is.Severity, "as a warning only")
+	}
+	assert.Equal(t, len(h8), planning.StartVarietyRepeats(s, tgt), "the run counts it at the start")
+}

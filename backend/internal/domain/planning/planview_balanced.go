@@ -49,6 +49,9 @@ func finishProposal(in ChooseInput, prop Proposal) (Proposal, []string) {
 	// Raised portions may have passed the week's meat limit again.
 	prop, n = guardWeek(in.State, in.Target, prop, skip, in.Instruction)
 	notes = append(notes, n...)
+	// A wish's time limit outlives the swaps above (V72).
+	prop, n = fixQuick(in, prop)
+	notes = append(notes, n...)
 	// A binding cooking-day limit leaves days light: say which and by how much.
 	ev := Evaluate(Merge(in.State, in.Target, prop), in.Target)
 	if limitBinds(ev, prop) {

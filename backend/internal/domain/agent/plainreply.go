@@ -60,6 +60,9 @@ func blockOf(output json.RawMessage) (b *replyBlock, check bool) {
 			}
 		}
 	}
+	if f, ok := varietyKept(obj); ok {
+		b.facts = append(b.facts, f)
+	}
 	// Nothing of the call was saved: composeReply says so first, in code (G4.1, SF2),
 	// so the reply is honest even when the lint drops the model's text.
 	b.nothingSaved = obj["saved"] == false && len(b.facts) > 0
@@ -145,6 +148,9 @@ type replyTurn struct {
 	foods   []string         // the names of the foods of the plan: a write's text names none the block does not
 	write   bool             // a plan-writing tool was called (also as a check)
 	block   *replyBlock      // the facts and the offer of the turn's writes
+	// undoable holds the block as it was before each change saved in this
+	// turn, newest last: an undo of that change takes the block back (addWrite).
+	undoable []*replyBlock
 	// drops, when set, collects every sentence of the model's final text the
 	// reply leaves out, with the reason (F6: agent.reply.lint).
 	drops *[]lintDrop
@@ -189,11 +195,98 @@ func mergeBlock(a, b *replyBlock) *replyBlock {
 	case b == nil:
 		return a
 	}
-	out := &replyBlock{facts: selectBlock(append(slices.Clone(a.facts), b.facts...)), offer: a.offer, nothingSaved: a.nothingSaved && b.nothingSaved}
+	// An earlier cooking line is no longer true when the later write tells the
+	// same cooking time again, says the day cooks nothing, or moved that
+	// cooking elsewhere (its line says "cooked <day> <meal> before"). A line
+	// for another cooking time of the same day stays (V72, review fix).
+	type cell struct{ day, meal string }
+	told := map[cell]bool{}
+	var movedFrom []string
+	for _, f := range b.facts {
+		if d, m := cookLineCell(f); d != "" {
+			told[cell{d, m}] = true
+			if i := strings.Index(f.EN, " (cooked "); i >= 0 {
+				movedFrom = append(movedFrom, f.EN[i:])
+			}
+		}
+	}
+	dayTold := func(day string) bool {
+		for c := range told {
+			if c.day == day {
+				return true
+			}
+		}
+		return false
+	}
+	earlier := slices.DeleteFunc(slices.Clone(a.facts), func(f fact) bool {
+		d, m := cookLineCell(f)
+		switch {
+		case d == "":
+			return false
+		case m == "": // the earlier line is day-wide
+			return dayTold(d)
+		case told[cell{d, ""}] || told[cell{d, m}]:
+			return true
+		}
+		return slices.ContainsFunc(movedFrom, func(x string) bool { return strings.Contains(x, " (cooked "+d+" "+m+" before)") })
+	})
+	out := &replyBlock{facts: selectBlock(append(earlier, b.facts...)), offer: a.offer, nothingSaved: a.nothingSaved && b.nothingSaved}
 	if b.offer != nil {
 		out.offer = b.offer
 	}
 	return out
+}
+
+// addWrite adds a successful write's block to the turn. An undo of a change
+// saved earlier in this turn takes the turn back to before it: the turn tells
+// neither that change's lines nor the undo's, since together they changed
+// nothing (V73 (c), tune-v2 g2-replan-01: regenerate, undo, a refused replace
+// told the replan's add and remove lines under "Nothing changed").
+func (t *replyTurn) addWrite(tool string, saved bool, b *replyBlock) {
+	if tool == "undo_last_change" && saved && len(t.undoable) > 0 {
+		t.block = t.undoable[len(t.undoable)-1]
+		t.undoable = t.undoable[:len(t.undoable)-1]
+		return
+	}
+	if saved && tool != "undo_last_change" {
+		t.undoable = append(t.undoable, t.block)
+	}
+	t.block = mergeBlock(t.block, b)
+}
+
+// cookLineCell is the day and meal a cooking line tells ("Thu 26 Nov at lunch you
+// cook ..."), the day with no meal for a day-wide line ("Thu 26 Nov: nothing is
+// cooked."), "" for any other line.
+func cookLineCell(f fact) (day, meal string) {
+	if f.Class != classMoved || f.Kind != kindCook {
+		return "", ""
+	}
+	colon := strings.Index(f.EN, ":")
+	if i := strings.Index(f.EN, " at "); i > 0 && (colon < 0 || i < colon) {
+		rest := f.EN[i+4:]
+		if j := strings.Index(rest, " you cook"); j > 0 {
+			return f.EN[:i], rest[:j]
+		}
+		return f.EN[:i], "?"
+	}
+	if colon > 0 {
+		return f.EN[:colon], ""
+	}
+	return "", ""
+}
+
+// writeSaved says whether a write tool's call saved something: a recorded
+// change, for an undo (which records none) at least one change undone.
+func writeSaved(tool string, output json.RawMessage, change *Change, b *replyBlock) bool {
+	if b.nothingSaved {
+		return false
+	}
+	if tool == "undo_last_change" {
+		var obj map[string]any
+		_ = json.Unmarshal(output, &obj)
+		return num(obj["undone"]) > 0
+	}
+	return change != nil
 }
 
 var writeTools = map[string]bool{"apply_changes": true, "undo_last_change": true, "regenerate": true, "apply_preset": true}
@@ -1121,6 +1214,35 @@ func regenerateRefused(obj map[string]any) *replyBlock {
 		de = "Nichts wurde neu geplant: dasselbe Hauptgericht wäre bei beiden Mahlzeiten des Tages und kein anderes passt, deshalb wurde nichts gespeichert."
 	}
 	return &replyBlock{facts: []fact{{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: en, DE: de}}, nothingSaved: true}
+}
+
+// keptRepeat is one dish a saved replan still repeats, in the run's notes
+// (planning.varietyKeptNote): "\"Chili\" on 2026-11-30".
+var keptRepeat = regexp.MustCompile(`"([^"]+)" on (\d{4}-\d{2}-\d{2})`)
+
+// varietyKept is the line naming each dish a saved replan still repeats too
+// soon (S1, ledger V73): always told, since the plan was saved with them.
+func varietyKept(obj map[string]any) (fact, bool) {
+	notes, _ := obj["notes"].(string)
+	_, rest, ok := strings.Cut(notes, "Dish variety: no other dish fits")
+	if !ok || obj["status"] == "error" {
+		return fact{}, false
+	}
+	rest, _, _ = strings.Cut(rest, "\n")
+	var en, de []string
+	for _, m := range keptRepeat.FindAllStringSubmatch(rest, -1) {
+		day := dayLabelStr(m[2])
+		en = append(en, fmt.Sprintf("%q on %s", m[1], day))
+		de = append(de, fmt.Sprintf("„%s“ am %s", m[1], deDay(day)))
+	}
+	if len(en) == 0 {
+		return fact{}, false
+	}
+	return fact{
+		Class: classWarn, Kind: kindWarn, Status: statusOK, Must: true,
+		EN: "Still repeated soon after the last time, as before, since no other dish fits: " + strings.Join(en, ", ") + ".",
+		DE: "Wiederholt sich weiter kurz nach dem letzten Mal, wie vorher, weil kein anderes Gericht passt: " + strings.Join(de, ", ") + ".",
+	}, true
 }
 
 // isoInParens is a parenthesised list of ISO dates in a run note ("(2026-12-07)").

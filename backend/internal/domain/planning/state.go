@@ -21,6 +21,11 @@ import (
 // plan window. The caller (the context builder, or a read model) fills it
 // with bounded queries; nothing here does I/O.
 type State struct {
+	// MaxMinutes is a wish's time limit by cell (planner runs only, V72): a
+	// main cooked in such a cell takes at most that many minutes (prep +
+	// cook); unknown minutes do not meet it. A leftover eaten there costs no
+	// time and is free.
+	MaxMinutes map[cellID]int
 	// Avoid are foods the user removed earlier in the conversation: no way,
 	// option or alternative adds them again (set by the chat tools).
 	Avoid map[int64]bool
