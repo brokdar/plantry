@@ -365,8 +365,11 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w wind
 		return "", 0, planning.State{}, err
 	}
 	prompt, cut := ComposePrompt(p, chatFacts(st), s.plan.Summary(st, chatIssues(st)), today)
-	lg, _ := messageLang(append([]string{req.UserText}, earlier...), foodNamesOf(st), st.Profile.Locale)
-	return prompt + languageLine(lg), cut, st, nil
+	// A language nothing says is not asserted (round 8 P1): no line.
+	if lg, ok := messageLang(append([]string{req.UserText}, earlier...), foodNamesOf(st), st.Profile.Locale); ok {
+		prompt += languageLine(lg)
+	}
+	return prompt, cut, st, nil
 }
 
 type windowKey struct{}

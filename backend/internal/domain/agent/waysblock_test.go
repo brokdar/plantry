@@ -68,6 +68,28 @@ func TestRun_FindWaysWithNothingToApplyTellsWhyInCode(t *testing.T) {
 			},
 			absent: []string{"Shall I"},
 		},
+		{
+			// l1r7-tune g2-protein-06: the reply said only that no checked
+			// change does it, without the search's reason.
+			name: "more protein, every candidate blocked (l1r7-tune g2-protein-06)", file: "protein06_find_ways.json",
+			user:  "mehr Eiweiß am Sonntag",
+			model: "Der Tag liegt bei 73 g Eiweiß und 1701 kcal und bleibt damit in seinem Rahmen.",
+			want: []string{
+				"- " + nothingChangedDE,
+				"- Keine Änderung bringt 10 g Eiweiß oder mehr, ohne den Tag (1701 kcal) über die Obergrenze seines Bereichs von 1785 kcal zu bringen oder mehr als 2 Gerichte auf eine Kochzeit zu legen.",
+			},
+			absent: []string{"schafft das allein"},
+		},
+		{
+			name: "more protein, every candidate blocked, English", file: "protein06_find_ways.json",
+			user:  "more protein on Sunday please",
+			model: "Sunday stays as it is.",
+			want: []string{
+				"- " + nothingChangedEN,
+				"- No change adds 10 g of protein or more without taking the day (1701 kcal) over its range top of 1785 kcal or putting more than 2 dishes on one cooking time.",
+			},
+			absent: []string{"does this on its own"},
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -110,6 +132,22 @@ func TestReplyTurnFinal_WriteBlockWinsOverEmptyWays(t *testing.T) {
 	require.NotNil(t, got.block)
 	assert.True(t, got.write)
 	assert.True(t, got.block.nothingSaved)
+}
+
+// Round 8 P3: each more-protein reason of the search is told in German clause
+// by clause; a reason the parser does not know keeps the generic line.
+func TestWaysBlock_ProteinReasonsInGerman(t *testing.T) {
+	t.Parallel()
+	for why, de := range map[string]string{
+		"No checked change adds 10 g of protein or more.":                        "Keine geprüfte Änderung bringt 10 g Eiweiß oder mehr.",
+		"No checked change adds 10 g of protein or more and passes every check.": "Keine Änderung bringt 10 g Eiweiß oder mehr und besteht jede Prüfung.",
+		"No change adds 10 g of protein or more without breaking a hard rule.":   "Keine Änderung bringt 10 g Eiweiß oder mehr, ohne eine feste Regel zu brechen.",
+		"No change adds 10 g of protein or more without dancing.":                "Keine geprüfte Änderung schafft das allein.",
+	} {
+		b := waysBlock(json.RawMessage(`{"ways":[],"goal":{"kind":"more_protein","date":"2026-11-22"},"empty_reason":"` + why + `"}`))
+		require.NotNil(t, b, why)
+		assert.Equal(t, de, b.facts[0].DE, why)
+	}
 }
 
 func TestWaysBlock_NilWhenAWayExists(t *testing.T) {
