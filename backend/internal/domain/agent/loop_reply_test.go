@@ -49,3 +49,42 @@ func TestRun_FinalReplyIsComposedByCode(t *testing.T) {
 		})
 	}
 }
+
+// H1: the unmet block reaches the stored reply after the model's text, and
+// only on a turn that ran no tool (or only a food lookup that found nothing).
+func TestRun_UnmetBlockFollowsTheModelsText(t *testing.T) {
+	t.Parallel()
+	unmet := &replyBlock{nothingSaved: true, facts: []fact{{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: "Left out: the change to Mon 23 Nov dinner (x).", DE: "Weggelassen: x."}}}
+	for _, c := range []struct {
+		name, tool, result, model, want string
+	}{
+		{"no tool", "", "", "That does not fit.", "That does not fit.\n\n- " + nothingChangedEN + "\n- Left out: the change to Mon 23 Nov dinner (x)."},
+		{"lookup found nothing", "find_foods", `{"items":[],"total":0}`, "No such dish.", "No such dish.\n\n- " + nothingChangedEN + "\n- Left out: the change to Mon 23 Nov dinner (x)."},
+		{"lookup found a dish", "find_foods", `{"items":[{"id":1}],"total":1}`, "Here it is.", "Here it is."},
+		{"a question stands", "", "", "Which one do you want?", "Which one do you want?"},
+		{"a read tool ran", "get_plan", `{"days":[]}`, "It is pasta.", "It is pasta."},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			var turns []fake.Turn
+			ts := minimalToolSet(t, "find_foods", json.RawMessage(`{}`), ToolEffectNone, nil)
+			if c.tool != "" {
+				ts = minimalToolSet(t, c.tool, json.RawMessage(c.result), ToolEffectNone, nil)
+				turns = append(turns, scriptToolUseTurn("t1", c.tool))
+			}
+			turns = append(turns, scriptEndTurn(c.model))
+			client := fake.NewFromScript(&fake.Script{Turns: turns})
+			req := makeReq(1)
+			req.UserText = "put the Beef goulash on Monday dinner"
+			req.unmet = unmet
+			req.Tools = ts.Describe()
+			repo := &memRepo{}
+			require.NoError(t, runLoopRepo(t, req, client, ts, repo))
+			msgs, _ := repo.ListMessages(context.Background(), 1)
+			var blocks []struct{ Type, Text string }
+			require.NoError(t, json.Unmarshal(msgs[len(msgs)-1].Content, &blocks))
+			require.NotEmpty(t, blocks)
+			assert.Equal(t, c.want, blocks[len(blocks)-1].Text)
+		})
+	}
+}

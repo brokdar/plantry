@@ -224,3 +224,14 @@ func TestWithoutRegressOptions(t *testing.T) {
 	}
 	assert.Equal(t, []planning.Issue{issue}, withoutRegressOptions(before, before, []planning.Issue{issue}), "no change, no filter")
 }
+
+// V77 lint (tune-v2b guests-02/-09, injection-10): the model offered in its
+// text what the program renders ("a banana side would bring it into range if
+// you want that"), and the lint dropped it as option. The saved change's next
+// says not to offer it in the text.
+func TestAdviceFor_SavedChangeSaysTheProgramOffers(t *testing.T) {
+	t.Parallel()
+	soft := planning.Issue{Rule: "S2", Code: "kcal_below_band", Severity: planning.SeveritySoft, Date: "2026-11-25", Options: []planning.Option{{Name: "Banana", Recommended: true}}}
+	next, _ := adviceFor(context.Background(), Services{}, planningWindow, planning.Evaluation{}, planning.Evaluation{Issues: []planning.Issue{soft}}, false, nil)
+	assert.Contains(t, next, "do not offer it in your text (the program does)")
+}

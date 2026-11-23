@@ -527,7 +527,7 @@ func toolRegenerate(svc Services) Tool {
 	return Tool{
 		Name: "regenerate",
 		Description: "Let the planner choose again for part of the draft plan and wait for it, only when the user asks to plan a whole day or week again (for one dish or side use find_alternatives). Confirmed rows are kept. " +
-			"Returns JSON {run_id, status (ok|partial|error|...), error_key?, counts:{plates, sessions, cook_days, kept_confirmed}, issues:[issue], notes?, changed:[{date, slot_id, plate}], week?:{meat_g:{before, after, limit}, same_dish_twice:[string]}} (week: the meat of the whole window per person against its weekly limit, before and after the run, and the repeated dishes or dish families the week now holds) where plate has the shape of a get_plan cell plate.",
+			"Returns JSON {saved? (a finished run: the plan is saved, no confirmation needed), run_id, status (ok|partial|error|...), error_key?, counts:{plates, sessions, cook_days, kept_confirmed}, issues:[issue], notes?, changed:[{date, slot_id, plate}], week?:{meat_g:{before, after, limit}, same_dish_twice:[string]}} (week: the meat of the whole window per person against its weekly limit, before and after the run, and the repeated dishes or dish families the week now holds) where plate has the shape of a get_plan cell plate.",
 		Schema: schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -609,6 +609,10 @@ func toolRegenerate(svc Services) Tool {
 					scoped[c.Date] = true
 				}
 				out.OtherDays = otherCookingDays(stBefore, stAfter, scoped)
+			}
+			out.Saved = regenerateSaved
+			if v.Status == airun.StatusPartial {
+				out.Saved = regenerateSavedPartial(len(out.Changed))
 			}
 			params["count"] = len(out.Changed)
 			if sc.Kind == planning.ScopeSide {
@@ -709,6 +713,9 @@ func regenerateScope(ctx context.Context, svc Services, kind planning.ScopeKind,
 }
 
 type regenerateOut struct {
+	// Saved says in one sentence that a finished run's plan is in the week
+	// now, as drafts the user can still accept: saved, not "not saved" (V77 S-C).
+	Saved    string            `json:"saved,omitempty"`
 	RunID    int64             `json:"run_id"`
 	Status   string            `json:"status"`
 	ErrorKey string            `json:"error_key,omitempty"`
@@ -720,6 +727,18 @@ type regenerateOut struct {
 	// OtherDays says, per day outside the plates the run wrote, how its cooking
 	// changed (a batch now for fewer or more meals, moved or gone).
 	OtherDays []string `json:"other_days,omitempty"`
+}
+
+// regenerateSaved is the saved sentence of a finished regenerate run: the new
+// plates are saved in the week as drafts (the board shows them to accept), so
+// "saved" is true and the drafts still wait for the user's accept; it never
+// says nothing waits for a confirmation.
+const regenerateSaved = "Saved: the new plan is in the week now as drafts (the user can undo it or accept it on the board)."
+
+// regenerateSavedPartial is the sentence of a partial run: what was saved, and
+// that the rest was not made (the notes and issues say what).
+func regenerateSavedPartial(plates int) string {
+	return fmt.Sprintf("Saved: part of the new plan, %d plate(s), is in the week now as drafts (the user can undo it or accept it on the board); the rest was not planned, see notes and issues.", plates)
 }
 
 // weekOut is what the run did to the week: the window's meat per person

@@ -147,6 +147,8 @@ type replyTurn struct {
 	year    int              // the year of the turn's ISO dates, 0 when none: a weekday before a date is checked against it
 	foods   []string         // the names of the foods of the plan: a write's text names none the block does not
 	write   bool             // a plan-writing tool was called (also as a check)
+	checked bool             // a check (dry run, preview) ran: "not saved" may be true of it
+	ran     bool             // a tool ran that is no food lookup finding nothing (unmetTold)
 	block   *replyBlock      // the facts and the offer of the turn's writes
 	// undoable holds the block as it was before each change saved in this
 	// turn, newest last: an undo of that change takes the block back (addWrite).
@@ -157,6 +159,43 @@ type replyTurn struct {
 	// ways is the block of the turn's last find_ways when it found nothing to
 	// apply on its own (waysBlock): told only when no write of the turn has a block.
 	ways *replyBlock
+	// unmet is told after the model's text when the message asked to change a
+	// meal it names and the turn ran no tool but food lookups that found
+	// nothing (unmetChange, unmetTold): never as a write, the text stays.
+	unmet *replyBlock
+}
+
+// noteTool records what a tool call of the turn was: a check (dry run,
+// preview) and whether it is more than a food lookup that found nothing.
+func (t *replyTurn) noteTool(name string, output json.RawMessage, err error) {
+	if err != nil {
+		t.ran = true
+		return
+	}
+	var obj map[string]any
+	if json.Unmarshal(output, &obj) != nil {
+		t.ran = true
+		return
+	}
+	if obj["dry_run"] == true {
+		t.checked = true
+	}
+	items, ok := obj["items"].([]any)
+	if name != "find_foods" || !ok || len(items) > 0 {
+		t.ran = true
+	}
+}
+
+// unmetTold reports whether the unmet block goes after the model's text: the
+// turn ran no tool (or only food lookups that found nothing), wrote nothing,
+// and the model's text does not end in a question (its question stands: the
+// user answers it). When unsure the block is left out.
+func (t replyTurn) unmetTold(model string) bool {
+	if t.unmet == nil || t.block != nil || t.write || t.ran || t.checked {
+		return false
+	}
+	ss := sentences(strings.TrimSpace(plainReply(model)))
+	return len(ss) == 0 || !strings.HasSuffix(ss[len(ss)-1], "?")
 }
 
 // final is the turn as its closing reply is composed: a turn that saved nothing
@@ -301,6 +340,9 @@ var (
 	isoAnywhere = regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)
 	thousand    = regexp.MustCompile(`^(\d{1,3})([.,]\d{3})+$`)
 	banned      = regexp.MustCompile(`(?i)\b(batch(es)?|eaters?|light days?|hearty minimum|cap|caps|band|bands|floor|soft|drafts?|extras?)\b|\b[HS]\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b|the tool only allows`)
+	// extraPerson is "the extra person": a guest, not the add-on position RP3
+	// bans the word for (V77, tune-v2b guests-00).
+	extraPerson = regexp.MustCompile(`(?i)\bextra (person|people|guests?|eater)\b`)
 	quotedRe    = regexp.MustCompile(`"[^"\n]*"|„[^“\n]*“|“[^”\n]*”`)
 	weekdayRe   = regexp.MustCompile(`(?i)\b(mon|tues?|wed(nes)?|thu(rs)?|fri|sat(ur)?|sun)(day)?\b|\b(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b`)
 )
@@ -659,8 +701,11 @@ var (
 	leftoverNo  = regexp.MustCompile(`(?i)(no leftovers?|without leftovers?|nothing (is )?left ?over|keine reste|ohne reste|nichts bleibt übrig)`)
 	issuesNo    = regexp.MustCompile(`(?i)(no (new )?(problems?|warnings?|issues?)|nothing (is )?(wrong|off)|everything (still )?(fits|is fine|works)|all (is )?fine|alles (passt|in ordnung|ok)|keine (neuen )?(probleme|warnungen))`)
 	rangeIn     = regexp.MustCompile(`(?i)(within|inside|in) (its|the|a good) (range|amount)|(im|innerhalb des) (passenden )?bereich|passt in den bereich`)
-	dayOver     = regexp.MustCompile(`(?i)\b(day|tag)\b[^.]*\b(over|above|too much|über|darüber|zu viel)\b|\b(over|above) (its|the) (range|amount)`)
-	dayUnder    = regexp.MustCompile(`(?i)\b(day|tag)\b[^.]*\b(under|below|short|too little|unter|darunter|zu wenig)\b|\b(under|below) (its|the) (range|amount|minimum)`)
+	// aboveMinimum is "above its minimum": the day's floor, not its range, so
+	// no claim the day is over (V77, tune-v2b injection-10).
+	aboveMinimum = regexp.MustCompile(`(?i)(?:\b(?:above|over)|über)\s+(its|the|the day's|seinem|dem|ihrem)?\s*(minimum|mindestwert\w*)`)
+	dayOver      = regexp.MustCompile(`(?i)\b(day|tag)\b[^.]*\b(over|above|too much|über|darüber|zu viel)\b|\b(over|above) (its|the) (range|amount)`)
+	dayUnder     = regexp.MustCompile(`(?i)\b(day|tag)\b[^.]*\b(under|below|short|too little|unter|darunter|zu wenig)\b|\b(under|below) (its|the) (range|amount|minimum)`)
 )
 
 // Word classes the model's text on a write turn may not use: the block states
@@ -683,10 +728,32 @@ var (
 	negation  = regexp.MustCompile(`(?i)(\bnot\b|n't|\bcannot\b|\bno\b|\bnothing\b|\bnicht\b|\bkeine?\b|\bnichts\b)`)
 )
 
+// unsavedClaim says a change is not saved or waits for a confirmation ("not
+// saved", "not yet saved", "noch nicht gespeichert", "until you confirm", "bis
+// du sie bestätigst"). The words sit together, no wildcard between them: a
+// true mention of confirming the drafts on the board is no such claim.
+var unsavedClaim = regexp.MustCompile(`(?i)\b(?:not|nicht)\s+(?:yet\s+|noch\s+)?(?:saved|stored|gespeichert|übernommen)\b|\bnoch\s+nicht\s+(?:gespeichert|übernommen)\b|\buntil\s+you\s+(?:confirm|approve)\w*|\bbis\s+du\s+(?:\w{1,4}\s+)?(?:bestätigst|freigibst)\b`)
+
+// underMinimum reports a fact that says a day is under its minimum (P-1).
+func underMinimum(facts []fact) bool {
+	return slices.ContainsFunc(facts, func(f fact) bool {
+		return f.Kind == kindDay && f.Status == statusUnder && (strings.Contains(strings.ToLower(f.EN), "minimum") || strings.Contains(strings.ToLower(f.DE), "mindest"))
+	})
+}
+
 // contradicts reports a model text that denies what the block states.
-func contradicts(text string, facts []fact, nothingSaved bool) bool {
+//
+// checked is a turn that ran a check (dry run, preview): "not saved" is true
+// of what it checked, so the unsaved claim is not judged.
+func contradicts(text string, facts []fact, nothingSaved, checked bool) bool {
 	if nothingSaved && doneClaim.MatchString(text) && !negation.MatchString(text) {
 		return true
+	}
+	// A saved change is never "not saved yet" or waiting for a yes (V77 S-C,
+	// dev-v2 g2-planner-13: "Die Änderungen sind noch nicht gespeichert, bis
+	// du sie bestätigst" after a saved replan).
+	if !nothingSaved && !checked && len(facts) > 0 && !slices.ContainsFunc(facts, func(f fact) bool { return f.Class == classRefused }) && unsavedClaim.MatchString(text) {
+		return true // a part left out may truly be "not saved"
 	}
 	has := func(kind string) bool {
 		for _, f := range facts {
@@ -719,7 +786,9 @@ func contradicts(text string, facts []fact, nothingSaved bool) bool {
 		return true
 	case rangeIn.MatchString(text) && (status(statusUnder) || status(statusOver)):
 		return true
-	case dayOver.MatchString(text) && status(statusUnder) && !status(statusOver):
+	case aboveMinimum.MatchString(text) && underMinimum(facts):
+		return true // a Must fact says the day is under its minimum
+	case dayOver.MatchString(aboveMinimum.ReplaceAllString(text, " ")) && status(statusUnder) && !status(statusOver):
 		return true
 	case dayUnder.MatchString(text) && status(statusOver) && !status(statusUnder):
 		return true
@@ -741,7 +810,7 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 	}
 	withBlock := t.write && t.block != nil
 	if withBlock {
-		if banned.MatchString(text) {
+		if banned.MatchString(extraPerson.ReplaceAllString(text, " ")) {
 			return "planner_word"
 		}
 		blockText := ""
@@ -770,7 +839,7 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 				return "number"
 			}
 		}
-		if modelCookingWords.MatchString(text) {
+		if modelCookingWords.MatchString(text) && !cookingBacked(text, t) {
 			return "cooking_claim"
 		}
 		if modelOptionWords.MatchString(withoutComparisons(text)) {
@@ -795,12 +864,12 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 				return "weekday"
 			}
 		}
-		if contradicts(text, t.block.facts, t.block.nothingSaved) {
+		if contradicts(text, t.block.facts, t.block.nothingSaved, t.checked) {
 			return "contradiction"
 		}
 		return ""
 	}
-	if banned.MatchString(quotedRe.ReplaceAllString(text, "")) {
+	if banned.MatchString(extraPerson.ReplaceAllString(quotedRe.ReplaceAllString(text, ""), " ")) {
 		return "planner_word"
 	}
 	have := map[string]bool{}
@@ -817,6 +886,23 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 // sentences, when the lint passes) followed by the facts block and the one offer,
 // both rendered by code in the language of the request.
 func composeReply(model string, t replyTurn) string {
+	reply := composeModelReply(model, t)
+	if !t.unmetTold(model) {
+		return reply
+	}
+	lg := t.lang(strings.TrimSpace(plainReply(model)))
+	nothing, line := nothingChangedEN, t.unmet.facts[0].line(lg)
+	if lg == langDE {
+		nothing = nothingChangedDE
+	}
+	lines := "- " + nothing + "\n- " + line
+	if reply == "" {
+		return lines
+	}
+	return reply + "\n\n" + lines
+}
+
+func composeModelReply(model string, t replyTurn) string {
 	text := strings.TrimSpace(plainReply(model))
 	lg := t.lang(text)
 	drop := func(sentence, reason string) {
@@ -937,7 +1023,7 @@ func finalizeMessage(m *llm.Message, t replyTurn) {
 			texts = append(texts, c.Text)
 		}
 	}
-	if first < 0 && (t.block == nil || !t.write) {
+	if first < 0 && (t.block == nil || !t.write) && !t.unmetTold("") {
 		return
 	}
 	reply := composeReply(strings.Join(texts, "\n\n"), t)

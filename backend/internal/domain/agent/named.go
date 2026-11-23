@@ -2,6 +2,9 @@ package agent
 
 import (
 	"fmt"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -108,4 +111,154 @@ func namedCells(text string, w window.Window, slotNames map[int64]string) map[st
 		}
 	}
 	return out
+}
+
+// dayKcalNumber is a kcal number in a message with its unit: "600 kcal",
+// "650 kalorien", "1,500 kcals", "2.000 kcal/day". The thousands separator is
+// part of the number ("1,500" and "1.800" are 1500 and 1800).
+var dayKcalNumber = regexp.MustCompile(`\b(\d{1,3}(?:[.,]\d{3})+|\d{3,4})\s*(?:kcals?|kilokalorien|kalorien|calories|cal)\b(\s*/\s*(?:day|tag))?`)
+
+// kcalWord is a folded word run of a message (and "~").
+var kcalWord = regexp.MustCompile(`[a-z0-9~]+`)
+
+var (
+	// absoluteCue before a kcal number says it is the day's target.
+	absoluteCue = map[string]bool{
+		"around": true, "about": true, "to": true, "only": true, "total": true, "auf": true, "etwa": true, "ca": true,
+		"ungefaehr": true, "nur": true, "insgesamt": true, "approx": true, "approximately": true, "circa": true, "~": true,
+	}
+	// totalCue near a number says it is the whole day's, whatever meal is named.
+	totalCue = map[string]bool{"total": true, "insgesamt": true, "gesamt": true, "day": true, "tag": true}
+	// relativeWord next to a kcal number makes it an amount to add or take.
+	relativeWord = map[string]bool{
+		"by": true, "less": true, "more": true, "lighter": true, "heavier": true, "cut": true, "um": true, "weniger": true, "mehr": true,
+		"leichter": true, "snack": true, "dessert": true, "side": true, "drink": true, "extra": true, "plus": true, "minus": true, "fewer": true,
+		"under": true, "over": true, "below": true, "above": true, "unter": true, "ueber": true,
+	}
+)
+
+func wordsOf(s string) []string { return kcalWord.FindAllString(s, -1) }
+
+func lastWords(s string, n int) []string {
+	w := wordsOf(s)
+	return w[max(0, len(w)-n):]
+}
+
+func firstWords(s string, n int) []string {
+	w := wordsOf(s)
+	return w[:min(n, len(w))]
+}
+
+func anyIn(words []string, set map[string]bool) bool {
+	return slices.ContainsFunc(words, func(w string) bool { return set[w] })
+}
+
+// shortWeekday are the abbreviations of the weekdays: three letters in
+// English, two in German. A two-letter one counts only with a period or
+// before a number ("Mo. 600 kcal", "So 1800 kcal"), since "so" and "do" are
+// words.
+var shortWeekday = map[string]time.Weekday{
+	"mon": time.Monday, "tue": time.Tuesday, "tues": time.Tuesday, "wed": time.Wednesday, "thu": time.Thursday, "thur": time.Thursday, "thurs": time.Thursday,
+	"fri": time.Friday, "sat": time.Saturday, "sun": time.Sunday,
+}
+
+var shortWeekdayDE = map[string]time.Weekday{
+	"mo": time.Monday, "di": time.Tuesday, "mi": time.Wednesday, "do": time.Thursday, "fr": time.Friday, "sa": time.Saturday, "so": time.Sunday,
+}
+var shortDayDE = regexp.MustCompile(`\b(mo|di|mi|do|fr|sa|so)(?:\.|\s+\d)`)
+
+// namedDayKcal are the days whose energy the message sets to a number: one
+// day (a weekday name or abbreviation of the window, or today/tomorrow/heute/
+// morgen against today) and one kcal number that is the day's absolute target:
+// after a cue word ("around", "to", "only", "total", "auf", "etwa", "ca.",
+// "ungefähr", "nur", "insgesamt") or right after the day ("Saturday 600
+// kcal"), and no relative amount ("by", "less", "more", "cut", "um", "weniger",
+// "mehr", "leichter", a snack, dessert, side, drink or extra), as date → kcal.
+// A meal word makes the number the meal's unless a cue says it is the day's
+// total ("Saturday ~600 kcal total"). Two days or two kcal numbers are not
+// read: it stays nil, so a guess never blocks a legitimate write. Set from the
+// request text, never from a model argument (C-11: a day number under the
+// day's minimum changes nothing, whichever op the model picks).
+func namedDayKcal(text string, w window.Window, today time.Time) map[string]float64 {
+	msg := " " + diet.Fold(text) + " "
+	nums := dayKcalNumber.FindAllStringSubmatchIndex(msg, -1)
+	if len(nums) != 1 {
+		return nil
+	}
+	m := nums[0]
+	before, after := msg[:m[0]], msg[m[1]:]
+	if anyIn(lastWords(before, 3), relativeWord) || anyIn(firstWords(after, 2), relativeWord) {
+		return nil
+	}
+	day := map[string]bool{}
+	for d := w.Start; !d.After(w.End); d = d.AddDate(0, 0, 1) {
+		for _, x := range weekdayWords[d.Weekday()] {
+			if strings.Contains(msg, " "+x) {
+				day[d.Format(time.DateOnly)] = true
+			}
+		}
+	}
+	for _, wd := range wordsOf(msg) {
+		for d := w.Start; !d.After(w.End); d = d.AddDate(0, 0, 1) {
+			if sd, ok := shortWeekday[wd]; ok && sd == d.Weekday() {
+				day[d.Format(time.DateOnly)] = true
+			}
+		}
+		if !today.IsZero() {
+			rel := map[string]int{"today": 0, "heute": 0, "tomorrow": 1, "morgen": 1}
+			if n, ok := rel[wd]; ok {
+				if d := today.AddDate(0, 0, n); !d.Before(w.Start) && !d.After(w.End) {
+					day[d.Format(time.DateOnly)] = true
+				}
+			}
+		}
+	}
+	for _, sm := range shortDayDE.FindAllStringSubmatch(msg, -1) {
+		for d := w.Start; !d.After(w.End); d = d.AddDate(0, 0, 1) {
+			if shortWeekdayDE[sm[1]] == d.Weekday() {
+				day[d.Format(time.DateOnly)] = true
+			}
+		}
+	}
+	if len(day) != 1 {
+		return nil
+	}
+	total := m[4] >= 0 || anyIn(firstWords(after, 3), totalCue) || anyIn(lastWords(before, 2), totalCue)
+	if !total {
+		for _, words := range mealWords {
+			for _, x := range words {
+				if strings.Contains(msg, " "+x) {
+					return nil
+				}
+			}
+		}
+	}
+	prev := lastWords(before, 2)
+	dayBefore := len(prev) > 0 && isDayWord(prev[len(prev)-1])
+	if !total && !anyIn(prev, absoluteCue) && !dayBefore {
+		return nil
+	}
+	n, err := strconv.ParseFloat(strings.NewReplacer(".", "", ",", "").Replace(msg[m[2]:m[3]]), 64)
+	if err != nil {
+		return nil
+	}
+	for d := range day {
+		return map[string]float64{d: n}
+	}
+	return nil
+}
+
+// isDayWord reports a folded word that names a day: a weekday (full, or
+// abbreviated), today or tomorrow.
+func isDayWord(w string) bool {
+	for _, names := range weekdayWords {
+		for _, x := range names {
+			if strings.HasPrefix(w, x) {
+				return true
+			}
+		}
+	}
+	_, short := shortWeekday[w]
+	_, shortDE := shortWeekdayDE[w]
+	return short || shortDE || w == "today" || w == "heute" || w == "tomorrow" || w == "morgen"
 }
