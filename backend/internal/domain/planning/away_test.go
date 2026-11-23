@@ -96,6 +96,28 @@ func TestEvaluate_RoutineOnlyDayIsNotJudged(t *testing.T) {
 	assert.Equal(t, 6, ev.Week.Days, "the routine-only day is not in the week")
 }
 
+// V63 c is narrow: a routine lunch or dinner that holds a plate is food eaten
+// at home, so an all-routine day with a plated routine dinner is judged, with
+// its floor and H9, as before.
+func TestEvaluate_AllRoutineDayWithAPlatedRoutineDinnerIsJudged(t *testing.T) {
+	s := baseState()
+	s.Profile.KcalTarget = f64(3000)
+	s.SlotKind = map[int64]slot.Kind{breakfast: slot.KindLight}
+	setMode(&s, cell(mon, breakfast), availability.ModeRoutine)
+	setMode(&s, cell(mon, lunch), availability.ModeRoutine)
+	setMode(&s, cell(mon, dinner), availability.ModeRoutine)
+	s.Sessions = append(s.Sessions, persistedSession(900, curry, mon, dinner, 1, true))
+	s.Plates = append(s.Plates, persisted(900, mon, dinner, true, curry, 900))
+
+	ev, issues := weekOf(s)
+
+	d := dayEval(t, ev, mon)
+	assert.InDelta(t, 500, d.Kcal, 0.01)
+	assert.Positive(t, d.FloorKcal)
+	assert.Contains(t, codeDates(issues, "H9", planning.CodeKcalBelowFloor), mon)
+	assert.Equal(t, 7, ev.Week.Days)
+}
+
 // The same day with a normal planned breakfast (not a routine) is judged on
 // its planned part as before (#172).
 func TestEvaluate_PlannedBreakfastLeftIsStillJudged(t *testing.T) {

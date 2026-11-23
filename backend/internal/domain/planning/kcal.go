@@ -164,7 +164,7 @@ func (x *index) computeAccounts(days []time.Time) []DayKcal {
 		cells, dayPlates := cellsBy[dayOf(d)], platesBy[dayOf(d)]
 		dk.shares, dk.shareTotal = daySlotShares(s, cells)
 		dk.shift = x.routineShift(&dk, cells, dayPlates)
-		totalShare, unplanned, nonRoutine := 0.0, 0.0, 0
+		totalShare, unplanned, atHome := 0.0, 0.0, false
 		for _, c := range cells {
 			dk.Meals++
 			totalShare += dk.shares[c.SlotID]
@@ -173,8 +173,10 @@ func (x *index) computeAccounts(days []time.Time) []DayKcal {
 				continue
 			}
 			dk.Planned++
-			if c.Mode != availability.ModeRoutine {
-				nonRoutine++
+			// Food at home: a planned non-routine meal, or a routine lunch or
+			// dinner that holds a plate (V63 c).
+			if c.Mode != availability.ModeRoutine || (x.mealOf(c.SlotID) == mealFull && len(x.byCell[idOf(c.Key())]) > 0) {
+				atHome = true
 			}
 			switch {
 			case s.lightMeal(c.Date, c.SlotID):
@@ -191,10 +193,11 @@ func (x *index) computeAccounts(days []time.Time) []DayKcal {
 				}
 			}
 		}
-		// A day away (nothing planned) and a routine-only day (every planned meal
-		// a routine, spec v1.5 SB3, V63 c) are not judged: no floor, no H9, no
-		// range, not in the week.
-		if dk.Active() == 0 || nonRoutine == 0 {
+		// A day away (nothing planned) and a routine-only day (every lunch and
+		// dinner away, none or an unplated routine, and only routines left, such
+		// as a routine breakfast; spec v1.5 SB3, V63 c) are not judged: no floor,
+		// no H9, no range, not in the week.
+		if dk.Active() == 0 || !atHome {
 			continue
 		}
 		if totalShare > 0 {
