@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -108,7 +111,7 @@ func TestUnmetTold_OnlyWithoutToolsAndWithoutAQuestion(t *testing.T) {
 	assert.Contains(t, composeReply("Do you mean the goulash? It has beef.", mk().final()), "Left out")
 	// A food lookup that found nothing: told.
 	lookup := mk()
-	lookup.noteTool("find_foods", json.RawMessage(`{"items":[],"total":0}`), nil)
+	lookup.noteTool("find_foods", json.RawMessage(`{"search":"beef goulash"}`), json.RawMessage(`{"items":[],"total":0}`), nil)
 	assert.Contains(t, composeReply("I found no such dish.", lookup.final()), "Left out")
 	// A lookup that found something, find_ways, get_plan, a check, any error: not told.
 	for name, out := range map[string]string{
@@ -119,11 +122,11 @@ func TestUnmetTold_OnlyWithoutToolsAndWithoutAQuestion(t *testing.T) {
 		"apply_changes":     `{"dry_run":true,"saved":false}`,
 	} {
 		turn := mk()
-		turn.noteTool(name, json.RawMessage(out), nil)
+		turn.noteTool(name, json.RawMessage(`{"search":"beef goulash"}`), json.RawMessage(out), nil)
 		assert.Equal(t, "Offers are in prose.", composeReply("Offers are in prose.", turn.final()), name)
 	}
 	failed := mk()
-	failed.noteTool("find_foods", nil, errors.New("boom"))
+	failed.noteTool("find_foods", nil, nil, errors.New("boom"))
 	assert.NotContains(t, composeReply("Sorry.", failed.final()), "Left out")
 	// The block never turns the turn into a write.
 	assert.False(t, mk().final().write)
@@ -256,8 +259,8 @@ func TestUnmetTold_AfterAQuestionWhenTheFoodIsNotThere(t *testing.T) {
 	ask := turn
 	assert.Equal(t, model, composeReply(model, ask.final()), "no lookup: the question stands alone")
 
-	turn.noteTool("find_foods", json.RawMessage(`{"items":[],"total":0,"truncated":false}`), nil)
-	turn.noteTool("find_foods", json.RawMessage(`{"items":[],"total":0,"truncated":false}`), nil)
+	turn.noteTool("find_foods", json.RawMessage(`{"search":"Chicken wings"}`), json.RawMessage(`{"items":[],"total":0,"truncated":false}`), nil)
+	turn.noteTool("find_foods", json.RawMessage(`{"search":"Chicken wings"}`), json.RawMessage(`{"items":[],"total":0,"truncated":false}`), nil)
 	got := composeReply(model, turn.final())
 	assert.Contains(t, got, nothingChangedDE)
 	assert.Contains(t, got, "Weggelassen: die Änderung an Donnerstag, 26. Nov. Abendessen", got)
@@ -336,4 +339,103 @@ func TestGuestsTurn_NoRound5LineChangesIt(t *testing.T) {
 	assert.True(t, strings.HasPrefix(got, "Friday dinner is now for two"), got)
 	assert.NotContains(t, got, "Left out", "a written guests turn tells no unmet or under-minimum line")
 	assert.NotContains(t, got, nothingChangedEN)
+}
+
+// V84 review F3: the under-minimum line is not repeated when the model's own
+// text already says nothing changed and names the minimum; a turn that ran a
+// read-only tool still tells it (nothing was saved either way).
+func TestComposeReply_UnderFloorLineIsNotRepeated(t *testing.T) {
+	t.Parallel()
+	floor := &replyBlock{nothingSaved: true, facts: []fact{{
+		Class: classRefused, Kind: kindRefused, Status: statusOK,
+		EN: "Sat 21 Nov stays as it is: 250 kcal is under the day's minimum of 793 kcal.",
+		DE: "Samstag, 21. Nov. bleibt, wie er ist: 250 kcal liegen unter dem Mindestwert des Tages von 793 kcal.",
+	}}}
+	nums := map[string]bool{"250": true, "793": true}
+	en := replyTurn{user: "Please plan Saturday at about 250 kcal.", underFloor: floor, numbers: nums}
+	got := composeReply("Nothing changed: the day's minimum is 793 kcal.", en.final())
+	assert.Equal(t, "Nothing changed: the day's minimum is 793 kcal.", got, "EN: the model said both")
+	got = composeReply("Nothing changed, that is too low.", en.final())
+	assert.Contains(t, got, "stays as it is: 250 kcal", "EN: no figure in the text, the line is told")
+	got = composeReply("The day's minimum is 793 kcal, so I did it anyway.", en.final())
+	assert.Contains(t, got, "stays as it is", "EN: a figure without 'nothing changed' is told")
+
+	de := replyTurn{user: "Bitte plane den Samstag auf etwa 250 kcal.", underFloor: floor, numbers: nums}
+	got = composeReply("Es wurde nichts geändert: der Mindestwert liegt bei 793 kcal.", de.final())
+	assert.Equal(t, "Es wurde nichts geändert: der Mindestwert liegt bei 793 kcal.", got, "DE: the model said both")
+	got = composeReply("Das geht nicht.", de.final())
+	assert.Contains(t, got, "bleibt, wie er ist", "DE: told")
+
+	read := en
+	read.noteTool("get_plan", nil, json.RawMessage(`{"days":[]}`), nil)
+	got = composeReply("That is too low.", read.final())
+	assert.Contains(t, got, "stays as it is: 250 kcal", "a read-only tool ran: still told")
+}
+
+// V84 review F4: a food lookup that found nothing settles the unmet change
+// only when its query is the food the message names; a misspelt query that
+// missed (followed by a hit) and an empty filter-only search settle nothing.
+func TestNoteTool_OnlyANamedFoodMissSettlesIt(t *testing.T) {
+	t.Parallel()
+	empty := json.RawMessage(`{"items":[],"total":0}`)
+	hit := json.RawMessage(`{"items":[{"id":1}],"total":1}`)
+	user := "Bitte setze am Donnerstag das Gericht Chicken wings statt dem geplanten."
+
+	named := replyTurn{user: user}
+	named.noteTool("find_foods", json.RawMessage(`{"search":"Chicken wings"}`), empty, nil)
+	assert.True(t, named.missed)
+	assert.False(t, named.ran, "the s2-diet-02 case: the named food is not there")
+
+	typo := replyTurn{user: user}
+	typo.noteTool("find_foods", json.RawMessage(`{"search":"Chiken wings"}`), empty, nil)
+	typo.noteTool("find_foods", json.RawMessage(`{"search":"wings"}`), hit, nil)
+	assert.False(t, typo.missed, "a misspelt query that missed settles nothing")
+	assert.True(t, typo.ran)
+
+	filter := replyTurn{user: user}
+	filter.noteTool("find_foods", json.RawMessage(`{"roles":["main"],"diet":"vegetarian"}`), empty, nil)
+	assert.False(t, filter.missed, "an empty filter-only search settles nothing")
+	assert.True(t, filter.ran)
+
+	other := replyTurn{user: user}
+	other.noteTool("find_foods", json.RawMessage(`{"search":"pizza"}`), empty, nil)
+	assert.False(t, other.missed, "a query for a food the message does not name")
+
+	// The unmet line follows: a misspelling or a filter search gives none.
+	slots, st, _ := unmetFixture()
+	thu := map[string]bool{"2026-11-26|3": true}
+	mk := func() replyTurn { return replyTurn{user: user, unmet: unmetChange(user, thu, slots, st)} }
+	model := "Das passt nicht. Soll ich stattdessen eine Alternative suchen?"
+	hit1 := mk()
+	hit1.noteTool("find_foods", json.RawMessage(`{"search":"Chicken wings"}`), empty, nil)
+	assert.Contains(t, composeReply(model, hit1.final()), nothingChangedDE)
+	for name, calls := range map[string][][2]json.RawMessage{
+		"misspelling": {{json.RawMessage(`{"search":"Chiken wings"}`), empty}, {json.RawMessage(`{"search":"wings"}`), hit}},
+		"filter only": {{json.RawMessage(`{"roles":["main"]}`), empty}},
+	} {
+		turn := mk()
+		for _, c := range calls {
+			turn.noteTool("find_foods", c[0], c[1], nil)
+		}
+		assert.Equal(t, model, composeReply(model, turn.final()), name)
+	}
+}
+
+// V84 review F7: a meal that blocks a move_cook through several links is told
+// once, and the refusal parses the reasons plate's constants name.
+func TestMoveCookRefusal_ADuplicateMealIsToldOnce(t *testing.T) {
+	t.Parallel()
+	op := changeOp{Op: "move_cook", SessionID: 1}
+	op.CookAt = &struct {
+		Date   string `json:"date"`
+		SlotID int64  `json:"slot_id"`
+	}{Date: "2026-12-03", SlotID: 3}
+	blocked := fmt.Sprintf("op 1 of 1 (move_cook): invalid input: plate 5 (2026-12-01 slot 2) %s; plate 6 (2026-12-01 slot 2) %s; plate 7 (2026-12-04 slot 3) %s",
+		plate.BlockComesBefore, plate.BlockComesBefore, plate.BlockPastKeeping)
+	res, ok := moveCookRefusal(context.Background(), Services{}, window.Window{}, op, false, errors.New(blocked))
+	require.True(t, ok)
+	en := res["skipped"].([]map[string]any)[0]["en"].(string)
+	assert.Equal(t, 1, strings.Count(en, "Tue 1 Dec"), en)
+	assert.Contains(t, en, "eat it before then")
+	assert.Contains(t, en, "Fri 4 Dec would eat it past its keeping time")
 }

@@ -14,6 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plainwords"
 )
@@ -172,7 +173,7 @@ type replyTurn struct {
 
 // noteTool records what a tool call of the turn was: a check (dry run,
 // preview) and whether it is more than a food lookup that found nothing.
-func (t *replyTurn) noteTool(name string, output json.RawMessage, err error) {
+func (t *replyTurn) noteTool(name string, input, output json.RawMessage, err error) {
 	if err != nil {
 		t.ran = true
 		return
@@ -190,7 +191,32 @@ func (t *replyTurn) noteTool(name string, output json.RawMessage, err error) {
 		t.ran = true
 		return
 	}
+	// Only a search for a food the message names is a miss that settles it
+	// (review F4): a filter-only search or a misspelt query settles nothing.
+	var in struct {
+		Search string `json:"search"`
+	}
+	if json.Unmarshal(input, &in) != nil || !t.namesQuery(in.Search) {
+		t.ran = true
+		return
+	}
 	t.missed = true
+}
+
+// namesQuery reports whether every word of the search query is a word of the
+// user's message (folded): the search is for what the message asked for.
+func (t *replyTurn) namesQuery(query string) bool {
+	words := strings.FieldsFunc(diet.Fold(query), func(r rune) bool { return r < 'a' || r > 'z' })
+	if len(words) == 0 {
+		return false
+	}
+	msg := " " + strings.Join(strings.FieldsFunc(diet.Fold(t.user), func(r rune) bool { return r < 'a' || r > 'z' }), " ") + " "
+	for _, w := range words {
+		if !strings.Contains(msg, " "+w+" ") {
+			return false
+		}
+	}
+	return true
 }
 
 // unmetTold reports whether the unmet block goes after the model's text: the
@@ -376,8 +402,9 @@ func normNumber(s string) string {
 var deDecimalComma = regexp.MustCompile(`^\d+,\d{3}$`)
 
 // sentenceLang is the language of a text by its marker words, quoted spans
-// and the plan's dish names left out; ok only when one language leads by two
-// words or more (a dish name or a short sentence decides nothing).
+// and the plan's dish names left out; ok only when one language has three
+// marker words or more and the other none (a dish name or a short sentence
+// decides nothing, review F5).
 func sentenceLang(text string, foods []string) (lang, bool) {
 	text = quotedRe.ReplaceAllString(text, " ")
 	low := strings.ToLower(text)
@@ -386,18 +413,51 @@ func sentenceLang(text string, foods []string) (lang, bool) {
 			low = strings.ReplaceAll(low, n, " ")
 		}
 	}
-	en, de := len(englishWord.FindAllString(low, -1)), len(germanWord.FindAllString(low, -1))
+	en, de := len(sentenceEnglish.FindAllString(low, -1)), len(sentenceGerman.FindAllString(low, -1))
 	switch {
-	case en-de >= 2:
+	case en >= 3 && de == 0:
 		return langEN, true
-	case de-en >= 2:
+	case de >= 3 && en == 0:
 		return langDE, true
 	}
 	return langEN, false
 }
 
-// kcalAfter is an energy unit right after a number.
-var kcalAfter = regexp.MustCompile(`(?i)^\s*(kcal|kalorien|calories|kilokalorien)\b`)
+// The marker words of sentenceLang: the shared lists without the words that
+// are ordinary tokens of the other language (is, to, no, of, on; am, tag, die).
+var (
+	sentenceEnglish = regexp.MustCompile(`(?i)\b(the|and|are|now|with|please|can|you|my|move|dinner|lunch|yes|instead|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b`)
+	sentenceGerman  = regexp.MustCompile(`(?i)\b(der|das|und|ist|wird|werden|mit|nicht|für|jetzt|auf|dem|den|bitte|kannst|du|ich|mein|meine|zum|zur|abendessen|mittagessen|frühstück|verschieb\w*|tausch\w*|leichter|mehr|weniger|ja|nein|statt|im|ein|eine|einen|nur|auch|noch|kein|keine|woche|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b|[äöüß]`)
+)
+
+// timeAfterNumber is a number with a time unit right after it.
+var timeAfterNumber = regexp.MustCompile(`(?i)(\d[\d.,]*\d|\d)[\s-]?(minutes?|minuten|mins?|stunden|stunde|std|hours?|hrs?)\b`)
+
+var (
+	rangeBefore = regexp.MustCompile(`(?i)\d\s*(?:-|–|to|bis)\s*$`)
+	rangeAfter  = regexp.MustCompile(`(?i)^\s*(?:-|–|to|bis)\s*\d`)
+)
+
+func timeUnitClass(unit string) string {
+	if strings.HasPrefix(strings.ToLower(unit), "m") {
+		return "min"
+	}
+	return "h"
+}
+
+// userTimeBacks reports whether the number at free[ix[0]:ix[1]] is a time
+// the user named with the same unit, outside a range.
+func userTimeBacks(said map[string]string, n, free string, ix []int) bool {
+	m := timeAfterNumber.FindStringSubmatchIndex(free[ix[0]:])
+	if m == nil || m[0] != 0 || free[ix[0]:ix[0]+m[3]] != free[ix[0]:ix[1]] {
+		return false
+	}
+	unit := free[ix[0]+m[4] : ix[0]+m[5]]
+	if rangeBefore.MatchString(free[:ix[0]]) || rangeAfter.MatchString(free[ix[1]:]) {
+		return false
+	}
+	return said[n+" "+timeUnitClass(unit)] != ""
+}
 
 // normModelNumber is normNumber for a number of the model's text in language lg.
 func normModelNumber(s string, lg lang) string {
@@ -869,17 +929,19 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 			known = map[dateKey]bool{}
 		}
 		datesIn(blockText, known, false)
-		// A number the user named in this conversation backs one too ("30 min
-		// max" → "under 30 minutes", V81 L4), except an energy figure: the
-		// user's kcal wish is no fact about the plan.
-		said := map[string]bool{}
+		// A time the user named in this conversation backs the same time of
+		// the text ("30 min max" → "under 30 minutes", V81 L4; review F2):
+		// never an energy figure or a count, never inside a range.
+		said := map[string]string{}
 		for _, u := range append([]string{t.user}, t.earlier...) {
-			numbersIn(u, said)
+			for _, m := range timeAfterNumber.FindAllStringSubmatch(u, -1) {
+				said[normNumber(m[1])+" "+timeUnitClass(m[2])] = "y"
+			}
 		}
 		free := withoutKnownDates(text, known, t.year)
 		for _, ix := range numberRe.FindAllStringIndex(free, -1) {
 			n := normModelNumber(free[ix[0]:ix[1]], lg)
-			if backedBy(n, backed, t.numbers) || (backedBy(n, said) && !kcalAfter.MatchString(free[ix[1]:])) {
+			if backedBy(n, backed, t.numbers) || userTimeBacks(said, n, free, ix) {
 				continue
 			}
 			return "number"
@@ -938,6 +1000,9 @@ func composeReply(model string, t replyTurn) string {
 		// refused in prose with no tool and no "nothing changed": the request
 		// is under the day's minimum, so the reply says so in code, whatever
 		// the model wrote (a question after it offers something else).
+		if saysFloorKept(reply, t.underFloor) {
+			return reply
+		}
 		told = t.underFloor
 	} else if !t.unmetTold(model) {
 		return reply
@@ -952,6 +1017,25 @@ func composeReply(model string, t replyTurn) string {
 		return lines
 	}
 	return reply + "\n\n" + lines
+}
+
+var (
+	saidNothingChanged = regexp.MustCompile(`(?i)\bnothing (?:was |has |is |got )?changed\b|\bnichts (?:wurde |ist |wird )?(?:ge|ver)(?:ae|ä)ndert\b`)
+	floorFigure        = regexp.MustCompile(`(?:minimum of|Mindestwert des Tages von) (\d+)`)
+)
+
+// saysFloorKept reports that the model's own text already says nothing
+// changed and names the day's minimum the block would tell (review F3): the
+// line would only repeat it.
+func saysFloorKept(reply string, floor *replyBlock) bool {
+	if reply == "" || !saidNothingChanged.MatchString(reply) {
+		return false
+	}
+	m := floorFigure.FindStringSubmatch(floor.facts[0].EN)
+	if m == nil {
+		return false
+	}
+	return regexp.MustCompile(`\b` + m[1] + `\b`).MatchString(reply)
 }
 
 func composeModelReply(model string, t replyTurn) string {

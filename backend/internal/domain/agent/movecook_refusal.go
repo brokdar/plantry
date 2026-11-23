@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -15,7 +16,8 @@ import (
 // cook; ...".
 var (
 	moveCookBlocked = regexp.MustCompile(`^op 1 of 1 \(move_cook\): invalid input: (.+)$`)
-	moveCookCell    = regexp.MustCompile(`\((\d{4}-\d{2}-\d{2}) slot (\d+)\) (comes before the cook|is past the keeping time)`)
+	// moveCookCell parses one blocking meal; its reasons are plate's constants.
+	moveCookCell = regexp.MustCompile(`\((\d{4}-\d{2}-\d{2}) slot (\d+)\) (` + regexp.QuoteMeta(plate.BlockComesBefore) + `|` + regexp.QuoteMeta(plate.BlockPastKeeping) + `)`)
 )
 
 // moveCookRefusal turns a single move_cook the plate service refused (a meal
@@ -56,9 +58,15 @@ func moveCookRefusal(ctx context.Context, svc Services, w window.Window, op chan
 	}
 	toEN, toDE := at(op.CookAt.Date, fmt.Sprint(op.CookAt.SlotID))
 	var before, beforeDE, late, lateDE []string
+	seen := map[string]bool{} // a meal blocks once, whatever its links say
 	for _, c := range cells {
+		if k := c[1] + "|" + c[2]; seen[k] {
+			continue
+		} else {
+			seen[k] = true
+		}
 		en, de := at(c[1], c[2])
-		if c[3] == "comes before the cook" {
+		if c[3] == plate.BlockComesBefore {
 			before, beforeDE = append(before, en), append(beforeDE, de)
 		} else {
 			late, lateDE = append(late, en), append(lateDE, de)

@@ -287,7 +287,7 @@ func TestPrompt_ReplanningTheWeekIsNoOutOfScope(t *testing.T) {
 	if strings.Contains(prompt, "planning a whole week is the Planner") {
 		t.Error("replanning this week is regenerate, not the Planner")
 	}
-	if !strings.Contains(prompt, "another week is the Planner") {
+	if !strings.Contains(prompt, "a week not shown is the Planner") {
 		t.Error("another week stays the Planner's")
 	}
 }

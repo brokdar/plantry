@@ -30,7 +30,7 @@ var (
 	// is not; in a compound the span after the weekday starts on the word.
 	mealWordRe = regexp.MustCompile(`(?i)\b(?:breakfast|lunch|dinner|supper|fruehstueck|mittag|abend)`)
 	// cookExclusive is a claim that a day cooks once or only something.
-	cookExclusive = regexp.MustCompile(`(?i)\b(one cooking time|a single cooking time|(?:only|just) (?:once|one)|cooks? once|nur (?:einmal|eine)|einmal gekocht|eine kochzeit|einzige kochzeit)\b`)
+	cookExclusive = regexp.MustCompile(`(?i)\b(one cooking time|a single cooking time|(?:only|just) (?:once|one (?:cooking|time|batch))|cooks? once|nur einmal|einmal gekocht|eine kochzeit|einzige kochzeit)\b`)
 	// cookDenial is a claim that something is not or no longer cooked.
 	cookDenial = regexp.MustCompile(`(?i)\b(not|no longer|nothing|nicht|nichts|kein\w*|nie)\b`)
 	// cookPast is a cooking claim about the past, which no cooking line backs.
@@ -51,13 +51,38 @@ var mealKey = map[string]string{"breakfast": "breakfast", "fruehstueck": "breakf
 type claimCell struct {
 	day, meal string
 	dishes    []string
-	// eats are the weekdays the cooking feeds ("for Mon 30 Nov lunch, ...").
-	eats map[string]bool
+	// feeds are, per dish, the weekdays and meals it feeds ("for Mon 30 Nov
+	// lunch, ..."): dish -> weekday -> meals ("*" when the line names none).
+	feeds map[string]map[string]map[string]bool
 }
 
-// eatList is the list of meals a cooked dish is for: "for <...>" up to the
-// next dish, the note in parentheses or the end.
-var eatList = regexp.MustCompile(`" for ([^;(]+)`)
+// feeding reports whether the dish (any dish when "") of the cell feeds the
+// day, at every one of the meals.
+func (c claimCell) feeding(dish, day string, meals map[string]bool) bool {
+	for d, byDay := range c.feeds {
+		if dish != "" && d != dish {
+			continue
+		}
+		have := byDay[day]
+		if len(have) == 0 {
+			continue
+		}
+		ok := true
+		for m := range meals {
+			if !have[m] && !have["*"] {
+				ok = false
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
+}
+
+// eatList is a cooked dish with the list of meals it is for: "for <...>" up
+// to the next dish, the note in parentheses or the end.
+var eatList = regexp.MustCompile(`(?:you cook |; )"([^"]+)" for ([^;(]+)`)
 
 // eatMarker ends a span before a weekday that names a day the cooking is
 // eaten on, not cooked on: "reicht für Montag", "covers Wednesday", "for
@@ -87,10 +112,28 @@ func claimCells(facts []fact) []claimCell {
 			for _, x := range claimDish.FindAllStringSubmatch(f.EN, -1) {
 				c.dishes = append(c.dishes, strings.ToLower(x[1]))
 			}
-			c.eats = map[string]bool{}
+			c.feeds = map[string]map[string]map[string]bool{}
 			for _, l := range eatList.FindAllStringSubmatch(f.EN, -1) {
-				for _, w := range weekdayRe.FindAllString(l[1], -1) {
-					c.eats[weekdayKey(w)] = true
+				dish := strings.ToLower(l[1])
+				if c.feeds[dish] == nil {
+					c.feeds[dish] = map[string]map[string]bool{}
+				}
+				for _, item := range strings.Split(l[2], ",") {
+					w := weekdayRe.FindString(item)
+					if w == "" {
+						continue
+					}
+					day := weekdayKey(w)
+					if c.feeds[dish][day] == nil {
+						c.feeds[dish][day] = map[string]bool{}
+					}
+					meals := mealsNear(item)
+					if len(meals) == 0 {
+						meals["*"] = true
+					}
+					for m := range meals {
+						c.feeds[dish][day][m] = true
+					}
 				}
 			}
 			cells = append(cells, c)
@@ -200,6 +243,36 @@ func uniqueDishFor(phrase []string, dishes []string) bool {
 	return n == 1
 }
 
+// cookTimes is the number of times the day cooks at: its distinct cooking
+// meals, and one for a day-wide line alone.
+func cookTimes(cells []claimCell, day string) int {
+	meals := map[string]bool{}
+	seen := false
+	for _, c := range cells {
+		if c.day == day {
+			seen = true
+			if c.meal != "" {
+				meals[c.meal] = true
+			}
+		}
+	}
+	if len(meals) == 0 && seen {
+		return 1
+	}
+	return len(meals)
+}
+
+// countCells is the number of cooking cells the dish is cooked in.
+func countCells(cells []claimCell, dish string) int {
+	n := 0
+	for _, c := range cells {
+		if slices.Contains(c.dishes, dish) {
+			n++
+		}
+	}
+	return n
+}
+
 // cookingBacked reports whether the block backs every cooking claim of text.
 func cookingBacked(text string, t replyTurn) bool {
 	if t.block == nil || cookDenial.MatchString(text) {
@@ -258,20 +331,54 @@ func cookingBacked(text string, t replyTurn) bool {
 			}
 		}
 	}
-	// A day the cooking is eaten on is a day some cooking line feeds.
+	// A day the cooking is eaten on is fed by a cooking line, at the meal the
+	// sentence names, and by every dish it names (V81 review F1: "The chili is
+	// cooked for Monday" when only the lasagne feeds Monday is false).
 	for i := range eatDays {
 		key := weekdayKey(text[days[i][0]:days[i][1]])
-		if !slices.ContainsFunc(cells, func(c claimCell) bool { return c.eats[key] }) {
+		lo, hi := max(0, days[i][0]-14), min(len(text), days[i][1]+20)
+		if i > 0 {
+			lo = max(lo, days[i-1][1])
+		}
+		if i+1 < len(days) {
+			hi = min(hi, days[i+1][0])
+		}
+		meals := mealsNear(text[lo:days[i][0]])
+		for m := range mealsNear(text[days[i][1]:hi]) {
+			meals[m] = true
+		}
+		feeds := func(dish string) bool {
+			return slices.ContainsFunc(cells, func(c claimCell) bool { return c.feeding(dish, key, meals) })
+		}
+		if !feeds("") {
 			return false
+		}
+		for _, n := range named {
+			if !feeds(strings.ToLower(strings.TrimSpace(n))) {
+				return false
+			}
+		}
+		var fed []string // the dishes feeding that day
+		for _, c := range cells {
+			for _, d := range c.dishes {
+				if c.feeding(d, key, nil) && !slices.Contains(fed, d) {
+					fed = append(fed, d)
+				}
+			}
+		}
+		for _, phrase := range loose {
+			if !uniqueDishFor(phrase, fed) {
+				return false
+			}
 		}
 	}
 	if len(tiedDays) == 0 && len(named) == 0 && len(loose) == 0 {
 		return false // a cooking claim about no day and no dish
 	}
-	// An exclusive claim ("one cooking time", "only", "nur einmal") names
-	// every dish cooked on its tied day, or it drops (V81, tune-v2c
-	// g2-replace-01: "cooked with Friday lunch so the day keeps one cooking
-	// time" left out the curry and rice Friday also cooks).
+	// An exclusive claim ("one cooking time", "only once", "nur einmal") is
+	// true when its day cooks at one time (V84; the sentence need not name
+	// every dish cooked then). The dishes it names must be cooked at that
+	// time, which the named-dish checks below enforce.
 	exclusive := cookExclusive.MatchString(text)
 	var scope []claimCell      // the cook cells a loosely named dish is looked up in
 	onDay := map[string]bool{} // named dishes found on a tied day
@@ -305,20 +412,8 @@ func cookingBacked(text string, t replyTurn) bool {
 			return false // not a cooking day, or not at that meal
 		}
 		scope = append(scope, day...)
-		if exclusive {
-			var all []string
-			for _, c := range cells {
-				if c.day == key {
-					for _, d := range c.dishes {
-						if !slices.Contains(all, d) {
-							all = append(all, d)
-						}
-					}
-				}
-			}
-			if len(all) > len(named)+len(loose) {
-				return false
-			}
+		if exclusive && cookTimes(cells, key) > 1 {
+			return false // the day cooks at more than one time
 		}
 		found := false
 		for _, n := range named {
@@ -337,6 +432,23 @@ func cookingBacked(text string, t replyTurn) bool {
 		for _, n := range named {
 			if !onDay[n] {
 				return false
+			}
+		}
+	}
+	if exclusive && len(tiedDays) == 0 {
+		// No day tied: every day the sentence names cooks at one time; with no
+		// day named, each dish it names is cooked at one time of the plan.
+		for _, d := range days {
+			if cookTimes(cells, weekdayKey(text[d[0]:d[1]])) > 1 {
+				return false
+			}
+		}
+		if len(days) == 0 {
+			for _, n := range named {
+				k := strings.ToLower(strings.TrimSpace(n))
+				if countCells(cells, k) > 1 {
+					return false
+				}
 			}
 		}
 	}

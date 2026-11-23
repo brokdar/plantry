@@ -718,9 +718,9 @@ func (s *Service) MoveCook(ctx context.Context, sessionID int64, to CellKey) (Me
 			}
 			where := fmt.Sprintf("plate %d (%s slot %d)", l.PlateID, l.Cell.Date.Format(dateLayout), l.Cell.SlotID)
 			if Before(l.Cell, to, e.order) {
-				blocking = append(blocking, where+" comes before the cook")
+				blocking = append(blocking, where+" "+BlockComesBefore)
 			} else if CheckLink(l.Cell, cand.FoodID, cand, keep, set, e.order) != nil {
-				blocking = append(blocking, where+" is past the keeping time")
+				blocking = append(blocking, where+" "+BlockPastKeeping)
 			}
 		}
 		if len(blocking) > 0 {
@@ -832,3 +832,10 @@ func copyComponents(comps []PlateComponent, as CopyAs) []PlateComponent {
 	}
 	return out
 }
+
+// The reasons a move_cook is refused, per blocking meal; the agent's refusal
+// line parses them out of the error (agent.moveCookCell).
+const (
+	BlockComesBefore = "comes before the cook"
+	BlockPastKeeping = "is past the keeping time"
+)

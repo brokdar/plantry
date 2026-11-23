@@ -325,7 +325,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			output, effect, change, err := tools.Execute(llm.WithCaller(ctx, caller), call.ToolUseName, call.ToolUseInput)
 			dur := time.Since(start).Milliseconds()
 
-			turnReply.noteTool(call.ToolUseName, output, err)
+			turnReply.noteTool(call.ToolUseName, call.ToolUseInput, output, err)
 			if err != nil {
 				// Tool errors are fed back to the model as tool_result with is_error.
 				// This gives the model a chance to correct its arguments or try a
