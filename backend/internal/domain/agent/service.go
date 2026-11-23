@@ -363,8 +363,6 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w wind
 	return prompt, cut, st, nil
 }
 
-type todayKey struct{}
-
 type windowKey struct{}
 
 // withWindow carries the chat turn's planning window to the tools.
@@ -378,16 +376,17 @@ func windowFrom(ctx context.Context) (window.Window, bool) {
 	return w, ok
 }
 
-// withToday carries the user's date to the tools of a chat turn.
+// withToday carries the user's date to the tools of a chat turn and to the
+// plate service they write through (plate.WithToday), so the turn's guards,
+// plan state and write path share one today.
 func withToday(ctx context.Context, today time.Time) context.Context {
-	return context.WithValue(ctx, todayKey{}, today)
+	return plate.WithToday(ctx, today)
 }
 
 // todayFrom returns the date set by withToday; the zero time when a chat
 // turn did not set one (Chat rejects such a request).
 func todayFrom(ctx context.Context) time.Time {
-	t, _ := ctx.Value(todayKey{}).(time.Time)
-	return t
+	return plate.TodayFrom(ctx)
 }
 
 // DebugSystemPrompt composes and returns the system prompt that would be sent

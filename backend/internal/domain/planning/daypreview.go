@@ -27,6 +27,7 @@ type DayPreview struct {
 // is rolled back, so the preview is what the run's save then does. date must
 // be in the window and not before today (domain.ErrInvalidScope).
 func (s *Service) PreviewDay(ctx context.Context, start, today, date time.Time) (*DayPreview, error) {
+	ctx = plate.WithToday(ctx, today) // the removal's re-anchor uses the same today
 	sd, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanShoppingDay)
 	if err != nil {
 		return nil, err

@@ -251,6 +251,23 @@ func TestMoveMeal_IntoOrFromThePastIsRefused(t *testing.T) {
 	assert.Equal(t, before, e.week())
 }
 
+// The caller's today (plate.WithToday: the chat turn's) rules the past-day
+// guard, not the clock: a day between them stays open when the clock runs
+// ahead, and a day before it stays closed when the clock lags.
+func TestMoveMeal_TheCallersTodayRulesThePast(t *testing.T) {
+	ahead := newEnvAt(t, nil, time.Date(2026, 11, 5, 12, 0, 0, 0, time.Local))
+	ahead.ctx = plate.WithToday(ahead.ctx, day(sun))
+	ahead.batch()
+	_, err := ahead.move(ahead.plateAt(mon, ahead.lunch), tue, ahead.dinner, plate.Occupant{})
+	require.NoError(t, err, "tue lies before the clock (thu), not before the caller's today (sun)")
+
+	behind := newEnv(t)
+	behind.ctx = plate.WithToday(behind.ctx, day(wed))
+	thuPlate := behind.create(thu, behind.lunch, nil, composed(behind.curry, 1))
+	_, err = behind.move(thuPlate, tue, behind.dinner, plate.Occupant{})
+	require.ErrorIs(t, err, domain.ErrPastCell, "tue lies before the caller's today (wed)")
+}
+
 func TestMoveMeal_AConfirmedMealMovesByHandAndItsBatchIsReported(t *testing.T) {
 	e := newEnv(t)
 	sunPlate, sid := e.batch()

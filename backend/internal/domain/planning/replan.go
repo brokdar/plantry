@@ -162,6 +162,7 @@ type spareBatch struct {
 
 // PreviewReplan lists what Replan would change.
 func (s *Service) PreviewReplan(ctx context.Context, q ReplanQuery) (*ReplanPreview, error) {
+	ctx = plate.WithToday(ctx, q.Today) // the removal's re-anchor uses the same today
 	var sc *replanScan
 	err := s.d.Tx.InTx(ctx, func(ctx context.Context) error {
 		var err error
@@ -180,6 +181,7 @@ func (s *Service) PreviewReplan(ctx context.Context, q ReplanQuery) (*ReplanPrev
 // else it fails with a *ConfirmedAffectedError. Days before From are never
 // touched, nor are cooked batches' portions.
 func (s *Service) Replan(ctx context.Context, req ReplanRequest) (*ReplanResult, error) {
+	ctx = plate.WithToday(ctx, req.Today) // the removal's re-anchor uses the same today
 	switch req.Spare {
 	case SpareFreeze, SpareKeep:
 	default:

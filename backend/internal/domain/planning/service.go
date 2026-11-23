@@ -241,6 +241,7 @@ type job struct {
 }
 
 func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held bool) (int64, error) {
+	ctx = plate.WithToday(ctx, req.Today) // the run's plate writes use the request's today
 	started := false
 	if held {
 		defer func() {
