@@ -26,9 +26,14 @@ if [ "${1:-}" = "--fast" ]; then MODE=fast; shift; fi
 SPECS=("$@")
 LOG="$(mktemp -d "/tmp/plantry-gate-${E2E_LANE:-0}-XXXX")"
 export GOWORK=off
+# -trimpath: cache entries are keyed on content, not the worktree directory, so
+# all worktrees share one Go build cache instead of each adding its own.
+export GOFLAGS="${GOFLAGS:+$GOFLAGS }-trimpath"
 RACE_FLAGS=(-race -short -gcflags=modernc.org/sqlite/...=-race=false)
 CPU_EXEC="$ROOT/scripts/cpu-exec.py"
 BUDGET="$ROOT/scripts/test-budget.py"
+
+"$ROOT/scripts/disk-guard.sh" || exit 1
 
 # T2 pass cache: the same clean tree, mode and specs passed before.
 PASS_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/plantry-gate"
