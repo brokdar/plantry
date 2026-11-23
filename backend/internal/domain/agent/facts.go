@@ -77,6 +77,9 @@ type fact struct {
 	// Must marks a line the reply always tells, outside the cap of classes 2
 	// to 5: a day the change left under its minimum (SF1(c), G4.4).
 	Must bool `json:"must,omitempty"`
+	// Day, on a leftover line that begins "<day>: ", lets the lines of one day
+	// merge into one (G4).
+	Day string `json:"day,omitempty"`
 }
 
 // lang is the language of a reply.
@@ -100,6 +103,41 @@ type factSink struct{ items []fact }
 
 func (s *factSink) add(class int, kind, status, en, de string) {
 	s.addKey("", class, kind, status, en, de)
+}
+
+// addDay adds a leftover line that begins "<day>: ", so it can merge with the
+// others of its day.
+func (s *factSink) addDay(day string, class int, kind, status, en, de string) {
+	if s == nil {
+		return
+	}
+	n := len(s.items)
+	s.add(class, kind, status, en, de)
+	if len(s.items) > n {
+		s.items[n].Day = day
+	}
+}
+
+// mergeDays joins the leftover lines of one day into one line ("Wed 2 Dec: a; b."),
+// at the place of the first.
+func mergeDays(told []fact) []fact {
+	var out []fact
+	at := map[string]int{}
+	for _, f := range told {
+		if f.Day == "" {
+			out = append(out, f)
+			continue
+		}
+		i, ok := at[f.Day]
+		if !ok {
+			at[f.Day] = len(out)
+			out = append(out, f)
+			continue
+		}
+		out[i].EN = strings.TrimSuffix(out[i].EN, ".") + "; " + strings.TrimPrefix(f.EN, f.Day+": ")
+		out[i].DE = strings.TrimSuffix(out[i].DE, ".") + "; " + strings.TrimPrefix(f.DE, deDay(f.Day)+": ")
+	}
+	return out
 }
 
 // addKey adds a fact that states the figure key.
@@ -129,10 +167,15 @@ func (s *factSink) addMust(key string, class int, kind, status, en, de string) {
 // emptyFact matches a line with nothing after its label ("Thu 26 Nov breakfast: ").
 var emptyFact = regexp.MustCompile(`^([^:]*:)?\s*[.;,]*\s*$`)
 
-// selectBlock is the facts a reply shows (a line is never cut: a fact is told whole or not at all): no empty line, no line twice, and of
-// classes 2 to 5 at most maxBlock. When more were found the ones that got worse
-// or are new warnings stay first, then the changed meals, then what moved; the
-// result is in class order. Class 1 is never cut and comes first.
+// selectBlock is the facts a reply shows (a line is never cut: a fact is told
+// whole or not at all): no empty line, no line twice. The must lines (a day under
+// its minimum) and the what-moved lines (movedTold: cooking, leftovers, guests,
+// a day's meals out) are never cut; leftover lines of one day are merged into one
+// line (mergeDays), and buildFacts already merges a day's meals out, assumed
+// energy and "nothing is cooked" into one. Of the rest (classes 2 to 5) at most
+// maxBlock stay: the changed meals first (at least one always keeps its place),
+// then the day outside its range, other worse figures, new warnings and the side
+// figures. The result is in class order; class 1 is never cut and comes first.
 func selectBlock(all []fact) []fact {
 	var refused, must, rest []fact
 	seen := map[string]bool{}
@@ -214,7 +257,7 @@ func selectBlock(all []fact) []fact {
 		keep = keep[:maxBlock]
 		rest = slices.DeleteFunc(rest, func(f fact) bool { return !slices.Contains(keep, f) })
 	}
-	rest = append(rest, told...)
+	rest = append(rest, mergeDays(told)...)
 	rest = append(rest, must...)
 	slices.SortStableFunc(rest, func(a, b fact) int { return a.Class - b.Class })
 	return append(refused, rest...)

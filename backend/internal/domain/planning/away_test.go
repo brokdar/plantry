@@ -193,3 +193,65 @@ func TestEvaluate_FloorFollowsThePlannedMeals(t *testing.T) {
 		})
 	}
 }
+
+// PR #178 review (SB3 slot kind): the "no food at home" rule needs a full-kind
+// slot on the day. A household whose slots are all light-kind is judged on what
+// it plans, routine plates included.
+func TestEvaluate_BreakfastOnlyHouseholdIsJudged(t *testing.T) {
+	s := baseState()
+	s.Profile.KcalTarget = f64(3000)
+	s.SlotKind = map[int64]slot.Kind{breakfast: slot.KindLight}
+	s.SlotOrder = map[int64]int{breakfast: 0}
+	var cells []planning.Cell
+	for _, c := range s.Cells {
+		if c.SlotID == breakfast {
+			cells = append(cells, c)
+		}
+	}
+	s.Cells = cells
+	setMode(&s, cell(mon, breakfast), availability.ModeRoutine)
+	s.Sessions = append(s.Sessions, persistedSession(900, curry, mon, breakfast, 1, true))
+	s.Plates = append(s.Plates, persisted(900, mon, breakfast, true, curry, 900))
+
+	ev, _ := weekOf(s)
+
+	d := dayEval(t, ev, mon)
+	assert.InDelta(t, 500, d.Kcal, 0.01, "the routine breakfast is the day")
+}
+
+// A custom full-kind slot (a 4th meal) that holds a plated routine is food at home.
+func TestEvaluate_CustomFullSlotWithAPlatedRoutineIsFoodAtHome(t *testing.T) {
+	const brotzeit int64 = 4
+	s := baseState()
+	s.Profile.KcalTarget = f64(3000)
+	s.SlotKind = map[int64]slot.Kind{breakfast: slot.KindLight, brotzeit: slot.KindMeal}
+	s.SlotOrder = map[int64]int{breakfast: 0, lunch: 1, dinner: 2, brotzeit: 3}
+	s.Cells = append(s.Cells, planning.Cell{Date: day(mon), SlotID: brotzeit, Mode: availability.ModeRoutine})
+	setMode(&s, cell(mon, breakfast), availability.ModeRoutine)
+	setMode(&s, cell(mon, lunch), availability.ModeNone)
+	setMode(&s, cell(mon, dinner), availability.ModeNone)
+	s.Sessions = append(s.Sessions, persistedSession(900, curry, mon, brotzeit, 1, true))
+	s.Plates = append(s.Plates, persisted(900, mon, brotzeit, true, curry, 900))
+
+	ev, _ := weekOf(s)
+
+	dayEval(t, ev, mon)
+}
+
+// The rule follows the slot kind, not its name: a light-kind slot called dinner
+// that holds the only plated routine is not food at home.
+func TestEvaluate_LightSlotNamedDinnerIsNotFoodAtHome(t *testing.T) {
+	s := baseState()
+	s.Profile.KcalTarget = f64(3000)
+	s.SlotKind = map[int64]slot.Kind{dinner: slot.KindLight}
+	setMode(&s, cell(mon, breakfast), availability.ModeNone)
+	setMode(&s, cell(mon, lunch), availability.ModeNone)
+	setMode(&s, cell(mon, dinner), availability.ModeRoutine)
+	s.Sessions = append(s.Sessions, persistedSession(900, curry, mon, dinner, 1, true))
+	s.Plates = append(s.Plates, persisted(900, mon, dinner, true, curry, 900))
+
+	ev, _ := weekOf(s)
+
+	_, ok := findDay(ev, mon)
+	assert.False(t, ok)
+}

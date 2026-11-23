@@ -2,8 +2,11 @@ package agent
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
 
 // awayFacts are the facts of test1 g-away-00 (Thu 3 Dec away): the five
@@ -71,4 +74,42 @@ func TestSelectBlock_TheCapHoldsForTheRest(t *testing.T) {
 		many = append(many, fact{Class: classMoved, Kind: kindCook, Status: statusOK, EN: d + " at lunch you cook X.", DE: d})
 	}
 	assert.Len(t, selectBlock(many), 7)
+}
+
+// spec v1.5 G4 (PR #178 review): a week away is one line per day, not a cooking
+// line and an away line each; a new cooking stays its own line; nothing is cut.
+func TestBuildFacts_WholeWeekAwayIsOneLinePerDay(t *testing.T) {
+	t.Parallel()
+	var r changeReport
+	var days []planning.DayEval
+	for i := 0; i < 7; i++ {
+		date := time.Date(2026, 11, 23+i, 0, 0, 0, 0, time.UTC)
+		label := dayLabel(date)
+		r.Changed = append(r.Changed,
+			reportMeal{Day: label, Meal: "lunch", Before: []string{"Soup 1 portion"}},
+			reportMeal{Day: label, Meal: "dinner", Before: []string{"Rice 1 portion"}})
+		r.Cooking = append(r.Cooking, reportCook{Day: label})
+		days = append(days, planning.DayEval{Date: date.Format(time.DateOnly), AwayKcal: 1400})
+	}
+	in := reportInput{after: planning.Evaluation{Days: days}, facts: &factSink{}}
+	buildFacts(in, r)
+	in.facts.add(classMoved, kindCook, statusOK, `Sat 28 Nov at lunch you cook "Stew" for Sat 28 Nov lunch.`, `Samstag, 28. Nov. (Mittagessen) kochst du „Stew“ für Samstag, 28. Nov. Mittagessen.`)
+	got := selectBlock(in.facts.items)
+	assert.Len(t, got, 8, "%v", tellOf(got))
+	assert.Contains(t, tellOf(got), "Mon 23 Nov: lunch and dinner out (about 1400 kcal assumed), nothing is cooked.")
+	var de []string
+	for _, f := range got {
+		de = append(de, f.DE)
+	}
+	assert.Contains(t, de, "Montag, 23. Nov.: Mittag- und Abendessen außer Haus (etwa 1400 kcal angenommen), es wird nichts gekocht.")
+}
+
+// Leftover moves merge per day when several hit one day.
+func TestSelectBlock_LeftoversOfOneDayMerge(t *testing.T) {
+	t.Parallel()
+	in := awayFacts()
+	in[2].Day, in[3].Day = "Wed 2 Dec", "Wed 2 Dec"
+	got := selectBlock(in)
+	assert.Len(t, got, 5)
+	assert.Contains(t, tellOf(got), `Wed 2 Dec: cook 1.5 portions of the "Cheese omelette" (was 2.75); cook 1 portion of the "Marinated tofu" (was 2).`)
 }
