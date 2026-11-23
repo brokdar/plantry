@@ -5,11 +5,14 @@ package spectest
 import (
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
@@ -267,53 +270,137 @@ func TestSF1c_AwayDeficitSavedReportedWithOffer(t *testing.T) {
 	})
 }
 
-// SB3 / SF4 / SF1(c) as changed by spec v1.5 (c, V63): a day with no food at
-// home (every lunch and dinner away, default-none or an unplated routine) whose
-// only plates are routines is judged like a fully away day: it is not in the
-// evaluated days, gets no new H9, and the reply tells no "under its minimum" line
-// for it. A plated routine lunch or dinner keeps the day judged.
+// homeAndFull reports, for a day of a plan, whether food is eaten at home (a
+// planned non-routine cell, plated or not, or a routine meal-kind slot that holds
+// a plate) and whether the household has a full (meal-kind) slot that day.
+func homeAndFull(s planning.State, date string) (home, full bool) {
+	plated := map[int64]bool{}
+	for _, p := range s.Plates {
+		if p.Date.Format("2006-01-02") == date {
+			plated[p.SlotID] = true
+		}
+	}
+	for _, c := range s.Cells {
+		if c.Date.Format("2006-01-02") != date {
+			continue
+		}
+		meal := s.SlotKind[c.SlotID] != slot.KindLight // a slot without a kind is a full meal
+		full = full || meal
+		switch string(c.Mode) {
+		case "plan":
+			home = true
+		case "routine":
+			home = home || (meal && plated[c.SlotID])
+		}
+	}
+	return home, full
+}
+
+func judgedDay(s planning.State, date string) (planning.DayEval, bool) {
+	for _, d := range planning.Evaluate(s, planning.WindowTarget(s)).Days {
+		if d.Date == date {
+			return d, true
+		}
+	}
+	return planning.DayEval{}, false
+}
+
+// SB3 / SF4 / SF1(c) as changed by spec v1.5 (c, V63; V68): a day with no food
+// at home (every lunch and dinner away, default-none or an unplated routine; only
+// routine light meals left) is judged like a fully away day when the household has
+// a full meal slot that day: it is not an evaluated day, gets no new H9, and the
+// reply tells no "under its minimum" line for it.
 func TestSB3_RoutineOnlyDayIsNotJudged(t *testing.T) {
 	forOps(t, []string{"away_day", "away_meal"}, func(t *testing.T, r opRun) {
 		if !r.Saved {
 			t.Skip("nothing saved")
 		}
 		date := r.Op["date"].(string)
-		plated := map[int64]bool{}
-		plates := 0
-		for _, p := range r.After.Plates {
-			if p.Date.Format("2006-01-02") == date {
-				plated[p.SlotID] = true
-				plates++
-			}
+		home, full := homeAndFull(r.After, date)
+		if home || !full {
+			t.Skip("food at home, or no full meal slot: the day is judged")
 		}
-		routineOnly := plates > 0
-		for _, c := range r.After.Cells {
-			if c.Date.Format("2006-01-02") != date {
-				continue
-			}
-			w, m := slotWord(r.After, c.SlotID), string(c.Mode)
-			if (w == "lunch" || w == "dinner") && (m == "plan" && plated[c.SlotID] || m == "routine" && plated[c.SlotID]) {
-				routineOnly = false // food at home: a planned or a plated routine lunch or dinner
-			}
-			if m == "plan" && plated[c.SlotID] {
-				routineOnly = false // a planned (non-routine) plate of any slot
-			}
-		}
-		if !routineOnly {
-			t.Skip("the day keeps food at home: judged")
-		}
-		for _, d := range planning.Evaluate(r.After, planning.WindowTarget(r.After)).Days {
-			assert.NotEqual(t, date, d.Date, "a routine-only day is not judged (not an evaluated day)")
-		}
+		_, judged := judgedDay(r.After, date)
+		assert.False(t, judged, "a routine-only day is not judged (not an evaluated day)")
 		for _, k := range r.NewViol {
 			assert.False(t, strings.HasPrefix(k, "H9/") && strings.Contains(k, date), "no H9 on a routine-only day: %s", k)
 		}
 		var o tellOut
-		_ = json.Unmarshal([]byte(r.Raw), &o)
+		require.NoError(t, json.Unmarshal([]byte(r.Raw), &o), "the tool result is JSON")
 		for _, l := range o.Report.Tell {
 			assert.False(t, strings.Contains(l, dayLabel(date)) && regexp.MustCompile(`(?i)minimum|mindest`).MatchString(l), "no under-minimum line for a routine-only day: %q", l)
 		}
 	})
+}
+
+// SB3 (v1.5 c, V68), the negatives: a plated routine lunch or dinner is food at
+// home and keeps the day judged (with its floor); a household whose slots are all
+// light (no full meal slot) is judged on what it plans, a routine breakfast alone
+// included. The routine-only control on the same day is not judged.
+func TestSB3_PlatedRoutineMealOrNoFullSlotStaysJudged(t *testing.T) {
+	for _, h := range households {
+		t.Run(h, func(t *testing.T) {
+			s := newEnv(t, "chat-"+h, chatWeek).st()
+			var date string
+			var dinnerID, lunchID int64
+			for _, p := range s.Plates {
+				w := slotWord(s, p.SlotID)
+				if w == "dinner" && s.Window.Contains(p.Date) && date == "" {
+					date, dinnerID = p.Date.Format("2006-01-02"), p.SlotID
+				}
+			}
+			if date == "" {
+				t.Skip("no dinner plate in the window")
+			}
+			for id := range s.SlotNames {
+				if slotWord(s, id) == "lunch" {
+					lunchID = id
+				}
+			}
+			breakfastPlate := false
+			for _, p := range s.Plates {
+				if p.Date.Format("2006-01-02") == date && slotWord(s, p.SlotID) != "lunch" && slotWord(s, p.SlotID) != "dinner" {
+					breakfastPlate = true
+				}
+			}
+			with := func(dinner availability.Mode, keepDinner, allLight bool) planning.State {
+				c := s
+				c.Cells = slices.Clone(s.Cells)
+				for i := range c.Cells {
+					if c.Cells[i].Date.Format("2006-01-02") != date {
+						continue
+					}
+					switch c.Cells[i].SlotID {
+					case lunchID:
+						c.Cells[i].Mode = availability.ModeNone
+					case dinnerID:
+						c.Cells[i].Mode = dinner
+					default:
+						c.Cells[i].Mode = availability.ModeRoutine
+					}
+				}
+				c.Plates = slices.DeleteFunc(slices.Clone(s.Plates), func(p planning.Plate) bool {
+					return p.Date.Format("2006-01-02") == date && (p.SlotID == lunchID || (p.SlotID == dinnerID && !keepDinner))
+				})
+				if allLight {
+					c.SlotKind = map[int64]slot.Kind{}
+					for id := range s.SlotNames {
+						c.SlotKind[id] = slot.KindLight
+					}
+				}
+				return c
+			}
+			d, ok := judgedDay(with(availability.ModeRoutine, true, false), date)
+			assert.True(t, ok && d.FloorKcal > 0, "a plated routine dinner is food at home: the day stays judged with its floor")
+			if !breakfastPlate {
+				t.Skip("no breakfast plate on the day: the routine-only control and the light-household case need one")
+			}
+			_, ok = judgedDay(with(availability.ModeNone, false, false), date)
+			assert.False(t, ok, "control: lunch and dinner out, only the routine breakfast left: not judged")
+			d, ok = judgedDay(with(availability.ModeNone, false, true), date)
+			assert.True(t, ok && d.FloorKcal > 0, "no full meal slot in the household: the day is judged on what it plans")
+		})
+	}
 }
 
 // NU11 (S10): a lunch or dinner outside its slot band is reported, with no

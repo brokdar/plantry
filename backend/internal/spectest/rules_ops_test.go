@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -222,7 +223,7 @@ func cookDays(a, b planning.State) []string {
 func TestRP5_FactsBlockCap(t *testing.T) {
 	forOps(t, nil, func(t *testing.T, r opRun) {
 		var o tellOut
-		_ = json.Unmarshal([]byte(r.Raw), &o)
+		require.NoError(t, json.Unmarshal([]byte(r.Raw), &o), "the tool result is JSON")
 		if len(o.Report.Tell) == 0 {
 			t.Skip("no facts block")
 		}
@@ -241,7 +242,23 @@ func TestRP5_FactsBlockCap(t *testing.T) {
 			}
 		}
 		assert.LessOrEqual(t, capped, 5, "the capped lines (classes 2-5 without the must and what-moved lines) are %d: %q", capped, o.Report.Tell)
-		if len(o.Report.Changed) > 0 {
+		if r.Kind == "away_day" || r.Kind == "away_meal" {
+			// V68: an away's meals, its assumed energy and "nothing is cooked" merge into one
+			// class-3 away line per day, told outside the cap: that line is the changed-meal line
+			// of the away day and names the day once. A day that is not judged (routine-only, a
+			// whole day away) has no assumed energy, so its "no meal any more" lines stay class-2
+			// meal lines; either form counts, a second away line for the day does not.
+			label, n := dayLabel(r.Op["date"].(string)), 0
+			for _, f := range o.Report.Facts {
+				if f.Kind == "away" && strings.Contains(f.EN, label) {
+					n++
+				}
+			}
+			assert.LessOrEqual(t, n, 1, "the away day %s is named by at most one merged away line: %q", label, o.Report.Tell)
+			if r.Saved {
+				assert.True(t, n == 1 || meal, "the away day %s is told: one merged away line or its changed-meal lines: %q", label, o.Report.Tell)
+			}
+		} else if len(o.Report.Changed) > 0 {
 			assert.True(t, meal, "a meal changed, so at least one changed-meal line stays: %q", o.Report.Tell)
 		}
 		if !r.Saved {
