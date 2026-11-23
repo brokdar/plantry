@@ -79,6 +79,9 @@ func blockOf(output json.RawMessage) (b *replyBlock, check bool) {
 			}
 		}
 	}
+	if stop, ok := undoStop(obj); ok && rep != nil {
+		b.facts = append(b.facts, stop) // undone some, then stopped
+	}
 	if b.offer == nil && (len(b.facts) > 0 || rep != nil) {
 		b.offer = offerOf(obj)
 	}
@@ -1014,7 +1017,13 @@ func savedBlock(tool string, output json.RawMessage) *replyBlock {
 	en, de := "Saved; no other meal changed.", "Gespeichert; keine andere Mahlzeit hat sich geändert."
 	switch tool {
 	case "undo_last_change":
+		if stop, ok := undoStop(obj); ok && num(obj["undone"]) == 0 {
+			return &replyBlock{facts: []fact{stop}, nothingSaved: true}
+		}
 		en, de = "Undone; the plan is as it was before that change.", "Rückgängig gemacht; der Plan ist wie vor dieser Änderung."
+		if stop, ok := undoStop(obj); ok {
+			return &replyBlock{facts: []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: en, DE: de}, stop}}
+		}
 	case "apply_preset":
 		en, de = "The routine is applied.", "Die Routine ist angewendet."
 		var skipped []string
@@ -1040,6 +1049,38 @@ func savedBlock(tool string, output json.RawMessage) *replyBlock {
 		en, de = "The plan was made again.", "Der Plan wurde neu gemacht."
 	}
 	return &replyBlock{facts: []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: en, DE: de}}}
+}
+
+// undoReasons are the code-rendered reasons of a refused undo, by kind (G4.1).
+var undoReasons = map[string][2]string{
+	"":            {"no change of this conversation is left to undo.", "in diesem Gespräch ist keine Änderung mehr rückgängig zu machen."},
+	undoStale:     {"the plan was changed since that change, so putting it back exactly would overwrite that edit.", "der Plan wurde seit dieser Änderung geändert, und sie genau zurückzusetzen würde diese Änderung überschreiben."},
+	undoConfirmed: {"a meal of that change is confirmed now.", "eine Mahlzeit dieser Änderung ist jetzt bestätigt."},
+	undoAlready:   {"that change was undone already on the board.", "diese Änderung wurde schon auf dem Plan rückgängig gemacht."},
+}
+
+// undoStop is the refused part of an undo_last_change result (G4.1, SF2): with
+// nothing undone "Nothing was undone: <why>", after some "The next change was
+// not undone: <why>"; ok false when the undo was not refused. A result with
+// nothing undone and no refusal had nothing left to undo.
+func undoStop(obj map[string]any) (fact, bool) {
+	ref, _ := obj["refused"].(map[string]any)
+	if _, isUndo := obj["undone"]; !isUndo || (ref == nil && num(obj["undone"]) > 0) {
+		return fact{}, false
+	}
+	kind, _ := ref["kind"].(string)
+	if ref != nil && kind == "" {
+		kind = undoStale // a stored refusal without its kind: the plan changed since
+	}
+	why, ok := undoReasons[kind]
+	if !ok {
+		why = undoReasons[undoStale]
+	}
+	en, de := "Nothing was undone: ", "Nichts wurde rückgängig gemacht: "
+	if num(obj["undone"]) > 0 {
+		en, de = "The next change was not undone: ", "Die nächste Änderung wurde nicht rückgängig gemacht: "
+	}
+	return fact{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: en + why[0], DE: de + why[1]}, true
 }
 
 // regenerateRefused is the block of a regenerate run that ended in error and

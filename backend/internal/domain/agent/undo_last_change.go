@@ -16,8 +16,16 @@ import (
 
 const undoLastChangeName = "undo_last_change"
 
+// The kinds of a refused undo; the reply renders each in code (G4.1).
+const (
+	undoStale     = "stale"     // the plan was changed since the change
+	undoConfirmed = "confirmed" // a row of the change is confirmed now
+	undoAlready   = "undone"    // the change was undone on the board already
+)
+
 // undoRefusal is why an undo was refused and what the user can do.
 type undoRefusal struct {
+	Kind   string `json:"kind"`
 	Reason string `json:"reason"`
 	WhatTo string `json:"what_to_do"`
 }
@@ -76,16 +84,18 @@ func toolUndoLastChange(svc Services) Tool {
 				switch {
 				case errors.Is(err, domain.ErrAIChangeStale):
 					out.Refused = &undoRefusal{
+						Kind:   undoStale,
 						Reason: "The plan was changed since that change (by the user on the board or by a later edit), so putting it back exactly would overwrite that edit.",
 						WhatTo: "Nothing was changed. The user can ask for the meals they want back and you change them with apply_changes, or undo by hand on the board.",
 					}
 				case errors.Is(err, domain.ErrAIChangeConfirmed):
 					out.Refused = &undoRefusal{
+						Kind:   undoConfirmed,
 						Reason: "A meal or cooking batch of that change is confirmed now.",
 						WhatTo: "Nothing was changed. Call unlock for it; undo again after the user's yes.",
 					}
 				case errors.Is(err, domain.ErrAIChangeUndone):
-					out.Refused = &undoRefusal{Reason: "That change was undone already (on the board).", WhatTo: "Nothing more to do for it."}
+					out.Refused = &undoRefusal{Kind: undoAlready, Reason: "That change was undone already (on the board).", WhatTo: "Nothing more to do for it."}
 				case err != nil:
 					return nil, ToolEffectNone, err
 				}
