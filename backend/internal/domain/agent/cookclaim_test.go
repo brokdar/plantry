@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,12 +56,15 @@ func TestLint_CookingClaimBackedByTheBlock(t *testing.T) {
 		{"elsewhere-10 true", elsewhere10, "cook the Minestrone on Monday dinner", langEN, "The Minestrone is now cooked on Monday dinner and still covers Wednesday lunch and dinner and Thursday lunch.", true},
 		{"elsewhere-12 DE true, dish named by its plan name", elsewhere12, "Greek salad with chickpeas am Sonntag zum Abendessen kochen", langDE, "Das „Greek salad with chickpeas“ wird jetzt am Sonntagabend gekocht.", true},
 		{"away-16 true", away16, "away on Monday", langEN, "Monday lunch and dinner are cleared, and Sunday's dinner cooking is trimmed to cover only Sunday.", true},
-		// Dishes named loosely ("the lasagne" for "Spinach lasagne") cannot be
-		// matched to a plan dish: the stricter rule drops these two true
-		// trace sentences and the loosely named DE one (M4).
-		{"guests-02 loose dish names are dropped", guests02, "4 people on Wednesday dinner", langEN, "Wednesday dinner is now set for 4 people, and the lasagne and cucumber salad are cooked for the larger cooking.", false},
-		{"guests-09 loose dish names are dropped", guests09, "a friend joins Friday dinner", langEN, "Friday dinner is now set for two, and the chicken traybake and salad are cooked for both of you.", false},
-		{"elsewhere-12 loosely named dish is dropped", elsewhere12, "Greek salad with chickpeas am Sonntag zum Abendessen kochen", langDE, "Das Greek Salad mit Kichererbsen wird jetzt am Sonntagabend gekocht und reicht für Montag Mittag und Abend.", false},
+		// A dish named loosely is resolved among the dishes cooked on the
+		// day the sentence names: exactly one match backs it.
+		{"guests-02 loose names, one match each that day", guests02, "4 people on Wednesday dinner", langEN, "Wednesday dinner is now set for 4 people, and the lasagne and cucumber salad are cooked for the larger cooking.", true},
+		{"guests-09 loose names, unique that day", guests09, "a friend joins Friday dinner", langEN, "Friday dinner is now set for two, and the chicken traybake and salad are cooked for both of you.", true},
+		{"elsewhere-12 DE: Greek Salad matches one dish of the day (Kichererbsen has no table, it is ignored)", elsewhere12, "Greek salad with chickpeas am Sonntag zum Abendessen kochen", langDE, "Das Greek Salad mit Kichererbsen wird jetzt am Sonntagabend gekocht und reicht für Montag Mittag und Abend.", true},
+		{"an ambiguous loose name: two salads cook that day", append(slices.Clone(guests02), moved(kindLeftover, `Wed 9 Dec: cook 2 portions of the "Carrot salad" (was 1).`, "x")), "x", langEN, "Wednesday dinner is set for 4, and the salad is cooked for the larger cooking.", false},
+		{"a loose name of a dish cooked on a different day", elsewhere10, "x", langEN, "The soup is cooked on Wednesday.", false},
+		{"a loose name of a dish cooked on a different day (Sunday, not Monday)", elsewhere12, "x", langEN, "The Greek salad is cooked on Monday.", false},
+		{"a loose name with no cooking day named", guests02, "x", langEN, "The lasagne is cooked fresh.", false},
 		{"guests-02 by its plan name", guests02, "4 people on Wednesday dinner", langEN, "The Spinach lasagne is cooked for 4 on Wednesday.", true},
 
 		{"a day the block does not cook on", elsewhere10, "cook the Minestrone on Monday dinner", langEN, "The Minestrone is now cooked on Tuesday dinner.", false},

@@ -36,7 +36,10 @@ var (
 	claimDish = regexp.MustCompile(`(?:you cook |; )"([^"]+)" for`)
 	cookPort  = regexp.MustCompile(`cook [\d.]+ portions? of the "([^"]+)"`)
 	// dishStop are words of a dish name that say nothing about the dish.
-	dishStop = map[string]bool{"with": true, "and": true, "the": true, "for": true, "mit": true, "und": true, "von": true, "fuer": true}
+	dishStop = map[string]bool{
+		"with": true, "and": true, "the": true, "for": true, "mit": true, "und": true, "von": true, "fuer": true,
+		"der": true, "die": true, "das": true, "den": true, "dem": true, "ein": true, "eine": true, "einen": true, "oder": true, "bei": true, "aus": true, "from": true, "all": true, "both": true,
+	}
 )
 
 var mealKey = map[string]string{"breakfast": "breakfast", "fruehstueck": "breakfast", "lunch": "lunch", "mittag": "lunch", "dinner": "dinner", "supper": "dinner", "abend": "dinner"}
@@ -91,26 +94,87 @@ func mealsNear(span string) map[string]bool {
 	return out
 }
 
-// looselyNames reports a text that shares a word with a dish name but names
-// no dish whole.
-func looselyNames(text string, foods []string) bool {
-	words := map[string]bool{}
+// dishStem folds a plural or singular ("salads", "Bohnen") to one stem.
+func dishStem(w string) string {
+	switch {
+	case strings.HasSuffix(w, "ies") && len(w) > 5:
+		return w[:len(w)-3] + "y"
+	case (strings.HasSuffix(w, "en") || strings.HasSuffix(w, "es")) && len(w) > 5:
+		return w[:len(w)-2]
+	case (strings.HasSuffix(w, "s") || strings.HasSuffix(w, "n")) && len(w) > 4:
+		return w[:len(w)-1]
+	}
+	return w
+}
+
+// dishWords are the stems of the content words of a text: folded, three
+// letters or more, no stop word or article.
+func dishWords(text string) []string {
+	var out []string
 	for _, w := range strings.FieldsFunc(diet.Fold(text), func(r rune) bool { return r < 'a' || r > 'z' }) {
-		if len(w) >= 4 && !dishStop[w] {
-			words[w] = true
+		if len(w) >= 3 && !dishStop[w] {
+			out = append(out, dishStem(w))
 		}
 	}
-	for _, name := range foods {
-		if namesFood(text, name) {
-			continue
+	return out
+}
+
+// loosePhrases are the runs of words in text that are words of a plan dish
+// name (a run ends at a punctuation mark or a word no dish name has), except
+// the runs inside a dish the text names whole: "the lasagne", "cucumber
+// salad". Each is a phrase of a dish named loosely.
+func loosePhrases(text string, foods, named []string) [][]string {
+	vocab := map[string]bool{}
+	for _, f := range foods {
+		for _, w := range dishWords(f) {
+			vocab[w] = true
 		}
-		for _, w := range strings.FieldsFunc(diet.Fold(name), func(r rune) bool { return r < 'a' || r > 'z' }) {
-			if len(w) >= 4 && !dishStop[w] && words[w] {
-				return true
+	}
+	whole := map[string]bool{}
+	for _, n := range named {
+		for _, w := range dishWords(n) {
+			whole[w] = true
+		}
+	}
+	var out [][]string
+	for _, chunk := range strings.FieldsFunc(text, func(r rune) bool { return strings.ContainsRune(",;.:()!?\"„“”", r) }) {
+		var run []string
+		flush := func() {
+			if len(run) > 0 {
+				out = append(out, run)
+			}
+			run = nil
+		}
+		for _, w := range strings.FieldsFunc(diet.Fold(chunk), func(r rune) bool { return r < 'a' || r > 'z' }) {
+			switch {
+			case dishStop[w] || len(w) < 3:
+				flush()
+			case vocab[dishStem(w)]:
+				if !whole[dishStem(w)] {
+					run = append(run, dishStem(w))
+				} else {
+					flush()
+				}
+			default:
+				flush()
 			}
 		}
+		flush()
 	}
-	return false
+	return out
+}
+
+// uniqueDishFor reports that exactly one of the dishes has every word of the
+// phrase.
+func uniqueDishFor(phrase []string, dishes []string) bool {
+	n := 0
+	for _, d := range dishes {
+		have := dishWords(d)
+		if !slices.ContainsFunc(phrase, func(w string) bool { return !slices.Contains(have, w) }) {
+			n++
+		}
+	}
+	return n == 1
 }
 
 // cookingBacked reports whether the block backs every cooking claim of text.
@@ -147,9 +211,10 @@ func cookingBacked(text string, t replyTurn) bool {
 	if len(verbs) == 0 {
 		return true
 	}
-	if cookPast.MatchString(text) || (len(named) == 0 && looselyNames(text, t.foods)) {
+	if cookPast.MatchString(text) {
 		return false
 	}
+	loose := loosePhrases(text, t.foods, named)
 	days := weekdayName.FindAllStringIndex(text, -1)
 	tiedDays := map[int]bool{} // index into days
 	for _, v := range verbs {
@@ -159,9 +224,10 @@ func cookingBacked(text string, t replyTurn) bool {
 			}
 		}
 	}
-	if len(tiedDays) == 0 && len(named) == 0 {
+	if len(tiedDays) == 0 && len(named) == 0 && len(loose) == 0 {
 		return false // a cooking claim about no day and no dish
 	}
+	var scope []claimCell      // the cook cells a loosely named dish is looked up in
 	onDay := map[string]bool{} // named dishes found on a tied day
 	for i := range days {
 		if !tiedDays[i] {
@@ -192,6 +258,7 @@ func cookingBacked(text string, t replyTurn) bool {
 		if len(day) == 0 {
 			return false // not a cooking day, or not at that meal
 		}
+		scope = append(scope, day...)
 		found := false
 		for _, n := range named {
 			for _, c := range day {
@@ -210,6 +277,33 @@ func cookingBacked(text string, t replyTurn) bool {
 			if !onDay[n] {
 				return false
 			}
+		}
+	}
+	if len(loose) == 0 {
+		return true
+	}
+	// No day tied to a cooking word: the weekdays the sentence names scope it.
+	if len(tiedDays) == 0 {
+		for _, d := range days {
+			key := weekdayKey(text[d[0]:d[1]])
+			for _, c := range cells {
+				if c.day == key {
+					scope = append(scope, c)
+				}
+			}
+		}
+	}
+	var dishes []string
+	for _, c := range scope {
+		for _, d := range c.dishes {
+			if !slices.Contains(dishes, d) {
+				dishes = append(dishes, d)
+			}
+		}
+	}
+	for _, phrase := range loose {
+		if !uniqueDishFor(phrase, dishes) {
+			return false // no dish, or several, cooked on that day has these words
 		}
 	}
 	return true
