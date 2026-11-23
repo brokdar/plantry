@@ -57,12 +57,14 @@ func TestRun_UnmetBlockFollowsTheModelsText(t *testing.T) {
 	unmet := &replyBlock{nothingSaved: true, facts: []fact{{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: "Left out: the change to Mon 23 Nov dinner (x).", DE: "Weggelassen: x."}}}
 	for _, c := range []struct {
 		name, tool, result, model, want string
+		input                           string // the tool call's input, {} when empty
 	}{
-		{"no tool", "", "", "That does not fit.", "That does not fit.\n\n- " + nothingChangedEN + "\n- Left out: the change to Mon 23 Nov dinner (x)."},
-		{"lookup found nothing", "find_foods", `{"items":[],"total":0}`, "No such dish.", "No such dish.\n\n- " + nothingChangedEN + "\n- Left out: the change to Mon 23 Nov dinner (x)."},
-		{"lookup found a dish", "find_foods", `{"items":[{"id":1}],"total":1}`, "Here it is.", "Here it is."},
-		{"a question stands", "", "", "Which one do you want?", "Which one do you want?"},
-		{"a read tool ran", "get_plan", `{"days":[]}`, "It is pasta.", "It is pasta."},
+		{"no tool", "", "", "That does not fit.", "That does not fit.\n\n- " + nothingChangedEN + "\n- Left out: the change to Mon 23 Nov dinner (x).", ""},
+		{"lookup found nothing", "find_foods", `{"items":[],"total":0}`, "No such dish.", "No such dish.\n\n- " + nothingChangedEN + "\n- Left out: the change to Mon 23 Nov dinner (x).", `{"search":"beef goulash"}`},
+		{"an empty filter search settles nothing", "find_foods", `{"items":[],"total":0}`, "No such dish.", "No such dish.", `{"roles":["main"]}`},
+		{"lookup found a dish", "find_foods", `{"items":[{"id":1}],"total":1}`, "Here it is.", "Here it is.", ""},
+		{"a question stands", "", "", "Which one do you want?", "Which one do you want?", ""},
+		{"a read tool ran", "get_plan", `{"days":[]}`, "It is pasta.", "It is pasta.", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -70,7 +72,11 @@ func TestRun_UnmetBlockFollowsTheModelsText(t *testing.T) {
 			ts := minimalToolSet(t, "find_foods", json.RawMessage(`{}`), ToolEffectNone, nil)
 			if c.tool != "" {
 				ts = minimalToolSet(t, c.tool, json.RawMessage(c.result), ToolEffectNone, nil)
-				turns = append(turns, scriptToolUseTurn("t1", c.tool))
+				turn := scriptToolUseTurn("t1", c.tool)
+				if c.input != "" {
+					turn.Message.Content[0].ToolInput = json.RawMessage(c.input)
+				}
+				turns = append(turns, turn)
 			}
 			turns = append(turns, scriptEndTurn(c.model))
 			client := fake.NewFromScript(&fake.Script{Turns: turns})

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -138,3 +139,11 @@ func WithTurnText(ctx context.Context, conversationID int64, text string, w wind
 }
 
 var NamedDayKcal = namedDayKcal
+
+// UnderFloorLine is the EN line of underFloorBlock ("" when nil).
+func UnderFloorLine(dayKcal map[string]float64, st planning.State) string {
+	if b := underFloorBlock(dayKcal, st); b != nil {
+		return b.facts[0].EN
+	}
+	return ""
+}

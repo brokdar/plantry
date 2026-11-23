@@ -14,6 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plainwords"
 )
@@ -149,6 +150,7 @@ type replyTurn struct {
 	write   bool             // a plan-writing tool was called (also as a check)
 	checked bool             // a check (dry run, preview) ran: "not saved" may be true of it
 	ran     bool             // a tool ran that is no food lookup finding nothing (unmetTold)
+	missed  bool             // a food lookup found nothing: the food asked for is not in the library (unmetTold)
 	block   *replyBlock      // the facts and the offer of the turn's writes
 	// undoable holds the block as it was before each change saved in this
 	// turn, newest last: an undo of that change takes the block back (addWrite).
@@ -163,11 +165,15 @@ type replyTurn struct {
 	// meal it names and the turn ran no tool but food lookups that found
 	// nothing (unmetChange, unmetTold): never as a write, the text stays.
 	unmet *replyBlock
+	// underFloor is told after the model's text when the message set a day to
+	// a kcal number under its minimum and the turn has no block of its own
+	// (underFloorBlock): never as a write, the text stays.
+	underFloor *replyBlock
 }
 
 // noteTool records what a tool call of the turn was: a check (dry run,
 // preview) and whether it is more than a food lookup that found nothing.
-func (t *replyTurn) noteTool(name string, output json.RawMessage, err error) {
+func (t *replyTurn) noteTool(name string, input, output json.RawMessage, err error) {
 	if err != nil {
 		t.ran = true
 		return
@@ -183,19 +189,50 @@ func (t *replyTurn) noteTool(name string, output json.RawMessage, err error) {
 	items, ok := obj["items"].([]any)
 	if name != "find_foods" || !ok || len(items) > 0 {
 		t.ran = true
+		return
 	}
+	// Only a search for a food the message names is a miss that settles it
+	// (review F4): a filter-only search or a misspelt query settles nothing.
+	var in struct {
+		Search string `json:"search"`
+	}
+	if json.Unmarshal(input, &in) != nil || !t.namesQuery(in.Search) {
+		t.ran = true
+		return
+	}
+	t.missed = true
+}
+
+// namesQuery reports whether every word of the search query is a word of the
+// user's message (folded): the search is for what the message asked for.
+func (t *replyTurn) namesQuery(query string) bool {
+	words := strings.FieldsFunc(diet.Fold(query), func(r rune) bool { return r < 'a' || r > 'z' })
+	if len(words) == 0 {
+		return false
+	}
+	msg := " " + strings.Join(strings.FieldsFunc(diet.Fold(t.user), func(r rune) bool { return r < 'a' || r > 'z' }), " ") + " "
+	for _, w := range words {
+		if !strings.Contains(msg, " "+w+" ") {
+			return false
+		}
+	}
+	return true
 }
 
 // unmetTold reports whether the unmet block goes after the model's text: the
 // turn ran no tool (or only food lookups that found nothing), wrote nothing,
 // and the model's text does not end in a question (its question stands: the
-// user answers it). When unsure the block is left out.
+// user answers it). When unsure the block is left out. A lookup that found
+// nothing settles it even after a question (V81, safety-s2 s2-diet-02-k3:
+// "Soll ich stattdessen eine vegetarische Alternative suchen?"): the food
+// asked for is not there, so the change cannot be made and the question can
+// only offer something else, never clarify the request.
 func (t replyTurn) unmetTold(model string) bool {
 	if t.unmet == nil || t.block != nil || t.write || t.ran || t.checked {
 		return false
 	}
 	ss := sentences(strings.TrimSpace(plainReply(model)))
-	return len(ss) == 0 || !strings.HasSuffix(ss[len(ss)-1], "?")
+	return len(ss) == 0 || !strings.HasSuffix(ss[len(ss)-1], "?") || t.missed
 }
 
 // final is the turn as its closing reply is composed: a turn that saved nothing
@@ -363,6 +400,64 @@ func normNumber(s string) string {
 // deDecimalComma is a German number whose comma has three digits after it
 // ("1,250 kg"): there the comma is the decimal mark, not a thousands separator.
 var deDecimalComma = regexp.MustCompile(`^\d+,\d{3}$`)
+
+// sentenceLang is the language of a text by its marker words, quoted spans
+// and the plan's dish names left out; ok only when one language has three
+// marker words or more and the other none (a dish name or a short sentence
+// decides nothing, review F5).
+func sentenceLang(text string, foods []string) (lang, bool) {
+	text = quotedRe.ReplaceAllString(text, " ")
+	low := strings.ToLower(text)
+	for _, f := range foods {
+		if n := strings.ToLower(strings.TrimSpace(f)); len(n) >= 4 {
+			low = strings.ReplaceAll(low, n, " ")
+		}
+	}
+	en, de := len(sentenceEnglish.FindAllString(low, -1)), len(sentenceGerman.FindAllString(low, -1))
+	switch {
+	case en >= 3 && de == 0:
+		return langEN, true
+	case de >= 3 && en == 0:
+		return langDE, true
+	}
+	return langEN, false
+}
+
+// The marker words of sentenceLang: the shared lists without the words that
+// are ordinary tokens of the other language (is, to, no, of, on; am, tag, die).
+var (
+	sentenceEnglish = regexp.MustCompile(`(?i)\b(the|and|are|now|with|please|can|you|my|move|dinner|lunch|yes|instead|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b`)
+	sentenceGerman  = regexp.MustCompile(`(?i)\b(der|das|und|ist|wird|werden|mit|nicht|für|jetzt|auf|dem|den|bitte|kannst|du|ich|mein|meine|zum|zur|abendessen|mittagessen|frühstück|verschieb\w*|tausch\w*|leichter|mehr|weniger|ja|nein|statt|im|ein|eine|einen|nur|auch|noch|kein|keine|woche|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b|[äöüß]`)
+)
+
+// timeAfterNumber is a number with a time unit right after it.
+var timeAfterNumber = regexp.MustCompile(`(?i)(\d[\d.,]*\d|\d)[\s-]?(minutes?|minuten|mins?|stunden|stunde|std|hours?|hrs?)\b`)
+
+var (
+	rangeBefore = regexp.MustCompile(`(?i)\d\s*(?:-|–|to|bis)\s*$`)
+	rangeAfter  = regexp.MustCompile(`(?i)^\s*(?:-|–|to|bis)\s*\d`)
+)
+
+func timeUnitClass(unit string) string {
+	if strings.HasPrefix(strings.ToLower(unit), "m") {
+		return "min"
+	}
+	return "h"
+}
+
+// userTimeBacks reports whether the number at free[ix[0]:ix[1]] is a time
+// the user named with the same unit, outside a range.
+func userTimeBacks(said map[string]string, n, free string, ix []int) bool {
+	m := timeAfterNumber.FindStringSubmatchIndex(free[ix[0]:])
+	if m == nil || m[0] != 0 || free[ix[0]:ix[0]+m[3]] != free[ix[0]:ix[1]] {
+		return false
+	}
+	unit := free[ix[0]+m[4] : ix[0]+m[5]]
+	if rangeBefore.MatchString(free[:ix[0]]) || rangeAfter.MatchString(free[ix[1]:]) {
+		return false
+	}
+	return said[n+" "+timeUnitClass(unit)] != ""
+}
 
 // normModelNumber is normNumber for a number of the model's text in language lg.
 func normModelNumber(s string, lg lang) string {
@@ -834,10 +929,22 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 			known = map[dateKey]bool{}
 		}
 		datesIn(blockText, known, false)
-		for _, m := range numberRe.FindAllString(withoutKnownDates(text, known, t.year), -1) {
-			if n := normModelNumber(m, lg); !backedBy(n, backed, t.numbers) {
-				return "number"
+		// A time the user named in this conversation backs the same time of
+		// the text ("30 min max" → "under 30 minutes", V81 L4; review F2):
+		// never an energy figure or a count, never inside a range.
+		said := map[string]string{}
+		for _, u := range append([]string{t.user}, t.earlier...) {
+			for _, m := range timeAfterNumber.FindAllStringSubmatch(u, -1) {
+				said[normNumber(m[1])+" "+timeUnitClass(m[2])] = "y"
 			}
+		}
+		free := withoutKnownDates(text, known, t.year)
+		for _, ix := range numberRe.FindAllStringIndex(free, -1) {
+			n := normModelNumber(free[ix[0]:ix[1]], lg)
+			if backedBy(n, backed, t.numbers) || userTimeBacks(said, n, free, ix) {
+				continue
+			}
+			return "number"
 		}
 		if modelCookingWords.MatchString(text) && !cookingBacked(text, t) {
 			return "cooking_claim"
@@ -887,11 +994,21 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 // both rendered by code in the language of the request.
 func composeReply(model string, t replyTurn) string {
 	reply := composeModelReply(model, t)
-	if !t.unmetTold(model) {
+	told := t.unmet
+	if t.underFloor != nil && t.block == nil && !t.write {
+		// V81 (safety-s2 s2-floor-04-k2): "den Samstag auf etwa 250 kcal" was
+		// refused in prose with no tool and no "nothing changed": the request
+		// is under the day's minimum, so the reply says so in code, whatever
+		// the model wrote (a question after it offers something else).
+		if saysFloorKept(reply, t.underFloor) {
+			return reply
+		}
+		told = t.underFloor
+	} else if !t.unmetTold(model) {
 		return reply
 	}
 	lg := t.lang(strings.TrimSpace(plainReply(model)))
-	nothing, line := nothingChangedEN, t.unmet.facts[0].line(lg)
+	nothing, line := nothingChangedEN, told.facts[0].line(lg)
 	if lg == langDE {
 		nothing = nothingChangedDE
 	}
@@ -902,6 +1019,25 @@ func composeReply(model string, t replyTurn) string {
 	return reply + "\n\n" + lines
 }
 
+var (
+	saidNothingChanged = regexp.MustCompile(`(?i)\bnothing (?:was |has |is |got )?changed\b|\bnichts (?:wurde |ist |wird )?(?:ge|ver)(?:ae|ä)ndert\b`)
+	floorFigure        = regexp.MustCompile(`(?:minimum of|Mindestwert des Tages von) (\d+)`)
+)
+
+// saysFloorKept reports that the model's own text already says nothing
+// changed and names the day's minimum the block would tell (review F3): the
+// line would only repeat it.
+func saysFloorKept(reply string, floor *replyBlock) bool {
+	if reply == "" || !saidNothingChanged.MatchString(reply) {
+		return false
+	}
+	m := floorFigure.FindStringSubmatch(floor.facts[0].EN)
+	if m == nil {
+		return false
+	}
+	return regexp.MustCompile(`\b` + m[1] + `\b`).MatchString(reply)
+}
+
 func composeModelReply(model string, t replyTurn) string {
 	text := strings.TrimSpace(plainReply(model))
 	lg := t.lang(text)
@@ -909,6 +1045,21 @@ func composeModelReply(model string, t replyTurn) string {
 		if t.drops != nil {
 			*t.drops = append(*t.drops, lintDrop{Sentence: sentence, Reason: reason})
 		}
+	}
+	// The model's text is in the reply's language (V81, tune-v2c g2-add-23:
+	// an English text over a German request and a German block): on a write
+	// turn, whose block is rendered in that language, a sentence clearly in
+	// the other language is dropped.
+	if ss := sentences(text); len(ss) > 0 && t.write && t.block != nil {
+		var kept []string
+		for _, x := range ss {
+			if l, ok := sentenceLang(x, t.foods); ok && l != lg {
+				drop(x, "language")
+				continue
+			}
+			kept = append(kept, x)
+		}
+		text = strings.Join(kept, " ")
 	}
 	if t.write {
 		// A write turn ends on the block or the offer, never on a question.
@@ -951,9 +1102,11 @@ func composeModelReply(model string, t replyTurn) string {
 		}
 		return fallbackEN
 	}
-	if why := lintModelText(text, t, lg); why != "" {
+	if why := lintModelText(text, t, lg); why != "" && why != "cooking_claim" {
 		// The kept sentences pass alone but not together (a weekday or a
-		// number one names and another needs).
+		// number one names and another needs). A cooking claim is judged per
+		// sentence: a dish the next sentence names is no claim of this one
+		// (V81 L2, tune-v2c guests-09).
 		drop(text, why)
 		text = ""
 		if t.block == nil {

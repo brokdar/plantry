@@ -371,12 +371,14 @@ func TestApplyChanges_MoveCook(t *testing.T) {
 	v, p := e.laterMealSession()
 	day := p.DateString()
 
-	// After its first meal: refused, nothing written.
+	// After its first meal: refused, nothing written, and told as a refusal
+	// with the meals that block it (V81), not a tool error.
 	before := e.planDump()
 	late := v.CookDate.AddDate(0, 0, 1).Format(time.DateOnly)
-	_, err := e.exec("apply_changes", fmt.Sprintf(`{"ops":[{"op":"move_cook","session_id":%d,"cook_at":%s}]}`, v.ID, cellJSON(late, v.CookSlotID)))
-	require.ErrorIs(t, err, domain.ErrInvalidInput)
-	assert.Contains(t, err.Error(), "op 1 of 1 (move_cook)")
+	res, err := e.exec("apply_changes", fmt.Sprintf(`{"ops":[{"op":"move_cook","session_id":%d,"cook_at":%s}]}`, v.ID, cellJSON(late, v.CookSlotID)))
+	require.NoError(t, err)
+	assert.Equal(t, false, res["saved"])
+	assert.Contains(t, fmt.Sprint(res["refused"]), "eat it before then")
 	assert.Equal(t, before, e.planDump())
 
 	// Earlier the same day: allowed.

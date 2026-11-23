@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"sort"
@@ -168,4 +169,27 @@ func removedAt(fold []string, i int) bool {
 		}
 	}
 	return false
+}
+
+// underFloorBlock is the block a turn tells when the message sets a day to a
+// kcal number under that day's minimum (C-11, NU9) and the turn saves
+// nothing: "Sat 21 Nov stays as it is: 250 kcal is under the day's minimum of
+// 793 kcal." nil when no named day number is under its minimum.
+func underFloorBlock(dayKcal map[string]float64, st planning.State) *replyBlock {
+	if len(dayKcal) == 0 {
+		return nil
+	}
+	for _, d := range planning.Evaluate(st, planning.WindowTarget(st)).Days {
+		want, ok := dayKcal[d.Date]
+		if !ok || d.FloorKcal <= 0 || want >= d.FloorKcal-0.5 {
+			continue
+		}
+		label := dayLabelStr(d.Date)
+		return &replyBlock{nothingSaved: true, facts: []fact{{
+			Class: classRefused, Kind: kindRefused, Status: statusOK,
+			EN: fmt.Sprintf("%s stays as it is: %.0f kcal is under the day's minimum of %.0f kcal.", label, math.Round(want), math.Round(d.FloorKcal)),
+			DE: fmt.Sprintf("%s bleibt, wie er ist: %.0f kcal liegen unter dem Mindestwert des Tages von %.0f kcal.", deDay(label), math.Round(want), math.Round(d.FloorKcal)),
+		}}}
+	}
+	return nil
 }

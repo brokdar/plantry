@@ -263,6 +263,11 @@ func toolApplyChanges(svc Services) Tool {
 			}
 			run, err := runGuarded(ctx, svc, w, applyInput{Ops: in.Ops, DryRun: in.DryRun, Light: light, Goal: in.Goal, keepSides: true}, ignoredFields(input))
 			if err != nil {
+				if len(in.Ops) == 1 {
+					if res, ok := moveCookRefusal(ctx, svc, w, in.Ops[0], in.DryRun, err); ok {
+						return mustJSON(res), ToolEffectNone, nil
+					}
+				}
 				return nil, ToolEffectNone, err
 			}
 			run.result["saved"], run.result["status"] = saveStatus(run.result)

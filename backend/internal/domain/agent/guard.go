@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -74,7 +75,7 @@ func refusedPart(ctx context.Context, svc Services, w window.Window, op changeOp
 			st, haveSt = s, true
 		}
 	}
-	dish, cell := "", ""
+	dish, cell, old := "", "", ""
 	if haveSt {
 		for _, p := range st.Plates {
 			match := p.ID == op.PlateID && op.PlateID != 0
@@ -85,6 +86,14 @@ func refusedPart(ctx context.Context, svc Services, w window.Window, op changeOp
 			}
 			if match {
 				cell = mealName(st, p)
+				// The dish a swap or replace takes out: the named component,
+				// else the plate's dish at the op's position (main by default).
+				for _, c := range p.Components {
+					if (op.PlateComponentID != 0 && c.ID == op.PlateComponentID) ||
+						(op.PlateComponentID == 0 && string(c.Position) == cmp.Or(op.Position, string(plate.PositionMain))) {
+						old = foodName(st, c.FoodID)
+					}
+				}
 				if dish == "" && op.FoodID == 0 {
 					for _, c := range p.Components {
 						if c.Position == plate.PositionMain {
@@ -138,6 +147,13 @@ func refusedPart(ctx context.Context, svc Services, w window.Window, op changeOp
 	case "remove":
 		return "removing " + q + at("from"), qd + atDE("von") + " entfernen"
 	case "swap", "replace":
+		// "replacing X with Y": the dish taken out and the one asked for, so the
+		// line never reads as if the new dish were replaced (V81, tune-v2c
+		// g2-replan-01: "replacing "Easy chicken curry"" for curry in place of
+		// Shakshuka); the main that stays is named.
+		if nw := foodName(st, op.FoodID); haveSt && old != "" && op.FoodID != 0 && nw != "" && old != nw {
+			return "replacing " + food.Quote(old) + " with " + food.Quote(nw) + at("at"), deQuote(old) + atDE("bei") + " durch " + deQuote(nw) + " ersetzen"
+		}
 		return "replacing " + q + at("at"), qd + atDE("bei") + " ersetzen"
 	case "set_quantity", "set_portions":
 		return "the new portion size of " + q + at("at"), "die neue Portionsgröße von " + qd + atDE("bei")

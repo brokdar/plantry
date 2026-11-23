@@ -41,7 +41,7 @@ func TestReply_ModelNumbersTheBlockBacksStay(t *testing.T) {
 		"Hummus ist zum Freitagabend hinzugefügt (100 g). Der Abend liegt damit bei 843 kcal, der Tag bei 1500 kcal und im Rahmen.")
 	assert.True(t, strings.HasPrefix(got, "Hummus ist zum Freitagabend hinzugefügt (100 g). Der Abend liegt damit bei 843 kcal, der Tag bei 1500 kcal und im Rahmen."), got)
 
-	got = replyOf(t, "apply_changes", "lighter05_apply_changes.json", "Samstag Abendessen leichter",
+	got = replyOf(t, "apply_changes", "lighter05_apply_changes.json", "make Saturday dinner lighter", // the reply's language is the request's (V81)
 		"Saturday dinner is lighter now: the pasta and rice both went down to 0.75 portions. The meal is 638 kcal, and it can't go further without pushing the day under its minimum.")
 	assert.True(t, strings.HasPrefix(got, "Saturday dinner is lighter now: the pasta and rice both went down to 0.75 portions."), got)
 }

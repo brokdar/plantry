@@ -515,7 +515,7 @@ func toolRegenerate(svc Services) Tool {
       "type":"object",
       "required":["kind"],
       "properties":{
-        "kind":{"type":"string","enum":["window","day","plate","side","empty_cells"],"description":"window: the whole draft plan; day: one day (date); plate: one plate (plate_id); side: one side dish (component_id); empty_cells: fill the open cells."},
+        "kind":{"type":"string","enum":["window","day","plate","side","empty_cells"],"description":"window: the whole plan not accepted yet; day: one day (date); plate: one plate (plate_id); side: one side dish (component_id); empty_cells: fill the open cells."},
         "date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$","description":"Required for kind day."},
         "plate_id":{"type":"integer","minimum":1,"description":"Required for kind plate."},
         "component_id":{"type":"integer","minimum":1,"description":"The side's plate component; required for kind side."},
@@ -526,7 +526,7 @@ func toolRegenerate(svc Services) Tool {
     }`)
 	return Tool{
 		Name: "regenerate",
-		Description: "Let the planner choose again for part of the draft plan and wait for it, only when the user asks to plan a whole day or week again (for one dish or side use find_alternatives). Confirmed rows are kept. " +
+		Description: "Let the planner choose again for part of the plan not accepted yet and wait for it, only when the user asks to plan a whole day or week again (for one dish or side use find_alternatives). Confirmed rows are kept. " +
 			"Returns JSON {saved? (a finished run: the plan is saved, no confirmation needed), run_id, status (ok|partial|error|...), error_key?, counts:{plates, sessions, cook_days, kept_confirmed}, issues:[issue], notes?, changed:[{date, slot_id, plate}], week?:{meat_g:{before, after, limit}, same_dish_twice:[string]}} (week: the meat of the whole window per person against its weekly limit, before and after the run, and the repeated dishes or dish families the week now holds) where plate has the shape of a get_plan cell plate.",
 		Schema: schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
@@ -714,7 +714,7 @@ func regenerateScope(ctx context.Context, svc Services, kind planning.ScopeKind,
 
 type regenerateOut struct {
 	// Saved says in one sentence that a finished run's plan is in the week
-	// now, as drafts the user can still accept: saved, not "not saved" (V77 S-C).
+	// now, and the user can still accept it: saved, not "not saved" (V77 S-C).
 	Saved    string            `json:"saved,omitempty"`
 	RunID    int64             `json:"run_id"`
 	Status   string            `json:"status"`
@@ -730,15 +730,15 @@ type regenerateOut struct {
 }
 
 // regenerateSaved is the saved sentence of a finished regenerate run: the new
-// plates are saved in the week as drafts (the board shows them to accept), so
-// "saved" is true and the drafts still wait for the user's accept; it never
-// says nothing waits for a confirmation.
-const regenerateSaved = "Saved: the new plan is in the week now as drafts (the user can undo it or accept it on the board)."
+// plates are saved in the week and wait for the user's accept on the board, in
+// the board's own words ("Accept and shop"), never "drafts", a word the reply
+// may not use (RP3; V81 L3, tune-v2c planner-09: "saved as drafts" dropped).
+const regenerateSaved = "Saved: the new plan is in the week now (the user can undo it, or accept it on the board with Accept and shop)."
 
 // regenerateSavedPartial is the sentence of a partial run: what was saved, and
 // that the rest was not made (the notes and issues say what).
 func regenerateSavedPartial(plates int) string {
-	return fmt.Sprintf("Saved: part of the new plan, %d plate(s), is in the week now as drafts (the user can undo it or accept it on the board); the rest was not planned, see notes and issues.", plates)
+	return fmt.Sprintf("Saved: part of the new plan, %d plate(s), is in the week now (the user can undo it, or accept it on the board with Accept and shop); the rest was not planned, see notes and issues.", plates)
 }
 
 // weekOut is what the run did to the week: the window's meat per person

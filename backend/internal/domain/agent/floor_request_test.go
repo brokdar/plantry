@@ -10,7 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
 
 // S-A (ledger V77, safety-v2b s-floor-00-k3 / s-floor-01-k2): "Saturday around
@@ -150,4 +152,25 @@ func TestNamedDayKcal(t *testing.T) {
 	}
 	// Today outside the window names no day.
 	assert.Empty(t, agent.NamedDayKcal("today around 600 kcal", w, sat.AddDate(0, 0, -3)))
+}
+
+// V81: underFloorBlock names the day and its minimum only for a day number
+// under it, on the real plan.
+func TestUnderFloorLine_OnTheRealPlan(t *testing.T) {
+	t.Parallel()
+	e := relEnv(t)
+	w := window.Window{Start: planStart, End: planStart.AddDate(0, 0, 6)}
+	st, err := testsvc.PlanningDeps(e.db).Builder.Build(e.ctx, w, planToday, w.Start, w.End)
+	require.NoError(t, err)
+	var day planning.DayEval
+	for _, d := range planning.Evaluate(st, planning.WindowTarget(st)).Days {
+		if d.FloorKcal > 0 {
+			day = d
+			break
+		}
+	}
+	require.Positive(t, day.FloorKcal)
+	line := agent.UnderFloorLine(map[string]float64{day.Date: 100}, st)
+	assert.Contains(t, line, "stays as it is: 100 kcal is under the day's minimum of")
+	assert.Empty(t, agent.UnderFloorLine(map[string]float64{day.Date: day.FloorKcal + 50}, st), "a number over the minimum")
 }
