@@ -94,7 +94,7 @@ func (s *Service) MoveMeal(ctx context.Context, plateID int64, to CellKey, occ O
 // moveMeal moves cur to next's cell (next may also carry new eaters and note)
 // inside the caller's unit of work.
 func (s *Service) moveMeal(ctx context.Context, cur, next Plate, occ Occupant) (MealResult, error) {
-	today := dateOnly(s.now())
+	today := s.today(ctx)
 	if err := notPast(today, cur.Cell(), next.Cell()); err != nil {
 		return MealResult{}, err
 	}
@@ -520,7 +520,7 @@ func (s *Service) ReplaceComponent(ctx context.Context, plateID int64, sel Selec
 		if err != nil {
 			return err
 		}
-		if err := notPast(dateOnly(s.now()), p.Cell()); err != nil {
+		if err := notPast(s.today(ctx), p.Cell()); err != nil {
 			return err
 		}
 		if err := s.guardPlates(ctx, *p); err != nil {
@@ -638,7 +638,7 @@ func (s *Service) cookAt(ctx context.Context, t *tracker, p *Plate, pc *PlateCom
 	if err := s.validateSlot(ctx, c.SlotID); err != nil {
 		return err
 	}
-	if err := notPast(dateOnly(s.now()), c); err != nil {
+	if err := notPast(s.today(ctx), c); err != nil {
 		return err
 	}
 	mode, err := s.cellMode(ctx, c)
@@ -680,7 +680,7 @@ func (s *Service) MoveCook(ctx context.Context, sessionID int64, to CellKey) (Me
 		if err := s.validateSlot(ctx, to.SlotID); err != nil {
 			return err
 		}
-		if err := notPast(dateOnly(s.now()), to); err != nil {
+		if err := notPast(s.today(ctx), to); err != nil {
 			return err
 		}
 		mode, err := s.cellMode(ctx, to)
@@ -778,7 +778,7 @@ func (s *Service) CopyMeal(ctx context.Context, plateID int64, to []CellKey, as 
 		if err != nil {
 			return err
 		}
-		today := dateOnly(s.now())
+		today := s.today(ctx)
 		// A leftover copy is a new link: it never relies on the freezer.
 		e.set.FreezingEnabled = false
 		j := newJournal()

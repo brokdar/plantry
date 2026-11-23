@@ -1831,7 +1831,7 @@ func (s *Service) reanchorSession(ctx context.Context, t *tracker, sess *CookSes
 		return false, err
 	}
 	in := anchorInput{
-		Session: *sess, Before: t.prior[sess.ID], Links: links, Restore: t.restore || t.pullBack[sess.ID], Today: dateOnly(s.now()),
+		Session: *sess, Before: t.prior[sess.ID], Links: links, Restore: t.restore || t.pullBack[sess.ID], Today: s.today(ctx),
 		KeepDays: e.set.KeepDays(f.KeepDays), Set: e.set, Order: e.order,
 	}
 	if in.Before.cookedAhead(e.order) {
@@ -2169,6 +2169,34 @@ func nextSortOrder(comps []PlateComponent) int {
 		}
 	}
 	return next
+}
+
+type todayKey struct{}
+
+// WithToday carries the caller's date (a chat turn's today, D25) to the
+// service: the past-day guard and the re-anchor use it instead of the clock,
+// so one call has one today. A zero today leaves the context as it is, so a
+// request without one never overwrites the turn's.
+func WithToday(ctx context.Context, today time.Time) context.Context {
+	if today.IsZero() {
+		return ctx
+	}
+	return context.WithValue(ctx, todayKey{}, today)
+}
+
+// TodayFrom returns the date set by WithToday; the zero time when none is.
+func TodayFrom(ctx context.Context) time.Time {
+	t, _ := ctx.Value(todayKey{}).(time.Time)
+	return t
+}
+
+// today is the date before which cells are past: the caller's (WithToday),
+// else the clock's.
+func (s *Service) today(ctx context.Context) time.Time {
+	if t := TodayFrom(ctx); !t.IsZero() {
+		return dateOnly(t)
+	}
+	return dateOnly(s.now())
 }
 
 func dateOnly(t time.Time) time.Time {

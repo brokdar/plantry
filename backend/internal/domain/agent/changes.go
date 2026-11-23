@@ -473,9 +473,14 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 			}
 		}
 		if ch.Light != nil {
-			// Prune from the real today: the change's earliest date as
-			// "today" would delete the untouched rows before it.
-			y, m, d := c.now().Date()
+			// Prune from the real today (the chat turn's, else the clock's):
+			// the change's earliest date as "today" would delete the
+			// untouched rows before it.
+			now := todayFrom(ctx)
+			if now.IsZero() {
+				now = c.now()
+			}
+			y, m, d := now.Date()
 			today := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 			if err := c.light.Replace(ctx, today, ch.Light.Dates, ch.Light.Before); err != nil {
 				return err
