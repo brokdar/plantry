@@ -190,7 +190,7 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 	}
 	// A check says what the change would do; a saved change says what it did.
 	// The offer is the extra step: it is never applied unasked.
-	lead, tail, told := "the change is done as asked and", "; do not apply the offer unasked", ": the program tells it and its offer"
+	lead, tail, told := "the change is done as asked and", "; do not apply the offer unasked and do not offer it in your text (the program does)", ": the program tells it and its offer"
 	if len(offers) > 0 {
 		told = ": the program tells it and offers offers[0]"
 	}

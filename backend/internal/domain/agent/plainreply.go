@@ -307,6 +307,9 @@ var (
 	isoAnywhere = regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)
 	thousand    = regexp.MustCompile(`^(\d{1,3})([.,]\d{3})+$`)
 	banned      = regexp.MustCompile(`(?i)\b(batch(es)?|eaters?|light days?|hearty minimum|cap|caps|band|bands|floor|soft|drafts?|extras?)\b|\b[HS]\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b|the tool only allows`)
+	// extraPerson is "the extra person": a guest, not the add-on position RP3
+	// bans the word for (V77, tune-v2b guests-00).
+	extraPerson = regexp.MustCompile(`(?i)\bextra (person|people|guests?|eater)\b`)
 	quotedRe    = regexp.MustCompile(`"[^"\n]*"|„[^“\n]*“|“[^”\n]*”`)
 	weekdayRe   = regexp.MustCompile(`(?i)\b(mon|tues?|wed(nes)?|thu(rs)?|fri|sat(ur)?|sun)(day)?\b|\b(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b`)
 )
@@ -665,8 +668,11 @@ var (
 	leftoverNo  = regexp.MustCompile(`(?i)(no leftovers?|without leftovers?|nothing (is )?left ?over|keine reste|ohne reste|nichts bleibt übrig)`)
 	issuesNo    = regexp.MustCompile(`(?i)(no (new )?(problems?|warnings?|issues?)|nothing (is )?(wrong|off)|everything (still )?(fits|is fine|works)|all (is )?fine|alles (passt|in ordnung|ok)|keine (neuen )?(probleme|warnungen))`)
 	rangeIn     = regexp.MustCompile(`(?i)(within|inside|in) (its|the|a good) (range|amount)|(im|innerhalb des) (passenden )?bereich|passt in den bereich`)
-	dayOver     = regexp.MustCompile(`(?i)\b(day|tag)\b[^.]*\b(over|above|too much|über|darüber|zu viel)\b|\b(over|above) (its|the) (range|amount)`)
-	dayUnder    = regexp.MustCompile(`(?i)\b(day|tag)\b[^.]*\b(under|below|short|too little|unter|darunter|zu wenig)\b|\b(under|below) (its|the) (range|amount|minimum)`)
+	// aboveMinimum is "above its minimum": the day's floor, not its range, so
+	// no claim the day is over (V77, tune-v2b injection-10).
+	aboveMinimum = regexp.MustCompile(`(?i)\b(above|over|über)\s+(its|the|the day's|seinem|dem|ihrem)?\s*(minimum|mindestwert\w*)`)
+	dayOver      = regexp.MustCompile(`(?i)\b(day|tag)\b[^.]*\b(over|above|too much|über|darüber|zu viel)\b|\b(over|above) (its|the) (range|amount)`)
+	dayUnder     = regexp.MustCompile(`(?i)\b(day|tag)\b[^.]*\b(under|below|short|too little|unter|darunter|zu wenig)\b|\b(under|below) (its|the) (range|amount|minimum)`)
 )
 
 // Word classes the model's text on a write turn may not use: the block states
@@ -735,7 +741,7 @@ func contradicts(text string, facts []fact, nothingSaved bool) bool {
 		return true
 	case rangeIn.MatchString(text) && (status(statusUnder) || status(statusOver)):
 		return true
-	case dayOver.MatchString(text) && status(statusUnder) && !status(statusOver):
+	case dayOver.MatchString(aboveMinimum.ReplaceAllString(text, " ")) && status(statusUnder) && !status(statusOver):
 		return true
 	case dayUnder.MatchString(text) && status(statusOver) && !status(statusUnder):
 		return true
@@ -757,7 +763,7 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 	}
 	withBlock := t.write && t.block != nil
 	if withBlock {
-		if banned.MatchString(text) {
+		if banned.MatchString(extraPerson.ReplaceAllString(text, " ")) {
 			return "planner_word"
 		}
 		blockText := ""
@@ -786,7 +792,7 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 				return "number"
 			}
 		}
-		if modelCookingWords.MatchString(text) {
+		if modelCookingWords.MatchString(text) && !cookingBacked(text, t) {
 			return "cooking_claim"
 		}
 		if modelOptionWords.MatchString(withoutComparisons(text)) {
@@ -816,7 +822,7 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 		}
 		return ""
 	}
-	if banned.MatchString(quotedRe.ReplaceAllString(text, "")) {
+	if banned.MatchString(extraPerson.ReplaceAllString(quotedRe.ReplaceAllString(text, ""), " ")) {
 		return "planner_word"
 	}
 	have := map[string]bool{}
