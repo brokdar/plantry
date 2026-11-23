@@ -137,8 +137,8 @@ func TestDayReplan_NeverSavesAnEmptyMeal(t *testing.T) {
 // A day replan that no fallback fills names what stays open, so it saves nothing.
 func TestEmptyDayMeals_NamesTheEmptyMeal(t *testing.T) {
 	s, tgt, p := emptyLunchDay()
-	why := planning.EmptyDayMeals(planning.Merge(s, tgt, p), tgt, day(tue))
+	why := planning.EmptyDayMeals(planning.Merge(s, tgt, p), tgt, day(tue), nil)
 	assert.Contains(t, why, "would stay empty")
 	filled, _ := planning.FillEmptyMeals(planning.ChooseInput{State: s, Target: tgt}, p)
-	assert.Empty(t, planning.EmptyDayMeals(planning.Merge(s, tgt, filled), tgt, day(tue)))
+	assert.Empty(t, planning.EmptyDayMeals(planning.Merge(s, tgt, filled), tgt, day(tue), nil))
 }

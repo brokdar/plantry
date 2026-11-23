@@ -153,6 +153,7 @@ type replyTurn struct {
 	missed  bool             // a food lookup found nothing: the food asked for is not in the library (noSaveLine)
 	failed  bool             // a write tool failed with an error and saved nothing (noSaveLine)
 	coded   bool             // code lines follow the model's text (composeReply)
+	unlock  bool             // unlock ran: the user answers its card, the change waits (noSaveLine)
 	block   *replyBlock      // the facts and the offer of the turn's writes
 	// undoable holds the block as it was before each change saved in this
 	// turn, newest last: an undo of that change takes the block back (addWrite).
@@ -176,6 +177,9 @@ type replyTurn struct {
 // noteTool records what a tool call of the turn was: a check (dry run,
 // preview) and whether it is more than a food lookup that found nothing.
 func (t *replyTurn) noteTool(name string, input, output json.RawMessage, err error) {
+	if name == "unlock" {
+		t.unlock = true
+	}
 	if err != nil {
 		t.ran = true
 		return
@@ -238,7 +242,9 @@ func (t *replyTurn) namesQuery(query string) bool {
 // A question about the plan or a message naming no meal has no unmet line, so
 // none of these fires on a G1 ask or a read-only answer (no write was tried).
 func (t replyTurn) noSaveLine(model string) (fact, bool) {
-	if t.block != nil {
+	// A turn that asked to unlock waits for the user's answer on the card:
+	// the change is not left out.
+	if t.block != nil || t.unlock {
 		return fact{}, false
 	}
 	reason := func(en, de string) (fact, bool) {

@@ -154,10 +154,13 @@ func (x *index) sameDishMeal(in ChooseInput, prop Proposal, c plate.CellKey) (Pr
 }
 
 // emptyDayMeals says what a day replan would leave open on its day: a planned
-// meal without a plate, or the day under its minimum; "" when neither.
-func emptyDayMeals(s State, t Target, date time.Time) string {
+// meal without a plate, or the day under its minimum when it was not under it
+// before the run (start: the hard issues open then, SF1 (a)); "" when neither.
+func emptyDayMeals(s State, t Target, date time.Time, start []Issue) string {
+	day := date.Format(time.DateOnly)
+	floorBefore := slices.ContainsFunc(start, func(is Issue) bool { return is.Date == day && is.Code == CodeKcalBelowFloor })
 	for _, is := range openHard(s, t) {
-		if is.Date != date.Format(time.DateOnly) {
+		if is.Date != day || (is.Code == CodeKcalBelowFloor && floorBefore) {
 			continue
 		}
 		switch is.Code {

@@ -135,6 +135,10 @@ func TestUnmetTold_EveryNoSavePathWithoutAQuestion(t *testing.T) {
 	failed := mkPlain()
 	failed.noteTool("find_foods", nil, nil, errors.New("boom"))
 	assert.Contains(t, composeReply("Sorry.", failed.final()), "Left out: the change to Mon 23 Nov dinner (nothing was saved for it).")
+	// An unlock card waits for the user: nothing is left out yet.
+	unlock := mkPlain()
+	unlock.noteTool("unlock", nil, nil, errors.New("unlock needs the user"))
+	assert.Equal(t, "Say yes on the card.", composeReply("Say yes on the card.", unlock.final()))
 	// Only a check (dry run): told so, also after a question.
 	checked := mkPlain()
 	checked.noteTool("apply_changes", nil, json.RawMessage(`{"dry_run":true,"saved":false}`), nil)

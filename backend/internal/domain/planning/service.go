@@ -999,6 +999,9 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	sideOpen := map[string]bool{}
 	// startH8 counts the dish-variety violations open before the run (S1).
 	startH8 := 0
+	// startOpen are the hard issues open before the run (SF1 (a): a day
+	// replan may leave them as they were).
+	var startOpen []Issue
 	build := func(ctx context.Context) error {
 		st, err := s.d.Builder.Build(ctx, j.w, j.today, j.from, j.to)
 		if err != nil {
@@ -1007,6 +1010,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		stored = st.Light
 		st.Light = MergeLight(stored, j.light)
 		startH8 = startVarietyRepeats(st, j.target)
+		startOpen = openHard(st, j.target)
 		if j.side != nil {
 			for _, is := range openHard(st, j.target) {
 				sideOpen[hardKey(is)] = true
@@ -1182,7 +1186,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	// empty or the day under its minimum; when no fallback filled it
 	// (fillEmptyMeals), nothing is saved and the notes say what stays open.
 	if j.scope.Kind == ScopeDay && j.side == nil {
-		if why := emptyDayMeals(Merge(base, j.target, prop), j.target, j.scope.Date); why != "" {
+		if why := emptyDayMeals(Merge(base, j.target, prop), j.target, j.scope.Date, startOpen); why != "" {
 			closeStatus, closeStage = "error", "checking"
 			return RunEnd{Status: airun.StatusError, ErrorKey: keyDayMealEmpty, Notes: "Nothing was saved: " + why + "."}
 		}
