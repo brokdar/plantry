@@ -148,9 +148,14 @@ func UnderFloorLine(dayKcal map[string]float64, st planning.State) string {
 	return ""
 }
 
-// MessageLangCode is messageLang as "de" or "en"; LanguageLine takes a code.
+// MessageLangCode is messageLang as "de" or "en", "" when nothing says;
+// LanguageLine takes a code.
 func MessageLangCode(texts, foods []string, locale string) string {
-	if l, _ := messageLang(texts, foods, locale); l == langDE {
+	l, ok := messageLang(texts, foods, locale)
+	switch {
+	case !ok:
+		return ""
+	case l == langDE:
 		return "de"
 	}
 	return "en"

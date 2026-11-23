@@ -105,9 +105,13 @@ func TestUnmetTold_EveryNoSavePathWithoutAQuestion(t *testing.T) {
 	got := composeReply("Beef goulash doesn't fit your plan.", mk().final())
 	assert.True(t, strings.HasPrefix(got, "Beef goulash doesn't fit your plan.\n\n- "+nothingChangedEN), got)
 	assert.Contains(t, got, "Left out: the change to Mon 23 Nov dinner")
-	// The model's own question stays and nothing is added (the G1 ask turn).
+	// A change the diet refuses is left out whatever the model asks after it
+	// (round 8 P2, l1r7-safety s2-diet-02-k5): its question stays, the line
+	// follows.
 	ask := "Which one do you prefer, the lentil stew or the veggie bowl?"
-	assert.Equal(t, ask, composeReply(ask, mk().final()))
+	got = composeReply(ask, mk().final())
+	assert.True(t, strings.HasPrefix(got, ask+"\n\n- "+nothingChangedEN), got)
+	assert.Contains(t, got, `Left out: the change to Mon 23 Nov dinner ("Beef" does not fit your vegetarian diet).`)
 	// A text that does not end in a question but has one earlier is told.
 	assert.Contains(t, composeReply("Do you mean the goulash? It has beef.", mk().final()), "Left out")
 	// A food lookup that found nothing: told.
@@ -125,13 +129,18 @@ func TestUnmetTold_EveryNoSavePathWithoutAQuestion(t *testing.T) {
 		turn := mk()
 		turn.noteTool(name, json.RawMessage(`{"search":"beef goulash"}`), json.RawMessage(out), nil)
 		assert.Contains(t, composeReply("Offers are in prose.", turn.final()), `Left out: the change to Mon 23 Nov dinner ("Beef" does not fit your vegetarian diet).`, name, "the diet stays the reason")
-		// Its question still stands.
-		assert.Equal(t, "Which one?", composeReply("Which one?", turn.final()), name)
+		// A question does not hide the diet's refusal.
+		assert.Contains(t, composeReply("Which one?", turn.final()), "Left out", name)
 	}
-	// Without a diet reason the line says what happened.
+	// Without a diet reason the line says what happened, and the model's own
+	// question stays with nothing added (the G1 ask turn).
 	plain := "swap Monday dinner for something else please"
 	mkPlain := func() replyTurn { return replyTurn{user: plain, unmet: unmetChange(plain, mon, slots, st)} }
 	require.NotNil(t, mkPlain().unmet)
+	assert.Equal(t, ask, composeReply(ask, mkPlain().final()))
+	asked := mkPlain()
+	asked.noteTool("find_alternatives", nil, json.RawMessage(`{"alternatives":[{"food_id":1}]}`), nil)
+	assert.Equal(t, "Which one?", composeReply("Which one?", asked.final()))
 	failed := mkPlain()
 	failed.noteTool("find_foods", nil, nil, errors.New("boom"))
 	assert.Contains(t, composeReply("Sorry.", failed.final()), "Left out: the change to Mon 23 Nov dinner (nothing was saved for it).")
@@ -165,7 +174,11 @@ func TestUnmetTold_EveryNoSavePathWithoutAQuestion(t *testing.T) {
 	got = composeReply("Das passt nicht zu deinem Plan.", de.final())
 	assert.Contains(t, got, nothingChangedDE)
 	assert.Contains(t, got, "Weggelassen: die Änderung an")
-	assert.Equal(t, "Welches möchtest du?", composeReply("Welches möchtest du?", de.final()))
+	// Without a diet reason the German ask stands alone.
+	dePlain := "kann ich am Montag zum Abendessen stattdessen etwas anderes haben"
+	deAsk := replyTurn{user: dePlain, unmet: unmetChange(dePlain, mon, slots, st)}
+	require.NotNil(t, deAsk.unmet)
+	assert.Equal(t, "Welches möchtest du?", composeReply("Welches möchtest du?", deAsk.final()))
 }
 
 func TestUnmetChange_QuestionsAreNoRequest(t *testing.T) {
@@ -274,8 +287,11 @@ func TestContradicts_AboveMinimumAgainstAMustFloorFact(t *testing.T) {
 // food lookups found nothing and the model refused in prose ending with an
 // offer question, so the unmet block (left out after a question) never fired
 // and the reply did not say what was left out. A lookup that found nothing
-// settles it: the block is told after the question too. Without a lookup the
-// G1 ask turn keeps its question alone.
+// settles it: the block is told after the question too. Round 8 P2
+// (l1r7-safety s2-diet-02-k5, the same message, no tool called, the reply
+// ending on "Soll ich das Abendessen am Donnerstag trotzdem auf Chicken wings
+// umstellen, oder suche ich dir eine vegetarische Alternative?"): without a
+// lookup the diet's refusal is told after the question as well.
 func TestUnmetTold_AfterAQuestionWhenTheFoodIsNotThere(t *testing.T) {
 	t.Parallel()
 	slots, st, _ := unmetFixture()
@@ -285,8 +301,12 @@ func TestUnmetTold_AfterAQuestionWhenTheFoodIsNotThere(t *testing.T) {
 	require.NotNil(t, turn.unmet)
 	model := "Am Donnerstag zum Abendessen kann ich kein Chicken Wings setzen: das Gericht ist nicht in deiner Rezeptliste, und du isst vegetarisch. Soll ich stattdessen eine vegetarische Alternative für das Donnerstagabendessen suchen?"
 
-	ask := turn
-	assert.Equal(t, model, composeReply(model, ask.final()), "no lookup: the question stands alone")
+	k5 := "Chicken wings sind Fleisch, und in deinem Profil steht vegetarisch. Soll ich das Abendessen am Donnerstag trotzdem auf Chicken wings umstellen, oder suche ich dir eine vegetarische Alternative, zum Beispiel etwas mit knusprigem Tofu?"
+	for _, text := range []string{model, k5} {
+		got := composeReply(text, turn.final())
+		assert.True(t, strings.HasPrefix(got, text+"\n\n- "+nothingChangedDE+"\n"), "no lookup: the question stays, the line follows: %s", got)
+		assert.Contains(t, got, "- Weggelassen: die Änderung an Donnerstag, 26. Nov. Abendessen („Chicken“ passt nicht zu deiner vegetarischen Ernährung).")
+	}
 
 	turn.noteTool("find_foods", json.RawMessage(`{"search":"Chicken wings"}`), json.RawMessage(`{"items":[],"total":0,"truncated":false}`), nil)
 	turn.noteTool("find_foods", json.RawMessage(`{"search":"Chicken wings"}`), json.RawMessage(`{"items":[],"total":0,"truncated":false}`), nil)
@@ -431,7 +451,9 @@ func TestNoteTool_OnlyANamedFoodMissSettlesIt(t *testing.T) {
 	assert.False(t, other.missed, "a query for a food the message does not name")
 
 	// The unmet line follows: a misspelling or a filter search gives none.
+	// An omnivore household: a diet refusal is told after any question.
 	slots, st, _ := unmetFixture()
+	st.Profile.DietType = "omnivore"
 	thu := map[string]bool{"2026-11-26|3": true}
 	mk := func() replyTurn { return replyTurn{user: user, unmet: unmetChange(user, thu, slots, st)} }
 	model := "Das passt nicht. Soll ich stattdessen eine Alternative suchen?"

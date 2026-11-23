@@ -54,6 +54,10 @@ func waysBlock(output json.RawMessage) *replyBlock {
 	case kind == planning.GoalMoreProtein && top > 0 && day >= top:
 		en = fmt.Sprintf("No protein food fits on its own: the day holds %.0f kcal, already over a good amount for it (up to %.0f kcal).", day, top)
 		de = fmt.Sprintf("Kein eiweißreiches Essen passt allein dazu: der Tag hat %.0f kcal, schon über dem passenden Bereich (bis %.0f kcal).", day, top)
+	case kind == planning.GoalMoreProtein && proteinWhyDE(why) != "":
+		// The search's own reason, naming the checks that dropped every
+		// candidate (l1r7-tune g2-protein-06: the reply had none).
+		en, de = why, proteinWhyDE(why)
 	default:
 		en = "No checked change does this on its own."
 		de = "Keine geprüfte Änderung schafft das allein."
@@ -72,6 +76,49 @@ func waysBlock(output json.RawMessage) *replyBlock {
 		}
 	}
 	return b
+}
+
+// The more-protein reasons of planning's noWayWhy and their clauses.
+var (
+	proteinNoWay  = regexp.MustCompile(`^No change adds (\d+) g of protein or more without (.+)\.$`)
+	proteinNone   = regexp.MustCompile(`^No checked change adds (\d+) g of protein or more\.$`)
+	proteinOver   = regexp.MustCompile(`^taking the day \((\d+) kcal\) over its range top of (\d+) kcal$`)
+	proteinCook   = regexp.MustCompile(`^putting more than (\d+) dishes on one cooking time$`)
+	proteinWaste  = regexp.MustCompile(`^adding over (\d+) kcal for under (\d+) g of protein$`)
+	proteinClause = map[string]string{
+		"breaking a hard rule":                              "eine feste Regel zu brechen",
+		"taking a day under its energy minimum":             "einen Tag unter seinen Mindestwert zu bringen",
+		"adding meat to a week already over its meat limit": "einer Woche über ihrer Fleischgrenze mehr Fleisch hinzuzufügen",
+		"leaving a meal without full nutrition data":        "eine Mahlzeit ohne vollständige Nährwerte zu lassen",
+	}
+)
+
+// proteinWhyDE says a more-protein search's reason in German; "" for any
+// other text (a reason with the real check's drops appended stays generic).
+func proteinWhyDE(why string) string {
+	if m := proteinNone.FindStringSubmatch(why); m != nil {
+		return fmt.Sprintf("Keine geprüfte Änderung bringt %s g Eiweiß oder mehr.", m[1])
+	}
+	m := proteinNoWay.FindStringSubmatch(why)
+	if m == nil {
+		return ""
+	}
+	var de []string
+	for _, c := range strings.Split(m[2], " or ") {
+		switch o, k, w := proteinOver.FindStringSubmatch(c), proteinCook.FindStringSubmatch(c), proteinWaste.FindStringSubmatch(c); {
+		case o != nil:
+			de = append(de, fmt.Sprintf("den Tag (%s kcal) über die Obergrenze seines Bereichs von %s kcal zu bringen", o[1], o[2]))
+		case k != nil:
+			de = append(de, fmt.Sprintf("mehr als %s Gerichte auf eine Kochzeit zu legen", k[1]))
+		case w != nil:
+			de = append(de, fmt.Sprintf("über %s kcal für unter %s g Eiweiß hinzuzufügen", w[1], w[2]))
+		case proteinClause[c] != "":
+			de = append(de, proteinClause[c])
+		default:
+			return ""
+		}
+	}
+	return fmt.Sprintf("Keine Änderung bringt %s g Eiweiß oder mehr, ohne %s.", m[1], strings.Join(de, " oder "))
 }
 
 var (

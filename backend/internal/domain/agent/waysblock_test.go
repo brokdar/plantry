@@ -68,6 +68,28 @@ func TestRun_FindWaysWithNothingToApplyTellsWhyInCode(t *testing.T) {
 			},
 			absent: []string{"Shall I"},
 		},
+		{
+			// l1r7-tune g2-protein-06: the reply said only that no checked
+			// change does it, without the search's reason.
+			name: "more protein, every candidate blocked (l1r7-tune g2-protein-06)", file: "protein06_find_ways.json",
+			user:  "mehr Eiweiß am Sonntag",
+			model: "Der Tag liegt bei 73 g Eiweiß und 1701 kcal und bleibt damit in seinem Rahmen.",
+			want: []string{
+				"- " + nothingChangedDE,
+				"- Keine Änderung bringt 10 g Eiweiß oder mehr, ohne den Tag (1701 kcal) über die Obergrenze seines Bereichs von 1785 kcal zu bringen oder mehr als 2 Gerichte auf eine Kochzeit zu legen.",
+			},
+			absent: []string{"schafft das allein"},
+		},
+		{
+			name: "more protein, every candidate blocked, English", file: "protein06_find_ways.json",
+			user:  "more protein on Sunday please",
+			model: "Sunday stays as it is.",
+			want: []string{
+				"- " + nothingChangedEN,
+				"- No change adds 10 g of protein or more without taking the day (1701 kcal) over its range top of 1785 kcal or putting more than 2 dishes on one cooking time.",
+			},
+			absent: []string{"does this on its own"},
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

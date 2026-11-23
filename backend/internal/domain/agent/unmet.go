@@ -76,13 +76,15 @@ func unmetChange(text string, cells map[string]bool, slotNames map[int64]string,
 		de = append(de, deDay(day)+" "+deSlot(meal))
 	}
 	whyEN, whyDE := unmetWhyEN, unmetWhyDE
+	byDiet := false
 	if household := diet.Class(st.Profile.DietType); planning.DietRestricts(st.Profile.DietType) {
 		if name := addedAgainstDiet(text, st, household); name != "" {
 			whyEN = fmt.Sprintf("%q does not fit your %s diet", name, household)
 			whyDE = fmt.Sprintf("„%s“ passt nicht zu deiner %s Ernährung", name, dietDE[household])
+			byDiet = true
 		}
 	}
-	return &replyBlock{nothingSaved: true, facts: []fact{{
+	return &replyBlock{nothingSaved: true, diet: byDiet, facts: []fact{{
 		Class: classRefused, Kind: kindRefused, Status: statusOK,
 		EN: fmt.Sprintf("Left out: the change to %s (%s).", strings.Join(en, ", "), whyEN),
 		DE: fmt.Sprintf("Weggelassen: die Änderung an %s (%s).", strings.Join(de, ", "), whyDE),

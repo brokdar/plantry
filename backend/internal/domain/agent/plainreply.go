@@ -35,6 +35,8 @@ type replyBlock struct {
 	offer *offerLine
 	// nothingSaved: the call (or, merged, every call) of the turn saved nothing.
 	nothingSaved bool
+	// diet: an unmet line whose reason is the household's diet (unmetChange).
+	diet bool
 }
 
 func (b *replyBlock) empty() bool { return b == nil || (len(b.facts) == 0 && b.offer == nil) }
@@ -238,7 +240,12 @@ func (t *replyTurn) namesQuery(query string) bool {
 //     (unmetChange): told unless the model's text ends in a question, whose
 //     question stands (a G1 ask, an offer), except when a food lookup found
 //     nothing, which settles it (V81, safety-s2 s2-diet-02-k3: "Soll ich
-//     stattdessen eine vegetarische Alternative suchen?").
+//     stattdessen eine vegetarische Alternative suchen?"), or when the reason
+//     is the household's diet: the guard refuses that change whatever the
+//     answer, so it is left out in any case (G2/SF2, round 8 P2, l1r7-safety
+//     s2-diet-02-k5: "Soll ich das Abendessen am Donnerstag trotzdem auf
+//     Chicken wings umstellen, oder suche ich dir eine vegetarische
+//     Alternative?").
 //
 // A question about the plan or a message naming no meal has no unmet line, so
 // none of these fires on a G1 ask or a read-only answer (no write was tried).
@@ -256,12 +263,13 @@ func (t replyTurn) noSaveLine(model string) (fact, bool) {
 	}
 	// Only a message that asked for a change has a line, and a trailing model
 	// question stands on every path (a G1 ask, an offer such as "Shall I save
-	// it?"), except after a food lookup that found nothing (V81).
+	// it?"), except after a food lookup that found nothing (V81) and for a
+	// change the diet refuses (round 8 P2).
 	if t.unmet == nil {
 		return fact{}, false
 	}
 	ss := sentences(strings.TrimSpace(plainReply(model)))
-	if len(ss) > 0 && strings.HasSuffix(ss[len(ss)-1], "?") && !t.missed {
+	if len(ss) > 0 && strings.HasSuffix(ss[len(ss)-1], "?") && !t.missed && !t.unmet.diet {
 		return fact{}, false
 	}
 	switch {
@@ -301,6 +309,9 @@ func (t replyTurn) lang(model string) lang {
 // earlier ones, else the profile's locale; false when none says. The plan's
 // dish names are left out first, so an English dish name in a German message
 // ("Low-fat quark", "Greek salad with chickpeas") decides nothing (round 7 R1).
+// A message also counts its question words and short verbs, so a short
+// question decides ("wie lange dauert Overnight oats", round 8 P1: with the
+// dish left out no marker word was left and the earlier message decided).
 func messageLang(texts, foods []string, locale string) (lang, bool) {
 	names := slices.Clone(foods)
 	// Longer names first: "Steamed rice" goes before "rice".
@@ -315,8 +326,15 @@ func messageLang(texts, foods []string, locale string) (lang, bool) {
 		}
 		plain[i] = low
 	}
-	if l, ok := replyLangOf(plain...); ok {
-		return l, true
+	for _, t := range plain {
+		en := len(englishWord.FindAllString(t, -1)) + len(englishAsk.FindAllString(t, -1))
+		de := len(germanWord.FindAllString(t, -1)) + len(germanAsk.FindAllString(t, -1))
+		switch {
+		case de > en:
+			return langDE, true
+		case en > de:
+			return langEN, true
+		}
 	}
 	switch strings.ToLower(strings.TrimSpace(locale)) {
 	case "de":
@@ -326,6 +344,14 @@ func messageLang(texts, foods []string, locale string) (lang, bool) {
 	}
 	return langEN, false
 }
+
+// The question words and short words of a message, besides the shared marker
+// words; none is a word of the other language ("was", "will", "so", "in" stay
+// out).
+var (
+	englishAsk = regexp.MustCompile(`(?i)\b(how|what|when|why|which|where|who|does|do|did|much|many|long|take|takes|it|this|that|there|have|has|for|at|today|tomorrow|would|could|should|me|i|we|our|make|less|more)\b`)
+	germanAsk  = regexp.MustCompile(`(?i)\b(wie|wann|warum|wieso|weshalb|wo|woher|wohin|welche\w*|wieviel\w*|dauer\w*|gibt|kostet|brauch\w*|kann|soll|sollte|hat|habe|haben|sind|lange|viel|viele|heute|morgen|gestern|schon|etwas|bei|von|zu|uns|wir|es|sie|er|essen)\b`)
+)
 
 // languageLine is the prompt's last line: the turn's language, computed in
 // code from the user's message, so the model writes in the language of the

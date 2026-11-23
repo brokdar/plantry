@@ -277,7 +277,25 @@ type waySearch struct {
 	keepMains bool
 	// toLimit: see WayRequest.ToLimit.
 	toLimit bool
+	// blocked: the checks that dropped a more-protein candidate adding
+	// RelMinProteinG or more, for the reason told when no way is left
+	// (noWayWhy).
+	blocked map[wayBlock]bool
 }
+
+// wayBlock is a check that drops a candidate, in the order noWayWhy names
+// them.
+type wayBlock int
+
+const (
+	blockOverTop wayBlock = iota // the day over its range top
+	blockHard                    // a new hard issue
+	blockFloor                   // a day under its energy minimum
+	blockCooking                 // a cooking time over maxDishesPerCooking (KR2)
+	blockMeat                    // more meat in a week over its limit
+	blockData                    // a meal or day without full nutrition data
+	blockWaste                   // much energy for little protein
+)
 
 // Ways returns up to maxWays ways to reach req.Goal, best first, each applied
 // to a copy of s, re-evaluated and kept only when it adds no hard issue (the
@@ -454,10 +472,25 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 			return
 		}
 		r := w.check(e.s)
-		if r.other || w.leavesRange(r.ev) || w.proteinOverBand(r.ev) {
+		over := w.proteinOverBand(r.ev)
+		if r.other || w.leavesRange(r.ev) || over {
+			if w.goal == GoalMoreProtein && w.way(e, r, intent).Meaningful {
+				w.blockedBy(r.blocks...)
+				if over {
+					w.blockedBy(blockOverTop)
+				}
+			}
 			return
 		}
 		way := w.way(e, r, intent)
+		if w.goal == GoalMoreProtein && way.Meaningful {
+			switch {
+			case r.floor:
+				w.blockedBy(r.blocks...)
+			case w.wastesKcal(way):
+				w.blockedBy(blockWaste)
+			}
+		}
 		switch {
 		case r.floor:
 			// The meal alone would break the floor: only a way that makes
@@ -572,6 +605,8 @@ type wayCheck struct {
 	// worse names a weekly limit the change makes worse without a new issue
 	// (more meat in a week already over the DGE limit).
 	worse []string
+	// blocks are the checks behind other and floor.
+	blocks []wayBlock
 }
 
 func (w *waySearch) check(next State) wayCheck {
@@ -583,11 +618,13 @@ func (w *waySearch) check(next State) wayCheck {
 			switch {
 			case is.Code == CodeKcalBelowFloor:
 				r.floor = true
+				r.blocks = append(r.blocks, blockFloor)
 			case is.Rule == "H3":
 				// A batch the change over-draws: apply_changes resizes one that
 				// exactly covers its meals (D11), so the real check decides.
 			default:
 				r.other = true
+				r.blocks = append(r.blocks, blockHard)
 			}
 		case (is.Severity == SeveritySoft && !w.soft[softKey(is)]) || (is.Severity == SeverityWarning && !w.warn[issueID(is)]):
 			is.Options = nil
@@ -597,16 +634,32 @@ func (w *waySearch) check(next State) wayCheck {
 	if w.pi >= 0 {
 		if why := newNutritionGap(w.base, r.ev, next.Plates[w.pi]); why != "" {
 			r.other = true
+			r.blocks = append(r.blocks, blockData)
 		}
 	}
-	if MeatOverStep(w.base, r.ev) || overloadedCooking(w.s0, next) {
+	if MeatOverStep(w.base, r.ev) {
 		r.other = true
+		r.blocks = append(r.blocks, blockMeat)
+	}
+	if overloadedCooking(w.s0, next) {
+		r.other = true
+		r.blocks = append(r.blocks, blockCooking)
 	}
 	if a, b := w.base.Week, r.ev.Week; a != nil && b != nil && b.MeatG > a.MeatG+1 &&
 		slices.ContainsFunc(r.ev.Issues, func(is Issue) bool { return is.Code == CodeWeekMeatAboveDGE }) {
 		r.worse = append(r.worse, PlainText(CodeWeekMeatAboveDGE).Label)
 	}
 	return r
+}
+
+// blockedBy notes the checks that dropped a candidate.
+func (w *waySearch) blockedBy(bs ...wayBlock) {
+	if w.blocked == nil {
+		w.blocked = map[wayBlock]bool{}
+	}
+	for _, b := range bs {
+		w.blocked[b] = true
+	}
 }
 
 // leavesRange: without a day mark a way keeps the day inside its own range.
@@ -833,7 +886,29 @@ func (w *waySearch) noWayWhy(res WayResult) string {
 	if res.BandHigh > 0 && res.Before.DayKcal >= res.BandHigh {
 		return fmt.Sprintf("No protein food fits without taking the day (%.0f kcal) further over its range top of %.0f kcal.", res.Before.DayKcal, res.BandHigh)
 	}
-	return "no verified change adds enough protein without breaking a hard rule"
+	// Only the checks that really dropped a candidate adding enough protein
+	// are named (l1r7-tune g2-protein-06: "without breaking a hard rule" was
+	// told where each one took the day over its range top or overloaded a
+	// cooking time).
+	clauses := map[wayBlock]string{
+		blockOverTop: fmt.Sprintf("taking the day (%.0f kcal) over its range top of %.0f kcal", res.Before.DayKcal, res.BandHigh),
+		blockHard:    "breaking a hard rule",
+		blockFloor:   "taking a day under its energy minimum",
+		blockCooking: fmt.Sprintf("putting more than %d dishes on one cooking time", maxDishesPerCooking),
+		blockMeat:    "adding meat to a week already over its meat limit",
+		blockData:    "leaving a meal without full nutrition data",
+		blockWaste:   fmt.Sprintf("adding over %.0f kcal for under %.0f g of protein", RelProteinWasteKcal, RelProteinWasteG),
+	}
+	var why []string
+	for b := blockOverTop; b <= blockWaste; b++ {
+		if w.blocked[b] {
+			why = append(why, clauses[b])
+		}
+	}
+	if len(why) == 0 {
+		return fmt.Sprintf("No checked change adds %.0f g of protein or more.", RelMinProteinG)
+	}
+	return fmt.Sprintf("No change adds %.0f g of protein or more without %s.", RelMinProteinG, strings.Join(why, " or "))
 }
 
 // ---------------------------------------------------------------------------

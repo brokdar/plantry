@@ -51,10 +51,42 @@ func TestMessageLang_DishNamesDecideNothing(t *testing.T) {
 		{"Greek salad with chickpeas am Freitag statt Reis", "", "de"},
 		{"put Steamed rice with the dinner on Friday", "de", "en"},
 		{"ok", "de", "de"},
-		{"ok", "", "en"},
+		{"ok", "", ""}, // nothing says: no language is asserted (round 8 P1)
 	} {
 		assert.Equal(t, c.want, agent.MessageLangCode([]string{c.text}, foods, c.locale), c.text)
 	}
 	assert.Equal(t, "\nReply in German, every sentence (dish names stay as they are).\n", agent.LanguageLine("de"))
 	assert.Equal(t, "\nReply in English, every sentence.\n", agent.LanguageLine("en"))
+}
+
+// Round 8 P1 (l1r7-tune g2-question-06, g2-injection-05): "wie lange dauert
+// <English dish>" got an English reply. With the dish left out no marker word
+// was left, so the earlier English message ("Reply with just the word OK.")
+// or the household's "en" locale decided. A short question decides by its
+// question word and verb, in both languages; an ambiguous message falls back
+// to the earlier messages, then the locale, and else asserts nothing.
+func TestMessageLang_ShortQuestionsDecide(t *testing.T) {
+	t.Parallel()
+	foods := []string{"Overnight oats", "Tomato lentil stew", "Red lentil soup"}
+	earlier := "Reply with just the word OK."
+	for _, c := range []struct {
+		texts  []string
+		locale string
+		want   string
+	}{
+		{[]string{"wie lange dauert Overnight oats", earlier}, "en", "de"},
+		{[]string{"wie lange dauert Tomato lentil stew", earlier}, "en", "de"},
+		{[]string{"was kostet Red lentil soup?"}, "en", "de"},
+		{[]string{"gibt es Red lentil soup am Sonntag"}, "en", "de"},
+		{[]string{"wieviel Eiweiß hat Overnight oats"}, "en", "de"},
+		{[]string{"how long does Overnight oats take", "Wie sieht mein Plan aus?"}, "de", "en"},
+		{[]string{"how long is Tomato lentil stew"}, "de", "en"},
+		{[]string{"what about Red lentil soup"}, "de", "en"},
+		// ambiguous: the earlier message, then the locale, else nothing
+		{[]string{"Overnight oats?", "wie sieht mein Plan aus"}, "en", "de"},
+		{[]string{"Overnight oats?"}, "de", "de"},
+		{[]string{"Overnight oats?"}, "", ""},
+	} {
+		assert.Equal(t, c.want, agent.MessageLangCode(c.texts, foods, c.locale), c.texts[0])
+	}
 }
