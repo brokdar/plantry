@@ -277,3 +277,17 @@ func TestPrompt_AskOnceThenAct(t *testing.T) {
 		t.Error("the old ask rule left the second question open")
 	}
 }
+
+// V81 (tune-v2c g2-planner-14): "Woche neu planen" was declined as out of
+// scope ("planning a whole week is the Planner"), though regenerate plans the
+// week of the plan again. Only another week is the Planner's.
+func TestPrompt_ReplanningTheWeekIsNoOutOfScope(t *testing.T) {
+	t.Parallel()
+	prompt := compose(nil, "", time.Time{})
+	if strings.Contains(prompt, "planning a whole week is the Planner") {
+		t.Error("replanning this week is regenerate, not the Planner")
+	}
+	if !strings.Contains(prompt, "another week is the Planner") {
+		t.Error("another week stays the Planner's")
+	}
+}

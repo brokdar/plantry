@@ -6,12 +6,14 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
 // S-B (ledger V77, safety-v2b s-diet-00-k2 / s-diet-01-k3, safety-v2
@@ -72,7 +74,7 @@ func TestContradicts_SavedChangeIsNeverUnsaved(t *testing.T) {
 	refused := append(slices.Clone(saved), fact{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: "Left out: x.", DE: "x"})
 	assert.False(t, contradicts("The swap on Monday was not saved.", refused, false, false), "a part left out may be unsaved")
 	assert.NotContains(t, regenerateSaved, "nothing waits for a confirmation")
-	assert.Contains(t, regenerateSaved, "drafts")
+	assert.Contains(t, regenerateSaved, "accept it on the board")
 }
 
 func unmetFixture() (map[int64]string, planning.State, map[string]bool) {
@@ -216,7 +218,7 @@ func TestContradicts_UnsavedClaimIsNarrow(t *testing.T) {
 	} {
 		assert.False(t, contradicts(text, saved, false, false), text)
 	}
-	assert.Contains(t, regenerateSaved, "drafts")
+	assert.Contains(t, regenerateSaved, "accept it on the board")
 	assert.NotContains(t, regenerateSaved, "nothing waits")
 	assert.Contains(t, regenerateSavedPartial(3), "part of the new plan, 3 plate(s)")
 	assert.Contains(t, regenerateSavedPartial(3), "the rest was not planned")
@@ -293,4 +295,45 @@ func TestUnderFloorBlock(t *testing.T) {
 	t.Parallel()
 	assert.Nil(t, underFloorBlock(nil, planning.State{}))
 	assert.Nil(t, underFloorBlock(map[string]float64{"2026-11-21": 250}, planning.State{}), "no day evaluated: no floor known")
+}
+
+// V81 L3 (tune-v2c planner-09, h2-planner-02): "saved as drafts" was dropped
+// as a planner word (RP3 bans "draft"), and the regenerate result itself said
+// "as drafts". The result and the tool text use the board's own words.
+func TestRegenerateTexts_NoDraftWord(t *testing.T) {
+	t.Parallel()
+	for _, text := range []string{regenerateSaved, regenerateSavedPartial(2)} {
+		assert.NotRegexp(t, `(?i)\bdrafts?\b`, text)
+		assert.Contains(t, text, "Accept and shop")
+	}
+	assert.Equal(t, "planner_word", lintModelText("I've re-planned the week and saved it as drafts.", replyTurn{write: true, block: &replyBlock{facts: []fact{{Class: classChanged, EN: "x", DE: "x"}}}}, langEN), "the reply still never says draft")
+}
+
+// V81 guests check: no round-5 or round-6 line reaches a guests turn's
+// outcome. A guests message names no day kcal number (the floor guard cannot
+// refuse its write), and a guests turn writes, so neither the unmet nor the
+// under-minimum line is told; its true cooking sentence stays.
+func TestGuestsTurn_NoRound5LineChangesIt(t *testing.T) {
+	t.Parallel()
+	sat := time.Date(2026, 12, 5, 0, 0, 0, 0, time.UTC)
+	w := window.Window{Start: sat, End: sat.AddDate(0, 0, 6)}
+	for _, msg := range []string{
+		"A friend joins us for Friday dinner.", "We're 4 people on Wednesday dinner.", "two guests on Saturday dinner, 2 extra portions please",
+		"Am Freitag kommt ein Freund zum Abendessen dazu.", "Am Samstag sind wir zu viert beim Abendessen.", "Für Sonntag mittag bitte 3 Personen.",
+	} {
+		assert.Empty(t, namedDayKcal(msg, w, sat), msg)
+	}
+	block := &replyBlock{facts: []fact{
+		{Class: classMoved, Kind: kindLeftover, Status: statusOK, EN: `Fri 11 Dec: cook 2 portions of the "Chicken and vegetable traybake" (was 1); cook 2 portions of the "Green salad" (was 1).`, DE: "x"},
+		{Class: classMoved, Kind: kindGuest, Status: statusOK, EN: `Fri 11 Dec dinner: now for 2 people, 2 portions of "Chicken and vegetable traybake".`, DE: "x"},
+	}}
+	unmet := &replyBlock{nothingSaved: true, facts: []fact{{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: "Left out: x.", DE: "x"}}}
+	turn := replyTurn{
+		user: "A friend joins us for Friday dinner.", write: true, block: block, numbers: map[string]bool{}, unmet: unmet, underFloor: unmet,
+		foods: []string{"Chicken and vegetable traybake", "Green salad"},
+	}
+	got := composeReply("Friday dinner is now for two, and the traybake and green salad are cooked for two.", turn.final())
+	assert.True(t, strings.HasPrefix(got, "Friday dinner is now for two"), got)
+	assert.NotContains(t, got, "Left out", "a written guests turn tells no unmet or under-minimum line")
+	assert.NotContains(t, got, nothingChangedEN)
 }

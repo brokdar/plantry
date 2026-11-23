@@ -29,6 +29,8 @@ var (
 	// mealWordRe is a meal word on a word start: "Mittag" is one, "Nachmittag"
 	// is not; in a compound the span after the weekday starts on the word.
 	mealWordRe = regexp.MustCompile(`(?i)\b(?:breakfast|lunch|dinner|supper|fruehstueck|mittag|abend)`)
+	// cookExclusive is a claim that a day cooks once or only something.
+	cookExclusive = regexp.MustCompile(`(?i)\b(one cooking time|a single cooking time|(?:only|just) (?:once|one)|cooks? once|nur (?:einmal|eine)|einmal gekocht|eine kochzeit|einzige kochzeit)\b`)
 	// cookDenial is a claim that something is not or no longer cooked.
 	cookDenial = regexp.MustCompile(`(?i)\b(not|no longer|nothing|nicht|nichts|kein\w*|nie)\b`)
 	// cookPast is a cooking claim about the past, which no cooking line backs.
@@ -49,7 +51,22 @@ var mealKey = map[string]string{"breakfast": "breakfast", "fruehstueck": "breakf
 type claimCell struct {
 	day, meal string
 	dishes    []string
+	// eats are the weekdays the cooking feeds ("for Mon 30 Nov lunch, ...").
+	eats map[string]bool
 }
+
+// eatList is the list of meals a cooked dish is for: "for <...>" up to the
+// next dish, the note in parentheses or the end.
+var eatList = regexp.MustCompile(`" for ([^;(]+)`)
+
+// eatMarker ends a span before a weekday that names a day the cooking is
+// eaten on, not cooked on: "reicht für Montag", "covers Wednesday", "for
+// Thursday lunch", "bis Freitag" (V81 L1, tune-v2c cook_elsewhere-12).
+var eatMarker = regexp.MustCompile(`(?i)\b(covers?|covering|feeds?|feeding|lasts?|for|until|through|reicht|reichen|f(?:ü|ue)r|bis|eaten|isst|essen)\b[^.,;!?\d]{0,12}$`)
+
+// cookOnDay is a preposition that puts the cooking on the day ("for 4 on
+// Wednesday"): the weekday after it is a cooking day again.
+var cookOnDay = regexp.MustCompile(`(?i)\b(on|at|am|an)\s*$`)
 
 // claimCells parses the block's cooking lines into cells.
 func claimCells(facts []fact) []claimCell {
@@ -69,6 +86,12 @@ func claimCells(facts []fact) []claimCell {
 			}
 			for _, x := range claimDish.FindAllStringSubmatch(f.EN, -1) {
 				c.dishes = append(c.dishes, strings.ToLower(x[1]))
+			}
+			c.eats = map[string]bool{}
+			for _, l := range eatList.FindAllStringSubmatch(f.EN, -1) {
+				for _, w := range weekdayRe.FindAllString(l[1], -1) {
+					c.eats[weekdayKey(w)] = true
+				}
 			}
 			cells = append(cells, c)
 		}
@@ -217,16 +240,39 @@ func cookingBacked(text string, t replyTurn) bool {
 	loose := loosePhrases(text, t.foods, named)
 	days := weekdayName.FindAllStringIndex(text, -1)
 	tiedDays := map[int]bool{} // index into days
+	eatDays := map[int]bool{}  // weekdays after an eating word: eaten, not cooked, then
+	for i, d := range days {
+		lo := 0
+		if i > 0 {
+			lo = days[i-1][1]
+		}
+		before := text[lo:d[0]]
+		if m := eatMarker.FindStringIndex(before); m != nil && !cookVerb.MatchString(before[m[0]:]) && !cookOnDay.MatchString(before) {
+			eatDays[i] = true
+		}
+	}
 	for _, v := range verbs {
 		for i, d := range days {
-			if d[1] > v[0]-24 && d[0] < v[1]+24 {
+			if !eatDays[i] && d[1] > v[0]-24 && d[0] < v[1]+24 {
 				tiedDays[i] = true
 			}
+		}
+	}
+	// A day the cooking is eaten on is a day some cooking line feeds.
+	for i := range eatDays {
+		key := weekdayKey(text[days[i][0]:days[i][1]])
+		if !slices.ContainsFunc(cells, func(c claimCell) bool { return c.eats[key] }) {
+			return false
 		}
 	}
 	if len(tiedDays) == 0 && len(named) == 0 && len(loose) == 0 {
 		return false // a cooking claim about no day and no dish
 	}
+	// An exclusive claim ("one cooking time", "only", "nur einmal") names
+	// every dish cooked on its tied day, or it drops (V81, tune-v2c
+	// g2-replace-01: "cooked with Friday lunch so the day keeps one cooking
+	// time" left out the curry and rice Friday also cooks).
+	exclusive := cookExclusive.MatchString(text)
 	var scope []claimCell      // the cook cells a loosely named dish is looked up in
 	onDay := map[string]bool{} // named dishes found on a tied day
 	for i := range days {
@@ -259,6 +305,21 @@ func cookingBacked(text string, t replyTurn) bool {
 			return false // not a cooking day, or not at that meal
 		}
 		scope = append(scope, day...)
+		if exclusive {
+			var all []string
+			for _, c := range cells {
+				if c.day == key {
+					for _, d := range c.dishes {
+						if !slices.Contains(all, d) {
+							all = append(all, d)
+						}
+					}
+				}
+			}
+			if len(all) > len(named)+len(loose) {
+				return false
+			}
+		}
 		found := false
 		for _, n := range named {
 			for _, c := range day {

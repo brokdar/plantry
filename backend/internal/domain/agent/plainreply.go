@@ -375,6 +375,30 @@ func normNumber(s string) string {
 // ("1,250 kg"): there the comma is the decimal mark, not a thousands separator.
 var deDecimalComma = regexp.MustCompile(`^\d+,\d{3}$`)
 
+// sentenceLang is the language of a text by its marker words, quoted spans
+// and the plan's dish names left out; ok only when one language leads by two
+// words or more (a dish name or a short sentence decides nothing).
+func sentenceLang(text string, foods []string) (lang, bool) {
+	text = quotedRe.ReplaceAllString(text, " ")
+	low := strings.ToLower(text)
+	for _, f := range foods {
+		if n := strings.ToLower(strings.TrimSpace(f)); len(n) >= 4 {
+			low = strings.ReplaceAll(low, n, " ")
+		}
+	}
+	en, de := len(englishWord.FindAllString(low, -1)), len(germanWord.FindAllString(low, -1))
+	switch {
+	case en-de >= 2:
+		return langEN, true
+	case de-en >= 2:
+		return langDE, true
+	}
+	return langEN, false
+}
+
+// kcalAfter is an energy unit right after a number.
+var kcalAfter = regexp.MustCompile(`(?i)^\s*(kcal|kalorien|calories|kilokalorien)\b`)
+
 // normModelNumber is normNumber for a number of the model's text in language lg.
 func normModelNumber(s string, lg lang) string {
 	if lg == langDE && deDecimalComma.MatchString(s) {
@@ -845,10 +869,20 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 			known = map[dateKey]bool{}
 		}
 		datesIn(blockText, known, false)
-		for _, m := range numberRe.FindAllString(withoutKnownDates(text, known, t.year), -1) {
-			if n := normModelNumber(m, lg); !backedBy(n, backed, t.numbers) {
-				return "number"
+		// A number the user named in this conversation backs one too ("30 min
+		// max" → "under 30 minutes", V81 L4), except an energy figure: the
+		// user's kcal wish is no fact about the plan.
+		said := map[string]bool{}
+		for _, u := range append([]string{t.user}, t.earlier...) {
+			numbersIn(u, said)
+		}
+		free := withoutKnownDates(text, known, t.year)
+		for _, ix := range numberRe.FindAllStringIndex(free, -1) {
+			n := normModelNumber(free[ix[0]:ix[1]], lg)
+			if backedBy(n, backed, t.numbers) || (backedBy(n, said) && !kcalAfter.MatchString(free[ix[1]:])) {
+				continue
 			}
+			return "number"
 		}
 		if modelCookingWords.MatchString(text) && !cookingBacked(text, t) {
 			return "cooking_claim"
@@ -928,6 +962,21 @@ func composeModelReply(model string, t replyTurn) string {
 			*t.drops = append(*t.drops, lintDrop{Sentence: sentence, Reason: reason})
 		}
 	}
+	// The model's text is in the reply's language (V81, tune-v2c g2-add-23:
+	// an English text over a German request and a German block): on a write
+	// turn, whose block is rendered in that language, a sentence clearly in
+	// the other language is dropped.
+	if ss := sentences(text); len(ss) > 0 && t.write && t.block != nil {
+		var kept []string
+		for _, x := range ss {
+			if l, ok := sentenceLang(x, t.foods); ok && l != lg {
+				drop(x, "language")
+				continue
+			}
+			kept = append(kept, x)
+		}
+		text = strings.Join(kept, " ")
+	}
 	if t.write {
 		// A write turn ends on the block or the offer, never on a question.
 		ss := sentences(text)
@@ -969,9 +1018,11 @@ func composeModelReply(model string, t replyTurn) string {
 		}
 		return fallbackEN
 	}
-	if why := lintModelText(text, t, lg); why != "" {
+	if why := lintModelText(text, t, lg); why != "" && why != "cooking_claim" {
 		// The kept sentences pass alone but not together (a weekday or a
-		// number one names and another needs).
+		// number one names and another needs). A cooking claim is judged per
+		// sentence: a dish the next sentence names is no claim of this one
+		// (V81 L2, tune-v2c guests-09).
 		drop(text, why)
 		text = ""
 		if t.block == nil {
