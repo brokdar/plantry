@@ -114,8 +114,10 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 
 	requests, turns, conts, continuation, wrapUp := 0, 0, 0, false, false
 	// What the final reply is judged against and completed with (see composeReply).
-	turnReply := replyTurn{user: req.UserText, numbers: map[string]bool{}, locale: req.Locale, foods: req.FoodNames, earlier: earlierUserTexts(req.History), state: map[string]bool{}}
+	turnReply := replyTurn{user: req.UserText, numbers: map[string]bool{}, locale: req.Locale, foods: req.FoodNames, earlier: earlierUserTexts(req.History), state: map[string]bool{}, dates: map[dateKey]bool{}}
 	stateNumbers(req.SystemPrompt, turnReply.state)
+	datesIn(planState(req.SystemPrompt), turnReply.dates, false)
+	datesIn(req.UserText, turnReply.dates, true)
 	for {
 		if requests++; requests > MaxRequests {
 			break
@@ -357,6 +359,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			// The facts come from the result itself, not from the model's
 			// view, which rewrites words.
 			toolNumbers(view, turnReply.numbers)
+			datesIn(string(output), turnReply.dates, false)
 			if call.ToolUseName == findWaysName {
 				turnReply.ways = waysBlock(output)
 			}

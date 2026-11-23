@@ -4,9 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
+	"math"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
@@ -127,14 +131,15 @@ func withoutFacts(view json.RawMessage) json.RawMessage {
 
 // replyTurn is what the reply of a turn is judged against.
 type replyTurn struct {
-	user    string          // the user's message, for the language and its numbers
-	earlier []string        // the earlier user messages, newest first: the language when this one has no marker word
-	locale  string          // the profile's locale, the last word on the language
-	numbers map[string]bool // numbers the turn's tool results hold (see toolNumbers)
-	state   map[string]bool // numbers of the prompt's plan state: back a read-only answer, never a write's text (v1.4 P-7)
-	foods   []string        // the names of the foods of the plan: a write's text names none the block does not
-	write   bool            // a plan-writing tool was called (also as a check)
-	block   *replyBlock     // the facts and the offer of the turn's writes
+	user    string           // the user's message, for the language and its numbers
+	earlier []string         // the earlier user messages, newest first: the language when this one has no marker word
+	locale  string           // the profile's locale, the last word on the language
+	numbers map[string]bool  // numbers the turn's tool results hold (see toolNumbers)
+	state   map[string]bool  // numbers of the prompt's plan state: back a read-only answer, never a write's text (v1.4 P-7)
+	dates   map[dateKey]bool // the days the code wrote (plan state, tool results) or the user named: a date naming one is no figure
+	foods   []string         // the names of the foods of the plan: a write's text names none the block does not
+	write   bool             // a plan-writing tool was called (also as a check)
+	block   *replyBlock      // the facts and the offer of the turn's writes
 	// drops, when set, collects every sentence of the model's final text the
 	// reply leaves out, with the reason (F6: agent.reply.lint).
 	drops *[]lintDrop
@@ -227,9 +232,130 @@ func normModelNumber(s string, lg lang) string {
 	return normNumber(s)
 }
 
+// dateKey is a calendar day without its year, as a date in a sentence names it.
+type dateKey struct {
+	month time.Month
+	day   int
+}
+
 // dateInText is a date written in a sentence ("Wed 25 Nov", "25. Dezember"):
 // its day number is no figure a tool result tells.
 var dateInText = regexp.MustCompile(`(?i)\b\d{1,2}\.?\s*(jan(uar|uary)?|feb(ruar|ruary)?|m[äa]r(z|ch)?|apr(il)?|mai|may|jun[ie]?|jul[iy]?|aug(ust)?|sept?(ember)?|o[ck]t(ober)?|nov(ember)?|de[cz](ember)?)\b`)
+
+// The dates a sentence may write, with their day and month captured: ISO
+// ("2026-11-22"), day before month ("Sun 22 Nov", "22. November", "22. Nov.",
+// a year after it), English month before day ("November 22") and the German
+// numeric date ("30.11.", "30.11.2026").
+var (
+	isoDate    = regexp.MustCompile(`\b\d{4}-(\d{2})-(\d{2})\b`)
+	dayMonth   = regexp.MustCompile(`(?i)\b(\d{1,2})\.?\s*(jan(?:uar|uary)?|feb(?:ruar|ruary)?|m[äa]r(?:z|ch)?|apr(?:il)?|mai|may|jun[ie]?|jul[iy]?|aug(?:ust)?|sept?(?:ember)?|o[ck]t(?:ober)?|nov(?:ember)?|de[cz](?:ember)?)\b\.?(?:\s+\d{4}\b)?`)
+	monthDay   = regexp.MustCompile(`\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b(?:,?\s+\d{4}\b)?`)
+	numericDay = regexp.MustCompile(`\b(\d{1,2})\.(\d{1,2})\.(?:\d{4}\b)?`)
+)
+
+// monthPrefix maps the first three letters of a month word, English or
+// German, to its month.
+var monthPrefix = map[string]time.Month{
+	"jan": time.January, "feb": time.February, "mar": time.March, "mär": time.March, "apr": time.April,
+	"may": time.May, "mai": time.May, "jun": time.June, "jul": time.July, "aug": time.August, "sep": time.September,
+	"oct": time.October, "okt": time.October, "nov": time.November, "dec": time.December, "dez": time.December,
+}
+
+// monthOf is the month a month word names, in either language; 0 for none.
+func monthOf(word string) time.Month {
+	if w := []rune(strings.ToLower(word)); len(w) >= 3 {
+		return monthPrefix[string(w[:3])]
+	}
+	return 0
+}
+
+// dateOf is the day a date match names (day and month as captured), ok false
+// for no calendar day.
+func dateOf(day string, month time.Month) (dateKey, bool) {
+	d, err := strconv.Atoi(day)
+	if err != nil || month < time.January || month > time.December || d < 1 || d > 31 {
+		return dateKey{}, false
+	}
+	return dateKey{month: month, day: d}, true
+}
+
+// dateMatchers are the date forms with the day and month of a match.
+var dateMatchers = []struct {
+	re  *regexp.Regexp
+	key func(m []string) (dateKey, bool)
+}{
+	{isoDate, func(m []string) (dateKey, bool) { mo, _ := strconv.Atoi(m[1]); return dateOf(m[2], time.Month(mo)) }},
+	{dayMonth, func(m []string) (dateKey, bool) { return dateOf(m[1], monthOf(m[2])) }},
+	{monthDay, func(m []string) (dateKey, bool) { return dateOf(m[2], monthOf(m[1])) }},
+	{numericDay, func(m []string) (dateKey, bool) { mo, _ := strconv.Atoi(m[2]); return dateOf(m[1], time.Month(mo)) }},
+}
+
+// datesIn collects into set the days the code writes in a text: ISO dates and
+// "25 Nov" (a tool result, the plan state, the facts block). With loose (the
+// user's own message) the other forms count too.
+func datesIn(text string, set map[dateKey]bool, loose bool) {
+	for i, dm := range dateMatchers {
+		if !loose && i > 1 {
+			break
+		}
+		for _, m := range dm.re.FindAllStringSubmatch(text, -1) {
+			if k, ok := dm.key(m); ok {
+				set[k] = true
+			}
+		}
+	}
+}
+
+// withoutKnownDates blanks every date of text that names a day of known, so its
+// day and month numbers are no figures (audit V58); any other date stays, and
+// the lint checks its numbers as before.
+func withoutKnownDates(text string, known map[dateKey]bool) string {
+	for _, dm := range dateMatchers {
+		text = dm.re.ReplaceAllStringFunc(text, func(match string) string {
+			if k, ok := dm.key(dm.re.FindStringSubmatch(match)); ok && known[k] {
+				return " "
+			}
+			return match
+		})
+	}
+	return text
+}
+
+// backedBy reports whether the model's number n is a figure of one of sets, or
+// such a figure rounded to n's decimals (78 for 78.08, 80.6 for 80.56). A
+// coarser rounding is not backed: 2200 rounds no figure 2196.
+func backedBy(n string, sets ...map[string]bool) bool {
+	for _, s := range sets {
+		if s[n] {
+			return true
+		}
+	}
+	v, err := strconv.ParseFloat(n, 64)
+	if err != nil {
+		return false
+	}
+	k := decimals(n)
+	p := math.Pow10(k)
+	for _, s := range sets {
+		for x := range s {
+			if decimals(x) <= k {
+				continue
+			}
+			if f, err := strconv.ParseFloat(x, 64); err == nil && math.Abs(math.Round(f*p)/p-v) < 1e-9 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// decimals is the number of digits after the decimal point of a normalised number.
+func decimals(n string) int {
+	if i := strings.IndexByte(n, '.'); i >= 0 {
+		return len(n) - i - 1
+	}
+	return 0
+}
 
 // numbersIn collects the numbers of a text into set.
 func numbersIn(text string, set map[string]bool) {
@@ -264,6 +390,9 @@ func sentences(s string) []string {
 // monthWord is a month name or its abbreviation, German or English.
 var monthWord = regexp.MustCompile(`(?i)^(jan(uar|uary)?|feb(ruar|ruary)?|m[äa]r(z|ch)?|apr(il)?|mai|may|jun[ie]?|jul[iy]?|aug(ust)?|sept?(ember)?|o[ck]t(ober)?|nov(ember)?|de[cz](ember)?)$`)
 
+// numericDate is a German numeric date before its last dot ("21.11", "(30.11").
+var numericDate = regexp.MustCompile(`^\(?\d{1,2}\.\d{1,2}$`)
+
 // monthFull is a month's own word ("Mai", "Juni"): its dot ends a sentence.
 var monthFull = regexp.MustCompile(`(?i)^(mai|may|jun[ie]?|jul[iy]?|m[äa]rz|march|apr(il)?)$`)
 
@@ -278,6 +407,14 @@ func dateDot(rs []rune, i int) bool {
 		start--
 	}
 	word := string(rs[start:i])
+	if numericDate.MatchString(word) {
+		// "nach dem 21.11. ist": the sentence goes on in lowercase.
+		n := i + 1
+		for n < len(rs) && unicode.IsSpace(rs[n]) {
+			n++
+		}
+		return n < len(rs) && (unicode.IsLower(rs[n]) || unicode.IsDigit(rs[n]))
+	}
 	if monthWord.MatchString(word) && len([]rune(word)) <= 4 && !monthFull.MatchString(word) {
 		p := start
 		for p > 0 && unicode.IsSpace(rs[p-1]) {
@@ -408,8 +545,13 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 		}
 		backed := map[string]bool{}
 		numbersIn(isoAnywhere.ReplaceAllString(blockText, " "), backed)
-		for _, m := range numberRe.FindAllString(text, -1) {
-			if n := normModelNumber(m, lg); !backed[n] && !t.numbers[n] {
+		known := maps.Clone(t.dates)
+		if known == nil {
+			known = map[dateKey]bool{}
+		}
+		datesIn(blockText, known, false)
+		for _, m := range numberRe.FindAllString(withoutKnownDates(text, known), -1) {
+			if n := normModelNumber(m, lg); !backedBy(n, backed, t.numbers) {
 				return "number"
 			}
 		}
@@ -448,9 +590,8 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 	}
 	have := map[string]bool{}
 	numbersIn(t.user, have)
-	for _, m := range numberRe.FindAllString(text, -1) {
-		n := normModelNumber(m, lg)
-		if !t.numbers[n] && !t.state[n] && !have[n] {
+	for _, m := range numberRe.FindAllString(withoutKnownDates(text, t.dates), -1) {
+		if n := normModelNumber(m, lg); !backedBy(n, t.numbers, t.state, have) {
 			return "number"
 		}
 	}
@@ -837,9 +978,17 @@ var (
 // stored plan, as a get_plan result would be. The rule text around it is not
 // state, and ids and ISO dates are no figures.
 func stateNumbers(prompt string, set map[string]bool) {
+	state := planState(prompt)
+	state = cellID.ReplaceAllString(state, "$1")
+	state = idRef.ReplaceAllString(state, " ")
+	numbersIn(isoAnywhere.ReplaceAllString(state, " "), set)
+}
+
+// planState is the plan state section of the prompt; "" without one.
+func planState(prompt string) string {
 	i := strings.Index(prompt, planStateStart)
 	if i < 0 {
-		return
+		return ""
 	}
 	state := prompt[i+len(planStateStart):]
 	if j := strings.Index(state, planStateEnd); j >= 0 {
@@ -847,7 +996,5 @@ func stateNumbers(prompt string, set map[string]bool) {
 	} else if j := strings.Index(state, "\nTool usage rules:"); j >= 0 {
 		state = state[:j]
 	}
-	state = cellID.ReplaceAllString(state, "$1")
-	state = idRef.ReplaceAllString(state, " ")
-	numbersIn(isoAnywhere.ReplaceAllString(state, " "), set)
+	return state
 }
