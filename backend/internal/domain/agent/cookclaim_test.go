@@ -53,10 +53,15 @@ func TestLint_CookingClaimBackedByTheBlock(t *testing.T) {
 		keep  bool
 	}{
 		{"elsewhere-10 true", elsewhere10, "cook the Minestrone on Monday dinner", langEN, "The Minestrone is now cooked on Monday dinner and still covers Wednesday lunch and dinner and Thursday lunch.", true},
-		{"elsewhere-12 true", elsewhere12, "Greek salad with chickpeas am Sonntag zum Abendessen kochen", langDE, "Das Greek Salad mit Kichererbsen wird jetzt am Sonntagabend gekocht und reicht für Montag Mittag und Abend.", true},
+		{"elsewhere-12 DE true, dish named by its plan name", elsewhere12, "Greek salad with chickpeas am Sonntag zum Abendessen kochen", langDE, "Das „Greek salad with chickpeas“ wird jetzt am Sonntagabend gekocht.", true},
 		{"away-16 true", away16, "away on Monday", langEN, "Monday lunch and dinner are cleared, and Sunday's dinner cooking is trimmed to cover only Sunday.", true},
-		{"guests-02 true", guests02, "4 people on Wednesday dinner", langEN, "Wednesday dinner is now set for 4 people, and the lasagne and cucumber salad are cooked for the larger cooking.", true},
-		{"guests-09 true", guests09, "a friend joins Friday dinner", langEN, "Friday dinner is now set for two, and the chicken traybake and salad are cooked for both of you.", true},
+		// Dishes named loosely ("the lasagne" for "Spinach lasagne") cannot be
+		// matched to a plan dish: the stricter rule drops these two true
+		// trace sentences and the loosely named DE one (M4).
+		{"guests-02 loose dish names are dropped", guests02, "4 people on Wednesday dinner", langEN, "Wednesday dinner is now set for 4 people, and the lasagne and cucumber salad are cooked for the larger cooking.", false},
+		{"guests-09 loose dish names are dropped", guests09, "a friend joins Friday dinner", langEN, "Friday dinner is now set for two, and the chicken traybake and salad are cooked for both of you.", false},
+		{"elsewhere-12 loosely named dish is dropped", elsewhere12, "Greek salad with chickpeas am Sonntag zum Abendessen kochen", langDE, "Das Greek Salad mit Kichererbsen wird jetzt am Sonntagabend gekocht und reicht für Montag Mittag und Abend.", false},
+		{"guests-02 by its plan name", guests02, "4 people on Wednesday dinner", langEN, "The Spinach lasagne is cooked for 4 on Wednesday.", true},
 
 		{"a day the block does not cook on", elsewhere10, "cook the Minestrone on Monday dinner", langEN, "The Minestrone is now cooked on Tuesday dinner.", false},
 		{"a dish not cooked on the day it is tied to", elsewhere12, "x", langEN, `The "Greek salad with chickpeas" is now cooked on Monday.`, false},
@@ -64,6 +69,17 @@ func TestLint_CookingClaimBackedByTheBlock(t *testing.T) {
 		{"a denial", away16, "away on Monday", langEN, "Nothing is cooked on Sunday any more.", false},
 		{"DE: a day no cooking line names", away16, "Montag weg", langDE, "Die Lasagne wird jetzt am Dienstag gekocht.", false},
 		{"DE: a dish on the wrong day", elsewhere12, "x", langDE, `„Greek salad with chickpeas“ wird jetzt am Montag gekocht.`, false},
+		// M4: backed against the cook cell, not the eating days.
+		{"a leftover day claimed as a cook day", elsewhere10, "x", langEN, "The Minestrone is cooked on Thursday.", false},
+		{"DE: a leftover day claimed as a cook day", elsewhere10, "x", langDE, "Die Minestrone wird am Donnerstag gekocht.", false},
+		{"a wrong meal", elsewhere10, "x", langEN, "The Minestrone is cooked on Monday lunch.", false},
+		{"DE: a wrong meal", elsewhere10, "x", langDE, "Die Minestrone wird am Montag zum Mittagessen gekocht.", false},
+		{"a right meal", elsewhere10, "x", langEN, "The Minestrone is cooked on Monday dinner.", true},
+		{"DE: Nachmittag is no Mittag (lang EN: the fixture has no DE lines)", elsewhere10, "x", langEN, "Die Minestrone wird am Montag Nachmittag gekocht.", true},
+		{"far-apart weekday still tied", elsewhere10, "x", langEN, "The Red lentil soup is cooked on Monday, Tuesday and Wednesday.", false},
+		{"past tense", elsewhere10, "x", langEN, "The Minestrone was cooked on Monday dinner.", false},
+		{"DE: past tense", elsewhere10, "x", langDE, "Die Minestrone wurde am Montag gekocht.", false},
+		{"a cooking word with no day and no dish", elsewhere10, "x", langEN, "Everything is cooked fresh.", false},
 		{"no cooking line at all", []fact{changed("Sat 5 Dec dinner: A replaced by B.", "x")}, "swap Saturday dinner", langEN, "Saturday dinner is now cooked fresh.", false},
 	} {
 		turn := replyTurn{user: tc.user, write: true, block: &replyBlock{facts: tc.facts}, foods: foods, numbers: map[string]bool{}}
@@ -82,9 +98,9 @@ func TestLint_CookingClaimBackedByTheBlock(t *testing.T) {
 func TestContradicts_AboveTheMinimumIsNotOverTheRange(t *testing.T) {
 	t.Parallel()
 	under := []fact{{Class: classWarn, Kind: kindDay, Status: statusUnder, EN: "Thu 10 Dec holds 1518 kcal (was 1545), below a good amount for the day (1530-1785 kcal).", DE: "x"}}
-	assert.False(t, contradicts("Thursday dinner is now the tomato lentil stew, with steamed rice added so the day stays above its minimum.", under, false))
-	assert.True(t, contradicts("The day is now above its range.", under, false))
-	assert.True(t, contradicts("The day is over its amount now, so it is above its minimum.", under, false))
+	assert.False(t, contradicts("Thursday dinner is now the tomato lentil stew, with steamed rice added so the day stays above its minimum.", under, false, false))
+	assert.True(t, contradicts("The day is now above its range.", under, false, false))
+	assert.True(t, contradicts("The day is over its amount now, so it is above its minimum.", under, false, false))
 }
 
 // V77 lint (tune-v2b guests-00): "scaled up for the extra person" is a guest,

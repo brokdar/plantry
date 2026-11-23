@@ -134,7 +134,7 @@ func ComposeDrops(ctx context.Context, user, model string, write bool) []string 
 // WithTurnText is WithTurn for a message with this text: the day kcal numbers
 // it names (namedDayKcal) reach the tools as Service.Chat sets them.
 func WithTurnText(ctx context.Context, conversationID int64, text string, w window.Window) context.Context {
-	return withTurn(ctx, chatTurn{conversationID: conversationID, dayKcal: namedDayKcal(text, w)})
+	return withTurn(ctx, chatTurn{conversationID: conversationID, dayKcal: namedDayKcal(text, w, todayFrom(ctx))})
 }
 
 var NamedDayKcal = namedDayKcal

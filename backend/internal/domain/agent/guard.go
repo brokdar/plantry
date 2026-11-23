@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"slices"
 	"strings"
 
@@ -332,8 +331,8 @@ func underFloorRequest(ctx context.Context, pr applyRun, dryRun bool) (applyRun,
 			continue
 		}
 		i := slices.IndexFunc(pr.after.Days, func(a planning.DayEval) bool { return a.Date == b.Date })
-		if i < 0 || math.Abs(pr.after.Days[i].Kcal-b.Kcal) < 0.5 {
-			continue // the call leaves that day as it is
+		if i < 0 || pr.after.Days[i].Kcal >= b.Kcal-0.5 {
+			continue // the call leaves that day as it is or raises it: never refused
 		}
 		day := dayLabelStr(b.Date)
 		whatEN := fmt.Sprintf("taking %s to about %.0f kcal", day, want)

@@ -3,9 +3,11 @@ package agent
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -15,8 +17,23 @@ import (
 // "swap", "can I have", "stattdessen", "kann ich ... haben".
 var changeAsk = regexp.MustCompile(`\b(?:instead|stattdessen|statt|swap\w*|tausch\w*|replace\w*|ersetz\w*|put|setz\w*|change|aender\w*|add|hinzu\w*|remove|entfern\w*|move|verschieb\w*|(?:can|could|may) i (?:get|have)|(?:kann|koennte|darf) ich)\b`)
 
-// infoAsk is a message that only asks what is there ("what is on Sunday dinner?").
-var infoAsk = regexp.MustCompile(`^\s*(?:what|which|how|when|was|welche\w*|wie|wann)\b`)
+// infoAsk is a message that only asks what is there ("what is on Sunday
+// dinner?", "why did you put pasta on Monday dinner?", "warum gibt es ...").
+var infoAsk = regexp.MustCompile(`^\s*(?:what|which|how|when|why|who|where|is|are|does|do|did|was|welche\w*|wie|wann|warum|wieso|weshalb|wer|wo|ist|sind)\b`)
+
+// requestAsk starts a message that asks for a change with a trailing "?"
+// ("can I get ... instead?"): such a message is no question about the plan.
+var requestAsk = regexp.MustCompile(`^\s*(?:please|bitte|(?:can|could|may|would|will) (?:i|you|we)|(?:kann|koennte|koenntest|darf|magst|wuerdest|moechte|moechten) (?:ich|du|man|wir)\b)`)
+
+// asksOnly reports a message that asks about the plan and requests nothing:
+// it starts with a question word, or it ends in "?" without starting like a
+// request.
+func asksOnly(msg string) bool {
+	if infoAsk.MatchString(msg) {
+		return true
+	}
+	return strings.HasSuffix(strings.TrimSpace(msg), "?") && !requestAsk.MatchString(msg)
+}
 
 // meatWords are words for meat or fish (folded), with the class they need.
 var meatWords = map[string]diet.Class{
@@ -40,7 +57,7 @@ var dietDE = map[diet.Class]string{diet.Vegan: "veganen", diet.Vegetarian: "vege
 // diet excludes. nil when the message asks for no change of a named meal.
 func unmetChange(text string, cells map[string]bool, slotNames map[int64]string, st planning.State) *replyBlock {
 	msg := diet.Fold(text)
-	if len(cells) == 0 || !changeAsk.MatchString(msg) || infoAsk.MatchString(msg) {
+	if len(cells) == 0 || !changeAsk.MatchString(msg) || asksOnly(msg) {
 		return nil
 	}
 	keys := make([]string, 0, len(cells))
@@ -59,21 +76,7 @@ func unmetChange(text string, cells map[string]bool, slotNames map[int64]string,
 	}
 	whyEN, whyDE := "nothing was checked and saved for it", "dafür wurde nichts geprüft und gespeichert"
 	if household := diet.Class(st.Profile.DietType); planning.DietRestricts(st.Profile.DietType) {
-		name := ""
-		for id := range namedFoods(text, st.Foods) {
-			if f := st.Foods[id]; diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, household) {
-				name = f.Name
-			}
-		}
-		if name == "" {
-			for _, w := range strings.FieldsFunc(msg, func(r rune) bool { return r < 'a' || r > 'z' }) {
-				if c, ok := meatWords[w]; ok && !diet.Compatible(c, household) {
-					name = w
-					break
-				}
-			}
-		}
-		if name != "" {
+		if name := addedAgainstDiet(text, st, household); name != "" {
 			whyEN = fmt.Sprintf("%q does not fit your %s diet", name, household)
 			whyDE = fmt.Sprintf("„%s“ passt nicht zu deiner %s Ernährung", name, dietDE[household])
 		}
@@ -83,4 +86,86 @@ func unmetChange(text string, cells map[string]bool, slotNames map[int64]string,
 		EN: fmt.Sprintf("Left out: the change to %s (%s).", strings.Join(en, ", "), whyEN),
 		DE: fmt.Sprintf("Weggelassen: die Änderung an %s (%s).", strings.Join(de, ", "), whyDE),
 	}}}
+}
+
+// removeCue and addCue are words (folded) that mark the food after them as
+// the one taken out or the one put in.
+var (
+	removeCue = map[string]bool{
+		"replace": true, "replaced": true, "replacing": true, "remove": true, "removing": true, "delete": true, "drop": true, "swap": true, "swapping": true,
+		"ersetze": true, "ersetzen": true, "ersetz": true, "entferne": true, "entfernen": true, "loesche": true, "tausche": true, "tauschen": true, "statt": true, "anstatt": true, "anstelle": true,
+	}
+	addCue = map[string]bool{
+		"with": true, "mit": true, "for": true, "fuer": true, "gegen": true, "durch": true, "by": true, "add": true, "put": true, "stattdessen": true, "instead": true,
+		"hinzu": true, "setze": true, "setzen": true, "insert": true, "have": true, "get": true, "haben": true,
+	}
+)
+
+// foodSpan is a food the message names: the user's words and where they start.
+type foodSpan struct {
+	shown string
+	pos   int
+	class diet.Class
+}
+
+// addedAgainstDiet is the food the message puts in that the household's diet
+// excludes, in the user's own words, "" when none. A food that is taken out or
+// replaced (after replace, remove, swap, "instead of", statt) is never blamed:
+// the nearest cue before a food within four words decides, and with no cue the
+// food is the one added. Candidates are sorted by position.
+func addedAgainstDiet(text string, st planning.State, household diet.Class) string {
+	orig := strings.FieldsFunc(text, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	fold := make([]string, len(orig))
+	for i, w := range orig {
+		fold[i] = diet.Fold(w)
+	}
+	var spans []foodSpan
+	taken := make([]bool, len(orig))
+	for id := range namedFoods(text, st.Foods) {
+		f := st.Foods[id]
+		if !diet.Valid(f.DietClass) || diet.Compatible(f.DietClass, household) {
+			continue
+		}
+		var name []string
+		for _, w := range strings.FieldsFunc(f.Name, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+			name = append(name, diet.Fold(w))
+		}
+		for i := 0; i+len(name) <= len(fold) && len(name) > 0; i++ {
+			if slices.Equal(fold[i:i+len(name)], name) {
+				spans = append(spans, foodSpan{shown: strings.Join(orig[i:i+len(name)], " "), pos: i, class: diet.Class(f.DietClass)})
+				for j := i; j < i+len(name); j++ {
+					taken[j] = true
+				}
+				break
+			}
+		}
+	}
+	for i, w := range fold {
+		if c, ok := meatWords[w]; ok && !taken[i] && !diet.Compatible(c, household) {
+			spans = append(spans, foodSpan{shown: orig[i], pos: i, class: c})
+		}
+	}
+	sort.Slice(spans, func(a, b int) bool { return spans[a].pos < spans[b].pos })
+	for _, sp := range spans {
+		if !removedAt(fold, sp.pos) {
+			return sp.shown
+		}
+	}
+	return ""
+}
+
+// removedAt reports whether the food at word i is the one taken out: the
+// nearest cue within the four words before it is a remove cue.
+func removedAt(fold []string, i int) bool {
+	for j := i - 1; j >= 0 && j >= i-4; j-- {
+		switch {
+		case removeCue[fold[j]]:
+			return true
+		case fold[j] == "instead" && j+1 < len(fold) && fold[j+1] == "of":
+			return true
+		case addCue[fold[j]]:
+			return false
+		}
+	}
+	return false
 }

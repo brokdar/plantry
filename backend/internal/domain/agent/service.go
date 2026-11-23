@@ -203,7 +203,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	// ctx.
 	ctx = withWindow(withToday(ctx, req.Today), w)
 	cells := namedCells(req.UserText, w, st.SlotNames)
-	ctx = withTurn(ctx, chatTurn{conversationID: conv.ID, seq: s.turns.Add(1), unlocks: s.unlocks, named: namedFoods(req.UserText, st.Foods), cells: cells, dayKcal: namedDayKcal(req.UserText, w)})
+	ctx = withTurn(ctx, chatTurn{conversationID: conv.ID, seq: s.turns.Add(1), unlocks: s.unlocks, named: namedFoods(req.UserText, st.Foods), cells: cells, dayKcal: namedDayKcal(req.UserText, w, req.Today)})
 	runReq := RunRequest{
 		ConversationID: conv.ID,
 		Model:          model,

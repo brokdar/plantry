@@ -611,6 +611,9 @@ func toolRegenerate(svc Services) Tool {
 				out.OtherDays = otherCookingDays(stBefore, stAfter, scoped)
 			}
 			out.Saved = regenerateSaved
+			if v.Status == airun.StatusPartial {
+				out.Saved = regenerateSavedPartial(len(out.Changed))
+			}
 			params["count"] = len(out.Changed)
 			if sc.Kind == planning.ScopeSide {
 				if name, ok := newSideName(before, out.Changed); ok {
@@ -711,7 +714,7 @@ func regenerateScope(ctx context.Context, svc Services, kind planning.ScopeKind,
 
 type regenerateOut struct {
 	// Saved says in one sentence that a finished run's plan is in the week
-	// now: "pending" plates are saved, not waiting for a yes (V77 S-C).
+	// now, as drafts the user can still accept: saved, not "not saved" (V77 S-C).
 	Saved    string            `json:"saved,omitempty"`
 	RunID    int64             `json:"run_id"`
 	Status   string            `json:"status"`
@@ -726,8 +729,17 @@ type regenerateOut struct {
 	OtherDays []string `json:"other_days,omitempty"`
 }
 
-// regenerateSaved is the saved sentence of a finished regenerate run.
-const regenerateSaved = "Saved: the new plan is in the week now (the user can undo it); nothing waits for a confirmation."
+// regenerateSaved is the saved sentence of a finished regenerate run: the new
+// plates are saved in the week as drafts (the board shows them to accept), so
+// "saved" is true and the drafts still wait for the user's accept; it never
+// says nothing waits for a confirmation.
+const regenerateSaved = "Saved: the new plan is in the week now as drafts (the user can undo it or accept it on the board)."
+
+// regenerateSavedPartial is the sentence of a partial run: what was saved, and
+// that the rest was not made (the notes and issues say what).
+func regenerateSavedPartial(plates int) string {
+	return fmt.Sprintf("Saved: part of the new plan, %d plate(s), is in the week now as drafts (the user can undo it or accept it on the board); the rest was not planned, see notes and issues.", plates)
+}
 
 // weekOut is what the run did to the week: the window's meat per person
 // against its limit, and the repeats the plan holds (E019).
