@@ -1056,6 +1056,9 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 			}
 			j.eaters[d] = n
 		}
+		if c.Quick != nil {
+			base.MaxMinutes = quickCells(base, *c.Quick)
+		}
 		cin.State, cin.Exclude, cin.EatersByDate, cin.MaxCookDays = base, j.exclude, j.eaters, c.MaxCookDays
 	}
 	if j.side != nil || hasOpenCell(base, j.target) {
@@ -1089,6 +1092,10 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 				var weekNotes []string
 				prop, weekNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
 				finishNotes = append(finishNotes, weekNotes...)
+				// A wish's time limit outlives the week guard's swaps (V72).
+				var quickNotes []string
+				prop, quickNotes = fixQuick(cin, prop)
+				finishNotes = append(finishNotes, quickNotes...)
 			} else {
 				prop, finishNotes = finishProposal(cin, prop)
 			}

@@ -422,7 +422,7 @@ func (h *planner) pickSupply(c plate.CellKey, eaters float64, skipAvoided bool) 
 		}
 		// An excluded food (a replaced plate) feeds the cell only as the last
 		// resort of eatAnyway: an empty cell (H1) weighs more.
-		if h.supplyOverMeat(sup, c) || (h.exclude[sup.food] && !h.allowMeat) {
+		if h.supplyOverMeat(sup, c) || (h.exclude[sup.food] && !h.allowMeat) || h.s.tooSlow(h.s.Foods[sup.food], c) {
 			continue
 		}
 		room := sup.free
@@ -449,7 +449,7 @@ func (h *planner) growable(c plate.CellKey) *supply {
 		if sup.proposed < 0 {
 			continue
 		}
-		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) || h.supplyAtDishCap(sup, c) || h.exclude[sup.food] {
+		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) || h.supplyAtDishCap(sup, c) || h.exclude[sup.food] || h.s.tooSlow(h.s.Foods[sup.food], c) {
 			continue
 		}
 		if best == nil || plate.Before(best.cook.CookCell(), sup.cook.CookCell(), h.order) {
@@ -657,7 +657,7 @@ func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freez
 			continue
 		}
 		full := h.x.mealOf(o.SlotID) == mealFull
-		if full && dishes >= h.s.Settings.MaxDishMeals() {
+		if full && dishes >= h.s.Settings.MaxDishMeals() || h.s.tooSlow(h.s.Foods[cook.FoodID], o) {
 			continue
 		}
 		if omni && limit != nil && h.s.Window.Contains(o.Date) && !meat[dayOf(o.Date)] {
@@ -734,7 +734,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		// else qualifies.
 		atCap := h.x.mealOf(c.SlotID) == mealFull && h.dishFull(f.ID)
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
-			b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
+			b2f(h.s.tooSlow(f, c)), b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
 			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}

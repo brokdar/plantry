@@ -189,11 +189,36 @@ func mergeBlock(a, b *replyBlock) *replyBlock {
 	case b == nil:
 		return a
 	}
-	out := &replyBlock{facts: selectBlock(append(slices.Clone(a.facts), b.facts...)), offer: a.offer, nothingSaved: a.nothingSaved && b.nothingSaved}
+	// A later write's cooking of a day is the turn's last word on it: the
+	// earlier write's cooking lines of that day are no longer true (V72).
+	later := map[string]bool{}
+	for _, f := range b.facts {
+		if d := cookDay(f); d != "" {
+			later[d] = true
+		}
+	}
+	earlier := slices.DeleteFunc(slices.Clone(a.facts), func(f fact) bool { return later[cookDay(f)] })
+	out := &replyBlock{facts: selectBlock(append(earlier, b.facts...)), offer: a.offer, nothingSaved: a.nothingSaved && b.nothingSaved}
 	if b.offer != nil {
 		out.offer = b.offer
 	}
 	return out
+}
+
+// cookDay is the day a cooking line tells ("Thu 26 Nov at lunch you cook ...",
+// "Thu 26 Nov: nothing is cooked."), "" for any other line.
+func cookDay(f fact) string {
+	if f.Class != classMoved || f.Kind != kindCook {
+		return ""
+	}
+	colon := strings.Index(f.EN, ":")
+	if i := strings.Index(f.EN, " at "); i > 0 && (colon < 0 || i < colon) {
+		return f.EN[:i]
+	}
+	if colon > 0 {
+		return f.EN[:colon]
+	}
+	return ""
 }
 
 var writeTools = map[string]bool{"apply_changes": true, "undo_last_change": true, "regenerate": true, "apply_preset": true}

@@ -734,3 +734,31 @@ func TestCheck_H8NamedDishRepeatIsAWarning(t *testing.T) {
 	assert.Equal(t, planning.CodeVarietyRepeatNamed, got[0].Code)
 	assert.Equal(t, planning.SeverityWarning, got[0].Severity)
 }
+
+// V72 T1b (tune-v2 g2-planner-09/-14, h2-planner-02): a main the plan cooked
+// in a week before the window (a draft, never eaten) is no more eligible than
+// one eaten then. When every main was cooked within the variety weeks, the
+// eligible count is 0 and H8 relaxes to a warning instead of refusing a
+// feasible week as "dish variety".
+func TestCheck_H8CountsEarlierCooksAgainstEligibility(t *testing.T) {
+	s := baseState()
+	before := sat // the window starts on sat; a week earlier is within 3 variety weeks
+	prev := day(before).AddDate(0, 0, -7).Format("2006-01-02")
+	var id int64 = 900
+	for fid, f := range s.Foods {
+		if !f.Composed() || f.Role != "main" {
+			continue
+		}
+		s.Sessions = append(s.Sessions, persistedSession(id, fid, prev, dinner, 1, false))
+		s.Plates = append(s.Plates, persisted(id, prev, dinner, false, fid, id))
+		id++
+	}
+	got := only(check(s, targetCells(cell(sun, dinner), cell(mon, dinner)), planning.Proposal{
+		Plates: []planning.ProposedPlate{pplate(sun, dinner, fresh(chili)), pplate(mon, dinner, fresh(curry))},
+	}), "H8")
+	require.NotEmpty(t, got)
+	for _, is := range got {
+		assert.Equal(t, planning.CodeVarietyRelaxed, is.Code, "every main was cooked within the variety weeks: no eligible main is left")
+		assert.Equal(t, planning.SeverityWarning, is.Severity)
+	}
+}

@@ -631,13 +631,20 @@ func DietRestricts(t profile.DietType) bool {
 }
 
 // eligibleRecipes counts the recipes H8 could pick for the window: mains
-// that fit the diet and were not eaten within the variety weeks before its
+// that fit the diet and were neither eaten nor cooked (a draft of an earlier
+// week, which H8 counts as a repeat too) within the variety weeks before its
 // start.
 func (x *index) eligibleRecipes(weeks int) int {
 	since := VarietySince(x.s.Window.Start, weeks)
 	t := diet.Class(x.s.Profile.DietType)
 	n := 0
 	routine := x.routineFoods()
+	cookedBefore := map[int64]bool{}
+	for _, ev := range x.cooks {
+		if !ev.cell.Date.Before(since) && ev.cell.Date.Before(x.s.Window.Start) && !x.routine(ev.cell) {
+			cookedBefore[ev.foodID] = true
+		}
+	}
 	// A standalone recipe is only a candidate where the window has a light
 	// slot to eat it in; lunches and dinners take mains.
 	light := false
@@ -652,7 +659,7 @@ func (x *index) eligibleRecipes(weeks int) int {
 		if DietRestricts(x.s.Profile.DietType) && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t) {
 			continue
 		}
-		if f.LastEaten == nil || f.LastEaten.Before(since) {
+		if (f.LastEaten == nil || f.LastEaten.Before(since)) && !cookedBefore[f.ID] {
 			n++
 		}
 	}
