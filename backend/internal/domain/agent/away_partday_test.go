@@ -10,12 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// SB3/SF4/SF1(c): a day with a meal left (here a routine breakfast of 306
-// kcal) is judged on its planned part, not "not counted": the facts say the
-// day is under its prorated minimum, with the number. Stored tune2 g-away-08:
-// Thursday lunch and dinner away on the M3 dev plan; the reply said "the day
-// is not counted".
-func TestAway_PartAwayDayIsJudgedOnItsPlannedPart(t *testing.T) {
+// spec v1.5 SB3 (V63 c, replacing #172's "judged on its planned part"): a day
+// whose only meal left is a routine (here the 306 kcal routine breakfast) is
+// judged like a fully away day: no minimum, no number, no offer. Stored tune2
+// g-away-08: Thursday lunch and dinner away on the M3 dev plan.
+func TestAway_RoutineOnlyDayIsNotJudged(t *testing.T) {
 	t.Parallel()
 	e := replayEnvAt(t, m3DevStartDB, time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC))
 	ctx, _ := e.chat()
@@ -32,9 +31,10 @@ func TestAway_PartAwayDayIsJudgedOnItsPlannedPart(t *testing.T) {
 		lines = append(lines, f.EN)
 	}
 	all := strings.Join(lines, "\n")
-	assert.NotContains(t, all, "not counted", "a day with a breakfast left is judged")
-	assert.Contains(t, all, "Thu 26 Nov holds 306 kcal")
-	assert.Contains(t, all, "minimum of 446 kcal")
+	assert.Contains(t, all, "Thu 26 Nov lunch: no meal any more.")
+	assert.Contains(t, all, "Thu 26 Nov dinner: no meal any more.")
+	assert.NotContains(t, all, "minimum", "a routine-only day has no minimum")
+	assert.NotContains(t, all, "306 kcal", "and is not judged by its kcal")
 
 	// The stored light mark of the away lunch goes with it (an away meal
 	// carries no mark, so no RL9 offer leans on it).
@@ -70,13 +70,20 @@ func TestAway_FullyAwayDayIsNotCounted(t *testing.T) {
 	assert.NotContains(t, facts, "not counted")
 }
 
-// SF1(c)/P-1 (tune3 g-away-08): the away leaves Thursday under its prorated
-// minimum and no checked change lifts it, so the block tells the day under its
-// minimum (a must line, never cut) and, in code, that nothing lifts it, with
-// no offer.
+// SF1(c)/P-1 (tune3 g-away-08, with Thursday's breakfast a confirmed normal
+// planned meal instead of a routine, V63 c): the away leaves Thursday under its
+// prorated minimum and no checked change lifts it, so the block tells the day
+// under its minimum (a must line, never cut) and, in code, that nothing lifts
+// it, with no offer.
 func TestAway_DayUnderItsMinimumWithNoLeverIsToldInCode(t *testing.T) {
 	t.Parallel()
 	e := replayEnvAt(t, m3DevStartDB, time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC))
+	// A normal planned breakfast the user confirmed: the day is judged, and no
+	// change of a planned meal (the agent never edits a confirmed one) lifts it.
+	_, err := e.db.Exec(`INSERT INTO availability_overrides (date, slot_id, mode) VALUES ('2026-11-26', 1, 'plan')`)
+	require.NoError(t, err)
+	_, err = e.db.Exec(`UPDATE plates SET state = 'confirmed' WHERE date = '2026-11-26' AND slot_id = 1`)
+	require.NoError(t, err)
 	ctx, _ := e.chat()
 	out, _, _, err := e.ts.Execute(ctx, "apply_changes", json.RawMessage(`{"ops": [{"op":"away","cells":[{"date":"2026-11-26","slot_id":2},{"date":"2026-11-26","slot_id":3}]}]}`))
 	require.NoError(t, err)
