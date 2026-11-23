@@ -21,7 +21,8 @@ import (
 //	4 worse: a day outside its range, a week figure that got worse
 //	5 warnings: new warnings
 //
-// Classes 2 to 5 together show at most maxBlock lines.
+// Classes 2 to 5 together show at most maxBlock lines, besides a day under its
+// minimum and what moved (movedTold), which are always told.
 const (
 	classRefused = 1
 	classChanged = 2
@@ -57,6 +58,11 @@ const (
 	kindWarn     = "warning"  // a new or worsened warning
 	kindRefused  = "refused"  // a part the guard left out
 )
+
+// movedTold are the kinds of class 3 (what moved) the reply always tells,
+// outside the cap of maxBlock (spec v1.5 G4.3, V63 b): cooking now elsewhere,
+// leftovers moved or resized, guest portions, an away slot's assumed energy.
+var movedTold = map[string]bool{kindCook: true, kindLeftover: true, kindGuest: true, kindAway: true}
 
 // fact is one rendered line of one fact class.
 type fact struct {
@@ -173,48 +179,42 @@ func selectBlock(all []fact) []fact {
 			rest = append(rest, f)
 		}
 	}
-	// A must line takes one of the capped places and is cut only past the cap.
-	// Bounded: the block never exceeds the cap, and a changed meal keeps a place
-	// when there is one (G4.2).
-	changedMeal := func(f fact) bool {
-		return f.Class == classChanged && (f.Kind == kindMeal || f.Kind == kindAway)
-	}
-	mustRoom := maxBlock
-	if slices.ContainsFunc(rest, changedMeal) {
-		mustRoom--
-	}
-	if len(must) > mustRoom {
-		must = must[:mustRoom]
-	}
-	room := max(0, maxBlock-len(must))
-	if len(rest) > room {
-		// What the household must hear first when the block is cut: the meals
-		// that changed and the cooking that moved (G4.2/G4.3; a day whose cooking
-		// changed is always named), then the day outside its range or under its
-		// minimum, the other worse figures, new warnings, and last the side
-		// figures of a changed meal (protein, the day's moved target, meat).
+	// spec v1.5 G4 (V63 b): what the household must know is never cut. A day
+	// under its minimum (a must line) and every line of what moved (cooking now
+	// elsewhere, leftovers, guests, an away slot's energy) are told outside the
+	// cap, like the refused part. The cap of maxBlock holds for the rest:
+	// changed meals, worse figures, new warnings and the other side figures.
+	var told []fact
+	rest = slices.DeleteFunc(rest, func(f fact) bool {
+		if f.Class == classMoved && movedTold[f.Kind] {
+			told = append(told, f)
+			return true
+		}
+		return false
+	})
+	if len(rest) > maxBlock {
+		// What stays when the rest is cut: the meals that changed (at least one
+		// always keeps its place), the day outside its range, the other worse
+		// figures, new warnings, and last the side figures of a change.
 		prio := func(f fact) int {
 			switch {
-			case changedMeal(f):
+			case f.Class == classChanged && (f.Kind == kindMeal || f.Kind == kindAway):
 				return 0
-			case f.Class == classMoved && (f.Kind == kindCook || f.Kind == kindLeftover):
-				return 1
 			case f.Class == classWorse && f.Kind == kindDay:
-				return 2
+				return 1
 			case f.Class == classWorse:
-				return 3
+				return 2
 			case f.Class == classWarn:
-				return 4
-			case f.Class == classMoved:
-				return 5
+				return 3
 			}
-			return 6
+			return 4
 		}
 		keep := slices.Clone(rest)
 		slices.SortStableFunc(keep, func(a, b fact) int { return prio(a) - prio(b) })
-		keep = keep[:room]
+		keep = keep[:maxBlock]
 		rest = slices.DeleteFunc(rest, func(f fact) bool { return !slices.Contains(keep, f) })
 	}
+	rest = append(rest, told...)
 	rest = append(rest, must...)
 	slices.SortStableFunc(rest, func(a, b fact) int { return a.Class - b.Class })
 	return append(refused, rest...)
