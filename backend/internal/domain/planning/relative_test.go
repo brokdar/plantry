@@ -499,3 +499,80 @@ func TestWays_NamedNumberUnderTheFloorShowsARangeAboveIt(t *testing.T) {
 	assert.GreaterOrEqual(t, res.MinKcal, res.FloorKcal, "min kcal")
 	assert.Greater(t, res.BandHigh, res.BandLow)
 }
+
+// V72 T3 (tune-v2 g2-heartier-07): a dinner already at its largest portion,
+// a little under its filling minimum, on a day with room to its top. The adds
+// were sized to the 31 kcal gap to the minimum, all below a meaningful step
+// (10 % of the meal), so "heartier" found nothing while the day had room. An
+// add is now at least a meaningful step.
+func TestWays_HeartierAddsAMeaningfulStepAtTheLargestPortion(t *testing.T) {
+	s := relState(false)
+	s.Profile.KcalTarget = f64(2600)
+	delete(s.Foods, lasagne) // every other main is lighter: only an add can make it heartier
+	const yogurt int64 = 63
+	s.Foods[yogurt] = planning.FoodFacts{
+		ID: yogurt, Name: "Greek yogurt", Kind: food.KindLeaf, LeafRole: food.RoleSideProtein, DietClass: "vegetarian", NoCook: true, ServingG: 150,
+		Macros: nutrition.Macros{Kcal: 97, Protein: 9}, NutritionComplete: true,
+	}
+	s.NoCook = append(s.NoCook, yogurt)
+	for i := range s.Plates {
+		if s.Plates[i].ID == 3 {
+			for ci := range s.Plates[i].Components {
+				s.Plates[i].Components[ci].Portions = f64(planning.MaxDishPortions)
+			}
+		}
+	}
+	for i := range s.Sessions {
+		if s.Sessions[i].ID == 30 || s.Sessions[i].ID == 31 {
+			s.Sessions[i].Portions = planning.MaxDishPortions
+		}
+	}
+	res := ways(t, s, planning.WayRequest{PlateID: 3, Goal: planning.GoalHeartier})
+	require.NotEmpty(t, res.Ways, "the day has room: a meaningful add exists (%s)", res.EmptyWhy)
+	for _, w := range res.Ways {
+		assert.True(t, planning.MeaningfulMealKcal(res.Before.MealKcal, w.After.MealKcal-res.Before.MealKcal), w.What)
+		assert.LessOrEqual(t, w.After.DayKcal, res.BandHigh+0.5, w.What)
+	}
+}
+
+// V72 T3 (tune-v2 g2-light_limit-17, "Wednesday dinner really filling"): the
+// main is at its largest portion (and a bigger one would pass the week's
+// meat), no single add reaches the filling minimum, but two fitting adds do.
+// A filling-meal request now tries a pair of adds before it says it cannot.
+func TestWays_FillingMealReachedByTwoAdds(t *testing.T) {
+	s := relState(false)
+	const yogurt int64 = 63
+	s.Foods[yogurt] = planning.FoodFacts{
+		ID: yogurt, Name: "Greek yogurt", Kind: food.KindLeaf, LeafRole: food.RoleSideProtein, DietClass: "vegetarian", NoCook: true, ServingG: 150,
+		Macros: nutrition.Macros{Kcal: 97, Protein: 9}, NutritionComplete: true,
+	}
+	b := s.Foods[relBread]
+	b.ServingG = 20 // two servings: 40 g, 100 kcal
+	s.Foods[relBread] = b
+	s.NoCook = []int64{relBread, yogurt}
+	delete(s.Foods, chili) // the heavier mains are out of reach (in the stored run: the week's meat)
+	delete(s.Foods, lasagne)
+	for i := range s.Plates {
+		if s.Plates[i].ID == 3 {
+			s.Plates[i].Components = []planning.Component{{ID: 30, FoodID: soup, Portions: f64(planning.MaxDishPortions), SessionID: 30, Position: plate.PositionMain}}
+		}
+	}
+	var sessions []planning.Session
+	for _, ss := range s.Sessions {
+		switch ss.ID {
+		case 30:
+			ss.FoodID, ss.Portions = soup, planning.MaxDishPortions
+		case 31:
+			continue
+		}
+		sessions = append(sessions, ss)
+	}
+	s.Sessions = sessions
+
+	res := ways(t, s, planning.WayRequest{PlateID: 3, Goal: planning.GoalHeartier, ToLimit: true})
+	require.NotEmpty(t, res.Ways, "two adds reach the filling minimum (%s)", res.EmptyWhy)
+	w := res.Ways[0]
+	assert.True(t, w.Reaches, w.What)
+	assert.GreaterOrEqual(t, w.After.MealKcal, res.MinKcal-0.5, w.What)
+	assert.Len(t, w.Ops, 2, "a pair of adds: %v", w.What)
+}

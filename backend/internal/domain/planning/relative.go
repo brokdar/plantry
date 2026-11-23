@@ -861,8 +861,13 @@ func (w *waySearch) primary(s State) []wayEdit {
 			}
 		case GoalHeartier:
 			out = append(out, w.quantityEdits(s, pi, +1)...)
-			out = append(out, w.addEdits(s, pi, w.minKcal-w.baseFig.MealKcal+1, false)...)
+			// An add reaches the minimum and is a real step either way: sized to
+			// the gap alone it can be too small to count (V72, g2-heartier-07).
+			out = append(out, w.addEdits(s, pi, math.Max(w.minKcal-w.baseFig.MealKcal+1, RelMinShare*w.baseFig.MealKcal+1), false)...)
 			out = append(out, w.swapEdits(s, p, AltMain, 0)...)
+			if w.toLimit {
+				out = append(out, w.pairEdits(s, pi)...)
+			}
 		default:
 			out = append(out, w.quantityEdits(s, pi, +1)...)
 			out = append(out, w.addEdits(s, pi, 0, true)...)
@@ -1306,6 +1311,41 @@ func (w *waySearch) addEdits(s State, pi int, want float64, protein bool) []wayE
 	var out []wayEdit
 	for _, c := range w.addCands(s, p, want, protein) {
 		out = append(out, w.addEdit(s, pi, c, ""))
+	}
+	return out
+}
+
+// maxPairFirst bounds the first adds a pair is built from (each pair is one
+// evaluation of the plan).
+const maxPairFirst = 3
+
+// pairEdits are two adds on the meal that together reach a filling meal's
+// minimum when one alone does not (V72, g2-light_limit-17): the second is
+// sized for what the first leaves and judged beside the plate with the first.
+func (w *waySearch) pairEdits(s State, pi int) []wayEdit {
+	need := w.minKcal - w.baseFig.MealKcal + 1
+	if need <= 0 {
+		return nil
+	}
+	first := w.addCands(s, s.Plates[pi], need, false)
+	slices.SortStableFunc(first, func(a, b addCand) int { return cmp.Compare(b.kcal, a.kcal) })
+	var out []wayEdit
+	for i, c1 := range first {
+		if i >= maxPairFirst || c1.kcal >= need {
+			continue // a single add that reaches is its own way
+		}
+		e1 := w.addEdit(s, pi, c1, "")
+		for _, c2 := range w.addCands(e1.s, e1.s.Plates[pi], need-c1.kcal, false) {
+			if c1.kcal+c2.kcal < need {
+				continue
+			}
+			e2 := w.addEdit(e1.s, pi, c2, "")
+			out = append(out, wayEdit{
+				s: e2.s, ops: append(slices.Clone(e1.ops), e2.ops...), what: append(slices.Clone(e1.what), e2.what...),
+				cost: e1.cost + e2.cost, kind: "add", group: "add_pair", plate: s.Plates[pi].ID,
+			})
+			break
+		}
 	}
 	return out
 }

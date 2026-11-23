@@ -253,3 +253,24 @@ func TestPrompt_FactsBeforeSummary(t *testing.T) {
 		t.Errorf("want facts < summary, got %d %d", f, s)
 	}
 }
+
+// V72 T2 (tune-v2 g2-ask-11/-16/-17/-22): "change the dinner" → the agent
+// asks → "Thursday's." → the agent asked again (lighter, heartier, a different
+// main?). Spec G1/RP1: ask only when nothing is named; once the answer names
+// the meal, act, and "change" is a different main dish.
+func TestPrompt_AskOnceThenAct(t *testing.T) {
+	t.Parallel()
+	prompt := compose(nil, "", time.Time{})
+	for _, want := range []string{
+		"Ask only when no meal, day or food is named",
+		"Once named (also in an answer), act",
+		`"change" is a new main dish`,
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt must contain %q", want)
+		}
+	}
+	if strings.Contains(prompt, "Ask only when the request needs a choice") {
+		t.Error("the old ask rule left the second question open")
+	}
+}
