@@ -238,7 +238,7 @@ func TestPrompt_SaysPortionsPerEater(t *testing.T) {
 	t.Parallel()
 	prompt, _ := agent.ComposePrompt(nil, "", "", time.Time{})
 	assert.Contains(t, prompt, "portions per eater")
-	assert.Equal(t, "v40", agent.PromptVersion)
+	assert.Equal(t, "v42", agent.PromptVersion)
 }
 
 // B2-AC6: the chat modes and week ids are gone from the agent package.

@@ -312,7 +312,7 @@ func TestFindWays_CannotLightenAloneOffersTheLightCompound(t *testing.T) {
 	offers := relMaps(res["offer"])
 	require.NotEmpty(t, offers)
 	maxKcal := res["max_kcal"].(float64)
-	assert.Contains(t, res["next"], "one recommended action")
+	assert.Contains(t, res["next"], "offers offer[0]")
 	fixed := 0
 	for _, o := range offers {
 		require.Equal(t, true, o["reaches_limit"], "%v", o["what"])
@@ -441,7 +441,7 @@ func TestFindWays_ImpossibleDayNumberOffersTheLowestVerifiedStep(t *testing.T) {
 		offered.Add(1)
 		o := offers[0]
 		assert.Equal(t, true, o["recommended"])
-		assert.Contains(t, res["next"], "END YOUR REPLY with offer[0]")
+		assert.Contains(t, res["next"], "offers offer[0]")
 		assert.Contains(t, res["closing"], "the lowest it goes")
 		got, err := e.applyWay(res, o, true)
 		require.NoError(t, err)

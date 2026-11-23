@@ -292,11 +292,11 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 		res.result["offers"] = offers
 	}
 	left := "left out: " + strings.Join(skippedOut, "; ")
-	tell := ". Tell the user plainly what was left out and why, with the numbers, "
+	tell := "; the program tells what was left out and why, "
 	if len(offers) > 0 {
-		tell += "and present offers[0] (marked recommended) as the way to do it safely; apply nothing more unasked"
+		tell += "and offers offers[0]; apply nothing more unasked"
 	} else {
-		tell += "and say plainly that no checked alternative exists for it: name none, promise none; apply nothing more unasked"
+		tell += "and that no checked alternative exists: name none, promise none; apply nothing more unasked"
 	}
 	switch {
 	case in.DryRun && len(safe) > 0:

@@ -367,7 +367,7 @@ func defaultTools(svc Services) []Tool {
 }
 
 // reportNote documents the report a plan-changing tool returns.
-const reportNote = " Also returns report, the computed facts of the change in plain words: tell (the ordered sentences your reply says: meals changed, protein, days, cooking and what moved, portions left over, the week, new and worse warnings, one offer), and for follow-up questions changed, days, cooking, earlier_warnings_unaffected (a count: do not list them), not_covered. Your reply states the tell items and nothing else about the plan."
+const reportNote = " Also returns report, the computed facts of the change in plain words: tell (the facts the program puts after your text: do not repeat them), and for follow-up questions changed, days, cooking, earlier_warnings_unaffected (a count: do not list them), not_covered."
 
 // --- read tools ---
 

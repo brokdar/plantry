@@ -242,7 +242,7 @@ func toolApplyPreset(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "apply_preset",
-		Description: "Apply a preset's plates onto target_date. Default on_conflict is 'skip' — leaves existing plates untouched. Use 'overwrite' only when the user explicitly asks to replace / rebuild / wipe. If the user's request targets a specific slot, set slot_ids_filter so multi-plate presets only land the relevant plate. The result enumerates created_plate_ids, replaced, skipped_occupied, skipped_unavailable (No-plate cells), and skipped_no_slot — surface any non-empty skip list to the user. Each list is [{date, slot_id}] except replaced; the result also has the `after` block (plates, sessions, issues).",
+		Description: "Apply a preset's plates onto target_date. Default on_conflict is 'skip' — leaves existing plates untouched. Use 'overwrite' only when the user explicitly asks to replace / rebuild / wipe. If the user's request targets a specific slot, set slot_ids_filter so multi-plate presets only land the relevant plate. The result enumerates created_plate_ids, replaced, skipped_occupied, skipped_unavailable (No-plate cells), and skipped_no_slot. Each list is [{date, slot_id}] except replaced; the result also has the `after` block (plates, sessions, issues).",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {

@@ -445,7 +445,7 @@ func toolUnlock(svc Services) Tool {
 	return Tool{
 		Name: "unlock",
 		Description: "Return a confirmed plate or cook session, with its batch closure, to draft so you can change it. Two steps: first call without user_confirmed; it changes nothing, " +
-			"shows the user the rows and you ask for a yes. Only after the user's yes in a later message call it again with user_confirmed: true. Give exactly one of plate_id or session_id. First call returns JSON {status:\"needs_user_confirmation\", rows:[{date, slot_id, names:[string]}], plate_ids, session_ids}; the confirmed call returns {plate_ids, session_ids} plus the `after` block (plates, sessions, issues).",
+			"shows the user the rows on an unlock card. Only after the user's yes in a later message call it again with user_confirmed: true. Give exactly one of plate_id or session_id. First call returns JSON {status:\"needs_user_confirmation\", rows:[{date, slot_id, names:[string]}], plate_ids, session_ids}; the confirmed call returns {plate_ids, session_ids} plus the `after` block (plates, sessions, issues).",
 		Schema: schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {

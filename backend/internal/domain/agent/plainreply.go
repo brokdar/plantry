@@ -79,6 +79,9 @@ func blockOf(output json.RawMessage) (b *replyBlock, check bool) {
 			}
 		}
 	}
+	if stop, ok := undoStop(obj); ok && rep != nil {
+		b.facts = append(b.facts, stop) // undone some, then stopped
+	}
 	if b.offer == nil && (len(b.facts) > 0 || rep != nil) {
 		b.offer = offerOf(obj)
 	}
@@ -436,7 +439,7 @@ func sentences(s string) []string {
 	rs := []rune(strings.TrimSpace(s))
 	for i, r := range rs {
 		cur = append(cur, r)
-		if r == '.' && i < len(rs)-1 && dateDot(rs, i) {
+		if r == '.' && i < len(rs)-1 && (dateDot(rs, i) || abbrevDot(rs, i)) {
 			continue
 		}
 		if (r == '.' || r == '!' || r == '?') && (i == len(rs)-1 || unicode.IsSpace(rs[i+1])) {
@@ -448,6 +451,49 @@ func sentences(s string) []string {
 		out = append(out, t)
 	}
 	return out
+}
+
+// abbreviations end with a dot that ends no sentence ("ca.", "z. B.", "bzw.").
+var abbreviations = map[string]bool{"ca": true, "bzw": true, "ggf": true, "evtl": true, "inkl": true, "vgl": true, "z.b": true, "u.a": true, "e.g": true, "i.e": true}
+
+// abbrevDot reports whether the dot at rs[i] closes an abbreviation: one of
+// abbreviations, or the second letter of "z. B." and "u. a.".
+func abbrevDot(rs []rune, i int) bool {
+	start := i
+	for start > 0 && !unicode.IsSpace(rs[start-1]) {
+		start--
+	}
+	word := strings.ToLower(strings.TrimLeft(string(rs[start:i]), "("))
+	if abbreviations[word] {
+		return true
+	}
+	// The first dot of "z. B." / "u. a.": the next word is the other half.
+	if (word == "z" && followedBy(rs, i, 'b')) || (word == "u" && followedBy(rs, i, 'a')) {
+		return true
+	}
+	if word != "b" && word != "a" {
+		return false
+	}
+	p := start
+	for p > 0 && unicode.IsSpace(rs[p-1]) {
+		p--
+	}
+	q := p
+	for q > 0 && !unicode.IsSpace(rs[q-1]) {
+		q--
+	}
+	prev := strings.ToLower(strings.TrimLeft(string(rs[q:p]), "("))
+	return (word == "b" && prev == "z.") || (word == "a" && prev == "u.")
+}
+
+// followedBy reports whether the dot at rs[i] is followed by a space and the
+// letter c (any case) and a dot.
+func followedBy(rs []rune, i int, c rune) bool {
+	j := i + 1
+	for j < len(rs) && unicode.IsSpace(rs[j]) {
+		j++
+	}
+	return j > i+1 && j+1 < len(rs) && unicode.ToLower(rs[j]) == c && rs[j+1] == '.'
 }
 
 // monthWord is a month name or its abbreviation, German or English.
@@ -528,8 +574,14 @@ var (
 // the cooking and the leftovers, and the one offer is code-rendered (G4, CL3,
 // CL4). A narrow vocabulary check in English and German, not a parser.
 var (
-	modelCookingWords = regexp.MustCompile(`(?i)\b(cook\w*|batch(es)?|leftovers?|left ?overs?|fresh(ly)?|portions? (are |is )?left|kochen|koch\w*|gekocht\w*|kochzeit\w*|reste?|übrig\w*|frisch\w*)\b`)
-	modelOptionWords  = regexp.MustCompile(`(?i)\b(if you|only if|unless|i can|i could|i'?d (suggest|recommend)|you (could|can|may|might)|want me to|would you like|shall i|should i|alternatively|instead|otherwise|falls du|wenn du|nur wenn|ich kann|ich könnte|du kannst|du könntest|möchtest du|willst du|soll ich|stattdessen|alternativ|sonst)\b`)
+	modelCookingWords = regexp.MustCompile(`(?i)\b(cook\w*|batch(es)?|leftovers?|left ?overs?|fresh(ly)?|portions? (are |is )?left|kochen|koch\w*|gekocht\w*|kochzeit\w*|reste[n]?|übrig\w*|frisch\w*)\b`)
+	// "I can't", "unless another meal grows", "weil der Tag sonst ..." and
+	// "instead of" (withoutComparisons) are refusals or reasons, no option.
+	modelOptionWords = regexp.MustCompile(`(?i)\b(if you|only if|unless you|i could|i'?d (suggest|recommend)|want me to|would you like|shall i|should i|alternatively|instead|otherwise|falls du|wenn du|nur wenn|ich kann|ich könnte|du kannst|du könntest|möchtest du|willst du|soll ich|stattdessen|alternativ)\b|\b(i can|you (could|can|may|might)) \w|\b(sonst )?(kann|könnte|soll) ich\b|(^|[.!?:;]\s+)sonst\b`)
+	// insteadOf is a done comparison: between quantities ("100 g instead of
+	// 200 g", "3 statt 4 Portionen") or after a statement ("is now ... instead
+	// of ..."). "Instead of the pasta, try rice" carries a proposal and stays.
+	insteadOf = regexp.MustCompile(`(?i)(\d[^.!?]*?\b(instead of|statt)\b[^.!?]*?\d|\b(is|are|was|were|now|ist|sind|jetzt|habe|have|has|hat)\b[^.!?]*?\b(instead of|statt)\b)`)
 )
 
 // A done-claim next to a refused call (nothing saved) says what did not happen.
@@ -582,6 +634,10 @@ func contradicts(text string, facts []fact, nothingSaved bool) bool {
 	return false
 }
 
+// withoutComparisons drops a done comparison ("100 g instead of 200 g") before
+// the option check; an "instead of" that proposes something stays.
+func withoutComparisons(text string) string { return insteadOf.ReplaceAllString(text, " ") }
+
 // lintModelText reports why the model's text cannot go out next to the block, or
 // "" when it can: a planner word, a number the block or the tool results do not
 // back (v1.4 P-7; on a turn without a block the user's message backs one too), a
@@ -624,7 +680,7 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 		if modelCookingWords.MatchString(text) {
 			return "cooking_claim"
 		}
-		if modelOptionWords.MatchString(text) {
+		if modelOptionWords.MatchString(withoutComparisons(text)) {
 			return "option"
 		}
 		lower := strings.ToLower(blockText)
@@ -978,7 +1034,13 @@ func savedBlock(tool string, output json.RawMessage) *replyBlock {
 	en, de := "Saved; no other meal changed.", "Gespeichert; keine andere Mahlzeit hat sich geändert."
 	switch tool {
 	case "undo_last_change":
+		if stop, ok := undoStop(obj); ok && num(obj["undone"]) == 0 {
+			return &replyBlock{facts: []fact{stop}, nothingSaved: true}
+		}
 		en, de = "Undone; the plan is as it was before that change.", "Rückgängig gemacht; der Plan ist wie vor dieser Änderung."
+		if stop, ok := undoStop(obj); ok {
+			return &replyBlock{facts: []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: en, DE: de}, stop}}
+		}
 	case "apply_preset":
 		en, de = "The routine is applied.", "Die Routine ist angewendet."
 		var skipped []string
@@ -1004,6 +1066,38 @@ func savedBlock(tool string, output json.RawMessage) *replyBlock {
 		en, de = "The plan was made again.", "Der Plan wurde neu gemacht."
 	}
 	return &replyBlock{facts: []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: en, DE: de}}}
+}
+
+// undoReasons are the code-rendered reasons of a refused undo, by kind (G4.1).
+var undoReasons = map[string][2]string{
+	"":            {"no change of this conversation is left to undo.", "in diesem Gespräch ist keine Änderung mehr rückgängig zu machen."},
+	undoStale:     {"the plan was changed since that change, so putting it back exactly would overwrite that edit.", "der Plan wurde seit dieser Änderung geändert, und sie genau zurückzusetzen würde diese Änderung überschreiben."},
+	undoConfirmed: {"a meal of that change is confirmed now.", "eine Mahlzeit dieser Änderung ist jetzt bestätigt."},
+	undoAlready:   {"that change was undone already on the board.", "diese Änderung wurde schon auf dem Plan rückgängig gemacht."},
+}
+
+// undoStop is the refused part of an undo_last_change result (G4.1, SF2): with
+// nothing undone "Nothing was undone: <why>", after some "The next change was
+// not undone: <why>"; ok false when the undo was not refused. A result with
+// nothing undone and no refusal had nothing left to undo.
+func undoStop(obj map[string]any) (fact, bool) {
+	ref, _ := obj["refused"].(map[string]any)
+	if _, isUndo := obj["undone"]; !isUndo || (ref == nil && num(obj["undone"]) > 0) {
+		return fact{}, false
+	}
+	kind, _ := ref["kind"].(string)
+	if ref != nil && kind == "" {
+		kind = undoStale // a stored refusal without its kind: the plan changed since
+	}
+	why, ok := undoReasons[kind]
+	if !ok {
+		why = undoReasons[undoStale]
+	}
+	en, de := "Nothing was undone: ", "Nichts wurde rückgängig gemacht: "
+	if num(obj["undone"]) > 0 {
+		en, de = "The next change was not undone: ", "Die nächste Änderung wurde nicht rückgängig gemacht: "
+	}
+	return fact{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: en + why[0], DE: de + why[1]}, true
 }
 
 // regenerateRefused is the block of a regenerate run that ended in error and
