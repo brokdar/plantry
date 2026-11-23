@@ -249,8 +249,9 @@ func quickCells(s State, q QuickLimit) map[cellID]int {
 	return out
 }
 
-// tooSlow reports whether f may not be the main of c under a wish's time
-// limit: a recipe over the minutes, or with unknown minutes.
+// tooSlow reports whether f may not be cooked in c under a wish's time
+// limit: a recipe over the minutes, or with unknown minutes. A leftover eaten
+// in c costs no time there.
 func (s State) tooSlow(f FoodFacts, c plate.CellKey) bool {
 	limit, ok := s.MaxMinutes[idOf(c)]
 	return ok && f.Composed() && (f.Minutes <= 0 || f.Minutes > limit)

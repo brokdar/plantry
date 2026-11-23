@@ -992,6 +992,8 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	// sideOpen are the hard issues a side swap's plan already had (PL1): only a
 	// new one stops the swap.
 	sideOpen := map[string]bool{}
+	// startH8 counts the dish-variety violations open before the run (S1).
+	startH8 := 0
 	build := func(ctx context.Context) error {
 		st, err := s.d.Builder.Build(ctx, j.w, j.today, j.from, j.to)
 		if err != nil {
@@ -999,6 +1001,11 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		}
 		stored = st.Light
 		st.Light = MergeLight(stored, j.light)
+		for _, is := range openHard(st, j.target) {
+			if is.Rule == "H8" {
+				startH8++
+			}
+		}
 		if j.side != nil {
 			for _, is := range openHard(st, j.target) {
 				sideOpen[hardKey(is)] = true
@@ -1186,9 +1193,17 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	// the rule, and the drafts stay as they are. An empty cell nothing can fill
 	// is not a rule broken (that plan is partial), nor is the heuristic's H9
 	// floor no recipe reaches (partial, the notes say so).
-	if still := slices.DeleteFunc(openHard(Merge(base, j.target, prop), j.target), func(is Issue) bool {
+	// S1 (V73): dish variety alone never stops a replan that fits the energy
+	// rules: the best week is saved when it leaves no more variety repeats open
+	// than the plan had, and the notes name each one.
+	still := slices.DeleteFunc(openHard(Merge(base, j.target, prop), j.target), func(is Issue) bool {
 		return is.Code == CodeMissingPlate || (is.Code == CodeKcalBelowFloor && isHeuristic(j.chooser))
-	}); len(still) > 0 && (j.side == nil || slices.ContainsFunc(still, func(is Issue) bool { return !sideOpen[hardKey(is)] })) {
+	})
+	if j.side == nil && varietyOnlyKept(still, startH8) {
+		prop.Notes = joinNotes(prop.Notes, varietyKeptNote(Merge(base, j.target, prop), still))
+		still = nil
+	}
+	if len(still) > 0 && (j.side == nil || slices.ContainsFunc(still, func(is Issue) bool { return !sideOpen[hardKey(is)] })) {
 		closeStatus, closeStage = "error", "checking"
 		return RunEnd{
 			Status: airun.StatusError, ErrorKey: keyHardRuleOpen,
@@ -1290,6 +1305,28 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 // openRules names the hard rules a saved plan still breaks, each once with the
 // days it breaks it on. An empty cell (missing_plate) is not named: it is the
 // plan still being built, or a meal nothing can fill.
+// varietyOnlyKept: the open hard issues are dish-variety repeats only, no
+// more than the plan had before the run (S1): the week is saved.
+func varietyOnlyKept(still []Issue, startH8 int) bool {
+	return len(still) > 0 && len(still) <= startH8 && !slices.ContainsFunc(still, func(is Issue) bool { return is.Rule != "H8" })
+}
+
+// varietyKeptNote names each dish a saved replan still repeats too soon (S1):
+// no more than the plan repeated before the run.
+func varietyKeptNote(s State, h8 []Issue) string {
+	var parts []string
+	for _, is := range h8 {
+		part := food.Quote(foodName(s, int64(anyF(is.Params["food_id"]))))
+		if is.Date != "" {
+			part += " on " + is.Date
+		}
+		if !slices.Contains(parts, part) {
+			parts = append(parts, part)
+		}
+	}
+	return "Dish variety: no other dish fits, so these repeat a dish eaten or cooked shortly before (the plan had as many repeats before): " + strings.Join(parts, ", ") + "."
+}
+
 func openRules(violations []Issue) string {
 	days := map[string][]string{}
 	var order []string

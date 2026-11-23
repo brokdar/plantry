@@ -60,6 +60,9 @@ func blockOf(output json.RawMessage) (b *replyBlock, check bool) {
 			}
 		}
 	}
+	if f, ok := varietyKept(obj); ok {
+		b.facts = append(b.facts, f)
+	}
 	// Nothing of the call was saved: composeReply says so first, in code (G4.1, SF2),
 	// so the reply is honest even when the lint drops the model's text.
 	b.nothingSaved = obj["saved"] == false && len(b.facts) > 0
@@ -145,6 +148,9 @@ type replyTurn struct {
 	foods   []string         // the names of the foods of the plan: a write's text names none the block does not
 	write   bool             // a plan-writing tool was called (also as a check)
 	block   *replyBlock      // the facts and the offer of the turn's writes
+	// undoable holds the block as it was before each change saved in this
+	// turn, newest last: an undo of that change takes the block back (addWrite).
+	undoable []*replyBlock
 	// drops, when set, collects every sentence of the model's final text the
 	// reply leaves out, with the reason (F6: agent.reply.lint).
 	drops *[]lintDrop
@@ -203,6 +209,23 @@ func mergeBlock(a, b *replyBlock) *replyBlock {
 		out.offer = b.offer
 	}
 	return out
+}
+
+// addWrite adds a successful write's block to the turn. An undo of a change
+// saved earlier in this turn takes the turn back to before it: the turn tells
+// neither that change's lines nor the undo's, since together they changed
+// nothing (V73 (c), tune-v2 g2-replan-01: regenerate, undo, a refused replace
+// told the replan's add and remove lines under "Nothing changed").
+func (t *replyTurn) addWrite(tool string, saved bool, b *replyBlock) {
+	if tool == "undo_last_change" && len(t.undoable) > 0 {
+		t.block = t.undoable[len(t.undoable)-1]
+		t.undoable = t.undoable[:len(t.undoable)-1]
+		return
+	}
+	if saved && tool != "undo_last_change" {
+		t.undoable = append(t.undoable, t.block)
+	}
+	t.block = mergeBlock(t.block, b)
 }
 
 // cookDay is the day a cooking line tells ("Thu 26 Nov at lunch you cook ...",
@@ -1146,6 +1169,35 @@ func regenerateRefused(obj map[string]any) *replyBlock {
 		de = "Nichts wurde neu geplant: dasselbe Hauptgericht wäre bei beiden Mahlzeiten des Tages und kein anderes passt, deshalb wurde nichts gespeichert."
 	}
 	return &replyBlock{facts: []fact{{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: en, DE: de}}, nothingSaved: true}
+}
+
+// keptRepeat is one dish a saved replan still repeats, in the run's notes
+// (planning.varietyKeptNote): "\"Chili\" on 2026-11-30".
+var keptRepeat = regexp.MustCompile(`"([^"]+)" on (\d{4}-\d{2}-\d{2})`)
+
+// varietyKept is the line naming each dish a saved replan still repeats too
+// soon (S1, ledger V73): always told, since the plan was saved with them.
+func varietyKept(obj map[string]any) (fact, bool) {
+	notes, _ := obj["notes"].(string)
+	_, rest, ok := strings.Cut(notes, "Dish variety: no other dish fits")
+	if !ok || obj["status"] == "error" {
+		return fact{}, false
+	}
+	rest, _, _ = strings.Cut(rest, "\n")
+	var en, de []string
+	for _, m := range keptRepeat.FindAllStringSubmatch(rest, -1) {
+		day := dayLabelStr(m[2])
+		en = append(en, fmt.Sprintf("%q on %s", m[1], day))
+		de = append(de, fmt.Sprintf("„%s“ am %s", m[1], deDay(day)))
+	}
+	if len(en) == 0 {
+		return fact{}, false
+	}
+	return fact{
+		Class: classWarn, Kind: kindWarn, Status: statusOK, Must: true,
+		EN: "Still repeated soon after the last time, as before, since no other dish fits: " + strings.Join(en, ", ") + ".",
+		DE: "Wiederholt sich weiter kurz nach dem letzten Mal, wie vorher, weil kein anderes Gericht passt: " + strings.Join(de, ", ") + ".",
+	}, true
 }
 
 // isoInParens is a parenthesised list of ISO dates in a run note ("(2026-12-07)").

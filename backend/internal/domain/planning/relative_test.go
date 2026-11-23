@@ -576,3 +576,23 @@ func TestWays_FillingMealReachedByTwoAdds(t *testing.T) {
 	assert.GreaterOrEqual(t, w.After.MealKcal, res.MinKcal-0.5, w.What)
 	assert.Len(t, w.Ops, 2, "a pair of adds: %v", w.What)
 }
+
+// V73 (a) (tune-v2 g2-light_limit-17): a filling-meal search judged the day
+// under the mark it would store and told that band (top 1766) while every
+// way's own check and the stored plan showed the day's real band (top 1605).
+// The told band is the stored day's.
+func TestWays_ToLimitTellsTheStoredDayBand(t *testing.T) {
+	s := relState(false)
+	var day planning.DayEval
+	for _, d := range planning.Evaluate(s, windowTarget(s)).Days {
+		if d.Date == sat {
+			day = d
+		}
+	}
+	require.Positive(t, day.BandHigh)
+	for _, goal := range []string{planning.GoalHeartier, planning.GoalLighter} {
+		res := ways(t, s, planning.WayRequest{PlateID: 3, Goal: goal, ToLimit: true})
+		assert.InDelta(t, day.BandLow, res.BandLow, 0.5, goal)
+		assert.InDelta(t, day.BandHigh, res.BandHigh, 0.5, goal)
+	}
+}

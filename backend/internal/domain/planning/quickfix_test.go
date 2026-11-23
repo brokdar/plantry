@@ -13,12 +13,13 @@ import (
 )
 
 // V72 T1a (tune-v2 g2-planner-07, "quick dinners Monday to Friday, 30 minutes
-// at most"): the wish reaches the heuristic as a time limit, and every weekday
-// dinner's main, cooked there or eaten from a batch, takes at most 30 minutes.
+// at most"): the wish reaches the heuristic as a time limit, and every main
+// cooked at a weekday dinner takes at most 30 minutes (a leftover eaten there
+// costs no time, V73).
 // Without the wish the same library plans a slow weekday dinner, so the test
 // tells the two apart.
 func TestService_QuickWeekdayDinnersAreKept(t *testing.T) {
-	plan := func(quick *planning.QuickLimit) (*svcEnv, []string) {
+	plan := func(quick *planning.QuickLimit) (int, []string) {
 		e := newSvcEnv(t)
 		for i, id := range e.mains {
 			mins := 60
@@ -34,27 +35,35 @@ func TestService_QuickWeekdayDinnersAreKept(t *testing.T) {
 		req.Chooser, req.Instruction = airun.ChooserLLM, "quick dinners Monday to Friday, 30 minutes at most"
 		end := e.runs.end(e.generate(req))
 		require.NotEqual(t, airun.StatusError, end.Status, end.ErrorKey)
+		// A leftover costs no time at the dinner that eats it: only a dinner
+		// that cooks a slow main breaks the wish.
 		var slow []string
-		for _, p := range e.window() {
-			if p.SlotID != e.dinner || p.Date.Weekday() == time.Saturday || p.Date.Weekday() == time.Sunday {
-				continue
-			}
-			for _, c := range p.Components {
-				var mins int
-				var role string
-				require.NoError(t, e.db.QueryRow(`SELECT COALESCE(prep_minutes,0)+COALESCE(cook_minutes,0), COALESCE(role,'') FROM foods WHERE id = ?`, c.FoodID).Scan(&mins, &role))
-				if role == "main" && mins > 30 {
-					slow = append(slow, p.DateString())
-				}
-			}
+		rows, err := e.db.Query(`SELECT cs.cook_date FROM cook_sessions cs JOIN foods f ON f.id = cs.food_id
+			WHERE cs.cook_slot_id = ? AND f.role = 'main' AND COALESCE(f.prep_minutes,0)+COALESCE(f.cook_minutes,0) > 30
+			AND cs.cook_date BETWEEN ? AND ? AND strftime('%w', cs.cook_date) BETWEEN '1' AND '5'`,
+			e.dinner, e.start.Format(time.DateOnly), e.start.AddDate(0, 0, 6).Format(time.DateOnly))
+		require.NoError(t, err)
+		defer rows.Close()
+		for rows.Next() {
+			var d string
+			require.NoError(t, rows.Scan(&d))
+			slow = append(slow, d)
 		}
-		return e, slow
+		require.NoError(t, rows.Err())
+		var leftovers int
+		require.NoError(t, e.db.QueryRow(`SELECT COUNT(*) FROM plate_components pc JOIN plates p ON p.id = pc.plate_id
+			JOIN cook_sessions cs ON cs.id = pc.cook_session_id JOIN foods f ON f.id = pc.food_id
+			WHERE p.slot_id = ? AND f.role = 'main' AND strftime('%w', p.date) BETWEEN '1' AND '5'
+			AND (cs.cook_date <> p.date OR cs.cook_slot_id <> p.slot_id)`, e.dinner).Scan(&leftovers))
+		return leftovers, slow
 	}
-	_, slow := plan(nil)
+	leftoversBefore, slow := plan(nil)
 	require.NotEmpty(t, slow, "without the wish a weekday dinner is slow (the fixture discriminates)")
+	require.Positive(t, leftoversBefore, "the fixture eats leftovers at weekday dinners")
 
-	_, slow = plan(&planning.QuickLimit{Minutes: 30, Slot: "dinner", Weekdays: []string{"mon", "tue", "wed", "thu", "fri"}})
+	leftovers, slow := plan(&planning.QuickLimit{Minutes: 30, Slot: "dinner", Weekdays: []string{"mon", "tue", "wed", "thu", "fri"}})
 	assert.Empty(t, slow, "every weekday dinner takes at most 30 minutes")
+	assert.Positive(t, leftovers, "a leftover costs no time at the dinner: the wish keeps leftover dinners (V73)")
 }
 
 // The extraction schema carries the limit and ParseConstraints keeps it when it

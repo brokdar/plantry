@@ -14,7 +14,7 @@ import (
 
 // fixQuick keeps a wish's time limit (State.MaxMinutes, V72) after the
 // finishing steps, which may swap a dish for less meat or more variety: a
-// proposed batch that feeds a limited cell with a dish over its minutes is
+// proposed batch cooked in a limited cell with a dish over its minutes is
 // cooked, batch by batch, as a quick main instead (not in the plan, not
 // recent, closest in energy, same cook cell). The plan after it must break no
 // rule it did not break before, repeat no more dishes and cook on no more days.
@@ -40,35 +40,19 @@ func fixQuick(in ChooseInput, prop Proposal) (Proposal, []string) {
 	return prop, notes
 }
 
-// slowBatch is the first proposed batch (by key) that feeds a limited cell with
-// a dish over its minutes, and the smallest limit of the cells it feeds.
+// slowBatch is the first proposed batch (by key) cooked in a limited cell
+// with a dish over its minutes, and that cell's limit. A leftover costs no
+// time at the meal that eats it, so only the cook cell is judged.
 func slowBatch(s State, prop Proposal, tried map[string]bool) (string, int) {
-	for _, p := range prop.Plates {
-		cell := plate.CellKey{Date: p.Date, SlotID: p.SlotID}
+	for _, ss := range prop.Sessions {
+		cell := plate.CellKey{Date: ss.CookDate, SlotID: ss.CookSlotID}
 		limit, ok := s.MaxMinutes[idOf(cell)]
-		if !ok {
+		if !ok || tried[ss.Key] || !s.tooSlow(s.Foods[ss.FoodID], cell) {
 			continue
 		}
-		for _, c := range p.Components {
-			if c.SessionKey == "" || tried[c.SessionKey] || !s.tooSlow(s.Foods[c.FoodID], cell) {
-				continue
-			}
-			return c.SessionKey, batchLimit(s, prop, c.SessionKey, limit)
-		}
+		return ss.Key, limit
 	}
 	return "", 0
-}
-
-// batchLimit is the smallest time limit of the cells batch key feeds.
-func batchLimit(s State, prop Proposal, key string, limit int) int {
-	for _, p := range prop.Plates {
-		for _, c := range p.Components {
-			if l, ok := s.MaxMinutes[idOf(plate.CellKey{Date: p.Date, SlotID: p.SlotID})]; ok && c.SessionKey == key && l < limit {
-				limit = l
-			}
-		}
-	}
-	return limit
 }
 
 // quickFor cooks batch key as a quick main (at most limit minutes).

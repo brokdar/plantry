@@ -422,7 +422,7 @@ func (h *planner) pickSupply(c plate.CellKey, eaters float64, skipAvoided bool) 
 		}
 		// An excluded food (a replaced plate) feeds the cell only as the last
 		// resort of eatAnyway: an empty cell (H1) weighs more.
-		if h.supplyOverMeat(sup, c) || (h.exclude[sup.food] && !h.allowMeat) || h.s.tooSlow(h.s.Foods[sup.food], c) {
+		if h.supplyOverMeat(sup, c) || (h.exclude[sup.food] && !h.allowMeat) {
 			continue
 		}
 		room := sup.free
@@ -449,7 +449,7 @@ func (h *planner) growable(c plate.CellKey) *supply {
 		if sup.proposed < 0 {
 			continue
 		}
-		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) || h.supplyAtDishCap(sup, c) || h.exclude[sup.food] || h.s.tooSlow(h.s.Foods[sup.food], c) {
+		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) || h.supplyAtDishCap(sup, c) || h.exclude[sup.food] {
 			continue
 		}
 		if best == nil || plate.Before(best.cook.CookCell(), sup.cook.CookCell(), h.order) {
@@ -657,7 +657,7 @@ func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freez
 			continue
 		}
 		full := h.x.mealOf(o.SlotID) == mealFull
-		if full && dishes >= h.s.Settings.MaxDishMeals() || h.s.tooSlow(h.s.Foods[cook.FoodID], o) {
+		if full && dishes >= h.s.Settings.MaxDishMeals() {
 			continue
 		}
 		if omni && limit != nil && h.s.Window.Contains(o.Date) && !meat[dayOf(o.Date)] {

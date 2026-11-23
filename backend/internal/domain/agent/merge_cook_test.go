@@ -32,3 +32,44 @@ func TestMergeBlock_LaterCookingOfADayReplacesTheEarlier(t *testing.T) {
 	assert.Contains(t, got, first.facts[3].EN, "a day the second write did not touch keeps its line")
 	assert.Contains(t, got, first.facts[0].EN)
 }
+
+// V73 (c) (tune-v2 g2-replan-01): a turn regenerated Sunday, undid it and then
+// had a replace refused. The reply said "Nothing changed" and still listed the
+// replan's add and remove lines and the undo's reverse lines. An undo of a
+// change saved in the same turn takes the turn's block back to before it.
+func TestReplyTurn_UndoInTheTurnCancelsTheChange(t *testing.T) {
+	t.Parallel()
+	line := func(en string) fact {
+		return fact{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: en, DE: en}
+	}
+	replan := &replyBlock{facts: []fact{line(`Sun 22 Nov dinner: removed "Shakshuka"; added "Easy chicken curry".`)}}
+	undo := &replyBlock{facts: []fact{line(`Sun 22 Nov dinner: removed "Easy chicken curry"; added "Shakshuka".`)}}
+	refused := &replyBlock{nothingSaved: true, facts: []fact{{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: `Left out: replacing "Minestrone".`, DE: "x"}}}
+
+	var turn replyTurn
+	turn.addWrite("regenerate", true, replan)
+	turn.addWrite("undo_last_change", false, undo)
+	turn.addWrite("apply_changes", false, refused)
+	got := tellOf(turn.block.facts)
+	assert.Equal(t, []string{refused.facts[0].EN}, got, "only the refusal: the replan and its undo changed nothing")
+	assert.True(t, turn.block.nothingSaved)
+
+	// An undo of a change from an earlier turn is told as it is.
+	var later replyTurn
+	later.addWrite("undo_last_change", false, undo)
+	assert.Equal(t, []string{undo.facts[0].EN}, tellOf(later.block.facts))
+}
+
+// S1 (ledger V73): a week replan saved with the dish-variety repeats the plan
+// already had names each in the block, always told.
+func TestBlockOf_RegenerateNamesEveryKeptRepeat(t *testing.T) {
+	t.Parallel()
+	out := []byte(`{"status":"partial","error_key":"error.plan.hard_rule_open","notes":"Heavy days: Friday.\nDish variety: no other dish fits, so these repeat a dish eaten or cooked shortly before (the plan had as many repeats before): \"Shakshuka\" on 2026-12-06, \"Lemon salmon with rice\" on 2026-12-07.\nA hard rule is still open in the saved plan: dish variety (2026-12-06, 2026-12-07)."}`)
+	b, check := blockOf(out)
+	if !assert.False(t, check) || !assert.NotNil(t, b) {
+		return
+	}
+	got := tellOf(selectBlock(b.facts))
+	assert.Contains(t, got, `Still repeated soon after the last time, as before, since no other dish fits: "Shakshuka" on Sun 6 Dec, "Lemon salmon with rice" on Mon 7 Dec.`)
+	assert.False(t, b.nothingSaved)
+}

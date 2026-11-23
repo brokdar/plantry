@@ -338,6 +338,7 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 		w.household = diet.Class(s.Profile.DietType)
 	}
 	res := WayResult{Goal: req.Goal, Date: w.date}
+	saved := s // the plan as stored: its day band is the one told (V73)
 	var intent *LightIntent
 	if dayGoal && !w.noMark {
 		in := LightIntent{Date: w.date, Scope: LightScopeDay, TargetKcal: req.TargetKcal} // a named number is the day's target (P-3)
@@ -395,6 +396,14 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 	if d, ok := w.dayEval(w.base); ok {
 		res.FloorKcal, res.BandLow, res.BandHigh = math.Round(d.FloorKcal), math.Round(d.BandLow), math.Round(d.BandHigh)
 		w.bandHigh = d.BandHigh
+		if req.ToLimit && !dayGoal {
+			// The search judges the day under the mark the request would store;
+			// what is told is the stored day's band, the one every way's own
+			// check and the saved plan show (a refusal stores no mark).
+			if sd, ok := w.dayEval(evaluateWith(saved, t, false, true)); ok {
+				res.BandLow, res.BandHigh = math.Round(sd.BandLow), math.Round(sd.BandHigh)
+			}
+		}
 		if dayGoal {
 			w.capKcal, w.minKcal = d.BandHigh, d.BandLow
 			res.MaxKcal, res.MinKcal = res.BandHigh, res.BandLow
