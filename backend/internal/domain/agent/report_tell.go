@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
@@ -162,7 +163,11 @@ func buildFacts(in reportInput, r changeReport) {
 	}
 	gone := map[string][]string{}
 	var goneOrder []string
+	out := dayOuts(in, r, awayDays)
 	for _, m := range r.Changed {
+		if len(m.After) == 0 && out[m.Day] != nil {
+			continue // told in the day's one line below
+		}
 		if len(m.After) == 0 && awayDays[m.Day] {
 			if _, ok := gone[m.Day]; !ok {
 				goneOrder = append(goneOrder, m.Day)
@@ -186,7 +191,6 @@ func buildFacts(in reportInput, r changeReport) {
 			s.add(classChanged, kindAway, statusOK, d.Day+" is away: the day is not counted.", deDay(d.Day)+" ist abwesend: der Tag wird nicht gezählt.")
 		}
 	}
-	awayEnergy(in, r, awayDays)
 	guestFacts(in)
 	keepFacts(in, r.Changed)
 	oddNameFacts(in, r.Changed)
@@ -197,34 +201,96 @@ func buildFacts(in reportInput, r changeReport) {
 	cookFacts(in, r)
 	for _, c := range r.Cooking {
 		if len(c.Cooked) == 0 && !awayDays[c.Day] {
+			if o := out[c.Day]; o != nil {
+				o.nothing = true
+				continue
+			}
 			s.add(classMoved, kindCook, statusOK, c.Day+": nothing is cooked.", deDay(c.Day)+": es wird nichts gekocht.")
+		}
+	}
+	for _, d := range in.after.Days {
+		if o := out[dayLabelStr(d.Date)]; o != nil {
+			o.tell(s)
 		}
 	}
 }
 
-// awayEnergy says, for a day with some meals away, what the meals out are
-// assumed to hold (the slot's expected share of the day's target).
-func awayEnergy(in reportInput, r changeReport, awayDays map[string]bool) {
+// dayOut is what a day with meals out says in one line (G4): the meals out, the
+// energy they are assumed to hold, and that nothing is cooked.
+type dayOut struct {
+	day     string
+	meals   []string
+	kcal    float64
+	nothing bool
+}
+
+// dayOuts is the days with meals out and an assumed energy, by day label. A day
+// whose meals out have no assumed energy is not in it: its meals keep their lines.
+func dayOuts(in reportInput, r changeReport, awayDays map[string]bool) map[string]*dayOut {
 	goneMeals := map[string][]string{}
 	for _, m := range r.Changed {
-		if len(m.After) == 0 && !awayDays[m.Day] {
+		// Only a meal whose slot is not planned any more is out (V68): a deleted
+		// plate leaves its cell planned, so it keeps its "no meal any more" line.
+		if len(m.After) == 0 && !awayDays[m.Day] && mealOut(in.afterSt, m.Day, m.Meal) {
 			goneMeals[m.Day] = append(goneMeals[m.Day], m.Meal)
 		}
 	}
+	out := map[string]*dayOut{}
 	for _, d := range in.after.Days {
 		day := dayLabelStr(d.Date)
-		meals := goneMeals[day]
-		if len(meals) == 0 || d.AwayKcal <= 0 {
+		if len(goneMeals[day]) == 0 || d.AwayKcal <= 0 {
 			continue
 		}
-		var de []string
-		for _, m := range meals {
-			de = append(de, deSlot(m))
-		}
-		in.facts.add(classMoved, kindAway, statusOK,
-			fmt.Sprintf("%s: %s out, about %.0f kcal is assumed for it.", day, strings.Join(meals, " and "), d.AwayKcal),
-			fmt.Sprintf("%s: %s außer Haus, dafür werden etwa %.0f kcal angenommen.", deDay(day), strings.Join(de, " und "), d.AwayKcal))
+		out[day] = &dayOut{day: day, meals: goneMeals[day], kcal: d.AwayKcal}
 	}
+	return out
+}
+
+// mealOut reports whether the meal on day is a slot the plan does not hold
+// (SB3): its cell is marked away or no plate (also by default), or is a routine
+// without a plate. A cell still planned is no meal out.
+func mealOut(st planning.State, day, meal string) bool {
+	for _, c := range st.Cells {
+		if dayLabel(c.Date) != day || slotWord(st, c.SlotID) != meal {
+			continue
+		}
+		switch c.Mode {
+		case availability.ModeNone:
+			return true
+		case availability.ModeRoutine:
+			return !slices.ContainsFunc(st.Plates, func(p planning.Plate) bool { return p.Cell().Equal(c.Key()) })
+		}
+		return false
+	}
+	return false
+}
+
+// tell adds the day's one line.
+func (o *dayOut) tell(s *factSink) {
+	var de []string
+	for _, m := range o.meals {
+		de = append(de, deSlot(m))
+	}
+	en := fmt.Sprintf("%s: %s out (about %.0f kcal assumed)", o.day, strings.Join(o.meals, " and "), o.kcal)
+	g := fmt.Sprintf("%s: %s außer Haus (etwa %.0f kcal angenommen)", deDay(o.day), deJoin(de), o.kcal)
+	if o.nothing {
+		en += ", nothing is cooked"
+		g += ", es wird nichts gekocht"
+	}
+	s.add(classMoved, kindAway, statusOK, dot(en), dot(g))
+}
+
+// deJoin lists German meal names: "Mittag- und Abendessen" for two "-essen" meals.
+func deJoin(names []string) string {
+	n := len(names)
+	if n == 1 {
+		return names[0]
+	}
+	head := slices.Clone(names[:n-1])
+	if last := names[n-1]; strings.HasSuffix(last, "essen") && strings.HasSuffix(head[n-2], "essen") {
+		head[n-2] = strings.TrimSuffix(head[n-2], "essen") + "-"
+	}
+	return strings.Join(head, ", ") + " und " + names[n-1]
 }
 
 // proteinFacts says where a day's protein stands when this change moved it by 5 g or more.

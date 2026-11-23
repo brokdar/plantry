@@ -28,7 +28,7 @@ func TestSelectBlock_KeepsChangedMealsAndCookingWhenCut(t *testing.T) {
 		f(classWorse, kindDay, statusUnder, "Thu 3 Dec holds 1216 kcal (was 2440), under the day's minimum of 1408 kcal."),
 	}
 	got := selectBlock(away)
-	assert.Len(t, got, maxBlock)
+	assert.Len(t, got, maxBlock+1, "the leftover line is told outside the cap (V63 b)")
 	assert.Contains(t, got, away[0])
 	assert.Contains(t, got, away[3], "the cooking day is told")
 	assert.Contains(t, got, away[5], "the day under its minimum is told")
@@ -44,7 +44,7 @@ func TestSelectBlock_KeepsChangedMealsAndCookingWhenCut(t *testing.T) {
 		f(classWarn, kindWarn, statusUnknown, "New warning: Wed 2 Dec dinner: cooked more than once this week."),
 	}
 	got = selectBlock(replan)
-	assert.Len(t, got, maxBlock)
+	assert.Len(t, got, maxBlock+1, "the cooking line is told outside the cap (V63 b)")
 	for _, i := range []int{0, 1, 2} {
 		assert.Contains(t, got, replan[i])
 	}
@@ -75,7 +75,7 @@ func TestSelectBlock_DayUnderItsMinimumIsNeverCut(t *testing.T) {
 		under,
 	}
 	got := selectBlock(all)
-	assert.Len(t, got, maxBlock)
+	assert.Len(t, got, len(all), "what moved and the minimum are told outside the cap (V63 b)")
 	assert.Contains(t, got, under)
 	assert.True(t, slices.ContainsFunc(got, func(f fact) bool { return f.Class == classChanged && f.Kind == kindMeal }), "a changed meal survives: %+v", got)
 }
@@ -111,9 +111,9 @@ func TestSelectBlock_ThreeDaysUnderTheirMinimumKeepAChangedMeal(t *testing.T) {
 	}
 }
 
-// More must lines than places: the block still has five lines at most and a
-// changed meal stays.
-func TestSelectBlock_TooManyMustLinesStayWithinTheCapAndKeepAChangedMeal(t *testing.T) {
+// More must lines than the cap: every one is told (V63 b) and a changed meal
+// stays.
+func TestSelectBlock_EveryMustLineIsToldAndAChangedMealStays(t *testing.T) {
 	t.Parallel()
 	all := []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: "Mon 23 Nov lunch: no meal any more.", DE: "x"}}
 	for i := 0; i < 6; i++ {
@@ -121,7 +121,7 @@ func TestSelectBlock_TooManyMustLinesStayWithinTheCapAndKeepAChangedMeal(t *test
 		all = append(all, fact{Class: classWorse, Kind: kindDay, Status: statusUnder, Must: true, Key: "day:" + d, EN: d + " is under the day's minimum of 400 kcal.", DE: "x"})
 	}
 	got := selectBlock(all)
-	assert.LessOrEqual(t, len(got), maxBlock)
+	assert.Len(t, got, len(all), "every day under its minimum is told (V63 b)")
 	assert.Equal(t, classChanged, got[0].Class, "the changed meal stays")
 }
 

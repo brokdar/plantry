@@ -477,7 +477,7 @@ func leftovers(bs, as planning.State, sink *factSink, changed []reportMeal) {
 			day := now.cooked.Format("Mon 2 Jan")
 			switch {
 			case math.Abs(free) <= 0.005 && math.Abs(was.portions-now.portions) >= 0.005:
-				sink.add(classMoved, kindLeftover, statusOK,
+				sink.addDay(day, classMoved, kindLeftover, statusOK,
 					fmt.Sprintf("%s: cook %s of the %s (was %s).", day, portionWord(now.portions), food.Quote(now.dish), fmtNum(was.portions)),
 					fmt.Sprintf("%s: %s von %s kochen (statt %s).", deDay(day), dePortions(now.portions), deQuote(now.dish), fmtComma(was.portions)))
 			case free > 0.005:

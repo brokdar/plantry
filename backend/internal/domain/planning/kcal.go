@@ -164,15 +164,21 @@ func (x *index) computeAccounts(days []time.Time) []DayKcal {
 		cells, dayPlates := cellsBy[dayOf(d)], platesBy[dayOf(d)]
 		dk.shares, dk.shareTotal = daySlotShares(s, cells)
 		dk.shift = x.routineShift(&dk, cells, dayPlates)
-		totalShare, unplanned := 0.0, 0.0
+		totalShare, unplanned, atHome, hasFull := 0.0, 0.0, false, false
 		for _, c := range cells {
 			dk.Meals++
+			hasFull = hasFull || x.mealOf(c.SlotID) == mealFull
 			totalShare += dk.shares[c.SlotID]
 			if c.Mode == availability.ModeNone {
 				unplanned += dk.shares[c.SlotID]
 				continue
 			}
 			dk.Planned++
+			// Food at home: a planned non-routine meal, or a routine meal-kind
+			// slot that holds a plate (V63 c). The kind decides, not the name.
+			if c.Mode != availability.ModeRoutine || (x.mealOf(c.SlotID) == mealFull && len(x.byCell[idOf(c.Key())]) > 0) {
+				atHome = true
+			}
 			switch {
 			case s.lightMeal(c.Date, c.SlotID):
 				lightBase += dk.mealShare(c.SlotID)
@@ -188,7 +194,13 @@ func (x *index) computeAccounts(days []time.Time) []DayKcal {
 				}
 			}
 		}
-		if dk.Active() == 0 {
+		// A day away (nothing planned) and a routine-only day (every lunch and
+		// dinner away, none or an unplated routine, and only routines left, such
+		// as a routine breakfast; spec v1.5 SB3, V63 c) are not judged: no floor,
+		// no H9, no range, not in the week.
+		// The no-food-at-home rule needs a meal-kind slot on the day: a household
+		// of light-kind slots only (breakfast only) is judged on what it plans.
+		if dk.Active() == 0 || (hasFull && !atHome) {
 			continue
 		}
 		if totalShare > 0 {
