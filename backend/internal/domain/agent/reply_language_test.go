@@ -21,15 +21,15 @@ func TestPrompt_ReplyContract(t *testing.T) {
 		for _, want := range []string{
 			"in the language of the user's message",
 			"at most two short sentences",
-			"no digit, weekday or date, no dish name",
-			"no question, no offer",
+			"a number or day only as the results give it, no dish name",
+			"list, question or offer",
 			"names the one you would take",
 			"Out of scope: decline in one sentence",
 			"the Recipes page", "the Shopping page", "the Settings page", "the Planner", "the Plan board",
 		} {
 			assert.Contains(t, prompt, want, "locale %q", locale)
 		}
-		for _, gone := range []string{"Say every item of report.tell", "report.tell is content, not wording", "as a question", "I can also ...: say so if you want it"} {
+		for _, gone := range []string{"Say every item of report.tell", "report.tell is content, not wording", "as a question", "I can also ...: say so if you want it", "no digit"} {
 			assert.NotContains(t, prompt, gone, "locale %q", locale)
 		}
 	}

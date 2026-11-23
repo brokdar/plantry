@@ -61,7 +61,7 @@ func TestPrompt_MealEditRules(t *testing.T) {
 		"change only what the user asked", "the program tells it and offers the fix", "only to clear a problem",
 		`occupant "swap"`,
 		"one away op", "A day away is not counted",
-		"find_alternatives with what main", "cite the total_minutes",
+		"find_alternatives with what main", "Apply the recommended alternative's ops at once",
 		"only do what your tools do", "logging food eaten out", "say so plainly",
 		"one change the user can undo", "all ops of a request in one call",
 	} {
@@ -81,8 +81,8 @@ func TestPrompt_V17Rules(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
 		"never infer what happens to other meals", "without a check first", "without asking \"should I save?\"",
-		"dry_run true only for a what-if question", "dish repeated this week", "carry out the request and name the warning",
-		"moves the day's target by that meal's share", "with the numbers",
+		"dry_run true only for a what-if question", "dish repeated this week", "carry out the request",
+		"moves the day's target by that meal's share",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt must mention %q", want)
@@ -98,15 +98,15 @@ func TestPrompt_SoftIssuesAreOffered(t *testing.T) {
 	prompt := compose(nil, "", time.Time{})
 	for _, want := range []string{
 		"A request is not done while a problem it caused is open",
-		"A warning is not fixed on your own: the program reports it and offers the fix",
-		"Close protein gaps by offering",
+		"is not fixed on your own: the program tells it and offers the fix",
+		"nothing is applied unasked",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt must contain %q", want)
 		}
 	}
 	// SF2: no prompt sentence lets the model write a second time; RP1: no "when in doubt".
-	for _, gone := range []string{"Close protein gaps actively", "Fix a new issue with another apply_changes call", "Fix a new problem with another apply_changes call", "When in doubt, ask once"} {
+	for _, gone := range []string{"Close protein gaps actively", "Close protein gaps by offering", "Fix a new issue with another apply_changes call", "Fix a new problem with another apply_changes call", "When in doubt, ask once"} {
 		if strings.Contains(prompt, gone) {
 			t.Errorf("prompt must not contain %q", gone)
 		}
@@ -208,7 +208,7 @@ func TestPrompt_V18(t *testing.T) {
 		"Playbook, light, filling, more protein, lower or raise a day", "Playbook, replace a dish", "Playbook, away",
 		"call find_ways (goal, plate_id or date; to_limit true", "what main", "check a fix from the issue's options",
 		"Cooking times per day", "a routine cell add none",
-		"worsened", "Report a worsened issue like a new one",
+		"A warning, new or worse",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt must mention %q", want)

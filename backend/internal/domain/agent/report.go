@@ -1000,7 +1000,7 @@ func withReport(svc Services, h ToolHandler, undo bool) ToolHandler {
 			// change: every warning open now existed then, so none is new or
 			// worse; they are all earlier ones.
 			r.EarlierWarnings = len(afterEv.Issues)
-			r.Note = "Undone: the plan is exactly as it was before that change, and the warnings open now were open then. Say what is back; list no warning."
+			r.Note = "Undone: the plan is exactly as it was before that change, and the warnings open now were open then: list no warning."
 			for i := range r.Days {
 				r.Days[i].Status = ""
 			}

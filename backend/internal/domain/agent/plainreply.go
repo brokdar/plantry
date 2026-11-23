@@ -373,7 +373,7 @@ func sentences(s string) []string {
 	rs := []rune(strings.TrimSpace(s))
 	for i, r := range rs {
 		cur = append(cur, r)
-		if r == '.' && i < len(rs)-1 && dateDot(rs, i) {
+		if r == '.' && i < len(rs)-1 && (dateDot(rs, i) || abbrevDot(rs, i)) {
 			continue
 		}
 		if (r == '.' || r == '!' || r == '?') && (i == len(rs)-1 || unicode.IsSpace(rs[i+1])) {
@@ -385,6 +385,35 @@ func sentences(s string) []string {
 		out = append(out, t)
 	}
 	return out
+}
+
+// abbreviations end with a dot that ends no sentence ("ca.", "z. B.", "bzw.").
+var abbreviations = map[string]bool{"ca": true, "bzw": true, "ggf": true, "evtl": true, "inkl": true, "vgl": true, "z": true, "z.b": true, "u": true, "u.a": true, "e.g": true, "i.e": true}
+
+// abbrevDot reports whether the dot at rs[i] closes an abbreviation: one of
+// abbreviations, or the second letter of "z. B." and "u. a.".
+func abbrevDot(rs []rune, i int) bool {
+	start := i
+	for start > 0 && !unicode.IsSpace(rs[start-1]) {
+		start--
+	}
+	word := strings.ToLower(strings.TrimLeft(string(rs[start:i]), "("))
+	if abbreviations[word] {
+		return true
+	}
+	if word != "b" && word != "a" {
+		return false
+	}
+	p := start
+	for p > 0 && unicode.IsSpace(rs[p-1]) {
+		p--
+	}
+	q := p
+	for q > 0 && !unicode.IsSpace(rs[q-1]) {
+		q--
+	}
+	prev := strings.ToLower(strings.TrimLeft(string(rs[q:p]), "("))
+	return (word == "b" && prev == "z.") || (word == "a" && prev == "u.")
 }
 
 // monthWord is a month name or its abbreviation, German or English.
@@ -462,8 +491,11 @@ var (
 // the cooking and the leftovers, and the one offer is code-rendered (G4, CL3,
 // CL4). A narrow vocabulary check in English and German, not a parser.
 var (
-	modelCookingWords = regexp.MustCompile(`(?i)\b(cook\w*|batch(es)?|leftovers?|left ?overs?|fresh(ly)?|portions? (are |is )?left|kochen|koch\w*|gekocht\w*|kochzeit\w*|reste?|übrig\w*|frisch\w*)\b`)
-	modelOptionWords  = regexp.MustCompile(`(?i)\b(if you|only if|unless|i can|i could|i'?d (suggest|recommend)|you (could|can|may|might)|want me to|would you like|shall i|should i|alternatively|instead|otherwise|falls du|wenn du|nur wenn|ich kann|ich könnte|du kannst|du könntest|möchtest du|willst du|soll ich|stattdessen|alternativ|sonst)\b`)
+	modelCookingWords = regexp.MustCompile(`(?i)\b(cook\w*|batch(es)?|leftovers?|left ?overs?|fresh(ly)?|portions? (are |is )?left|kochen|koch\w*|gekocht\w*|kochzeit\w*|reste[n]?|übrig\w*|frisch\w*)\b`)
+	// "I can't", "unless another meal grows", "weil der Tag sonst ..." and
+	// "instead of" (withoutComparisons) are refusals or reasons, no option.
+	modelOptionWords = regexp.MustCompile(`(?i)\b(if you|only if|unless you|i could|i'?d (suggest|recommend)|want me to|would you like|shall i|should i|alternatively|instead|otherwise|falls du|wenn du|nur wenn|ich kann|ich könnte|du kannst|du könntest|möchtest du|willst du|soll ich|stattdessen|alternativ)\b|\b(i can|you (could|can|may|might)) \w|(^|[.!?:;]\s+)sonst\b`)
+	insteadOf        = regexp.MustCompile(`(?i)\binstead of\b`)
 )
 
 // A done-claim next to a refused call (nothing saved) says what did not happen.
@@ -516,6 +548,10 @@ func contradicts(text string, facts []fact, nothingSaved bool) bool {
 	return false
 }
 
+// withoutComparisons drops "instead of", a comparison ("100 g instead of 200 g"),
+// before the option check.
+func withoutComparisons(text string) string { return insteadOf.ReplaceAllString(text, " ") }
+
 // lintModelText reports why the model's text cannot go out next to the block, or
 // "" when it can: a planner word, a number the block or the tool results do not
 // back (v1.4 P-7; on a turn without a block the user's message backs one too), a
@@ -558,7 +594,7 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 		if modelCookingWords.MatchString(text) {
 			return "cooking_claim"
 		}
-		if modelOptionWords.MatchString(text) {
+		if modelOptionWords.MatchString(withoutComparisons(text)) {
 			return "option"
 		}
 		lower := strings.ToLower(blockText)

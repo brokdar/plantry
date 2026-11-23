@@ -40,7 +40,7 @@ func toolUndoLastChange(svc Services) Tool {
     }`)
 	return Tool{
 		Name: undoLastChangeName,
-		Description: "Undo the newest change you made in this conversation that is not undone yet, exactly as it was: the same meals, the same cooking batches and leftovers. Use it whenever the user asks to undo, revert or take back what you just did (count 2 for \"both\"); never rebuild the old state by hand with apply_changes, that loses batch links. After it, tell the user in plain words what is back (use restored), or why it could not be undone. " +
+		Description: "Undo the newest change you made in this conversation that is not undone yet, exactly as it was: the same meals, the same cooking batches and leftovers. Use it whenever the user asks to undo, revert or take back what you just did (count 2 for \"both\"); never rebuild the old state by hand with apply_changes, that loses batch links. " +
 			"Takes no ids. Returns JSON {undone:int, restored:[string] (the meals and what they are again), message, refused?:{reason, what_to_do}}; refused is set when the plan was changed since or a meal is confirmed now, and nothing of that change was touched.",
 		Schema: schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
@@ -77,12 +77,12 @@ func toolUndoLastChange(svc Services) Tool {
 				case errors.Is(err, domain.ErrAIChangeStale):
 					out.Refused = &undoRefusal{
 						Reason: "The plan was changed since that change (by the user on the board or by a later edit), so putting it back exactly would overwrite that edit.",
-						WhatTo: "Nothing was changed. The user can ask for the meals they want back and you change them with apply_changes (say that a cooking batch may need a fresh start), or undo by hand on the board.",
+						WhatTo: "Nothing was changed. The user can ask for the meals they want back and you change them with apply_changes, or undo by hand on the board.",
 					}
 				case errors.Is(err, domain.ErrAIChangeConfirmed):
 					out.Refused = &undoRefusal{
 						Reason: "A meal or cooking batch of that change is confirmed now.",
-						WhatTo: "Nothing was changed. Ask the user whether to unlock it (unlock), then undo again.",
+						WhatTo: "Nothing was changed. Call unlock for it; undo again after the user's yes.",
 					}
 				case errors.Is(err, domain.ErrAIChangeUndone):
 					out.Refused = &undoRefusal{Reason: "That change was undone already (on the board).", WhatTo: "Nothing more to do for it."}

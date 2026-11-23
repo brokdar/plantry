@@ -100,9 +100,9 @@ func recommend(ways, offers []planning.Way, toLimit bool) {
 }
 
 // adviceFor builds what a plain apply_changes call (no goal) tells the model
-// about what it left: when the ops made issues new it says to report them and
-// offer the recommended fix as a question, applying nothing unasked, and for a
-// dish that now repeats on another plate it offers a verified replacement.
+// about what it left: the program tells new issues and their offer (G4), the
+// model applies nothing unasked; for a dish that now repeats on another plate
+// it offers a verified replacement.
 func adviceFor(ctx context.Context, svc Services, w window.Window, before, after planning.Evaluation, dry bool, applied []map[string]any) (string, []map[string]any) {
 	was := issueMap(before.Issues)
 	var fresh []planning.Issue
@@ -190,7 +190,10 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 	}
 	// A check says what the change would do; a saved change says what it did.
 	// The offer is the extra step: it is never applied unasked.
-	lead, tail := "the change is done as asked and", "; do not apply the offer unasked"
+	lead, tail, told := "the change is done as asked and", "; do not apply the offer unasked", ": the program tells it and its offer"
+	if len(offers) > 0 {
+		told = ": the program tells it and offers offers[0]"
+	}
 	var what string
 	switch {
 	case repeated:
@@ -208,32 +211,26 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 	}
 	if dry {
 		// Warnings never stop a requested change: it is saved, then reported.
-		return "NOT saved (a check). A question about what would happen: answer from this result. A requested change: save it now with the same ops and dry_run false, never ask first; it would " + what + ", which you then report", offers
+		return "NOT saved (a check). A question about what would happen: answer from this result. A requested change: save it now with the same ops and dry_run false, never ask first; it would " + what + ", which the program then tells", offers
 	}
 	if meat != "" && !hard {
-		text := lead + " now " + meat + ": tell the user"
-		if len(offers) > 0 {
-			text += ", present offers[0] (a meat meal swapped for a vegetarian one) as your recommended way to balance it"
-		} else {
-			text += " and offer to swap a meat meal for a vegetarian one"
-		}
-		return text + tail, offers
+		return lead + " now " + meat + told + tail, offers
 	}
 	switch {
 	case repeated:
-		return lead + " now repeats a dish: tell the user, present offers[0] as your recommended way out" + tail, offers
+		return lead + " now repeats a dish" + told + tail, offers
 	case hard && len(offers) > 0:
-		return lead + " left a day under its minimum: tell the user plainly and present offers[0] as your closing offer ('I can also ...: say so if you want it')" + tail, offers
+		return lead + " left a day under its minimum" + told + tail, offers
 	case hard:
-		return lead + " left a day under its minimum and no checked fix reaches it: tell the user plainly, with the shortfall in kcal; offer no fix, name none", nil
+		return lead + " left a day under its minimum and no checked fix reaches it" + told + "; offer no fix, name none", nil
 	case other && options:
-		return lead + " left a problem open (see issues.new): tell the user plainly and state the option marked recommended as your closing offer ('I can also ...: say so if you want it')" + tail, nil
+		return lead + " left a problem open (see issues.new)" + told + tail, nil
 	case other:
-		return lead + " left a problem open (see issues.new) and no checked fix exists: tell the user plainly; offer no fix, name none", nil
+		return lead + " left a problem open (see issues.new) and no checked fix exists" + told + "; offer no fix, name none", nil
 	case options:
-		return lead + " made new issues: report them and state the option marked recommended as your closing offer ('I can also ...: say so if you want it')" + tail, nil
+		return lead + " made new issues" + told + tail, nil
 	}
-	return lead + " made new issues: report them plainly", nil
+	return lead + " made new issues" + told, nil
 }
 
 // repeatedPlate is the latest draft plate that eats the dish a repeat warning
@@ -352,9 +349,9 @@ func sideClashOffer(ctx context.Context, svc Services, w window.Window, in apply
 
 // clashNext puts the clash into the next-step text: told, offered, never done.
 func clashNext(next string, offer map[string]any, dry bool) string {
-	text := fmt.Sprintf("the swap is done as asked and nothing else was changed; tell the user plainly that %v, and offer offers[0] (%v) as your one recommended option; apply it only on a yes", offer["clash"], offer["what"])
+	text := fmt.Sprintf("the swap is done as asked and nothing else was changed; say plainly that %v; the program offers offers[0] (%v): apply it only on a yes", offer["clash"], offer["what"])
 	if dry {
-		text = "the swap as asked changes nothing else; after saving it, tell the user that " + fmt.Sprint(offer["clash"]) + " and offer offers[0] (" + fmt.Sprint(offer["what"]) + ") only on a yes"
+		text = "the swap as asked changes nothing else; after saving it, say that " + fmt.Sprint(offer["clash"]) + "; the program offers offers[0] (" + fmt.Sprint(offer["what"]) + "): apply it only on a yes"
 	}
 	if next == "" {
 		return text

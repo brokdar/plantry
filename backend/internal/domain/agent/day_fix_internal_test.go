@@ -19,6 +19,6 @@ func TestNextStep_StopsShortClosesWithTheRecommendedOffer(t *testing.T) {
 	}
 	res := planning.WayResult{Goal: planning.GoalLighter, MaxKcal: 550, FloorKcal: 1650}
 	got := nextStep(ways, offers, res, false)
-	assert.Contains(t, got, "END YOUR REPLY with the recommended offer")
-	assert.Contains(t, got, "I can also Tue dinner: halve the salmon; the day would then hold 1825 kcal")
+	assert.Contains(t, got, "the program offers the recommended one")
+	assert.Contains(t, got, "(Tue dinner: halve the salmon; the day would then hold 1825 kcal)")
 }

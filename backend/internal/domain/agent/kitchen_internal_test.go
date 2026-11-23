@@ -73,7 +73,7 @@ func TestAdviceFor_NothingUnasked(t *testing.T) {
 		want  string
 	}{
 		"nothing new":     {planning.Evaluation{}, ""},
-		"a soft issue":    {planning.Evaluation{Issues: []planning.Issue{soft}}, "state the option marked recommended as your closing offer"},
+		"a soft issue":    {planning.Evaluation{Issues: []planning.Issue{soft}}, "the program tells it and its offer"},
 		"a day under min": {planning.Evaluation{Issues: []planning.Issue{floor, soft}}, "under its minimum"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -101,7 +101,7 @@ func TestAdviceFor_WeekMeat(t *testing.T) {
 	ctx := context.Background()
 	next, _ := adviceFor(ctx, Services{}, planningWindow, ev(321), ev(471), false, nil)
 	assert.Contains(t, next, "the week's meat goes from 321 to 471 g, over the 300 g limit")
-	assert.Contains(t, next, "swap a meat meal for a vegetarian one")
+	assert.Contains(t, next, "the program tells it")
 	dry, _ := adviceFor(ctx, Services{}, planningWindow, ev(321), ev(471), true, nil)
 	assert.Contains(t, dry, "never ask first")
 	small, _ := adviceFor(ctx, Services{}, planningWindow, ev(321), ev(325), false, nil)
