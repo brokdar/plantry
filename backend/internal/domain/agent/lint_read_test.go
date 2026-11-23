@@ -10,7 +10,7 @@ import (
 // readTurn is a read-only turn whose plan state holds the given figures and
 // dates (the days the code wrote in the prompt or a tool result).
 func readTurn(user string, figures []string, dates ...dateKey) replyTurn {
-	t := replyTurn{user: user, numbers: map[string]bool{}, state: map[string]bool{}, dates: map[dateKey]bool{}}
+	t := replyTurn{year: 2026, user: user, numbers: map[string]bool{}, state: map[string]bool{}, dates: map[dateKey]bool{}}
 	for _, f := range figures {
 		t.state[f] = true
 	}
@@ -129,4 +129,33 @@ func TestSentences_GermanNumericDateIsNoSentenceEnd(t *testing.T) {
 	t.Parallel()
 	assert.Equal(t, []string{"Nach dem 21.11. ist alles frei.", "Fertig."}, sentences("Nach dem 21.11. ist alles frei. Fertig."))
 	assert.Equal(t, []string{"Das ist am 21.11.", "Fertig."}, sentences("Das ist am 21.11. Fertig."), "before an uppercase word it ends")
+}
+
+// PR #176 review (G4 lint, RP4): a number after a date is no year; it is a
+// quantity the lint checks.
+func TestLint_ANumberAfterADateIsNotItsYear(t *testing.T) {
+	t.Parallel()
+	got := composeReply("Sunday 22 Nov 2196 kcal is fine. That is it.", readTurn("kcal on Sunday?", []string{"2137"}, nov(22)))
+	assert.Equal(t, "That is it.", got)
+	got = composeReply("On Nov 22, 2196 kcal is the total. That is it.", readTurn("kcal on Sunday?", []string{"2137"}, nov(22)))
+	assert.Equal(t, "That is it.", got)
+}
+
+// PR #176 review: a decimal is no date.
+func TestLint_DecimalsAreNoDates(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, []string{"The day has 12.5 g.", "3 meals remain."}, sentences("The day has 12.5 g. 3 meals remain."))
+	assert.Equal(t, []string{"Ich habe 12.5.", "3 Mahlzeiten gefunden."}, sentences("Ich habe 12.5. 3 Mahlzeiten gefunden."))
+	assert.Equal(t, []string{"Es sind 40.13.", "Fertig."}, sentences("Es sind 40.13. Fertig."))
+	// 12.5. with May 12 known and no backing figure is a quantity: it is checked.
+	got := composeReply("Das sind 12.5. Das ist gut.", readTurn("Wie viel Eiweiß?", nil, dateKey{time.May, 12}))
+	assert.Equal(t, "Das ist gut.", got)
+	assert.Equal(t, "Nach dem 21.11. ist alles frei.", composeReply("Nach dem 21.11. ist alles frei.", readTurn("frei?", nil, nov(21))))
+}
+
+// PR #176 review: the weekday of a known date is still checked.
+func TestLint_WeekdayOfAKnownDateIsChecked(t *testing.T) {
+	t.Parallel()
+	got := composeReply("Saturday 29 November comes to 2137 kcal. That is fine.", readTurn("kcal on Sunday?", []string{"2137"}, nov(29)))
+	assert.Equal(t, "That is fine.", got)
 }

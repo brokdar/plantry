@@ -117,6 +117,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 	turnReply := replyTurn{user: req.UserText, numbers: map[string]bool{}, locale: req.Locale, foods: req.FoodNames, earlier: earlierUserTexts(req.History), state: map[string]bool{}, dates: map[dateKey]bool{}}
 	stateNumbers(req.SystemPrompt, turnReply.state)
 	datesIn(planState(req.SystemPrompt), turnReply.dates, false)
+	turnReply.year = isoYear(planState(req.SystemPrompt))
 	datesIn(req.UserText, turnReply.dates, true)
 	for {
 		if requests++; requests > MaxRequests {
