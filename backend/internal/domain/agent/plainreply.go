@@ -195,15 +195,41 @@ func mergeBlock(a, b *replyBlock) *replyBlock {
 	case b == nil:
 		return a
 	}
-	// A later write's cooking of a day is the turn's last word on it: the
-	// earlier write's cooking lines of that day are no longer true (V72).
-	later := map[string]bool{}
+	// An earlier cooking line is no longer true when the later write tells the
+	// same cooking time again, says the day cooks nothing, or moved that
+	// cooking elsewhere (its line says "cooked <day> <meal> before"). A line
+	// for another cooking time of the same day stays (V72, review fix).
+	type cell struct{ day, meal string }
+	told := map[cell]bool{}
+	var movedFrom []string
 	for _, f := range b.facts {
-		if d := cookDay(f); d != "" {
-			later[d] = true
+		if d, m := cookLineCell(f); d != "" {
+			told[cell{d, m}] = true
+			if i := strings.Index(f.EN, " (cooked "); i >= 0 {
+				movedFrom = append(movedFrom, f.EN[i:])
+			}
 		}
 	}
-	earlier := slices.DeleteFunc(slices.Clone(a.facts), func(f fact) bool { return later[cookDay(f)] })
+	dayTold := func(day string) bool {
+		for c := range told {
+			if c.day == day {
+				return true
+			}
+		}
+		return false
+	}
+	earlier := slices.DeleteFunc(slices.Clone(a.facts), func(f fact) bool {
+		d, m := cookLineCell(f)
+		switch {
+		case d == "":
+			return false
+		case m == "": // the earlier line is day-wide
+			return dayTold(d)
+		case told[cell{d, ""}] || told[cell{d, m}]:
+			return true
+		}
+		return slices.ContainsFunc(movedFrom, func(x string) bool { return strings.Contains(x, " (cooked "+d+" "+m+" before)") })
+	})
 	out := &replyBlock{facts: selectBlock(append(earlier, b.facts...)), offer: a.offer, nothingSaved: a.nothingSaved && b.nothingSaved}
 	if b.offer != nil {
 		out.offer = b.offer
@@ -217,7 +243,7 @@ func mergeBlock(a, b *replyBlock) *replyBlock {
 // nothing (V73 (c), tune-v2 g2-replan-01: regenerate, undo, a refused replace
 // told the replan's add and remove lines under "Nothing changed").
 func (t *replyTurn) addWrite(tool string, saved bool, b *replyBlock) {
-	if tool == "undo_last_change" && len(t.undoable) > 0 {
+	if tool == "undo_last_change" && saved && len(t.undoable) > 0 {
 		t.block = t.undoable[len(t.undoable)-1]
 		t.undoable = t.undoable[:len(t.undoable)-1]
 		return
@@ -228,20 +254,39 @@ func (t *replyTurn) addWrite(tool string, saved bool, b *replyBlock) {
 	t.block = mergeBlock(t.block, b)
 }
 
-// cookDay is the day a cooking line tells ("Thu 26 Nov at lunch you cook ...",
-// "Thu 26 Nov: nothing is cooked."), "" for any other line.
-func cookDay(f fact) string {
+// cookLineCell is the day and meal a cooking line tells ("Thu 26 Nov at lunch you
+// cook ..."), the day with no meal for a day-wide line ("Thu 26 Nov: nothing is
+// cooked."), "" for any other line.
+func cookLineCell(f fact) (day, meal string) {
 	if f.Class != classMoved || f.Kind != kindCook {
-		return ""
+		return "", ""
 	}
 	colon := strings.Index(f.EN, ":")
 	if i := strings.Index(f.EN, " at "); i > 0 && (colon < 0 || i < colon) {
-		return f.EN[:i]
+		rest := f.EN[i+4:]
+		if j := strings.Index(rest, " you cook"); j > 0 {
+			return f.EN[:i], rest[:j]
+		}
+		return f.EN[:i], "?"
 	}
 	if colon > 0 {
-		return f.EN[:colon]
+		return f.EN[:colon], ""
 	}
-	return ""
+	return "", ""
+}
+
+// writeSaved says whether a write tool's call saved something: a recorded
+// change, for an undo (which records none) at least one change undone.
+func writeSaved(tool string, output json.RawMessage, change *Change, b *replyBlock) bool {
+	if b.nothingSaved {
+		return false
+	}
+	if tool == "undo_last_change" {
+		var obj map[string]any
+		_ = json.Unmarshal(output, &obj)
+		return num(obj["undone"]) > 0
+	}
+	return change != nil
 }
 
 var writeTools = map[string]bool{"apply_changes": true, "undo_last_change": true, "regenerate": true, "apply_preset": true}

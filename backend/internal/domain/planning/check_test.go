@@ -762,3 +762,26 @@ func TestCheck_H8CountsEarlierCooksAgainstEligibility(t *testing.T) {
 		assert.Equal(t, planning.SeverityWarning, is.Severity)
 	}
 }
+
+// Review fix (S1): the start plan's dish-variety repeats are counted the way a
+// run's merged state judges them. An in-window repeat is a warning on the
+// persisted plan but a violation after the merge, so it counts at the start.
+func TestStartVarietyRepeats_CountsAnInWindowRepeat(t *testing.T) {
+	s := baseState()
+	manyMains(&s, 5)
+	s.Sessions = []planning.Session{
+		persistedSession(1, chili, fri, dinner, 1, false),
+		persistedSession(2, chili, sat, dinner, 1, false),
+	}
+	s.Plates = []planning.Plate{
+		persisted(10, fri, dinner, false, chili, 1),
+		persisted(11, sat, dinner, false, chili, 2),
+	}
+	tgt := windowTarget(s)
+	h8 := only(planning.Check(s, tgt), "H8")
+	require.NotEmpty(t, h8, "the persisted plan reports the repeat")
+	for _, is := range h8 {
+		assert.Equal(t, planning.SeverityWarning, is.Severity, "as a warning only")
+	}
+	assert.Equal(t, len(h8), planning.StartVarietyRepeats(s, tgt), "the run counts it at the start")
+}

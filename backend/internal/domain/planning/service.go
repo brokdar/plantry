@@ -1001,11 +1001,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		}
 		stored = st.Light
 		st.Light = MergeLight(stored, j.light)
-		for _, is := range openHard(st, j.target) {
-			if is.Rule == "H8" {
-				startH8++
-			}
-		}
+		startH8 = startVarietyRepeats(st, j.target)
 		if j.side != nil {
 			for _, is := range openHard(st, j.target) {
 				sideOpen[hardKey(is)] = true
@@ -1302,9 +1298,24 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	return end
 }
 
+// startVarietyRepeats counts the dish-variety repeats of the start plan as the
+// merged state of the run judges them: the persisted check downgrades a repeat
+// inside the plan window, or of a named dish, to a warning, while a merged
+// state keeps the violation, so all three codes count (review fix).
+func startVarietyRepeats(st State, t Target) int {
+	n := 0
+	for _, is := range Check(st, t) {
+		if is.Rule == "H8" && (is.Code == CodeVarietyRepeat || is.Code == CodeVarietyRepeatWeek || is.Code == CodeVarietyRepeatNamed) {
+			n++
+		}
+	}
+	return n
+}
+
 // openRules names the hard rules a saved plan still breaks, each once with the
 // days it breaks it on. An empty cell (missing_plate) is not named: it is the
 // plan still being built, or a meal nothing can fill.
+//
 // varietyOnlyKept: the open hard issues are dish-variety repeats only, no
 // more than the plan had before the run (S1): the week is saved.
 func varietyOnlyKept(still []Issue, startH8 int) bool {

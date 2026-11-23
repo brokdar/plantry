@@ -265,6 +265,9 @@ func TestPrompt_AskOnceThenAct(t *testing.T) {
 		"Ask only when no meal, day or food is named",
 		"Once named (also in an answer), act",
 		`"change" is a new main dish`,
+		"names only a day acts on that day's dinner",
+		"Playbook, replace a dish (quicker, vegetarian, different, more protein):",
+		"(the lines after say them)",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt must contain %q", want)

@@ -48,7 +48,7 @@ func TestReplyTurn_UndoInTheTurnCancelsTheChange(t *testing.T) {
 
 	var turn replyTurn
 	turn.addWrite("regenerate", true, replan)
-	turn.addWrite("undo_last_change", false, undo)
+	turn.addWrite("undo_last_change", true, undo)
 	turn.addWrite("apply_changes", false, refused)
 	got := tellOf(turn.block.facts)
 	assert.Equal(t, []string{refused.facts[0].EN}, got, "only the refusal: the replan and its undo changed nothing")
@@ -56,7 +56,7 @@ func TestReplyTurn_UndoInTheTurnCancelsTheChange(t *testing.T) {
 
 	// An undo of a change from an earlier turn is told as it is.
 	var later replyTurn
-	later.addWrite("undo_last_change", false, undo)
+	later.addWrite("undo_last_change", true, undo)
 	assert.Equal(t, []string{undo.facts[0].EN}, tellOf(later.block.facts))
 }
 
@@ -72,4 +72,50 @@ func TestBlockOf_RegenerateNamesEveryKeptRepeat(t *testing.T) {
 	got := tellOf(selectBlock(b.facts))
 	assert.Contains(t, got, `Still repeated soon after the last time, as before, since no other dish fits: "Shakshuka" on Sun 6 Dec, "Lemon salmon with rice" on Mon 7 Dec.`)
 	assert.False(t, b.nothingSaved)
+}
+
+// Review fix: an undo that undid nothing (refused, or nothing to undo) leaves
+// the turn's block, and so the change that stands, in the reply.
+func TestReplyTurn_FailedUndoKeepsTheBlock(t *testing.T) {
+	t.Parallel()
+	line := func(en string) fact {
+		return fact{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: en, DE: en}
+	}
+	replan := &replyBlock{facts: []fact{line(`Sun 22 Nov dinner: removed "Shakshuka"; added "Easy chicken curry".`)}}
+	stop := &replyBlock{nothingSaved: true, facts: []fact{{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: "Left out: undo.", DE: "x"}}}
+	var turn replyTurn
+	turn.addWrite("regenerate", true, replan)
+	turn.addWrite("undo_last_change", false, stop)
+	got := tellOf(turn.block.facts)
+	assert.Contains(t, got, replan.facts[0].EN, "the change still stands")
+
+	// writeSaved: an undo counts when it undid something, a refused one never.
+	assert.False(t, writeSaved("undo_last_change", []byte(`{"undone":0}`), nil, &replyBlock{}))
+	assert.False(t, writeSaved("undo_last_change", []byte(`{"undone":1}`), nil, stop))
+	assert.True(t, writeSaved("undo_last_change", []byte(`{"undone":1}`), nil, &replyBlock{}))
+}
+
+// Review fix: a later write that changes only one cooking time of a day keeps
+// the earlier line of the day's other cooking time; a cook moved within the day
+// leaves no stale line.
+func TestMergeBlock_CookLinesAreDroppedPerCookingTime(t *testing.T) {
+	t.Parallel()
+	cook := func(en string) fact { return fact{Class: classMoved, Kind: kindCook, Status: statusOK, EN: en, DE: en} }
+	lunch := cook(`Thu 26 Nov at lunch you cook "Soup" for Thu 26 Nov lunch.`)
+	dinner := cook(`Thu 26 Nov at dinner you cook "Pasta" for Thu 26 Nov dinner.`)
+
+	newDinner := cook(`Thu 26 Nov at dinner you cook "Curry" for Thu 26 Nov dinner.`)
+	got := tellOf(mergeBlock(&replyBlock{facts: []fact{lunch, dinner}}, &replyBlock{facts: []fact{newDinner}}).facts)
+	assert.Contains(t, got, lunch.EN, "the lunch cooking is still true")
+	assert.NotContains(t, got, dinner.EN)
+	assert.Contains(t, got, newDinner.EN)
+
+	moved := cook(`Thu 26 Nov at dinner you cook "Soup" for Thu 26 Nov lunch, Thu 26 Nov dinner (cooked Thu 26 Nov lunch before).`)
+	got = tellOf(mergeBlock(&replyBlock{facts: []fact{lunch}}, &replyBlock{facts: []fact{moved}}).facts)
+	assert.NotContains(t, got, lunch.EN, "the cook moved from lunch to dinner")
+	assert.Contains(t, got, moved.EN)
+
+	none := cook("Thu 26 Nov: nothing is cooked.")
+	got = tellOf(mergeBlock(&replyBlock{facts: []fact{lunch, dinner}}, &replyBlock{facts: []fact{none}}).facts)
+	assert.Equal(t, []string{none.EN}, got)
 }

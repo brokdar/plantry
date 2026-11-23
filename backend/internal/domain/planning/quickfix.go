@@ -23,7 +23,13 @@ func fixQuick(in ChooseInput, prop Proposal) (Proposal, []string) {
 	if len(in.State.MaxMinutes) == 0 {
 		return prop, nil
 	}
-	skip := idSet(in.Exclude)
+	// A quick swap never brings back a food the run avoids or the user removed.
+	skip := idSet(slices.Concat(in.Exclude, in.Avoid, in.AvoidBatches))
+	for id, on := range in.State.Avoid {
+		if on {
+			skip[id] = true
+		}
+	}
 	var notes []string
 	tried := map[string]bool{}
 	for range maxGuardSteps {

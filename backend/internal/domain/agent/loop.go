@@ -370,7 +370,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 					if b == nil {
 						b = savedBlock(call.ToolUseName, output)
 					}
-					turnReply.addWrite(call.ToolUseName, change != nil && !b.nothingSaved, b)
+					turnReply.addWrite(call.ToolUseName, writeSaved(call.ToolUseName, output, change, b), b)
 				}
 			}
 			view = withoutFacts(view)

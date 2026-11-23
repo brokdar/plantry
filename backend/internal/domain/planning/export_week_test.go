@@ -145,3 +145,6 @@ var OpenRulesForTest = openRules
 // EvaluateNoOptions exposes the evaluation the planner's own re-checks use:
 // the same verdicts, without the verified options of each issue.
 func EvaluateNoOptions(s State, t Target) Evaluation { return evaluateWith(s, t, false, true) }
+
+// StartVarietyRepeats exposes the start plan's repeat count of a run.
+var StartVarietyRepeats = startVarietyRepeats

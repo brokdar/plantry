@@ -400,7 +400,7 @@ func ways(s State, t Target, req WayRequest) (WayResult, error) {
 			// The search judges the day under the mark the request would store;
 			// what is told is the stored day's band, the one every way's own
 			// check and the saved plan show (a refusal stores no mark).
-			if sd, ok := w.dayEval(evaluateWith(saved, t, false, true)); ok {
+			if sd, ok := w.dayEval(Evaluate(saved, t)); ok {
 				res.BandLow, res.BandHigh = math.Round(sd.BandLow), math.Round(sd.BandHigh)
 			}
 		}
