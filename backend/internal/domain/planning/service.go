@@ -48,6 +48,11 @@ const keyHardRuleOpen = "error.plan.hard_rule_open"
 // main at both meals (v1 OQ6: it saves nothing and says so).
 const keyDayRepeat = "error.plan.day_same_dish"
 
+// keyDayMealEmpty is the error key of a day replan that would leave a meal of
+// the day empty or the day under its minimum because no KR7 fallback fits (a
+// cold plate, the day's dish twice): it saves nothing and says so.
+const keyDayMealEmpty = "error.plan.day_meal_empty"
+
 // errShuttingDown refuses a generation once Shutdown began.
 var errShuttingDown = errors.New("plan generation is shutting down")
 
@@ -994,6 +999,9 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	sideOpen := map[string]bool{}
 	// startH8 counts the dish-variety violations open before the run (S1).
 	startH8 := 0
+	// startOpen are the hard issues open before the run (SF1 (a): a day
+	// replan may leave them as they were).
+	var startOpen []Issue
 	build := func(ctx context.Context) error {
 		st, err := s.d.Builder.Build(ctx, j.w, j.today, j.from, j.to)
 		if err != nil {
@@ -1002,6 +1010,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		stored = st.Light
 		st.Light = MergeLight(stored, j.light)
 		startH8 = startVarietyRepeats(st, j.target)
+		startOpen = openHard(st, j.target)
 		if j.side != nil {
 			for _, is := range openHard(st, j.target) {
 				sideOpen[hardKey(is)] = true
@@ -1084,8 +1093,10 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		if j.side == nil {
 			var finishNotes []string
 			if isHeuristic(ch) {
+				// KR7: a meal the cooking cap left empty takes a cold plate or the day's dish.
+				prop, finishNotes = fillEmptyMeals(cin, prop, startOpen)
 				dayProp, dayNotes := guardDayMains(base, j.target, prop, idSet(j.exclude))
-				prop, finishNotes = dayProp, dayNotes
+				prop, finishNotes = dayProp, append(finishNotes, dayNotes...)
 				if len(dayNotes) > 0 {
 					// A dish changed under the heuristic's quantities: set them again.
 					var balNotes []string
@@ -1128,6 +1139,8 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		return prop, runLog
 	}
 	prop, runLog := finishPlan(j.chooser, last)
+	// fillsRan says KR7's fallbacks (fillEmptyMeals) ran on the plan kept.
+	fillsRan := isHeuristic(j.chooser)
 	// PL1b: a plan with a hard rule still open is never the result of a run:
 	// the heuristic plans it again and the notes say so.
 	if open := openHard(Merge(base, j.target, prop), j.target); !isHeuristic(j.chooser) && len(open) > 0 && j.side == nil {
@@ -1146,7 +1159,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 					what = "broke " + what
 				}
 				hprop.Notes = joinNotes(hprop.Notes, "The model's plan "+what+"; this is the heuristic plan instead.")
-				prop, runLog, last = hprop, hlog, hlast
+				prop, runLog, last, fillsRan = hprop, hlog, hlast, true
 			}
 		}
 	}
@@ -1169,6 +1182,15 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 					Notes: prop.Notes + " Nothing was saved: " + food.Quote(foodName(Merge(base, j.target, prop), other)) + " would be the main at both meals of the day and no other main or cold plate fits.",
 				}
 			}
+		}
+	}
+	// KR7 (tune-v2c g2-replan-01): a day replan never leaves a meal of the day
+	// empty or the day under its minimum; when no fallback filled it
+	// (fillEmptyMeals), nothing is saved and the notes say what stays open.
+	if j.scope.Kind == ScopeDay && j.side == nil {
+		if why := emptyDayMeals(Merge(base, j.target, prop), j.target, j.scope.Date, startOpen, fillsRan); why != "" {
+			closeStatus, closeStage = "error", "checking"
+			return RunEnd{Status: airun.StatusError, ErrorKey: keyDayMealEmpty, Notes: "Nothing was saved: " + why + "."}
 		}
 	}
 	// B-3: removing the day's plates re-anchors the batches they cooked for

@@ -637,3 +637,59 @@ func TestApplyChanges_WindowRepeatIsAWarning(t *testing.T) {
 func sqliteChange(e *planToolEnv, id int64) (*agent.Change, error) {
 	return sqlite.NewAIChangeRepo(e.db).GetChange(context.Background(), id)
 }
+
+// Round 7 R4 (tune-v2b g2-ask-16): when every alternative brings a warning, the
+// best is still recommended (spec S2/C-5: the first verified alternative is
+// applied), so the model acts instead of asking again; the program tells the
+// warning.
+func TestFindAlternatives_AWarnedBestIsRecommended(t *testing.T) {
+	t.Parallel()
+	e := newPlanToolEnv(t)
+	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "3"))
+	a, b := e.twoDinners()
+	var main plate.PlateComponent
+	for _, c := range a.Components {
+		if c.Position == plate.PositionMain {
+			main = c
+		}
+	}
+	require.NotZero(t, main.ID)
+	foods := e.mustExec("find_foods", fmt.Sprintf(`{"ids":[%d]}`, main.FoodID))["items"].([]any)
+	require.Len(t, foods, 1)
+	name := foods[0].(map[string]any)["name"].(string)
+
+	res := e.mustExec("find_alternatives", fmt.Sprintf(`{"plate_id":%d,"what":"main","constraints":{"search":%q}}`, b.ID, name))
+	alts := res["alternatives"].([]any)
+	require.NotEmpty(t, alts)
+	first := alts[0].(map[string]any)
+	require.NotEmpty(t, first["new_issues"], "the only candidate repeats a dish of the week")
+	assert.Equal(t, true, first["recommended"])
+	assert.Contains(t, first["recommended_because"], "warning")
+}
+
+// Round 7 R3: a candidate the plan copy passes and the real check refuses (here
+// it grows a batch of an accepted meal) is dropped; when that empties the list,
+// empty_reason says why instead of an empty list with no reason (tune-v2c
+// g2-replan-01: alternatives [] and the model guessed).
+func TestFindAlternatives_ARefusedCheckSaysWhy(t *testing.T) {
+	t.Parallel()
+	e := newPlanToolEnv(t)
+	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "3"))
+	a, b := e.twoDinners()
+	var main plate.PlateComponent
+	for _, c := range a.Components {
+		if c.Position == plate.PositionMain {
+			main = c
+		}
+	}
+	foods := e.mustExec("find_foods", fmt.Sprintf(`{"ids":[%d]}`, main.FoodID))["items"].([]any)
+	name := foods[0].(map[string]any)["name"].(string)
+	_, err := e.plates.Confirm(context.Background(), plate.RowSet{PlateIDs: []int64{a.ID}})
+	require.NoError(t, err)
+
+	res := e.mustExec("find_alternatives", fmt.Sprintf(`{"plate_id":%d,"what":"main","constraints":{"search":%q}}`, b.ID, name))
+	assert.Empty(t, res["alternatives"])
+	why, ok := res["empty_reason"].(map[string]any)
+	require.True(t, ok, "an emptied list carries its reason")
+	assert.Contains(t, fmt.Sprint(why["why"]), "would change an accepted meal or cooking")
+}

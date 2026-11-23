@@ -69,8 +69,28 @@ func dishChangeLines(s State, orig, final Proposal) []string {
 	cells := map[change][]string{}
 	var order []change
 	var cold []string
+	coldLine := func(fp ProposedPlate) string {
+		var parts []string
+		kcal := 0.0
+		for _, c := range fp.Components {
+			f := s.Foods[c.FoodID]
+			parts = append(parts, fmt.Sprintf("%s %s g", strings.ToLower(f.Name), num(c.Grams)))
+			kcal += f.Macros.Kcal * c.Grams / 100
+		}
+		return fmt.Sprintf("%s is a cold plate, nothing to cook: %s (about %.0f kcal).", cellShort(s, fp.Date, fp.SlotID), strings.Join(parts, ", "), math.Round(kcal/10)*10)
+	}
 	for i, fp := range final.Plates {
-		if i >= len(orig.Plates) || fp.PlateID != 0 || !orig.Plates[i].Date.Equal(fp.Date) || orig.Plates[i].SlotID != fp.SlotID {
+		if fp.PlateID != 0 {
+			continue
+		}
+		if i >= len(orig.Plates) {
+			// A meal the chooser left empty that a fallback filled with a cold plate (KR7).
+			if fp.Reason == reasonColdFill {
+				cold = append(cold, coldLine(fp))
+			}
+			continue
+		}
+		if !orig.Plates[i].Date.Equal(fp.Date) || orig.Plates[i].SlotID != fp.SlotID {
 			continue
 		}
 		from, to := mainID(s, orig.Plates[i]), mainID(s, fp)
@@ -78,14 +98,7 @@ func dishChangeLines(s State, orig, final Proposal) []string {
 			continue
 		}
 		if to == 0 {
-			var parts []string
-			kcal := 0.0
-			for _, c := range fp.Components {
-				f := s.Foods[c.FoodID]
-				parts = append(parts, fmt.Sprintf("%s %s g", strings.ToLower(f.Name), num(c.Grams)))
-				kcal += f.Macros.Kcal * c.Grams / 100
-			}
-			cold = append(cold, fmt.Sprintf("%s is a cold plate, nothing to cook: %s (about %.0f kcal).", cellShort(s, fp.Date, fp.SlotID), strings.Join(parts, ", "), math.Round(kcal/10)*10))
+			cold = append(cold, coldLine(fp))
 			continue
 		}
 		k := change{from, to}

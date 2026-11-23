@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"time"
 
@@ -245,7 +246,10 @@ func deltaOf(base, now map[string]planning.Issue) map[string]any {
 	}
 	newIs, resolved := []effectIssue{}, []effectIssue{}
 	var worse []effectWorsened
-	for k, is := range now {
+	// Keys in order, so equal inputs give equal lists (B-replay: issues of one
+	// date, rule and code came out in map order, g2-away-02, g2-swap-17).
+	for _, k := range slices.Sorted(maps.Keys(now)) {
+		is := now[k]
 		had, ok := base[k]
 		switch {
 		case !ok:
@@ -257,14 +261,15 @@ func deltaOf(base, now map[string]planning.Issue) map[string]any {
 			})
 		}
 	}
-	for k, is := range base {
+	for _, k := range slices.Sorted(maps.Keys(base)) {
+		is := base[k]
 		if _, still := now[k]; !still {
 			resolved = append(resolved, noOptions(is))
 		}
 	}
 	res := map[string]any{"total_open": len(now)}
 	for name, list := range map[string][]effectIssue{"new": newIs, "resolved": resolved} {
-		slices.SortFunc(list, func(a, b effectIssue) int {
+		slices.SortStableFunc(list, func(a, b effectIssue) int {
 			return cmp.Or(cmp.Compare(a.Date, b.Date), cmp.Compare(a.Rule, b.Rule), cmp.Compare(a.Code, b.Code))
 		})
 		if len(list) > maxEffectIssues {
@@ -274,7 +279,7 @@ func deltaOf(base, now map[string]planning.Issue) map[string]any {
 		res[name] = list
 	}
 	if len(worse) > 0 {
-		slices.SortFunc(worse, func(a, b effectWorsened) int {
+		slices.SortStableFunc(worse, func(a, b effectWorsened) int {
 			return cmp.Or(cmp.Compare(a.Date, b.Date), cmp.Compare(a.Rule, b.Rule), cmp.Compare(a.Code, b.Code))
 		})
 		if len(worse) > maxEffectIssues {

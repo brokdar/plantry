@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -265,4 +266,11 @@ func TestDebugSystemPrompt_SamePathAsChat(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, got, "Today is Monday 2026-10-26.")
 	assert.Contains(t, got, "- Sunday 2026-11-01\n")
+	// R1: the turn's language closes the prompt, computed from the message.
+	assert.True(t, strings.HasSuffix(got, "\nReply in English, every sentence.\n"), got[max(0, len(got)-80):])
+	de, err := svc.DebugSystemPrompt(context.Background(), agent.ChatRequest{
+		UserText: "Mach das Abendessen am Freitag leichter", Today: ymd(t, "2026-10-26"), Start: ymd(t, "2026-10-26"),
+	})
+	require.NoError(t, err)
+	assert.True(t, strings.HasSuffix(de, "\nReply in German, every sentence (dish names stay as they are).\n"), de[max(0, len(de)-80):])
 }

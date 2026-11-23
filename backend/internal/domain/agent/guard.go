@@ -4,10 +4,12 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -516,8 +518,16 @@ func newWarnings(before, after planning.Evaluation) []planning.Issue {
 // seen there). Clean candidates come first, in rank; a candidate that makes a
 // problem is dropped; one that only makes a warning is listed after them with
 // that warning, up to n, and is never recommended: only the first clean one is.
-func verifiedAlternatives(ctx context.Context, svc Services, w window.Window, pool []planning.Alternative, n int) []planning.Alternative {
+func verifiedAlternatives(ctx context.Context, svc Services, w window.Window, pool []planning.Alternative, n int) ([]planning.Alternative, []string) {
 	var clean, warned []planning.Alternative
+	// why holds, per blocking rule, what the real check refused (one line each),
+	// for the empty_reason of a list the check emptied.
+	var why []string
+	note := func(s string) {
+		if !slices.Contains(why, s) {
+			why = append(why, s)
+		}
+	}
 	for _, a := range pool {
 		ops, err := changeOpsOf(a.Ops)
 		if err != nil || len(ops) == 0 {
@@ -525,9 +535,16 @@ func verifiedAlternatives(ctx context.Context, svc Services, w window.Window, po
 		}
 		r, err := runApply(ctx, svc, w, applyInput{Ops: ops, DryRun: true, quiet: true}, nil)
 		if err != nil {
+			if errors.Is(err, domain.ErrRowConfirmed) {
+				note(fmt.Sprintf("%q would change an accepted meal or cooking", a.Name))
+			} else {
+				note(fmt.Sprintf("%q could not be applied in the real check", a.Name))
+			}
 			continue
 		}
-		if len(newHard(r.before, r.after)) > 0 {
+		if hard := newHard(r.before, r.after); len(hard) > 0 {
+			en, _ := hardWhyL(hard[0])
+			note(fmt.Sprintf("%q: %s", a.Name, en))
 			continue
 		}
 		if applied, ok := r.result["applied"].([]map[string]any); ok {
@@ -548,11 +565,19 @@ func verifiedAlternatives(ctx context.Context, svc Services, w window.Window, po
 	if len(out) > n {
 		out = out[:n]
 	}
-	if len(clean) > 0 {
+	switch {
+	case len(clean) > 0:
 		out[0].Recommended = true
 		out[0].Because = "the best-ranked candidate: no new problem, no new warning, no extra cooking where possible"
+	case len(out) > 0:
+		// Every candidate brings a warning: the best is still the one to apply
+		// (spec S2/C-5: the first verified alternative), and the program tells
+		// its warning (round 7 R4, tune-v2b g2-ask-16: no recommendation, so the
+		// model asked again after the user had named the meal).
+		out[0].Recommended = true
+		out[0].Because = "the best-ranked candidate; it brings a warning the program tells after the change (see new_issues)"
 	}
-	return out
+	return out, why
 }
 
 // mealName says which meal a plate is, "Wed 25 Nov dinner".

@@ -47,7 +47,17 @@ func TestFinishProposal_KeepsALightMealLight(t *testing.T) {
 			assert.LessOrEqual(t, pe.Kcal, pe.MaxKcal+0.5, "a light meal ends within its limit")
 		}
 	}
-	assert.InDelta(t, got.Plates[0].Components[0].Portions*1.0, got.Sessions[0].Portions, 1e-9, "the batch follows the plate")
+	// The empty lunch takes the day's dish again (KR7 fallback), so the batch
+	// follows every plate that eats it.
+	eaten := 0.0
+	for _, pl := range got.Plates {
+		for _, c := range pl.Components {
+			if c.SessionKey == got.Sessions[0].Key {
+				eaten += c.Portions
+			}
+		}
+	}
+	assert.InDelta(t, eaten, got.Sessions[0].Portions, 1e-9, "the batch follows the plates")
 }
 
 func TestParseProposal_ReadsAWrappedPlan(t *testing.T) {

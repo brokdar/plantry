@@ -335,10 +335,15 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 					"message_key": errorMessageKey(err),
 				}
 				var refusal markRefusal
-				if errors.As(err, &refusal) {
+				switch {
+				case errors.As(err, &refusal):
 					payload["tell"] = refusal.tell
 					turnReply.write = true
 					turnReply.block = mergeBlock(turnReply.block, refusal.block())
+				case writeTools[call.ToolUseName] && change == nil:
+					// A write the program refused saved nothing: the reply says so in
+					// code (round 7 R2, tune-v2c g2-cook_elsewhere-07 on 347b003).
+					turnReply.failed = true
 				}
 				errorPayload := withChange(mustMarshal(payload), change)
 				resultBlocks = append(resultBlocks, llm.ContentBlock{

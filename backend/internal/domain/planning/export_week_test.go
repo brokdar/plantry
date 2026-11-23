@@ -148,3 +148,12 @@ func EvaluateNoOptions(s State, t Target) Evaluation { return evaluateWith(s, t,
 
 // StartVarietyRepeats exposes the start plan's repeat count of a run.
 var StartVarietyRepeats = startVarietyRepeats
+
+// FillEmptyMeals exposes KR7's fallbacks for a meal the cooking cap left empty.
+var FillEmptyMeals = fillEmptyMeals
+
+// EmptyDayMeals exposes what a day replan would leave open on its day.
+var EmptyDayMeals = emptyDayMeals
+
+// OpenHard exposes the hard issues a plan holds.
+var OpenHard = openHard

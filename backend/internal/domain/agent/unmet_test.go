@@ -89,10 +89,11 @@ func unmetFixture() (map[int64]string, planning.State, map[string]bool) {
 	return slots, st, map[string]bool{"2026-11-22|3": true}
 }
 
-// H1 (review of PR 180): the unmet block fires only on a turn that ran no
-// tool, or only food lookups that found nothing, and whose text does not end
-// in a question; it is appended after the model's text, never a write.
-func TestUnmetTold_OnlyWithoutToolsAndWithoutAQuestion(t *testing.T) {
+// H1 (review of PR 180), round 7 R2: the unmet line fires on every turn that
+// asked to change a named meal and saved nothing, whose text does not end in a
+// question; the reason says what happened (no tool, only lookups, only a
+// check, a refused write). It is appended after the model's text, never a write.
+func TestUnmetTold_EveryNoSavePathWithoutAQuestion(t *testing.T) {
 	t.Parallel()
 	slots, st, mon := unmetFixture()
 	mon = map[string]bool{"2026-11-23|3": true}
@@ -113,21 +114,49 @@ func TestUnmetTold_OnlyWithoutToolsAndWithoutAQuestion(t *testing.T) {
 	lookup := mk()
 	lookup.noteTool("find_foods", json.RawMessage(`{"search":"beef goulash"}`), json.RawMessage(`{"items":[],"total":0}`), nil)
 	assert.Contains(t, composeReply("I found no such dish.", lookup.final()), "Left out")
-	// A lookup that found something, find_ways, get_plan, a check, any error: not told.
+	// A lookup that found something, find_ways, get_plan, any read error:
+	// told, nothing was saved for it.
 	for name, out := range map[string]string{
 		"find_foods":        `{"items":[{"id":1}],"total":1}`,
 		"find_ways":         `{"offers":[{"x":1}]}`,
 		"get_plan":          `{"days":[]}`,
 		"find_alternatives": `{"items":[]}`,
-		"apply_changes":     `{"dry_run":true,"saved":false}`,
 	} {
 		turn := mk()
 		turn.noteTool(name, json.RawMessage(`{"search":"beef goulash"}`), json.RawMessage(out), nil)
-		assert.Equal(t, "Offers are in prose.", composeReply("Offers are in prose.", turn.final()), name)
+		assert.Contains(t, composeReply("Offers are in prose.", turn.final()), `Left out: the change to Mon 23 Nov dinner ("Beef" does not fit your vegetarian diet).`, name, "the diet stays the reason")
+		// Its question still stands.
+		assert.Equal(t, "Which one?", composeReply("Which one?", turn.final()), name)
 	}
-	failed := mk()
+	// Without a diet reason the line says what happened.
+	plain := "swap Monday dinner for something else please"
+	mkPlain := func() replyTurn { return replyTurn{user: plain, unmet: unmetChange(plain, mon, slots, st)} }
+	require.NotNil(t, mkPlain().unmet)
+	failed := mkPlain()
 	failed.noteTool("find_foods", nil, nil, errors.New("boom"))
-	assert.NotContains(t, composeReply("Sorry.", failed.final()), "Left out")
+	assert.Contains(t, composeReply("Sorry.", failed.final()), "Left out: the change to Mon 23 Nov dinner (nothing was saved for it).")
+	// An unlock card waits for the user: nothing is left out yet.
+	unlock := mkPlain()
+	unlock.noteTool("unlock", nil, nil, errors.New("unlock needs the user"))
+	assert.Equal(t, "Say yes on the card.", composeReply("Say yes on the card.", unlock.final()))
+	// Only a check (dry run): told so. A question of the model ("Shall I save
+	// it?") adds no Left-out line (RP2 still cuts a write turn's trailing question).
+	checked := mkPlain()
+	checked.noteTool("apply_changes", nil, json.RawMessage(`{"dry_run":true,"saved":false}`), nil)
+	checked.write = true
+	assert.Equal(t, "It would fit.", composeReply("It would fit. Shall I save it?", checked.final()))
+	got = composeReply("It would fit.", checked.final())
+	assert.Contains(t, got, nothingChangedEN)
+	assert.Contains(t, got, "(it was only checked, not saved)")
+	// A failed dry run on a turn that asked for no change has no line at all,
+	// and with a change asked for, a trailing question stands.
+	question := replyTurn{user: "would it fit if I moved the gratin?"}
+	question.noteTool("apply_changes", nil, nil, errors.New("boom"))
+	question.failed, question.write = true, true
+	assert.Equal(t, "It does not fit.", composeReply("It does not fit.", question.final()))
+	refused := mkPlain()
+	refused.failed, refused.write = true, true
+	assert.Equal(t, "Shall I try another?", composeReply("Shall I try another?", refused.final()))
 	// The block never turns the turn into a write.
 	assert.False(t, mk().final().write)
 	// DE.
