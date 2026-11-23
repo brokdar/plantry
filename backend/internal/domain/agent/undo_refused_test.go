@@ -60,3 +60,51 @@ func TestReply_RefusedUndoSaysWhy(t *testing.T) {
 	got := replyOver(t, undoLastChangeName, out, "undo both", "Done.")
 	assert.Contains(t, got, "The next change was not undone: the plan was changed since that change")
 }
+
+// PR #177 review: every refusal kind in both languages, the undoAlready kind, an
+// unknown kind (stale), and the stop appended to a block that has a report.
+func TestUndoStop_TextsOfEveryKind(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		kind, en, de string
+	}{
+		{"", "no change of this conversation is left to undo.", "in diesem Gespräch ist keine Änderung mehr rückgängig zu machen."},
+		{undoStale, "the plan was changed since that change", "der Plan wurde seit dieser Änderung geändert"},
+		{undoConfirmed, "a meal of that change is confirmed now.", "eine Mahlzeit dieser Änderung ist jetzt bestätigt."},
+		{undoAlready, "that change was undone already on the board.", "diese Änderung wurde schon auf dem Plan rückgängig gemacht."},
+		{"unheard_of", "the plan was changed since that change", "der Plan wurde seit dieser Änderung geändert"},
+	} {
+		obj := map[string]any{"undone": float64(0), "refused": map[string]any{"kind": c.kind}}
+		if c.kind == "" {
+			obj = map[string]any{"undone": float64(0)}
+		}
+		f, ok := undoStop(obj)
+		require.True(t, ok, c.kind)
+		assert.Contains(t, f.EN, "Nothing was undone: "+c.en, c.kind)
+		assert.Contains(t, f.DE, "Nichts wurde rückgängig gemacht: "+c.de, c.kind)
+		if c.kind == "" {
+			continue // undone some and no refusal: nothing was stopped
+		}
+		obj["undone"] = float64(1)
+		f, ok = undoStop(obj)
+		require.True(t, ok, c.kind)
+		assert.Contains(t, f.EN, "The next change was not undone: "+c.en, c.kind)
+		assert.Contains(t, f.DE, "Die nächste Änderung wurde nicht rückgängig gemacht: "+c.de, c.kind)
+	}
+}
+
+func TestBlockOf_UndoStopAfterAReport(t *testing.T) {
+	t.Parallel()
+	out := mustJSON(map[string]any{
+		"undone": 1, "restored": []string{"x"},
+		"refused": map[string]any{"kind": undoAlready},
+		"report":  map[string]any{"facts": []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: "Back.", DE: "Zurück."}}},
+	})
+	b, check := blockOf(out)
+	require.NotNil(t, b)
+	assert.False(t, check)
+	require.Len(t, b.facts, 2)
+	assert.Equal(t, "Back.", b.facts[0].EN)
+	assert.Equal(t, classRefused, b.facts[1].Class)
+	assert.Contains(t, b.facts[1].DE, "Die nächste Änderung wurde nicht rückgängig gemacht: diese Änderung wurde schon")
+}

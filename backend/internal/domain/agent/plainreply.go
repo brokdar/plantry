@@ -454,7 +454,7 @@ func sentences(s string) []string {
 }
 
 // abbreviations end with a dot that ends no sentence ("ca.", "z. B.", "bzw.").
-var abbreviations = map[string]bool{"ca": true, "bzw": true, "ggf": true, "evtl": true, "inkl": true, "vgl": true, "z": true, "z.b": true, "u": true, "u.a": true, "e.g": true, "i.e": true}
+var abbreviations = map[string]bool{"ca": true, "bzw": true, "ggf": true, "evtl": true, "inkl": true, "vgl": true, "z.b": true, "u.a": true, "e.g": true, "i.e": true}
 
 // abbrevDot reports whether the dot at rs[i] closes an abbreviation: one of
 // abbreviations, or the second letter of "z. B." and "u. a.".
@@ -465,6 +465,10 @@ func abbrevDot(rs []rune, i int) bool {
 	}
 	word := strings.ToLower(strings.TrimLeft(string(rs[start:i]), "("))
 	if abbreviations[word] {
+		return true
+	}
+	// The first dot of "z. B." / "u. a.": the next word is the other half.
+	if (word == "z" && followedBy(rs, i, 'b')) || (word == "u" && followedBy(rs, i, 'a')) {
 		return true
 	}
 	if word != "b" && word != "a" {
@@ -480,6 +484,16 @@ func abbrevDot(rs []rune, i int) bool {
 	}
 	prev := strings.ToLower(strings.TrimLeft(string(rs[q:p]), "("))
 	return (word == "b" && prev == "z.") || (word == "a" && prev == "u.")
+}
+
+// followedBy reports whether the dot at rs[i] is followed by a space and the
+// letter c (any case) and a dot.
+func followedBy(rs []rune, i int, c rune) bool {
+	j := i + 1
+	for j < len(rs) && unicode.IsSpace(rs[j]) {
+		j++
+	}
+	return j > i+1 && j+1 < len(rs) && unicode.ToLower(rs[j]) == c && rs[j+1] == '.'
 }
 
 // monthWord is a month name or its abbreviation, German or English.
@@ -563,8 +577,11 @@ var (
 	modelCookingWords = regexp.MustCompile(`(?i)\b(cook\w*|batch(es)?|leftovers?|left ?overs?|fresh(ly)?|portions? (are |is )?left|kochen|koch\w*|gekocht\w*|kochzeit\w*|reste[n]?|übrig\w*|frisch\w*)\b`)
 	// "I can't", "unless another meal grows", "weil der Tag sonst ..." and
 	// "instead of" (withoutComparisons) are refusals or reasons, no option.
-	modelOptionWords = regexp.MustCompile(`(?i)\b(if you|only if|unless you|i could|i'?d (suggest|recommend)|want me to|would you like|shall i|should i|alternatively|instead|otherwise|falls du|wenn du|nur wenn|ich kann|ich könnte|du kannst|du könntest|möchtest du|willst du|soll ich|stattdessen|alternativ)\b|\b(i can|you (could|can|may|might)) \w|(^|[.!?:;]\s+)sonst\b`)
-	insteadOf        = regexp.MustCompile(`(?i)\binstead of\b`)
+	modelOptionWords = regexp.MustCompile(`(?i)\b(if you|only if|unless you|i could|i'?d (suggest|recommend)|want me to|would you like|shall i|should i|alternatively|instead|otherwise|falls du|wenn du|nur wenn|ich kann|ich könnte|du kannst|du könntest|möchtest du|willst du|soll ich|stattdessen|alternativ)\b|\b(i can|you (could|can|may|might)) \w|\b(sonst )?(kann|könnte|soll) ich\b|(^|[.!?:;]\s+)sonst\b`)
+	// insteadOf is a done comparison: between quantities ("100 g instead of
+	// 200 g", "3 statt 4 Portionen") or after a statement ("is now ... instead
+	// of ..."). "Instead of the pasta, try rice" carries a proposal and stays.
+	insteadOf = regexp.MustCompile(`(?i)(\d[^.!?]*?\b(instead of|statt)\b[^.!?]*?\d|\b(is|are|was|were|now|ist|sind|jetzt|habe|have|has|hat)\b[^.!?]*?\b(instead of|statt)\b)`)
 )
 
 // A done-claim next to a refused call (nothing saved) says what did not happen.
@@ -617,8 +634,8 @@ func contradicts(text string, facts []fact, nothingSaved bool) bool {
 	return false
 }
 
-// withoutComparisons drops "instead of", a comparison ("100 g instead of 200 g"),
-// before the option check.
+// withoutComparisons drops a done comparison ("100 g instead of 200 g") before
+// the option check; an "instead of" that proposes something stays.
 func withoutComparisons(text string) string { return insteadOf.ReplaceAllString(text, " ") }
 
 // lintModelText reports why the model's text cannot go out next to the block, or

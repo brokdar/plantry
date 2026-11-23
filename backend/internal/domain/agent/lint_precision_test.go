@@ -76,3 +76,48 @@ func TestReply_HonestRefusalStaysNextToTheBlock(t *testing.T) {
 	got := composeReply("I can't plan Monday at 750 kcal: that is below the day's minimum of 1095 kcal, so I haven't changed anything.", turn)
 	assert.Contains(t, got, "I can't plan Monday at 750 kcal")
 }
+
+// PR #177 review (G4 lint, P-7): offers hiding behind "sonst", "kann ich" and a
+// leading "instead of" are dropped; a reason and a quantity comparison pass.
+func TestLint_ReviewOfferGaps(t *testing.T) {
+	t.Parallel()
+	for _, s := range []string{
+		"Der Tag liegt drunter, sonst kann ich dir Obst ergänzen.",
+		"Das geht, sonst könnte ich dir Obst ergänzen.",
+		"Das geht, sonst soll ich Obst ergänzen.",
+		"Kann ich dir eine Beilage vorschlagen? Das kann ich tun.",
+		"Instead of the pasta, try rice.",
+		"Instead of the pasta I'd go for rice.",
+		"Try the rice instead of the pasta.",
+	} {
+		assert.True(t, modelOptionWords.MatchString(withoutComparisons(s)), s)
+	}
+	for _, s := range []string{
+		"Es blieb, weil der Tag sonst unter sein Minimum gerutscht wäre.",
+		"The tofu is now 100 g instead of 200 g.",
+		"Es sind jetzt 3 Portionen statt 4 Portionen.",
+	} {
+		assert.False(t, modelOptionWords.MatchString(withoutComparisons(s)), s)
+	}
+}
+
+func TestSentences_LoneZAndUSplit(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, []string{"Plan z.", "Danach geht es weiter."}, sentences("Plan z. Danach geht es weiter."))
+	assert.Equal(t, []string{"Plan u.", "Danach."}, sentences("Plan u. Danach."))
+	s := "Eine Beilage, z. B. Brot, und u. a. Linsen."
+	assert.Equal(t, []string{s}, sentences(s))
+}
+
+// PR #177 review: the clash text names the side dish, which the lint drops from
+// the model's sentence; the program tells it, so next never asks the model to.
+func TestClashNext_ProgramTellsTheClash(t *testing.T) {
+	t.Parallel()
+	offer := map[string]any{"clash": "Rice and Pasta are two starches on one plate", "what": "drop the rice"}
+	saved := clashNext("", offer, false)
+	assert.NotContains(t, saved, "Rice and Pasta")
+	assert.Contains(t, saved, "the program tells")
+	dry := clashNext("", offer, true)
+	assert.NotContains(t, dry, "Rice and Pasta")
+	assert.Contains(t, dry, "without naming the dish")
+}

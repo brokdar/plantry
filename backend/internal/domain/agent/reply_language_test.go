@@ -21,7 +21,7 @@ func TestPrompt_ReplyContract(t *testing.T) {
 		for _, want := range []string{
 			"in the language of the user's message",
 			"at most two short sentences",
-			"a number or day only as the results give it, no dish name",
+			"a number only as the block or the results give it, a day only as the block or the user names it",
 			"list, question or offer",
 			"names the one you would take",
 			"Out of scope: decline in one sentence",

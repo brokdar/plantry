@@ -349,9 +349,9 @@ func sideClashOffer(ctx context.Context, svc Services, w window.Window, in apply
 
 // clashNext puts the clash into the next-step text: told, offered, never done.
 func clashNext(next string, offer map[string]any, dry bool) string {
-	text := fmt.Sprintf("the swap is done as asked and nothing else was changed; say plainly that %v; the program offers offers[0] (%v): apply it only on a yes", offer["clash"], offer["what"])
+	text := fmt.Sprintf("the swap is done as asked and nothing else was changed; the program tells the clash and offers offers[0] (%v): apply it only on a yes", offer["what"])
 	if dry {
-		text = "the swap as asked changes nothing else; after saving it, say that " + fmt.Sprint(offer["clash"]) + "; the program offers offers[0] (" + fmt.Sprint(offer["what"]) + "): apply it only on a yes"
+		text = "the swap as asked changes nothing else; after saving it, say plainly that the side does not suit the main, without naming the dish; the program offers offers[0] (" + fmt.Sprint(offer["what"]) + "): apply it only on a yes"
 	}
 	if next == "" {
 		return text
