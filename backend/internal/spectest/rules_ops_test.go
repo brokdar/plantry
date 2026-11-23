@@ -5,9 +5,11 @@ package spectest
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -161,11 +163,62 @@ func TestKR1_AwayKeepsOneCookingTime(t *testing.T) {
 
 type tellOut struct {
 	Report struct {
-		Tell []string `json:"tell"`
+		Tell  []string `json:"tell"`
+		Facts []struct {
+			Class int    `json:"class"`
+			Kind  string `json:"kind"`
+			EN    string `json:"en"`
+			Must  bool   `json:"must"`
+		} `json:"facts"`
+		Changed []json.RawMessage `json:"changed"`
 	} `json:"report"`
 }
 
-// RP5: the facts block has at most 5 lines (classes 2-5; refusals are item 1).
+// whatMoved are the G4.3 kinds of class 3 (cooking now elsewhere, leftover
+// portions moved or resized, the guest's portions, an away slot's energy).
+var whatMoved = map[string]bool{"cook": true, "leftover": true, "guest": true, "away": true}
+
+// dayLabel is the facts block's day name ("Mon 23 Nov").
+func dayLabel(date string) string {
+	d, _ := time.Parse("2006-01-02", date)
+	return d.Format("Mon 2 Jan")
+}
+
+// cookDays are the dates whose cooking after the write holds a cooking (dish,
+// cooking time, portions) it did not hold before: "cooking now elsewhere" and
+// batch size changes, the lines G4.3 tells per cooking time. A day that only
+// lost its cooking is not required (G4.3 names where the cooking is now).
+func cookDays(a, b planning.State) []string {
+	sig := func(s planning.State) map[string][]string {
+		out := map[string][]string{}
+		for _, ss := range s.Sessions {
+			if !s.Window.Contains(ss.CookDate) {
+				continue
+			}
+			d := ss.CookDate.Format("2006-01-02")
+			out[d] = append(out[d], fmt.Sprintf("%d/%d/%.3f", ss.FoodID, ss.CookSlotID, ss.Portions))
+		}
+		return out
+	}
+	sa, sb := sig(a), sig(b)
+	var days []string
+	for d, after := range sb {
+		for _, x := range after {
+			if !slices.Contains(sa[d], x) {
+				days = append(days, d)
+				break
+			}
+		}
+	}
+	slices.Sort(days)
+	return days
+}
+
+// RP5 / G4 as changed by spec v1.5 (b, V63): what the household must know is
+// never cut. The SF1(c) day under its minimum and every G4.3 what-moved line are
+// told outside the cap, like class 1; the cap of 5 holds for the rest of classes
+// 2-5 (changed meals, worse figures, warnings, side figures), and at least one
+// changed-meal line stays when a meal changed.
 func TestRP5_FactsBlockCap(t *testing.T) {
 	forOps(t, nil, func(t *testing.T, r opRun) {
 		var o tellOut
@@ -173,7 +226,42 @@ func TestRP5_FactsBlockCap(t *testing.T) {
 		if len(o.Report.Tell) == 0 {
 			t.Skip("no facts block")
 		}
-		assert.LessOrEqual(t, len(o.Report.Tell), 5, "facts block has %d lines", len(o.Report.Tell))
+		capped, meal := 0, false
+		for _, f := range o.Report.Facts {
+			if f.Must {
+				assert.Regexp(t, `(?i)minimum|mindest`, f.EN, "a must line is the day under its minimum")
+				continue
+			}
+			if f.Class < 2 || (f.Class == 3 && whatMoved[f.Kind]) {
+				continue
+			}
+			capped++
+			if f.Class == 2 && (f.Kind == "meal" || f.Kind == "away") {
+				meal = true
+			}
+		}
+		assert.LessOrEqual(t, capped, 5, "the capped lines (classes 2-5 without the must and what-moved lines) are %d: %q", capped, o.Report.Tell)
+		if len(o.Report.Changed) > 0 {
+			assert.True(t, meal, "a meal changed, so at least one changed-meal line stays: %q", o.Report.Tell)
+		}
+		if !r.Saved {
+			return
+		}
+		moved := ""
+		for _, f := range o.Report.Facts {
+			if f.Class == 3 && whatMoved[f.Kind] {
+				moved += f.EN + "\n"
+			}
+		}
+		for _, d := range cookDays(r.Before, r.After) {
+			assert.Contains(t, moved, dayLabel(d), "the cooking of %s changed: a what-moved line names it (G4.3, never cut): %q", d, o.Report.Tell)
+		}
+		tell := strings.Join(o.Report.Tell, "\n")
+		for _, k := range r.NewViol {
+			if p := strings.Split(k, "/"); p[0] == "H9" && len(p) > 2 {
+				assert.Regexp(t, `(?i)`+regexp.QuoteMeta(dayLabel(p[2]))+`[^\n]*(minimum|mindest)|(minimum|mindest)[^\n]*`+regexp.QuoteMeta(dayLabel(p[2])), tell, "%s ends under its minimum: the SF1(c) line is told (never cut)", p[2])
+			}
+		}
 	})
 }
 

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -76,19 +77,62 @@ func genOps(t *testing.T, hh string) []opCase {
 			add("away_meal", fmt.Sprintf("plate %d", p.ID), map[string]any{"op": "away", "date": p.Date.Format("2006-01-02"), "slot_id": p.SlotID}, true)
 		}
 	}
-	// away of the dinner on a day that already has a day-energy issue: the resolved
-	// issue must keep its before-write figures (RP9)
-	for _, is := range planning.Evaluate(s, planning.WindowTarget(s)).Issues {
-		if is.Rule != "S2" || is.Date == "" {
+	// part-away (spec v1.5 c, V63): on the days of the whole-day aways, the lunch
+	// away with the dinner left, and the dinner away with the lunch left, so a
+	// non-routine planned meal stays and the day is still judged on its planned
+	// part (SF1(c), SF4, SB3 keep their coverage now that a routine-only day is not
+	// judged).
+	dayPlate := func(ps []planning.Plate, d time.Time) (planning.Plate, bool) {
+		for _, p := range ps {
+			if p.Date.Equal(d) {
+				return p, true
+			}
+		}
+		return planning.Plate{}, false
+	}
+	for i, p := range plates {
+		if i%5 != 0 {
 			continue
 		}
+		l, okL := dayPlate(lunch, p.Date)
+		d, okD := dayPlate(dinner, p.Date)
+		if okL && okD {
+			add("away_meal", fmt.Sprintf("plate %d (dinner left)", l.ID), map[string]any{"op": "away", "date": p.Date.Format("2006-01-02"), "slot_id": l.SlotID}, true)
+			add("away_meal", fmt.Sprintf("plate %d (lunch left)", d.ID), map[string]any{"op": "away", "date": p.Date.Format("2006-01-02"), "slot_id": d.SlotID}, true)
+		}
+	}
+	// away of the dinner on a day that already has a day-energy issue: the resolved
+	// issue must keep its before-write figures (RP9). The day keeps a planned lunch
+	// where one exists, so it stays judged after the away (spec v1.5 c).
+	var issueDays []string
+	for _, is := range planning.Evaluate(s, planning.WindowTarget(s)).Issues {
+		if is.Rule == "S2" && is.Date != "" {
+			issueDays = append(issueDays, is.Date)
+		}
+	}
+	slices.SortStableFunc(issueDays, func(a, b string) int {
+		has := func(d string) int {
+			for _, l := range lunch {
+				if l.Date.Format("2006-01-02") == d {
+					return 0
+				}
+			}
+			return 1
+		}
+		return has(a) - has(b)
+	})
+	for _, day := range issueDays {
+		found := false
 		for _, p := range dinner {
-			if p.Date.Format("2006-01-02") == is.Date {
-				add("away_meal", fmt.Sprintf("plate %d (day issue)", p.ID), map[string]any{"op": "away", "date": is.Date, "slot_id": p.SlotID}, true)
+			if p.Date.Format("2006-01-02") == day {
+				add("away_meal", fmt.Sprintf("plate %d (day issue)", p.ID), map[string]any{"op": "away", "date": day, "slot_id": p.SlotID}, true)
+				found = true
 				break
 			}
 		}
-		break
+		if found {
+			break
+		}
 	}
 	// guests, remove a side, add a leaf, replace the main, set_quantity.
 	var leaf int64

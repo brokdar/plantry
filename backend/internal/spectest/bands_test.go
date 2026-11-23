@@ -4,6 +4,7 @@ package spectest
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -263,6 +264,55 @@ func TestSF1c_AwayDeficitSavedReportedWithOffer(t *testing.T) {
 			return
 		}
 		assert.Regexp(t, `(?i)"offers?"|closing|I can also|day_fix`, r.Raw, "one offer to fix it")
+	})
+}
+
+// SB3 / SF4 / SF1(c) as changed by spec v1.5 (c, V63): a day with no food at
+// home (every lunch and dinner away, default-none or an unplated routine) whose
+// only plates are routines is judged like a fully away day: it is not in the
+// evaluated days, gets no new H9, and the reply tells no "under its minimum" line
+// for it. A plated routine lunch or dinner keeps the day judged.
+func TestSB3_RoutineOnlyDayIsNotJudged(t *testing.T) {
+	forOps(t, []string{"away_day", "away_meal"}, func(t *testing.T, r opRun) {
+		if !r.Saved {
+			t.Skip("nothing saved")
+		}
+		date := r.Op["date"].(string)
+		plated := map[int64]bool{}
+		plates := 0
+		for _, p := range r.After.Plates {
+			if p.Date.Format("2006-01-02") == date {
+				plated[p.SlotID] = true
+				plates++
+			}
+		}
+		routineOnly := plates > 0
+		for _, c := range r.After.Cells {
+			if c.Date.Format("2006-01-02") != date {
+				continue
+			}
+			w, m := slotWord(r.After, c.SlotID), string(c.Mode)
+			if (w == "lunch" || w == "dinner") && (m == "plan" && plated[c.SlotID] || m == "routine" && plated[c.SlotID]) {
+				routineOnly = false // food at home: a planned or a plated routine lunch or dinner
+			}
+			if m == "plan" && plated[c.SlotID] {
+				routineOnly = false // a planned (non-routine) plate of any slot
+			}
+		}
+		if !routineOnly {
+			t.Skip("the day keeps food at home: judged")
+		}
+		for _, d := range planning.Evaluate(r.After, planning.WindowTarget(r.After)).Days {
+			assert.NotEqual(t, date, d.Date, "a routine-only day is not judged (not an evaluated day)")
+		}
+		for _, k := range r.NewViol {
+			assert.False(t, strings.HasPrefix(k, "H9/") && strings.Contains(k, date), "no H9 on a routine-only day: %s", k)
+		}
+		var o tellOut
+		_ = json.Unmarshal([]byte(r.Raw), &o)
+		for _, l := range o.Report.Tell {
+			assert.False(t, strings.Contains(l, dayLabel(date)) && regexp.MustCompile(`(?i)minimum|mindest`).MatchString(l), "no under-minimum line for a routine-only day: %q", l)
+		}
 	})
 }
 
