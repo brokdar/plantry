@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
 
@@ -82,6 +83,8 @@ func TestBuildFacts_WholeWeekAwayIsOneLinePerDay(t *testing.T) {
 	t.Parallel()
 	var r changeReport
 	var days []planning.DayEval
+	// The away op left lunch and dinner No plate (V68: only such a slot is out).
+	st := planning.State{SlotNames: map[int64]string{2: "slot.lunch", 3: "slot.dinner"}}
 	for i := 0; i < 7; i++ {
 		date := time.Date(2026, 11, 23+i, 0, 0, 0, 0, time.UTC)
 		label := dayLabel(date)
@@ -90,8 +93,9 @@ func TestBuildFacts_WholeWeekAwayIsOneLinePerDay(t *testing.T) {
 			reportMeal{Day: label, Meal: "dinner", Before: []string{"Rice 1 portion"}})
 		r.Cooking = append(r.Cooking, reportCook{Day: label})
 		days = append(days, planning.DayEval{Date: date.Format(time.DateOnly), AwayKcal: 1400})
+		st.Cells = append(st.Cells, planning.Cell{Date: date, SlotID: 2, Mode: availability.ModeNone}, planning.Cell{Date: date, SlotID: 3, Mode: availability.ModeNone})
 	}
-	in := reportInput{after: planning.Evaluation{Days: days}, facts: &factSink{}}
+	in := reportInput{after: planning.Evaluation{Days: days}, afterSt: st, facts: &factSink{}}
 	buildFacts(in, r)
 	in.facts.add(classMoved, kindCook, statusOK, `Sat 28 Nov at lunch you cook "Stew" for Sat 28 Nov lunch.`, `Samstag, 28. Nov. (Mittagessen) kochst du „Stew“ für Samstag, 28. Nov. Mittagessen.`)
 	got := selectBlock(in.facts.items)

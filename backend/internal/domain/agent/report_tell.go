@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
@@ -228,7 +229,9 @@ type dayOut struct {
 func dayOuts(in reportInput, r changeReport, awayDays map[string]bool) map[string]*dayOut {
 	goneMeals := map[string][]string{}
 	for _, m := range r.Changed {
-		if len(m.After) == 0 && !awayDays[m.Day] {
+		// Only a meal whose slot is not planned any more is out (V68): a deleted
+		// plate leaves its cell planned, so it keeps its "no meal any more" line.
+		if len(m.After) == 0 && !awayDays[m.Day] && mealOut(in.afterSt, m.Day, m.Meal) {
 			goneMeals[m.Day] = append(goneMeals[m.Day], m.Meal)
 		}
 	}
@@ -241,6 +244,25 @@ func dayOuts(in reportInput, r changeReport, awayDays map[string]bool) map[strin
 		out[day] = &dayOut{day: day, meals: goneMeals[day], kcal: d.AwayKcal}
 	}
 	return out
+}
+
+// mealOut reports whether the meal on day is a slot the plan does not hold
+// (SB3): its cell is marked away or no plate (also by default), or is a routine
+// without a plate. A cell still planned is no meal out.
+func mealOut(st planning.State, day, meal string) bool {
+	for _, c := range st.Cells {
+		if dayLabel(c.Date) != day || slotWord(st, c.SlotID) != meal {
+			continue
+		}
+		switch c.Mode {
+		case availability.ModeNone:
+			return true
+		case availability.ModeRoutine:
+			return !slices.ContainsFunc(st.Plates, func(p planning.Plate) bool { return p.Cell().Equal(c.Key()) })
+		}
+		return false
+	}
+	return false
 }
 
 // tell adds the day's one line.
