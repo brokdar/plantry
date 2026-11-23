@@ -527,7 +527,7 @@ func toolRegenerate(svc Services) Tool {
 	return Tool{
 		Name: "regenerate",
 		Description: "Let the planner choose again for part of the draft plan and wait for it, only when the user asks to plan a whole day or week again (for one dish or side use find_alternatives). Confirmed rows are kept. " +
-			"Returns JSON {run_id, status (ok|partial|error|...), error_key?, counts:{plates, sessions, cook_days, kept_confirmed}, issues:[issue], notes?, changed:[{date, slot_id, plate}], week?:{meat_g:{before, after, limit}, same_dish_twice:[string]}} (week: the meat of the whole window per person against its weekly limit, before and after the run, and the repeated dishes or dish families the week now holds) where plate has the shape of a get_plan cell plate.",
+			"Returns JSON {saved? (a finished run: the plan is saved, no confirmation needed), run_id, status (ok|partial|error|...), error_key?, counts:{plates, sessions, cook_days, kept_confirmed}, issues:[issue], notes?, changed:[{date, slot_id, plate}], week?:{meat_g:{before, after, limit}, same_dish_twice:[string]}} (week: the meat of the whole window per person against its weekly limit, before and after the run, and the repeated dishes or dish families the week now holds) where plate has the shape of a get_plan cell plate.",
 		Schema: schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -610,6 +610,7 @@ func toolRegenerate(svc Services) Tool {
 				}
 				out.OtherDays = otherCookingDays(stBefore, stAfter, scoped)
 			}
+			out.Saved = regenerateSaved
 			params["count"] = len(out.Changed)
 			if sc.Kind == planning.ScopeSide {
 				if name, ok := newSideName(before, out.Changed); ok {
@@ -709,6 +710,9 @@ func regenerateScope(ctx context.Context, svc Services, kind planning.ScopeKind,
 }
 
 type regenerateOut struct {
+	// Saved says in one sentence that a finished run's plan is in the week
+	// now: "pending" plates are saved, not waiting for a yes (V77 S-C).
+	Saved    string            `json:"saved,omitempty"`
 	RunID    int64             `json:"run_id"`
 	Status   string            `json:"status"`
 	ErrorKey string            `json:"error_key,omitempty"`
@@ -721,6 +725,9 @@ type regenerateOut struct {
 	// changed (a batch now for fewer or more meals, moved or gone).
 	OtherDays []string `json:"other_days,omitempty"`
 }
+
+// regenerateSaved is the saved sentence of a finished regenerate run.
+const regenerateSaved = "Saved: the new plan is in the week now (the user can undo it); nothing waits for a confirmation."
 
 // weekOut is what the run did to the week: the window's meat per person
 // against its limit, and the repeats the plan holds (E019).

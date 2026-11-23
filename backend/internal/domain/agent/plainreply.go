@@ -157,6 +157,9 @@ type replyTurn struct {
 	// ways is the block of the turn's last find_ways when it found nothing to
 	// apply on its own (waysBlock): told only when no write of the turn has a block.
 	ways *replyBlock
+	// unmet is told when the message asked to change a meal it names and no
+	// write ran (unmetChange): told only when the turn has no other block.
+	unmet *replyBlock
 }
 
 // final is the turn as its closing reply is composed: a turn that saved nothing
@@ -165,6 +168,9 @@ type replyTurn struct {
 func (t replyTurn) final() replyTurn {
 	if t.ways != nil && t.block == nil {
 		t.write, t.block = true, t.ways
+	}
+	if t.unmet != nil && t.block == nil && !t.write {
+		t.write, t.block = true, t.unmet
 	}
 	return t
 }
@@ -683,10 +689,20 @@ var (
 	negation  = regexp.MustCompile(`(?i)(\bnot\b|n't|\bcannot\b|\bno\b|\bnothing\b|\bnicht\b|\bkeine?\b|\bnichts\b)`)
 )
 
+// unsavedClaim says a change is not saved or waits for a confirmation ("not
+// saved until you confirm", "noch nicht gespeichert, bis du sie bestätigst").
+var unsavedClaim = regexp.MustCompile(`(?i)(\b(not|nicht)\b[^.!?]{0,30}\b(saved|stored|gespeichert|übernommen)\b|\b(until|once|after|bis|sobald|erst wenn|wenn)\b[^.!?]{0,30}\b(you|du)\b[^.!?]{0,30}\b(confirm\w*|approve\w*|bestätig\w*|freigibst))`)
+
 // contradicts reports a model text that denies what the block states.
 func contradicts(text string, facts []fact, nothingSaved bool) bool {
 	if nothingSaved && doneClaim.MatchString(text) && !negation.MatchString(text) {
 		return true
+	}
+	// A saved change is never "not saved yet" or waiting for a yes (V77 S-C,
+	// dev-v2 g2-planner-13: "Die Änderungen sind noch nicht gespeichert, bis
+	// du sie bestätigst" after a saved replan).
+	if !nothingSaved && len(facts) > 0 && !slices.ContainsFunc(facts, func(f fact) bool { return f.Class == classRefused }) && unsavedClaim.MatchString(text) {
+		return true // a part left out may truly be "not saved"
 	}
 	has := func(kind string) bool {
 		for _, f := range facts {

@@ -89,6 +89,8 @@ type chatTurn struct {
 	named map[int64]bool
 	// cells are the meals the message names ("Thursday dinner"): "date|slot".
 	cells map[string]bool
+	// dayKcal are the days the message sets to a kcal number (namedDayKcal).
+	dayKcal map[string]float64
 }
 
 type turnKey struct{}

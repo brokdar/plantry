@@ -2,6 +2,8 @@ package agent
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -108,4 +110,45 @@ func namedCells(text string, w window.Window, slotNames map[int64]string) map[st
 		}
 	}
 	return out
+}
+
+// dayKcalNumber is a kcal number in a message ("600 kcal", "650 kalorien").
+var dayKcalNumber = regexp.MustCompile(`\b(\d{3,4})\s*(?:kcal|kilokalorien|kalorien|calories|cal)\b`)
+
+// namedDayKcal are the days whose energy the message sets to a number: one
+// weekday of the window and one kcal number, and no meal word ("Saturday
+// around 600 kcal", "Dienstag etwa 650 kcal"), as date → kcal. A meal word
+// makes the number the meal's. Set from the request text, never from a model
+// argument (C-11: a day number under the day's minimum changes nothing,
+// whichever op the model picks).
+func namedDayKcal(text string, w window.Window) map[string]float64 {
+	msg := " " + diet.Fold(text) + " "
+	for _, words := range mealWords {
+		for _, x := range words {
+			if strings.Contains(msg, " "+x) {
+				return nil
+			}
+		}
+	}
+	nums := dayKcalNumber.FindAllStringSubmatch(msg, -1)
+	if len(nums) != 1 {
+		return nil
+	}
+	var days []string
+	for d := w.Start; !d.After(w.End); d = d.AddDate(0, 0, 1) {
+		for _, x := range weekdayWords[d.Weekday()] {
+			if strings.Contains(msg, " "+x) {
+				days = append(days, d.Format(time.DateOnly))
+				break
+			}
+		}
+	}
+	if len(days) != 1 {
+		return nil
+	}
+	n, err := strconv.ParseFloat(nums[0][1], 64)
+	if err != nil {
+		return nil
+	}
+	return map[string]float64{days[0]: n}
 }

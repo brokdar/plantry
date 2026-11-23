@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 
@@ -188,6 +189,9 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 	if err != nil {
 		return applyRun{}, err
 	}
+	if res, ok := underFloorRequest(ctx, pr, in.DryRun); ok {
+		return res, nil
+	}
 	if len(newHard(pr.before, pr.after)) == 0 {
 		if in.DryRun {
 			return pr, nil
@@ -309,6 +313,44 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 		res.result["next"] = fmt.Sprintf("the safe part is applied (%d of %d changes); %s", len(in.Ops)-len(skipped), len(in.Ops), left) + tell
 	}
 	return res, nil
+}
+
+// underFloorRequest refuses a call that changes a day the user's message set
+// to a kcal number under that day's minimum (C-11, NU9, V77 s-floor-00/-01:
+// "Saturday around 600 kcal" was carried out as a lighter dinner that kept
+// the day just above its minimum, "left for you to decide"). The request
+// itself is under the minimum, so nothing of it is saved, whichever op the
+// model picked; the refusal names the minimum.
+func underFloorRequest(ctx context.Context, pr applyRun, dryRun bool) (applyRun, bool) {
+	t, ok := turnFrom(ctx)
+	if !ok || len(t.dayKcal) == 0 {
+		return applyRun{}, false
+	}
+	for _, b := range pr.before.Days {
+		want, named := t.dayKcal[b.Date]
+		if !named || b.FloorKcal <= 0 || want >= b.FloorKcal-0.5 {
+			continue
+		}
+		i := slices.IndexFunc(pr.after.Days, func(a planning.DayEval) bool { return a.Date == b.Date })
+		if i < 0 || math.Abs(pr.after.Days[i].Kcal-b.Kcal) < 0.5 {
+			continue // the call leaves that day as it is
+		}
+		day := dayLabelStr(b.Date)
+		whatEN := fmt.Sprintf("taking %s to about %.0f kcal", day, want)
+		whatDE := fmt.Sprintf("%s auf etwa %.0f kcal bringen", deDay(day), want)
+		why := fmt.Sprintf("%.0f kcal is below the day's minimum of %.0f kcal", want, b.FloorKcal)
+		whyDE := fmt.Sprintf("%.0f kcal liegen unter dem Mindestwert des Tages von %.0f kcal", want, b.FloorKcal)
+		entry := map[string]any{"op": 1, "what": whatEN, "why": why}
+		for k, v := range refusedFact(whatEN, whatDE, why, whyDE) {
+			entry[k] = v
+		}
+		return applyRun{before: pr.before, after: pr.before, result: map[string]any{
+			"dry_run": dryRun, "saved": false, "applied": []any{}, "refused": why,
+			"skipped": []map[string]any{entry},
+			"next":    "nothing was saved: the user asked for " + whatEN + ", and " + why + "; the program says so and names the minimum. Change nothing else; offer only what find_ways (goal lower_day with this target_kcal) offers",
+		}}, true
+	}
+	return applyRun{}, false
 }
 
 // opJSON writes an op as the model sends it: only the fields it set.

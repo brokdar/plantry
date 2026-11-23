@@ -60,6 +60,9 @@ type RunRequest struct {
 	UserText  string
 	Locale    string
 	FoodNames []string
+	// unmet is what the reply tells when the message asks to change a meal
+	// it names and the turn writes nothing (unmetChange).
+	unmet *replyBlock
 	// Effort is the reasoning effort (ai.reasoning_effort.chat); empty: the
 	// provider default.
 	Effort string
@@ -114,7 +117,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 
 	requests, turns, conts, continuation, wrapUp := 0, 0, 0, false, false
 	// What the final reply is judged against and completed with (see composeReply).
-	turnReply := replyTurn{user: req.UserText, numbers: map[string]bool{}, locale: req.Locale, foods: req.FoodNames, earlier: earlierUserTexts(req.History), state: map[string]bool{}, dates: map[dateKey]bool{}}
+	turnReply := replyTurn{user: req.UserText, numbers: map[string]bool{}, locale: req.Locale, foods: req.FoodNames, earlier: earlierUserTexts(req.History), state: map[string]bool{}, dates: map[dateKey]bool{}, unmet: req.unmet}
 	stateNumbers(req.SystemPrompt, turnReply.state)
 	datesIn(planState(req.SystemPrompt), turnReply.dates, false)
 	turnReply.year = isoYear(planState(req.SystemPrompt))
