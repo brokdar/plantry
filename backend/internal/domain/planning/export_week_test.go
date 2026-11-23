@@ -154,3 +154,6 @@ var FillEmptyMeals = fillEmptyMeals
 
 // EmptyDayMeals exposes what a day replan would leave open on its day.
 var EmptyDayMeals = emptyDayMeals
+
+// OpenHard exposes the hard issues a plan holds.
+var OpenHard = openHard

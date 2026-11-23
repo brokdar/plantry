@@ -113,8 +113,9 @@ func TestRun_RefusedWriteSaysNothingChanged(t *testing.T) {
 		unmet                   *replyBlock
 	}{
 		{"EN, a named meal", "cook the gratin on Wednesday lunch instead", "That does not work.", "That does not work.\n\n- " + nothingChangedEN + "\n- Left out: the change to Wed 2 Dec lunch (the program refused it).", unmet},
-		{"DE, after an offer question", "Koch den Gratin stattdessen am Mittwochmittag", "Das geht so nicht. Soll ich ihn verschieben?", "Das geht so nicht. Soll ich ihn verschieben?\n\n- " + nothingChangedDE + "\n- Weggelassen: die Änderung an Mittwoch, 2. Dez. Mittagessen (das Programm hat sie abgelehnt).", unmet},
-		{"DE, no named meal, English text dropped", "Koch den Gratin bitte früher", "That does not work with the cooking times, and the gratin has to be cooked before you eat it.", "- " + nothingChangedDE + "\n- Weggelassen: die gewünschte Änderung (das Programm hat sie abgelehnt).", nil},
+		{"DE, after an offer question the question stands alone", "Koch den Gratin stattdessen am Mittwochmittag", "Das geht so nicht. Soll ich ihn verschieben?", "Das geht so nicht. Soll ich ihn verschieben?", unmet},
+		{"DE, a named meal, no question", "Koch den Gratin stattdessen am Mittwochmittag", "Das geht so nicht.", "Das geht so nicht.\n\n- " + nothingChangedDE + "\n- Weggelassen: die Änderung an Mittwoch, 2. Dez. Mittagessen (das Programm hat sie abgelehnt).", unmet},
+		{"no change was asked for: no Left-out line", "Koch den Gratin bitte früher", "Das geht so nicht mit den Kochzeiten.", "Das geht so nicht mit den Kochzeiten.", nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

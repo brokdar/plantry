@@ -139,13 +139,24 @@ func TestUnmetTold_EveryNoSavePathWithoutAQuestion(t *testing.T) {
 	unlock := mkPlain()
 	unlock.noteTool("unlock", nil, nil, errors.New("unlock needs the user"))
 	assert.Equal(t, "Say yes on the card.", composeReply("Say yes on the card.", unlock.final()))
-	// Only a check (dry run): told so, also after a question.
+	// Only a check (dry run): told so. A question of the model ("Shall I save
+	// it?") adds no Left-out line (RP2 still cuts a write turn's trailing question).
 	checked := mkPlain()
 	checked.noteTool("apply_changes", nil, json.RawMessage(`{"dry_run":true,"saved":false}`), nil)
 	checked.write = true
-	got = composeReply("It would fit. Shall I save it?", checked.final())
+	assert.Equal(t, "It would fit.", composeReply("It would fit. Shall I save it?", checked.final()))
+	got = composeReply("It would fit.", checked.final())
 	assert.Contains(t, got, nothingChangedEN)
 	assert.Contains(t, got, "(it was only checked, not saved)")
+	// A failed dry run on a turn that asked for no change has no line at all,
+	// and with a change asked for, a trailing question stands.
+	question := replyTurn{user: "would it fit if I moved the gratin?"}
+	question.noteTool("apply_changes", nil, nil, errors.New("boom"))
+	question.failed, question.write = true, true
+	assert.Equal(t, "It does not fit.", composeReply("It does not fit.", question.final()))
+	refused := mkPlain()
+	refused.failed, refused.write = true, true
+	assert.Equal(t, "Shall I try another?", composeReply("Shall I try another?", refused.final()))
 	// The block never turns the turn into a write.
 	assert.False(t, mk().final().write)
 	// DE.

@@ -2,7 +2,9 @@ package planning
 
 import (
 	"fmt"
+	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
@@ -17,6 +19,14 @@ import (
 //  2. the same dish twice: the meal eats the day's cooked dish (cooked at the
 //     earlier of the two meals), only where no hard rule breaks, so never
 //     where dish variety (H8) triggers.
+// Order (spec KR7: "With no spare portion and cook-once, in this order: cold
+// plate > an extra portion of an earlier dish > the same dish twice"): the
+// spare portion the spec's precondition names (supplyFor) and growing a batch
+// the run already proposed (growable, the "extra portion of an earlier dish")
+// are the chooser's own picks, made before a cell is left empty; this file
+// runs only on a cell the chooser left empty, so the cold plate comes first
+// and the same dish twice last. Growing a stored batch of an earlier day from
+// a day run is not done.
 // A batch of an earlier day with a spare portion is the chooser's own first
 // pick (supplyFor), so it is no fallback here. A fill must break no hard rule
 // the plan does not already break and leave the day at or above its minimum
@@ -25,12 +35,14 @@ import (
 
 // The plate reasons of the two fallbacks (stored with the plate, shown on the board).
 const (
-	reasonColdFill     = "Cold plate, nothing to cook: the day cooks once"
-	reasonSameDishFill = "The day's dish again: the day cooks once"
+	reasonColdFill     = "Cold plate, nothing to cook"
+	reasonSameDishFill = "The day's dish again"
 )
 
 // fillEmptyMeals fills the short run's empty planned meals by KR7's fallbacks.
-func fillEmptyMeals(in ChooseInput, prop Proposal) (Proposal, []string) {
+// startOpen are the hard issues open before the run (SF1 (a)): only a day
+// under its minimum that already was under it at the start may stay so.
+func fillEmptyMeals(in ChooseInput, prop Proposal, startOpen []Issue) (Proposal, []string) {
 	if distinctDays(in.Target) >= minDGEDays {
 		return prop, nil
 	}
@@ -39,17 +51,28 @@ func fillEmptyMeals(in ChooseInput, prop Proposal) (Proposal, []string) {
 	for _, c := range emptyMeals(Merge(in.State, in.Target, prop), in.Target) {
 		merged := Merge(in.State, in.Target, prop)
 		x := newIndex(merged, in.Target)
-		if next, ok := x.coldMeal(in, prop, merged, c, skip); ok {
+		why := "no dish fits this meal"
+		if capUsed(merged, in.Target, c.Date) {
+			why = "no cooking time is left that day"
+		}
+		if next, ok := x.coldMeal(in, prop, merged, c, skip, startOpen); ok {
 			prop = next
-			notes = append(notes, fmt.Sprintf("Empty meal: %s %s is a cold plate, nothing to cook (one cooking time that day).", c.Date.Weekday(), slotName(merged, c.SlotID)))
+			notes = append(notes, fmt.Sprintf("Empty meal: %s %s is a cold plate, nothing to cook (%s).", c.Date.Weekday(), slotName(merged, c.SlotID), why))
 			continue
 		}
-		if next, ok := x.sameDishMeal(in, prop, c); ok {
+		if next, ok := x.sameDishMeal(in, prop, c, startOpen); ok {
 			prop = next
-			notes = append(notes, fmt.Sprintf("Empty meal: %s %s eats the day's cooked dish again (one cooking time that day).", c.Date.Weekday(), slotName(merged, c.SlotID)))
+			notes = append(notes, fmt.Sprintf("Empty meal: %s %s eats the day's cooked dish again (%s).", c.Date.Weekday(), slotName(merged, c.SlotID), why))
 		}
 	}
 	return prop, notes
+}
+
+// capUsed reports whether the day's cooking times are all used
+// (plan.max_cook_occasions_per_day, any value above 0).
+func capUsed(s State, t Target, date time.Time) bool {
+	limit := s.Settings.MaxCookOccasionsPerDay
+	return limit > 0 && len(newIndex(s, t).occasions[dayOf(date)]) >= limit
 }
 
 // emptyMeals are the target's planned lunch and dinner cells (not routine,
@@ -71,10 +94,23 @@ func emptyMeals(s State, t Target) []plate.CellKey {
 // fillHolds reports whether the plan with the fill breaks no hard rule the
 // plan without it lacks, adds no cooking day, and keeps the day at or above its
 // minimum once balanced; it returns the balanced plan. A warning never stops a
-// fill: an empty meal is a hard rule broken, a warning is told.
-func fillHolds(in ChooseInput, before State, next Proposal) (Proposal, bool) {
+// fill: an empty meal is a hard rule broken, a warning is told. A day under its
+// minimum fails the fill unless it was under it at the start of the run
+// (startOpen), though the state with the empty meal already has it open.
+func fillHolds(in ChooseInput, before State, next Proposal, startOpen []Issue) (Proposal, bool) {
 	ev := evaluateLean(before, in.Target)
 	hard := hardKeys(ev.Issues)
+	started := hardKeys(startOpen)
+	for _, k := range slices.Collect(maps.Keys(hard)) {
+		if strings.Contains(k, "|"+CodeKcalBelowFloor+"|") && !started[k] {
+			delete(hard, k)
+		}
+	}
+	for k := range started {
+		if strings.Contains(k, "|"+CodeKcalBelowFloor+"|") {
+			hard[k] = true
+		}
+	}
 	after := evaluateLean(Merge(in.State, in.Target, next), in.Target)
 	for _, is := range after.Issues {
 		// The day's energy is lifted by balancing: judged on the balanced plan below.
@@ -93,7 +129,7 @@ func fillHolds(in ChooseInput, before State, next Proposal) (Proposal, bool) {
 }
 
 // coldMeal puts a cold plate on the empty cell c (fallback 1).
-func (x *index) coldMeal(in ChooseInput, prop Proposal, merged State, c plate.CellKey, skip map[int64]bool) (Proposal, bool) {
+func (x *index) coldMeal(in ChooseInput, prop Proposal, merged State, c plate.CellKey, skip map[int64]bool, startOpen []Issue) (Proposal, bool) {
 	aim, dayTarget := 0.0, 0.0
 	for _, dk := range x.dayAccounts([]time.Time{c.Date}) {
 		if dk.Adjusted > 0 {
@@ -109,13 +145,13 @@ func (x *index) coldMeal(in ChooseInput, prop Proposal, merged State, c plate.Ce
 	}
 	next := prop
 	next.Plates = append(slices.Clone(prop.Plates), ProposedPlate{Date: c.Date, SlotID: c.SlotID, Components: comps, Reason: reasonColdFill})
-	return fillHolds(in, merged, next)
+	return fillHolds(in, merged, next, startOpen)
 }
 
 // sameDishMeal lets the empty cell c eat the dish a proposed plate of the
 // same day cooks (fallback 2): the batch grows by the meal's portions and
 // cooks at the earlier of the two meals, so the day keeps one cooking time.
-func (x *index) sameDishMeal(in ChooseInput, prop Proposal, c plate.CellKey) (Proposal, bool) {
+func (x *index) sameDishMeal(in ChooseInput, prop Proposal, c plate.CellKey, startOpen []Issue) (Proposal, bool) {
 	merged := Merge(in.State, in.Target, prop)
 	pp := ProposedPlate{Date: c.Date, SlotID: c.SlotID, Eaters: in.EatersByDate[c.Date.Format(time.DateOnly)], Reason: reasonSameDishFill}
 	eaters := pp.eaters(merged)
@@ -146,7 +182,7 @@ func (x *index) sameDishMeal(in ChooseInput, prop Proposal, c plate.CellKey) (Pr
 		}
 		pp.Components = slices.Clone(p.Components)
 		next.Plates = append(slices.Clone(prop.Plates), pp)
-		if out, held := fillHolds(in, merged, next); held {
+		if out, held := fillHolds(in, merged, next, startOpen); held {
 			return out, true
 		}
 	}
@@ -154,13 +190,14 @@ func (x *index) sameDishMeal(in ChooseInput, prop Proposal, c plate.CellKey) (Pr
 }
 
 // emptyDayMeals says what a day replan would leave open on its day: a planned
-// meal without a plate, or the day under its minimum when it was not under it
-// before the run (start: the hard issues open then, SF1 (a)); "" when neither.
-func emptyDayMeals(s State, t Target, date time.Time, start []Issue) string {
+// meal without a plate, or the day under its minimum, other than the hard
+// issues open before the run (start, SF1 (a): the run may leave those as they
+// were); "" when nothing. tried says the KR7 fallbacks ran on this plan.
+func emptyDayMeals(s State, t Target, date time.Time, start []Issue, tried bool) string {
 	day := date.Format(time.DateOnly)
-	floorBefore := slices.ContainsFunc(start, func(is Issue) bool { return is.Date == day && is.Code == CodeKcalBelowFloor })
+	started := hardKeys(start)
 	for _, is := range openHard(s, t) {
-		if is.Date != day || (is.Code == CodeKcalBelowFloor && floorBefore) {
+		if is.Date != day || started[issueID(is)] {
 			continue
 		}
 		switch is.Code {
@@ -169,7 +206,14 @@ func emptyDayMeals(s State, t Target, date time.Time, start []Issue) string {
 			if is.SlotID != nil {
 				meal = slotName(s, *is.SlotID)
 			}
-			return fmt.Sprintf("%s %s would stay empty (the day cooks once, and neither a cold plate nor a second serving of the day's dish fits)", date.Weekday(), meal)
+			why := "no dish fits that meal (diet or library)"
+			if capUsed(s, t, date) {
+				why = "no cooking time is left that day"
+				if tried {
+					why += ", and neither a cold plate nor a second serving of the day's dish fits"
+				}
+			}
+			return fmt.Sprintf("%s %s would stay empty (%s)", date.Weekday(), meal, why)
 		case CodeKcalBelowFloor:
 			return fmt.Sprintf("%s would stay under its minimum (%.0f of %.0f kcal)", date.Weekday(), anyF(is.Params["kcal"]), anyF(is.Params["floor_kcal"]))
 		}

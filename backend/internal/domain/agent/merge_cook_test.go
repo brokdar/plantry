@@ -127,6 +127,6 @@ func TestRegenerateRefused_EmptyDayMealIsTold(t *testing.T) {
 	t.Parallel()
 	b := regenerateRefused(map[string]any{"status": "error", "error_key": "error.plan.day_meal_empty", "notes": "Nothing was saved: Sunday lunch would stay empty."})
 	require.True(t, b.nothingSaved)
-	assert.Contains(t, b.facts[0].EN, "a meal of the day would stay empty")
+	assert.Contains(t, b.facts[0].EN, "Sunday lunch would stay empty")
 	assert.Contains(t, b.facts[0].DE, "eine Mahlzeit des Tages bliebe leer")
 }

@@ -1052,7 +1052,7 @@
       "changed_during_run": "That plan changed while it was being made, so nothing was applied. Please try again.",
       "timeout": "Making the plan took too long. Please try again.",
       "day_same_dish": "No other main or cold plate fits this day, so it would have the same main at both meals. Nothing was changed.",
-      "day_meal_empty": "A meal of this day would stay empty or the day under its minimum: the day cooks once, and neither a cold plate nor a second serving of the day's dish fits. Nothing was changed."
+      "day_meal_empty": "A meal of this day would stay empty or the day under its minimum, so nothing was changed. The run's notes say which."
     },
     "slot": {
       "in_use": "This time slot is used by plates and cannot be deleted.",

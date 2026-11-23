@@ -40,7 +40,7 @@ func finishProposal(in ChooseInput, prop Proposal) (Proposal, []string) {
 	notes = append(notes, n...)
 	prop, n = trimLightMeals(in, prop)
 	notes = append(notes, n...)
-	prop, n = fillEmptyMeals(in, prop)
+	prop, n = fillEmptyMeals(in, prop, openHard(in.State, in.Target))
 	notes = append(notes, n...)
 	prop, n = guardDayMains(in.State, in.Target, prop, skip)
 	notes = append(notes, n...)

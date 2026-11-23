@@ -1094,7 +1094,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 			var finishNotes []string
 			if isHeuristic(ch) {
 				// KR7: a meal the cooking cap left empty takes a cold plate or the day's dish.
-				prop, finishNotes = fillEmptyMeals(cin, prop)
+				prop, finishNotes = fillEmptyMeals(cin, prop, startOpen)
 				dayProp, dayNotes := guardDayMains(base, j.target, prop, idSet(j.exclude))
 				prop, finishNotes = dayProp, append(finishNotes, dayNotes...)
 				if len(dayNotes) > 0 {
@@ -1139,6 +1139,8 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		return prop, runLog
 	}
 	prop, runLog := finishPlan(j.chooser, last)
+	// fillsRan says KR7's fallbacks (fillEmptyMeals) ran on the plan kept.
+	fillsRan := isHeuristic(j.chooser)
 	// PL1b: a plan with a hard rule still open is never the result of a run:
 	// the heuristic plans it again and the notes say so.
 	if open := openHard(Merge(base, j.target, prop), j.target); !isHeuristic(j.chooser) && len(open) > 0 && j.side == nil {
@@ -1157,7 +1159,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 					what = "broke " + what
 				}
 				hprop.Notes = joinNotes(hprop.Notes, "The model's plan "+what+"; this is the heuristic plan instead.")
-				prop, runLog, last = hprop, hlog, hlast
+				prop, runLog, last, fillsRan = hprop, hlog, hlast, true
 			}
 		}
 	}
@@ -1186,7 +1188,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	// empty or the day under its minimum; when no fallback filled it
 	// (fillEmptyMeals), nothing is saved and the notes say what stays open.
 	if j.scope.Kind == ScopeDay && j.side == nil {
-		if why := emptyDayMeals(Merge(base, j.target, prop), j.target, j.scope.Date, startOpen); why != "" {
+		if why := emptyDayMeals(Merge(base, j.target, prop), j.target, j.scope.Date, startOpen, fillsRan); why != "" {
 			closeStatus, closeStage = "error", "checking"
 			return RunEnd{Status: airun.StatusError, ErrorKey: keyDayMealEmpty, Notes: "Nothing was saved: " + why + "."}
 		}

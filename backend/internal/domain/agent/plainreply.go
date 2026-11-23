@@ -231,6 +231,7 @@ func (t *replyTurn) namesQuery(query string) bool {
 // whose writes have a block tells that block instead. The paths:
 //   - a write tool failed with an error (an invalid op, the plate service
 //     refusing a move): the change the message asked for was refused;
+//     told unless the model's text ends in a question;
 //   - the message asked to change a meal it names and the turn only checked a
 //     change (dry run): it was checked, not saved;
 //   - the message asked to change a meal it names and the turn wrote nothing
@@ -253,27 +254,24 @@ func (t replyTurn) noSaveLine(model string) (fact, bool) {
 		f.DE = strings.Replace(f.DE, unmetWhyDE, de, 1)
 		return f, true
 	}
-	switch {
-	case t.failed && t.unmet != nil:
-		return reason(failedWhyEN, failedWhyDE)
-	case t.failed:
-		return fact{
-			Class: classRefused, Kind: kindRefused, Status: statusOK,
-			EN: "Left out: the change you asked for (" + failedWhyEN + ").",
-			DE: "Weggelassen: die gewünschte Änderung (" + failedWhyDE + ").",
-		}, true
-	case t.unmet == nil:
-		return fact{}, false
-	case t.write && t.checked:
-		return reason(checkedWhyEN, checkedWhyDE)
-	case t.write:
+	// Only a message that asked for a change has a line, and a trailing model
+	// question stands on every path (a G1 ask, an offer such as "Shall I save
+	// it?"), except after a food lookup that found nothing (V81).
+	if t.unmet == nil {
 		return fact{}, false
 	}
 	ss := sentences(strings.TrimSpace(plainReply(model)))
 	if len(ss) > 0 && strings.HasSuffix(ss[len(ss)-1], "?") && !t.missed {
 		return fact{}, false
 	}
-	if t.ran {
+	switch {
+	case t.failed:
+		return reason(failedWhyEN, failedWhyDE)
+	case t.write && t.checked:
+		return reason(checkedWhyEN, checkedWhyDE)
+	case t.write:
+		return fact{}, false
+	case t.ran:
 		return reason(lookedWhyEN, lookedWhyDE)
 	}
 	return t.unmet.facts[0], true
@@ -1532,8 +1530,15 @@ func regenerateRefused(obj map[string]any) *replyBlock {
 			}
 		}
 	case "error.plan.day_meal_empty":
-		en = "Nothing was planned again: a meal of the day would stay empty or the day under its minimum (the day cooks once, and neither a cold plate nor a second serving of the day's dish fits), so nothing was saved."
-		de = "Nichts wurde neu geplant: eine Mahlzeit des Tages bliebe leer oder der Tag unter seinem Mindestwert (der Tag wird nur einmal gekocht, und weder ein kalter Teller noch eine zweite Portion des Gerichts des Tages passt), deshalb wurde nichts gespeichert."
+		en = "Nothing was planned again: a meal of the day would stay empty or the day under its minimum, so nothing was saved."
+		de = "Nichts wurde neu geplant: eine Mahlzeit des Tages bliebe leer oder der Tag unter seinem Mindestwert, deshalb wurde nichts gespeichert."
+		// The run's notes name the real reason in English (dayfill: emptyDayMeals).
+		notes, _ := obj["notes"].(string)
+		if _, why, ok := strings.Cut(notes, "Nothing was saved: "); ok {
+			if why = strings.TrimSuffix(strings.TrimSpace(isoInParens.ReplaceAllString(why, "")), "."); why != "" {
+				en = fmt.Sprintf("Nothing was planned again: %s, so nothing was saved.", why)
+			}
+		}
 	case "error.plan.day_same_dish":
 		en = "Nothing was planned again: the same main dish would be at both meals of the day and no other fits, so nothing was saved."
 		de = "Nichts wurde neu geplant: dasselbe Hauptgericht wäre bei beiden Mahlzeiten des Tages und kein anderes passt, deshalb wurde nichts gespeichert."
