@@ -1,6 +1,7 @@
 package plate_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -249,6 +250,23 @@ func TestMoveMeal_IntoOrFromThePastIsRefused(t *testing.T) {
 	require.ErrorIs(t, err, domain.ErrPastCell, "into the past")
 
 	assert.Equal(t, before, e.week())
+}
+
+// The caller's today (plate.WithToday: the chat turn's) rules the past-day
+// guard, not the clock: a day between them stays open when the clock runs
+// ahead, and a day before it stays closed when the clock lags.
+func TestMoveMeal_TheCallersTodayRulesThePast(t *testing.T) {
+	ahead := newEnvAt(t, nil, time.Date(2026, 11, 5, 12, 0, 0, 0, time.Local))
+	ahead.ctx = plate.WithToday(ahead.ctx, day(sun))
+	ahead.batch()
+	_, err := ahead.move(ahead.plateAt(mon, ahead.lunch), tue, ahead.dinner, plate.Occupant{})
+	require.NoError(t, err, "tue lies before the clock (thu), not before the caller's today (sun)")
+
+	behind := newEnv(t)
+	behind.ctx = plate.WithToday(behind.ctx, day(wed))
+	thuPlate := behind.create(thu, behind.lunch, nil, composed(behind.curry, 1))
+	_, err = behind.move(thuPlate, tue, behind.dinner, plate.Occupant{})
+	require.ErrorIs(t, err, domain.ErrPastCell, "tue lies before the caller's today (wed)")
 }
 
 func TestMoveMeal_AConfirmedMealMovesByHandAndItsBatchIsReported(t *testing.T) {
@@ -858,4 +876,75 @@ func TestMoveCook_KeepsAnAlreadyFrozenLink(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, e.lunch, e.session(sid).CookSlotID)
 	assert.Equal(t, day(mon), e.session(sid).CookDate)
+}
+
+// The guard sites other than MoveMeal read the caller's today too: the clock
+// (Oct 31) is before every cell used here, so each case passes only through
+// the caller's today (Wed or Thu).
+func TestGuards_TheCallersTodayBeatsTheClock(t *testing.T) {
+	pastCell := func(run func(e *env) error) func(*testing.T) {
+		return func(t *testing.T) {
+			e := newEnv(t)
+			err := run(e)
+			require.ErrorIs(t, err, domain.ErrPastCell)
+		}
+	}
+	main := plate.Selector{Position: plate.PositionMain}
+	tests := []struct {
+		name string
+		run  func(t *testing.T)
+	}{
+		{"ReplaceComponent", pastCell(func(e *env) error {
+			p := e.create(tue, e.dinner, nil, composed(e.chili, 1))
+			e.ctx = plate.WithToday(e.ctx, day(wed))
+			_, err := e.svc.ReplaceComponent(e.ctx, p.ID, main, e.curry, plate.Source{}, nil)
+			return err
+		})},
+		{"cookAt via ReplaceComponent", pastCell(func(e *env) error {
+			p := e.create(thu, e.dinner, nil, composed(e.chili, 1))
+			e.ctx = plate.WithToday(e.ctx, day(wed))
+			at := cell(tue, e.dinner)
+			_, err := e.svc.ReplaceComponent(e.ctx, p.ID, main, e.curry, plate.Source{CookAt: &at}, nil)
+			return err
+		})},
+		{"cookAt via AddComponentAt", pastCell(func(e *env) error {
+			p := e.create(thu, e.dinner, nil, composed(e.chili, 1))
+			e.ctx = plate.WithToday(e.ctx, day(wed))
+			at := cell(tue, e.dinner)
+			_, err := e.svc.AddComponentAt(e.ctx, p.ID, composed(e.curry, 1), &at)
+			return err
+		})},
+		{"MoveCook", pastCell(func(e *env) error {
+			_, sid := e.batch()
+			e.ctx = plate.WithToday(e.ctx, day(wed))
+			_, err := e.svc.MoveCook(e.ctx, sid, cell(sun, e.lunch))
+			return err
+		})},
+		{"CopyMeal", pastCell(func(e *env) error {
+			p := e.create(thu, e.dinner, nil, composed(e.chili, 1))
+			e.ctx = plate.WithToday(e.ctx, day(wed))
+			_, err := e.svc.CopyMeal(e.ctx, p.ID, []plate.CellKey{cell(tue, e.lunch)}, plate.CopyFresh)
+			return err
+		})},
+		{"re-anchor after remove", func(t *testing.T) {
+			e := newEnv(t)
+			wedLunch, _ := e.lasagne()
+			e.ctx = plate.WithToday(e.ctx, day(thu))
+			_, err := e.svc.Delete(e.ctx, wedLunch.ID)
+			require.NoError(t, err)
+			assert.Equal(t, []string{
+				"2026-11-04/dinner chili cook=2026-11-05/lunch portions=4",
+				"2026-11-05/lunch chili cook=2026-11-05/lunch portions=4",
+			}, e.describePlan(), "the cook skips Wed (before the caller's Thu), though the clock is before it")
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, tt.run)
+	}
+}
+
+func TestWithToday_ZeroKeepsTheTurnsToday(t *testing.T) {
+	ctx := plate.WithToday(context.Background(), day(wed))
+	ctx = plate.WithToday(ctx, time.Time{})
+	assert.Equal(t, day(wed), plate.TodayFrom(ctx))
 }

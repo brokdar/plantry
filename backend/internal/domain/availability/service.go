@@ -268,6 +268,7 @@ func (s *Service) SetAway(ctx context.Context, in AwayInput) (AwayResult, error)
 		return AwayResult{}, err
 	}
 	today := dateOnly(in.Today)
+	ctx = plate.WithToday(ctx, today) // the plate removal's re-anchor uses the same today
 	var res AwayResult
 	err = s.tx.InTx(ctx, func(ctx context.Context) error {
 		cells, err := s.awayCells(ctx, in)

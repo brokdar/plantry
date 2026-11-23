@@ -54,6 +54,7 @@ type planToolEnv struct {
 	sides   []int64
 	rec     *airun.Recorder
 	changes *agent.Changes
+	clock   time.Time // the plate service's wall clock; zero: planToday
 }
 
 // planFixture is the seeded and generated week every planToolEnv starts
@@ -126,8 +127,12 @@ func (e *planToolEnv) wire() {
 	e.deps.RunLog, e.deps.Runs = planning.RecorderLog{Recorder: e.rec}, sqlite.NewAIRunRepo(db)
 	e.deps.Go = func(f func()) { f() }
 	e.planner = planning.NewService(e.deps)
-	// The plate clock is the chat's today: meal operations refuse cells before it.
-	e.plates, e.avail = testsvc.PlanAt(db, nil, func() time.Time { return planToday })
+	// The plate clock is the chat's today unless a test moves it.
+	clock := planToday
+	if !e.clock.IsZero() {
+		clock = e.clock
+	}
+	e.plates, e.avail = testsvc.PlanAt(db, nil, func() time.Time { return clock })
 	e.changes = agent.NewChanges(sqlite.NewAIChangeRepo(db), e.plates, e.avail, sqlite.NewPlanLightRepo(db), sqlite.NewTxRunner(db), func() time.Time { return planToday })
 	foods := sqlite.NewFoodRepo(db)
 	var err error
