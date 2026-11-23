@@ -129,11 +129,70 @@ func (h *planner) dayAccounts() (*index, []DayKcal) {
 // verified no-cook foods.
 func (h *planner) liftDay(dk DayKcal, limit float64, roundUp bool) {
 	h.topUpDay(dk.Date, limit-dk.Kcal, roundUp)
+	h.growLight(dk.Date, limit)
 	if h.balance {
 		h.addSide(dk.Date, limit)
 	}
 	for h.addNoCook(dk.Date, false, limit) {
 	}
+}
+
+// growLight raises the batch-eaten mains and starches of a short day's light
+// meals by quarter portions while the meal stays within its light cap and
+// the day under limit: topUpDay never grows a light meal, yet a light lunch
+// under its cap has room the day needs (V73, g2-planner-04: light lunches at
+// 482-570 kcal under a 737 cap left three days under their band). The batch
+// cooks more where it already cooks: no new cooking time.
+func (h *planner) growLight(date time.Time, limit float64) {
+	for range 8 { // at most two portions over all of the day's light meals
+		ev := evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target)
+		day := slices.IndexFunc(ev.Days, func(d DayEval) bool { return d.Date == date.Format(time.DateOnly) })
+		if day < 0 || ev.Days[day].Kcal >= limit-epsilon {
+			return
+		}
+		if !h.growLightStep(date, ev, limit-ev.Days[day].Kcal) {
+			return
+		}
+	}
+}
+
+// growLightStep grows one component of a light meal of date by a quarter
+// portion when that keeps the meal within its cap and the step within need.
+func (h *planner) growLightStep(date time.Time, ev Evaluation, need float64) bool {
+	sessions := map[string]int{}
+	for i, ss := range h.prop.Sessions {
+		sessions[ss.Key] = i
+	}
+	for pi := range h.prop.Plates {
+		p := &h.prop.Plates[pi]
+		if dayOf(p.Date) != dayOf(date) || !h.s.lightMeal(p.Date, p.SlotID) {
+			continue
+		}
+		pe := slices.IndexFunc(ev.Plates, func(e PlateEval) bool {
+			return e.Date == p.Date.Format(time.DateOnly) && e.SlotID == p.SlotID
+		})
+		if pe < 0 || ev.Plates[pe].MaxKcal <= 0 {
+			continue
+		}
+		room := ev.Plates[pe].MaxKcal - ev.Plates[pe].Kcal
+		for ci := range p.Components {
+			c := &p.Components[ci]
+			si, ok := sessions[c.SessionKey]
+			f, known := h.s.Foods[c.FoodID]
+			if !ok || !known || c.Portions <= 0 || c.Portions+roundPortions > MaxDishPortions+epsilon ||
+				f.Macros.Kcal <= 0 || (f.Role != food.RoleMain && f.Role != food.RoleSideStarch) {
+				continue
+			}
+			step := f.Macros.Kcal * roundPortions
+			if step > room+epsilon || step > need+f.Macros.Kcal*roundPortions/2 {
+				continue
+			}
+			c.Portions += roundPortions
+			h.prop.Sessions[si].Portions += p.eaters(h.s) * roundPortions
+			return true
+		}
+	}
+	return false
 }
 
 // The no-cook adds of one day over every pass (floor, protein, band, week):
