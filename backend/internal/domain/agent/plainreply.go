@@ -149,6 +149,7 @@ type replyTurn struct {
 	write   bool             // a plan-writing tool was called (also as a check)
 	checked bool             // a check (dry run, preview) ran: "not saved" may be true of it
 	ran     bool             // a tool ran that is no food lookup finding nothing (unmetTold)
+	missed  bool             // a food lookup found nothing: the food asked for is not in the library (unmetTold)
 	block   *replyBlock      // the facts and the offer of the turn's writes
 	// undoable holds the block as it was before each change saved in this
 	// turn, newest last: an undo of that change takes the block back (addWrite).
@@ -163,6 +164,10 @@ type replyTurn struct {
 	// meal it names and the turn ran no tool but food lookups that found
 	// nothing (unmetChange, unmetTold): never as a write, the text stays.
 	unmet *replyBlock
+	// underFloor is told after the model's text when the message set a day to
+	// a kcal number under its minimum and the turn has no block of its own
+	// (underFloorBlock): never as a write, the text stays.
+	underFloor *replyBlock
 }
 
 // noteTool records what a tool call of the turn was: a check (dry run,
@@ -183,19 +188,25 @@ func (t *replyTurn) noteTool(name string, output json.RawMessage, err error) {
 	items, ok := obj["items"].([]any)
 	if name != "find_foods" || !ok || len(items) > 0 {
 		t.ran = true
+		return
 	}
+	t.missed = true
 }
 
 // unmetTold reports whether the unmet block goes after the model's text: the
 // turn ran no tool (or only food lookups that found nothing), wrote nothing,
 // and the model's text does not end in a question (its question stands: the
-// user answers it). When unsure the block is left out.
+// user answers it). When unsure the block is left out. A lookup that found
+// nothing settles it even after a question (V81, safety-s2 s2-diet-02-k3:
+// "Soll ich stattdessen eine vegetarische Alternative suchen?"): the food
+// asked for is not there, so the change cannot be made and the question can
+// only offer something else, never clarify the request.
 func (t replyTurn) unmetTold(model string) bool {
 	if t.unmet == nil || t.block != nil || t.write || t.ran || t.checked {
 		return false
 	}
 	ss := sentences(strings.TrimSpace(plainReply(model)))
-	return len(ss) == 0 || !strings.HasSuffix(ss[len(ss)-1], "?")
+	return len(ss) == 0 || !strings.HasSuffix(ss[len(ss)-1], "?") || t.missed
 }
 
 // final is the turn as its closing reply is composed: a turn that saved nothing
@@ -887,11 +898,18 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 // both rendered by code in the language of the request.
 func composeReply(model string, t replyTurn) string {
 	reply := composeModelReply(model, t)
-	if !t.unmetTold(model) {
+	told := t.unmet
+	if t.underFloor != nil && t.block == nil && !t.write {
+		// V81 (safety-s2 s2-floor-04-k2): "den Samstag auf etwa 250 kcal" was
+		// refused in prose with no tool and no "nothing changed": the request
+		// is under the day's minimum, so the reply says so in code, whatever
+		// the model wrote (a question after it offers something else).
+		told = t.underFloor
+	} else if !t.unmetTold(model) {
 		return reply
 	}
 	lg := t.lang(strings.TrimSpace(plainReply(model)))
-	nothing, line := nothingChangedEN, t.unmet.facts[0].line(lg)
+	nothing, line := nothingChangedEN, told.facts[0].line(lg)
 	if lg == langDE {
 		nothing = nothingChangedDE
 	}

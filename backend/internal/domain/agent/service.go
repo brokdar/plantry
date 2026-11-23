@@ -203,7 +203,8 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	// ctx.
 	ctx = withWindow(withToday(ctx, req.Today), w)
 	cells := namedCells(req.UserText, w, st.SlotNames)
-	ctx = withTurn(ctx, chatTurn{conversationID: conv.ID, seq: s.turns.Add(1), unlocks: s.unlocks, named: namedFoods(req.UserText, st.Foods), cells: cells, dayKcal: namedDayKcal(req.UserText, w, req.Today)})
+	dayKcal := namedDayKcal(req.UserText, w, req.Today)
+	ctx = withTurn(ctx, chatTurn{conversationID: conv.ID, seq: s.turns.Add(1), unlocks: s.unlocks, named: namedFoods(req.UserText, st.Foods), cells: cells, dayKcal: dayKcal})
 	runReq := RunRequest{
 		ConversationID: conv.ID,
 		Model:          model,
@@ -216,6 +217,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		Effort:         s.effort(ctx),
 		MaxTokens:      chatMaxTokens,
 		unmet:          unmetChange(req.UserText, cells, st.SlotNames, st),
+		underFloor:     underFloorBlock(dayKcal, st),
 	}
 	if chatProgrammatic {
 		runReq.CodeExecution = true
