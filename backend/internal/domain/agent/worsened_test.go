@@ -101,3 +101,24 @@ func TestDeltaOf_UnmeasurableAfterIsNotWorsened(t *testing.T) {
 	after := issueWith("S7", "unknown_code", "", nil)
 	assert.NotContains(t, agent.DeltaOf(byKey(before), byKey(after)), "worsened")
 }
+
+// Equal inputs give equal results (B-replay g2-away-02, g2-swap-17): issues of
+// one date, rule and code (two meals outside their share on one day) used to
+// come out in map order, so the model read a different first issue per run.
+func TestDeltaOf_SameInputSameOrder(t *testing.T) {
+	t.Parallel()
+	slot := func(id int64) *int64 { return &id }
+	s10 := func(s int64, kcal float64) planning.Issue {
+		is := issueWith("S10", "meal_outside_slot_band", "2026-11-22", map[string]any{"kcal": kcal})
+		is.SlotID = slot(s)
+		return is
+	}
+	before := byKey(s10(2, 507), s10(3, 888), s10(4, 120), s10(5, 300))
+	first, err := json.Marshal(agent.DeltaOf(before, byKey()))
+	require.NoError(t, err)
+	for range 50 {
+		got, err := json.Marshal(agent.DeltaOf(before, byKey()))
+		require.NoError(t, err)
+		require.JSONEq(t, string(first), string(got))
+	}
+}

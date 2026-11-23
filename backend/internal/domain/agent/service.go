@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -33,7 +34,7 @@ const chatProgrammatic = false
 
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v44"
+const PromptVersion = "v45"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
@@ -161,7 +162,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	history = append(history, llm.Message{Role: llm.RoleUser, Content: userBlocks})
 
 	// Compose system prompt.
-	prompt, cut, st, err := s.buildSystemPrompt(ctx, req, w)
+	prompt, cut, st, err := s.buildSystemPrompt(ctx, req, w, earlierUserTexts(history))
 	if err != nil {
 		return err
 	}
@@ -353,7 +354,7 @@ func (s *Service) CheckStart(ctx context.Context, start time.Time) error {
 
 // buildSystemPrompt renders the system prompt and returns the bytes its
 // budget cut off (0: none) and the window's state it was built from.
-func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w window.Window) (string, int, planning.State, error) {
+func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w window.Window, earlier []string) (string, int, planning.State, error) {
 	p, err := s.profile.Get(ctx)
 	if err != nil {
 		return "", 0, planning.State{}, err
@@ -364,7 +365,8 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w wind
 		return "", 0, planning.State{}, err
 	}
 	prompt, cut := ComposePrompt(p, chatFacts(st), s.plan.Summary(st, chatIssues(st)), today)
-	return prompt, cut, st, nil
+	lg, _ := messageLang(append([]string{req.UserText}, earlier...), foodNamesOf(st), st.Profile.Locale)
+	return prompt + languageLine(lg), cut, st, nil
 }
 
 type windowKey struct{}
@@ -405,7 +407,7 @@ func (s *Service) DebugSystemPrompt(ctx context.Context, req ChatRequest) (strin
 	if err != nil {
 		return "", err
 	}
-	prompt, _, _, err := s.buildSystemPrompt(ctx, req, w)
+	prompt, _, _, err := s.buildSystemPrompt(ctx, req, w, nil)
 	return prompt, err
 }
 
@@ -417,5 +419,6 @@ func foodNamesOf(st planning.State) []string {
 			out = append(out, f.Name)
 		}
 	}
+	slices.Sort(out) // one order per plan: the lint and the language read them in turn
 	return out
 }

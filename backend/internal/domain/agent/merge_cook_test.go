@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // V72 T1d (tune-v2 g2-planner-07): a turn regenerated the week (Thursday ate
@@ -118,4 +119,14 @@ func TestMergeBlock_CookLinesAreDroppedPerCookingTime(t *testing.T) {
 	none := cook("Thu 26 Nov: nothing is cooked.")
 	got = tellOf(mergeBlock(&replyBlock{facts: []fact{lunch, dinner}}, &replyBlock{facts: []fact{none}}).facts)
 	assert.Equal(t, []string{none.EN}, got)
+}
+
+// KR7 (tune-v2c g2-replan-01): a day replan that would leave a meal empty saves
+// nothing, and the reply says so with the reason in the user's language.
+func TestRegenerateRefused_EmptyDayMealIsTold(t *testing.T) {
+	t.Parallel()
+	b := regenerateRefused(map[string]any{"status": "error", "error_key": "error.plan.day_meal_empty", "notes": "Nothing was saved: Sunday lunch would stay empty."})
+	require.True(t, b.nothingSaved)
+	assert.Contains(t, b.facts[0].EN, "a meal of the day would stay empty")
+	assert.Contains(t, b.facts[0].DE, "eine Mahlzeit des Tages bliebe leer")
 }

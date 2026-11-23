@@ -223,6 +223,8 @@ func TestJudgeRelative(t *testing.T) {
 		{"lighter, food unchanged under the cap", planning.GoalLighter, true, 550, 0, fig(331, 0, 0, 0), fig(331, 0, 0, 0), false, false},
 		{"heartier above the minimum, 8 % more is not a step", planning.GoalHeartier, true, 0, 917, fig(1216, 0, 0, 0), fig(1313, 0, 0, 0), false, false},
 		{"heartier above the minimum, 10 % more", planning.GoalHeartier, true, 0, 917, fig(1216, 0, 0, 0), fig(1338, 0, 0, 0), true, true},
+		{"heartier by exactly 10 % is not more than a tenth (C-7, heartier-23)", planning.GoalHeartier, true, 0, 1103, fig(1080, 0, 0, 0), fig(1188, 0, 0, 0), false, false},
+		{"heartier by just over 10 %", planning.GoalHeartier, true, 0, 1103, fig(1080, 0, 0, 0), fig(1189, 0, 0, 0), true, true},
 		{"heartier, already above and unchanged", planning.GoalHeartier, true, 0, 917, fig(1216, 0, 0, 0), fig(1216, 0, 0, 0), false, false},
 		{"heartier, more but under the minimum", planning.GoalHeartier, true, 0, 917, fig(700, 0, 0, 0), fig(820, 0, 0, 0), true, false},
 		{"protein of the meal, 10 g", planning.GoalMoreProtein, true, 0, 0, fig(0, 30, 0, 80), fig(0, 40, 0, 90), true, true},

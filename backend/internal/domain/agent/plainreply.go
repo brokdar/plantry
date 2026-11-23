@@ -149,8 +149,10 @@ type replyTurn struct {
 	foods   []string         // the names of the foods of the plan: a write's text names none the block does not
 	write   bool             // a plan-writing tool was called (also as a check)
 	checked bool             // a check (dry run, preview) ran: "not saved" may be true of it
-	ran     bool             // a tool ran that is no food lookup finding nothing (unmetTold)
-	missed  bool             // a food lookup found nothing: the food asked for is not in the library (unmetTold)
+	ran     bool             // a tool ran that is no food lookup finding nothing (noSaveLine)
+	missed  bool             // a food lookup found nothing: the food asked for is not in the library (noSaveLine)
+	failed  bool             // a write tool failed with an error and saved nothing (noSaveLine)
+	coded   bool             // code lines follow the model's text (composeReply)
 	block   *replyBlock      // the facts and the offer of the turn's writes
 	// undoable holds the block as it was before each change saved in this
 	// turn, newest last: an undo of that change takes the block back (addWrite).
@@ -163,7 +165,7 @@ type replyTurn struct {
 	ways *replyBlock
 	// unmet is told after the model's text when the message asked to change a
 	// meal it names and the turn ran no tool but food lookups that found
-	// nothing (unmetChange, unmetTold): never as a write, the text stays.
+	// nothing (unmetChange, noSaveLine): never as a write, the text stays.
 	unmet *replyBlock
 	// underFloor is told after the model's text when the message set a day to
 	// a kcal number under its minimum and the turn has no block of its own
@@ -219,20 +221,56 @@ func (t *replyTurn) namesQuery(query string) bool {
 	return true
 }
 
-// unmetTold reports whether the unmet block goes after the model's text: the
-// turn ran no tool (or only food lookups that found nothing), wrote nothing,
-// and the model's text does not end in a question (its question stands: the
-// user answers it). When unsure the block is left out. A lookup that found
-// nothing settles it even after a question (V81, safety-s2 s2-diet-02-k3:
-// "Soll ich stattdessen eine vegetarische Alternative suchen?"): the food
-// asked for is not there, so the change cannot be made and the question can
-// only offer something else, never clarify the request.
-func (t replyTurn) unmetTold(model string) bool {
-	if t.unmet == nil || t.block != nil || t.write || t.ran || t.checked {
-		return false
+// noSaveLine is the code line a turn that saved nothing tells after the
+// model's text, with "Nothing changed" before it (spec G2/SF2, C-11; round 7
+// R2: every no-save path says it in code, whatever the model wrote). A turn
+// whose writes have a block tells that block instead. The paths:
+//   - a write tool failed with an error (an invalid op, the plate service
+//     refusing a move): the change the message asked for was refused;
+//   - the message asked to change a meal it names and the turn only checked a
+//     change (dry run): it was checked, not saved;
+//   - the message asked to change a meal it names and the turn wrote nothing
+//     (unmetChange): told unless the model's text ends in a question, whose
+//     question stands (a G1 ask, an offer), except when a food lookup found
+//     nothing, which settles it (V81, safety-s2 s2-diet-02-k3: "Soll ich
+//     stattdessen eine vegetarische Alternative suchen?").
+//
+// A question about the plan or a message naming no meal has no unmet line, so
+// none of these fires on a G1 ask or a read-only answer (no write was tried).
+func (t replyTurn) noSaveLine(model string) (fact, bool) {
+	if t.block != nil {
+		return fact{}, false
+	}
+	reason := func(en, de string) (fact, bool) {
+		f := t.unmet.facts[0]
+		f.EN = strings.Replace(f.EN, unmetWhyEN, en, 1)
+		f.DE = strings.Replace(f.DE, unmetWhyDE, de, 1)
+		return f, true
+	}
+	switch {
+	case t.failed && t.unmet != nil:
+		return reason(failedWhyEN, failedWhyDE)
+	case t.failed:
+		return fact{
+			Class: classRefused, Kind: kindRefused, Status: statusOK,
+			EN: "Left out: the change you asked for (" + failedWhyEN + ").",
+			DE: "Weggelassen: die gewünschte Änderung (" + failedWhyDE + ").",
+		}, true
+	case t.unmet == nil:
+		return fact{}, false
+	case t.write && t.checked:
+		return reason(checkedWhyEN, checkedWhyDE)
+	case t.write:
+		return fact{}, false
 	}
 	ss := sentences(strings.TrimSpace(plainReply(model)))
-	return len(ss) == 0 || !strings.HasSuffix(ss[len(ss)-1], "?") || t.missed
+	if len(ss) > 0 && strings.HasSuffix(ss[len(ss)-1], "?") && !t.missed {
+		return fact{}, false
+	}
+	if t.ran {
+		return reason(lookedWhyEN, lookedWhyDE)
+	}
+	return t.unmet.facts[0], true
 }
 
 // final is the turn as its closing reply is composed: a turn that saved nothing
@@ -248,18 +286,52 @@ func (t replyTurn) final() replyTurn {
 // lang is the language of the reply: the user's message, else the earlier
 // ones, else the profile's locale, else the model's own text, else English.
 func (t replyTurn) lang(model string) lang {
-	texts := append([]string{t.user}, t.earlier...)
-	if l, ok := replyLangOf(texts...); ok {
+	if l, ok := messageLang(append([]string{t.user}, t.earlier...), t.foods, t.locale); ok {
 		return l
-	}
-	switch strings.ToLower(strings.TrimSpace(t.locale)) {
-	case "de":
-		return langDE
-	case "en":
-		return langEN
 	}
 	l, _ := replyLangOf(model)
 	return l
+}
+
+// messageLang is the language of the turn: the user's message, else the
+// earlier ones, else the profile's locale; false when none says. The plan's
+// dish names are left out first, so an English dish name in a German message
+// ("Low-fat quark", "Greek salad with chickpeas") decides nothing (round 7 R1).
+func messageLang(texts, foods []string, locale string) (lang, bool) {
+	names := slices.Clone(foods)
+	// Longer names first: "Steamed rice" goes before "rice".
+	slices.SortStableFunc(names, func(a, b string) int { return len(b) - len(a) })
+	plain := make([]string, len(texts))
+	for i, text := range texts {
+		low := strings.ToLower(text)
+		for _, f := range names {
+			if n := strings.ToLower(strings.TrimSpace(f)); len(n) >= 4 {
+				low = strings.ReplaceAll(low, n, " ")
+			}
+		}
+		plain[i] = low
+	}
+	if l, ok := replyLangOf(plain...); ok {
+		return l, true
+	}
+	switch strings.ToLower(strings.TrimSpace(locale)) {
+	case "de":
+		return langDE, true
+	case "en":
+		return langEN, true
+	}
+	return langEN, false
+}
+
+// languageLine is the prompt's last line: the turn's language, computed in
+// code from the user's message, so the model writes in the language of the
+// lines the program puts after its text (round 7 R1: English text over a
+// German block when the message held an English dish name or a typo).
+func languageLine(l lang) string {
+	if l == langDE {
+		return "\nReply in German, every sentence (dish names stay as they are).\n"
+	}
+	return "\nReply in English, every sentence.\n"
 }
 
 // mergeBlock adds the block of a later write to the earlier ones: every write's
@@ -993,22 +1065,26 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 // sentences, when the lint passes) followed by the facts block and the one offer,
 // both rendered by code in the language of the request.
 func composeReply(model string, t replyTurn) string {
-	reply := composeModelReply(model, t)
-	told := t.unmet
-	if t.underFloor != nil && t.block == nil && !t.write {
+	var told fact
+	ok := false
+	floor := t.underFloor != nil && t.block == nil && !t.write
+	if floor {
 		// V81 (safety-s2 s2-floor-04-k2): "den Samstag auf etwa 250 kcal" was
 		// refused in prose with no tool and no "nothing changed": the request
 		// is under the day's minimum, so the reply says so in code, whatever
 		// the model wrote (a question after it offers something else).
-		if saysFloorKept(reply, t.underFloor) {
-			return reply
-		}
-		told = t.underFloor
-	} else if !t.unmetTold(model) {
+		told, ok = t.underFloor.facts[0], true
+	} else {
+		told, ok = t.noSaveLine(model)
+	}
+	// Code lines follow: the model's text keeps only sentences in their language.
+	t.coded = ok
+	reply := composeModelReply(model, t)
+	if !ok || (floor && saysFloorKept(reply, t.underFloor)) {
 		return reply
 	}
 	lg := t.lang(strings.TrimSpace(plainReply(model)))
-	nothing, line := nothingChangedEN, told.facts[0].line(lg)
+	nothing, line := nothingChangedEN, told.line(lg)
 	if lg == langDE {
 		nothing = nothingChangedDE
 	}
@@ -1048,9 +1124,10 @@ func composeModelReply(model string, t replyTurn) string {
 	}
 	// The model's text is in the reply's language (V81, tune-v2c g2-add-23:
 	// an English text over a German request and a German block): on a write
-	// turn, whose block is rendered in that language, a sentence clearly in
-	// the other language is dropped.
-	if ss := sentences(text); len(ss) > 0 && t.write && t.block != nil {
+	// turn, whose block is rendered in that language, and on any turn whose
+	// code lines follow (round 7 R1), a sentence clearly in the other language
+	// is dropped.
+	if ss := sentences(text); len(ss) > 0 && (t.write && t.block != nil || t.coded) {
 		var kept []string
 		for _, x := range ss {
 			if l, ok := sentenceLang(x, t.foods); ok && l != lg {
@@ -1096,7 +1173,7 @@ func composeModelReply(model string, t replyTurn) string {
 		}
 		text = strings.Join(kept, " ")
 	}
-	if text == "" && strings.TrimSpace(model) != "" && t.block == nil {
+	if text == "" && strings.TrimSpace(model) != "" && t.block == nil && !t.coded {
 		if lg == langDE {
 			return fallbackDE
 		}
@@ -1109,7 +1186,7 @@ func composeModelReply(model string, t replyTurn) string {
 		// (V81 L2, tune-v2c guests-09).
 		drop(text, why)
 		text = ""
-		if t.block == nil {
+		if t.block == nil && !t.coded {
 			if lg == langDE {
 				return fallbackDE
 			}
@@ -1176,7 +1253,7 @@ func finalizeMessage(m *llm.Message, t replyTurn) {
 			texts = append(texts, c.Text)
 		}
 	}
-	if first < 0 && (t.block == nil || !t.write) && !t.unmetTold("") {
+	if _, coded := t.noSaveLine(""); first < 0 && (t.block == nil || !t.write) && !coded {
 		return
 	}
 	reply := composeReply(strings.Join(texts, "\n\n"), t)
@@ -1448,6 +1525,9 @@ func regenerateRefused(obj map[string]any) *replyBlock {
 				en = fmt.Sprintf("Nothing was planned again: the new plan would still break a rule of the plan (%s), so nothing was saved.", rules)
 			}
 		}
+	case "error.plan.day_meal_empty":
+		en = "Nothing was planned again: a meal of the day would stay empty or the day under its minimum (the day cooks once, and neither a cold plate nor a second serving of the day's dish fits), so nothing was saved."
+		de = "Nichts wurde neu geplant: eine Mahlzeit des Tages bliebe leer oder der Tag unter seinem Mindestwert (der Tag wird nur einmal gekocht, und weder ein kalter Teller noch eine zweite Portion des Gerichts des Tages passt), deshalb wurde nichts gespeichert."
 	case "error.plan.day_same_dish":
 		en = "Nothing was planned again: the same main dish would be at both meals of the day and no other fits, so nothing was saved."
 		de = "Nichts wurde neu geplant: dasselbe Hauptgericht wäre bei beiden Mahlzeiten des Tages und kein anderes passt, deshalb wurde nichts gespeichert."

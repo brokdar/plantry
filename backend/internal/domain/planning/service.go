@@ -48,6 +48,11 @@ const keyHardRuleOpen = "error.plan.hard_rule_open"
 // main at both meals (v1 OQ6: it saves nothing and says so).
 const keyDayRepeat = "error.plan.day_same_dish"
 
+// keyDayMealEmpty is the error key of a day replan that would leave a meal of
+// the day empty or the day under its minimum because no KR7 fallback fits (a
+// cold plate, the day's dish twice): it saves nothing and says so.
+const keyDayMealEmpty = "error.plan.day_meal_empty"
+
 // errShuttingDown refuses a generation once Shutdown began.
 var errShuttingDown = errors.New("plan generation is shutting down")
 
@@ -1084,8 +1089,10 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		if j.side == nil {
 			var finishNotes []string
 			if isHeuristic(ch) {
+				// KR7: a meal the cooking cap left empty takes a cold plate or the day's dish.
+				prop, finishNotes = fillEmptyMeals(cin, prop)
 				dayProp, dayNotes := guardDayMains(base, j.target, prop, idSet(j.exclude))
-				prop, finishNotes = dayProp, dayNotes
+				prop, finishNotes = dayProp, append(finishNotes, dayNotes...)
 				if len(dayNotes) > 0 {
 					// A dish changed under the heuristic's quantities: set them again.
 					var balNotes []string
@@ -1169,6 +1176,15 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 					Notes: prop.Notes + " Nothing was saved: " + food.Quote(foodName(Merge(base, j.target, prop), other)) + " would be the main at both meals of the day and no other main or cold plate fits.",
 				}
 			}
+		}
+	}
+	// KR7 (tune-v2c g2-replan-01): a day replan never leaves a meal of the day
+	// empty or the day under its minimum; when no fallback filled it
+	// (fillEmptyMeals), nothing is saved and the notes say what stays open.
+	if j.scope.Kind == ScopeDay && j.side == nil {
+		if why := emptyDayMeals(Merge(base, j.target, prop), j.target, j.scope.Date); why != "" {
+			closeStatus, closeStage = "error", "checking"
+			return RunEnd{Status: airun.StatusError, ErrorKey: keyDayMealEmpty, Notes: "Nothing was saved: " + why + "."}
 		}
 	}
 	// B-3: removing the day's plates re-anchors the batches they cooked for

@@ -75,7 +75,7 @@ func unmetChange(text string, cells map[string]bool, slotNames map[int64]string,
 		en = append(en, day+" "+meal)
 		de = append(de, deDay(day)+" "+deSlot(meal))
 	}
-	whyEN, whyDE := "nothing was checked and saved for it", "dafür wurde nichts geprüft und gespeichert"
+	whyEN, whyDE := unmetWhyEN, unmetWhyDE
 	if household := diet.Class(st.Profile.DietType); planning.DietRestricts(st.Profile.DietType) {
 		if name := addedAgainstDiet(text, st, household); name != "" {
 			whyEN = fmt.Sprintf("%q does not fit your %s diet", name, household)
@@ -88,6 +88,20 @@ func unmetChange(text string, cells map[string]bool, slotNames map[int64]string,
 		DE: fmt.Sprintf("Weggelassen: die Änderung an %s (%s).", strings.Join(de, ", "), whyDE),
 	}}}
 }
+
+// The reason of the unmet line when no tool ran, and the reasons that replace
+// it on the other no-save paths (spec G2/SF2, round 7 R2): a write the program
+// refused, a change only checked, a turn that only looked things up.
+const (
+	unmetWhyEN   = "nothing was checked and saved for it"
+	unmetWhyDE   = "dafür wurde nichts geprüft und gespeichert"
+	failedWhyEN  = "the program refused it"
+	failedWhyDE  = "das Programm hat sie abgelehnt"
+	checkedWhyEN = "it was only checked, not saved"
+	checkedWhyDE = "sie wurde nur geprüft, nicht gespeichert"
+	lookedWhyEN  = "nothing was saved for it"
+	lookedWhyDE  = "dafür wurde nichts gespeichert"
+)
 
 // removeCue and addCue are words (folded) that mark the food after them as
 // the one taken out or the one put in.

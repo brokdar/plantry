@@ -84,6 +84,14 @@ func MeaningfulMealKcal(before, delta float64) bool {
 	return delta >= RelMinShare*before-1e-9
 }
 
+// heartierStep is the step of a comparative "heartier" (spec C-7, RL2): the
+// meal grows by more than RelMinShare of itself, never exactly that (tune
+// heartier-23: +108 kcal on 1080 is a tenth, not more); the small margin keeps
+// float noise from passing an exact tenth.
+func heartierStep(before, delta float64) bool {
+	return delta > RelMinShare*before+0.05
+}
+
 // WayRequest asks for the ways to reach goal on one plate (lighter, heartier,
 // more_protein) or, for more_protein only, on the day of Date.
 type WayRequest struct {
@@ -693,11 +701,11 @@ func JudgeRelative(goal string, meal bool, maxKcal, minKcal float64, before, aft
 		}
 		return changed, reached, why
 	case GoalHeartier:
-		changed = MeaningfulMealKcal(before.MealKcal, after.MealKcal-before.MealKcal)
+		changed = heartierStep(before.MealKcal, after.MealKcal-before.MealKcal)
 		reached = minKcal <= 0 || after.MealKcal >= minKcal-0.5
 		switch {
 		case !changed:
-			why = fmt.Sprintf("the meal holds %.0f kcal after, %.0f before: not heartier by a meaningful amount (at least %.0f kcal)", after.MealKcal, before.MealKcal, RelMinShare*before.MealKcal)
+			why = fmt.Sprintf("the meal holds %.0f kcal after, %.0f before: not heartier by a meaningful amount (more than %.0f kcal)", after.MealKcal, before.MealKcal, RelMinShare*before.MealKcal)
 		case !reached:
 			why = fmt.Sprintf("heartier, but not a filling meal yet: it now holds %.0f kcal (was %.0f), a filling meal needs at least %.0f kcal", after.MealKcal, before.MealKcal, minKcal)
 		}

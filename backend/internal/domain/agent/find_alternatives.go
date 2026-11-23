@@ -118,7 +118,15 @@ func toolFindAlternatives(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			res.Alternatives = verifiedAlternatives(ctx, svc, w, res.Alternatives, wanted)
+			pool := len(res.Alternatives)
+			var refused []string
+			res.Alternatives, refused = verifiedAlternatives(ctx, svc, w, res.Alternatives, wanted)
+			if len(res.Alternatives) == 0 && pool > 0 && res.EmptyReason == nil {
+				// The real check refused every candidate the plan copy passed (the
+				// re-anchored batches of a replaced dish): the list says why, never
+				// an empty list without a reason (round 7 R3, tune-v2c g2-replan-01).
+				res.EmptyReason = &planning.EmptyReason{Candidates: pool, Why: refused}
+			}
 			alts := res.Alternatives
 			if alts == nil {
 				alts = []planning.Alternative{}

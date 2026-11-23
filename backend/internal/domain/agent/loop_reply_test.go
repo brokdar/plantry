@@ -3,12 +3,14 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 )
 
 // G3/G4: the stored final reply of a write turn is the model's framing, the
@@ -50,8 +52,8 @@ func TestRun_FinalReplyIsComposedByCode(t *testing.T) {
 	}
 }
 
-// H1: the unmet block reaches the stored reply after the model's text, and
-// only on a turn that ran no tool (or only a food lookup that found nothing).
+// H1, round 7 R2: the unmet block reaches the stored reply after the model's
+// text on a turn that saved nothing, unless its text ends in a question.
 func TestRun_UnmetBlockFollowsTheModelsText(t *testing.T) {
 	t.Parallel()
 	unmet := &replyBlock{nothingSaved: true, facts: []fact{{Class: classRefused, Kind: kindRefused, Status: statusOK, EN: "Left out: the change to Mon 23 Nov dinner (x).", DE: "Weggelassen: x."}}}
@@ -61,10 +63,10 @@ func TestRun_UnmetBlockFollowsTheModelsText(t *testing.T) {
 	}{
 		{"no tool", "", "", "That does not fit.", "That does not fit.\n\n- " + nothingChangedEN + "\n- Left out: the change to Mon 23 Nov dinner (x).", ""},
 		{"lookup found nothing", "find_foods", `{"items":[],"total":0}`, "No such dish.", "No such dish.\n\n- " + nothingChangedEN + "\n- Left out: the change to Mon 23 Nov dinner (x).", `{"search":"beef goulash"}`},
-		{"an empty filter search settles nothing", "find_foods", `{"items":[],"total":0}`, "No such dish.", "No such dish.", `{"roles":["main"]}`},
-		{"lookup found a dish", "find_foods", `{"items":[{"id":1}],"total":1}`, "Here it is.", "Here it is.", ""},
+		{"an empty filter search: told as a look-up", "find_foods", `{"items":[],"total":0}`, "No such dish.", "No such dish.\n\n- " + nothingChangedEN + "\n- Left out: the change to Mon 23 Nov dinner (x).", `{"roles":["main"]}`},
+		{"lookup found a dish", "find_foods", `{"items":[{"id":1}],"total":1}`, "Here it is.", "Here it is.\n\n- " + nothingChangedEN + "\n- Left out: the change to Mon 23 Nov dinner (x).", ""},
 		{"a question stands", "", "", "Which one do you want?", "Which one do you want?", ""},
-		{"a read tool ran", "get_plan", `{"days":[]}`, "It is pasta.", "It is pasta.", ""},
+		{"a question stands after a read tool", "get_plan", `{"days":[]}`, "Which one do you want?", "Which one do you want?", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -83,6 +85,44 @@ func TestRun_UnmetBlockFollowsTheModelsText(t *testing.T) {
 			req := makeReq(1)
 			req.UserText = "put the Beef goulash on Monday dinner"
 			req.unmet = unmet
+			req.Tools = ts.Describe()
+			repo := &memRepo{}
+			require.NoError(t, runLoopRepo(t, req, client, ts, repo))
+			msgs, _ := repo.ListMessages(context.Background(), 1)
+			var blocks []struct{ Type, Text string }
+			require.NoError(t, json.Unmarshal(msgs[len(msgs)-1].Content, &blocks))
+			require.NotEmpty(t, blocks)
+			assert.Equal(t, c.want, blocks[len(blocks)-1].Text)
+		})
+	}
+}
+
+// Round 7 R2 (tune-v2c g2-cook_elsewhere-07 on 347b003): a write the program
+// refused with an error saved nothing, and the reply said so only when the
+// model did. The reply now tells it in code, in the user's language, also
+// after the model's offer question; the model's sentence in the other language
+// goes (R1).
+func TestRun_RefusedWriteSaysNothingChanged(t *testing.T) {
+	t.Parallel()
+	unmet := &replyBlock{nothingSaved: true, facts: []fact{{
+		Class: classRefused, Kind: kindRefused, Status: statusOK,
+		EN: "Left out: the change to Wed 2 Dec lunch (" + unmetWhyEN + ").", DE: "Weggelassen: die Änderung an Mittwoch, 2. Dez. Mittagessen (" + unmetWhyDE + ").",
+	}}}
+	for _, c := range []struct {
+		name, user, model, want string
+		unmet                   *replyBlock
+	}{
+		{"EN, a named meal", "cook the gratin on Wednesday lunch instead", "That does not work.", "That does not work.\n\n- " + nothingChangedEN + "\n- Left out: the change to Wed 2 Dec lunch (the program refused it).", unmet},
+		{"DE, after an offer question", "Koch den Gratin stattdessen am Mittwochmittag", "Das geht so nicht. Soll ich ihn verschieben?", "Das geht so nicht. Soll ich ihn verschieben?\n\n- " + nothingChangedDE + "\n- Weggelassen: die Änderung an Mittwoch, 2. Dez. Mittagessen (das Programm hat sie abgelehnt).", unmet},
+		{"DE, no named meal, English text dropped", "Koch den Gratin bitte früher", "That does not work with the cooking times, and the gratin has to be cooked before you eat it.", "- " + nothingChangedDE + "\n- Weggelassen: die gewünschte Änderung (das Programm hat sie abgelehnt).", nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			ts := minimalToolSet(t, "apply_changes", nil, ToolEffectNone, fmt.Errorf("op 1 of 1 (move_cook): %w: plate 134 comes before the cook", domain.ErrInvalidInput))
+			client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{scriptToolUseTurn("t1", "apply_changes"), scriptEndTurn(c.model)}})
+			req := makeReq(1)
+			req.UserText = c.user
+			req.unmet = c.unmet
 			req.Tools = ts.Describe()
 			repo := &memRepo{}
 			require.NoError(t, runLoopRepo(t, req, client, ts, repo))
