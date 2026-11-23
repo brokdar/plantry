@@ -559,6 +559,8 @@ var (
 	// pastOfEating are the cookPast words a move_cook reason uses for the
 	// meals that eat first ("already eaten", "essen schon vorher davon").
 	pastOfEating = regexp.MustCompile(`(?i)\b(?:already|before|earlier|bereits|schon|vorher|zuvor|davor)\b`)
+	// hypothetical is the mood of a change that was not made.
+	hypothetical = regexp.MustCompile(`(?i)\b(?:would|could|würde\w*|wäre\w*|gäbe|bräuchte\w*|entstünde\w*|hätte\w*|käme\w*|müsste\w*|könnte\w*)\b|\w'd\b`)
 	// mealCompound is a meal word inside a weekday compound ("Montagmittag").
 	mealCompound = regexp.MustCompile(`(?i)(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)(mittag|abend|fruehstueck)`)
 )
@@ -596,6 +598,11 @@ func refusalBacked(text string, t replyTurn) bool {
 	case eatReason && !eating:
 		return false // an eating claim the refusal does not make
 	case cookPast.MatchString(text) && !pastOK:
+		return false
+	case timesReason && !hypothetical.MatchString(text):
+		// The cooking times of a change that was not made, told like the
+		// refused line, as what would be: "dann entstehen zwei Kochzeiten"
+		// reads as the saved plan (tune-v2c g2-swap-12).
 		return false
 	case !refusalPhrase.MatchString(text) && !timesReason && !eatReason:
 		return false // no refusal and no reason of the refused line

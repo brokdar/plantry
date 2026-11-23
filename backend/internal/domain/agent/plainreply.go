@@ -1391,16 +1391,26 @@ func composeModelReply(model string, t replyTurn) string {
 	if ss := sentences(text); lintModelText(text, t, lg) != "" || capped && len(ss) > 2 {
 		// The text keeps every sentence the lint passes: a sentence that breaks it
 		// is dropped, not the whole text (G4 lint per sentence, v1.3 P-6; RP4).
+		// On a write turn a sentence that points back ("That brings lunch to
+		// 927 kcal", "Dann wird nichts zusätzlich gekocht") to a dropped one
+		// has lost what it says, so it goes too (round 9, M5's twin: dev-v2d new2
+		// h2-limit-05 about an offer the lint dropped).
 		var kept []string
+		prevDropped := false
 		for _, s := range ss {
-			switch why := lintModelText(s, t, lg); {
+			why := lintModelText(s, t, lg)
+			switch {
 			case why != "":
+				drop(s, why)
+			case capped && prevDropped && pointsBack.MatchString(s):
+				why = "dangling"
 				drop(s, why)
 			case capped && len(kept) == 2:
 				drop(s, "third_sentence")
 			default:
 				kept = append(kept, s)
 			}
+			prevDropped = why != ""
 		}
 		text = strings.Join(kept, " ")
 	}
@@ -1461,9 +1471,14 @@ func composeModelReply(model string, t replyTurn) string {
 	return strings.Join(parts, "\n\n")
 }
 
+// pointsBack is a sentence that opens on a word pointing back to the one
+// before it.
+var pointsBack = regexp.MustCompile(`(?i)^\W*(that|this|these|those|then|das|dies\w*|dann|damit|dadurch|so)\b`)
+
 // lintDrop is a sentence of the model's final text the reply left out, with
 // the reason: a lint reason of lintModelText (planner_word, not_found,
-// cooking_claim, option, dish, weekday, contradiction, number), "question" (a
+// cooking_claim, option, dish, weekday, contradiction, number), "dangling"
+// (points back to a dropped sentence), "question" (a
 // write turn's trailing question) or "third_sentence" (past the two passing
 // sentences a write's text may have).
 type lintDrop struct {

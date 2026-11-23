@@ -73,6 +73,9 @@ func TestLint_RefusalReasonBackedByTheRefusedLine(t *testing.T) {
 		{"a day the line does not name", remove22, "kein Green salad bei Montag Mittagessen", langDE, "Am Dienstag entstünde eine zweite Kochzeit.", false},
 		{"a dish the line does not name", cookref02, "cook the Shakshuka on Friday dinner", langEN, "I can't move the Egg fried rice cook to Friday dinner.", false},
 		{"done claim", cookref02, "cook the Shakshuka on Friday dinner", langEN, "I moved the Shakshuka cook to Friday dinner.", false},
+		{"cooking times told as the saved plan (tune-v2c g2-swap-12)", swap23, "können wir das Abendessen am Dienstag und am Donnerstag tauschen?", langDE, "Das Gratin lässt sich nicht auf Donnerstag legen, weil dann am Mittwoch zwei Kochzeiten an einem Tag entstehen.", false},
+		{"the same as what would be", swap23, "können wir das Abendessen am Dienstag und am Donnerstag tauschen?", langDE, "Das Gratin lässt sich nicht auf Donnerstag legen, weil dann am Mittwoch zwei Kochzeiten an einem Tag entstehen würden.", true},
+		{"EN cooking times told as the saved plan", remove22, "no Green salad at Monday lunch", langEN, "Removing it isn't possible: Monday then has two cooking times.", false},
 		{"no refusal and no reason", cookref02, "cook the Shakshuka on Friday dinner", langEN, "The Shakshuka is cooked on Friday dinner.", false},
 	} {
 		turn := replyTurn{user: tc.user, write: true, foods: foods, block: &replyBlock{nothingSaved: true, facts: []fact{tc.line}}}
@@ -108,6 +111,18 @@ func TestComposeReply_CapCountsPassingSentences(t *testing.T) {
 	got = composeReply("I can't move the Lasagne bolognese cook to Tuesday lunch. It's already eaten on Saturday dinner and on Sunday lunch and dinner, so the cooking has to happen before those meals. The plan is unchanged.", turn)
 	assert.True(t, strings.HasPrefix(got, "I can't move the Lasagne bolognese cook to Tuesday lunch. It's already eaten on Saturday dinner and on Sunday lunch and dinner, so the cooking has to happen before those meals.\n\n- "+nothingChangedEN), got)
 	assert.Equal(t, []lintDrop{{Sentence: "The plan is unchanged.", Reason: "third_sentence"}}, drops, "two passing sentences already: the third goes")
+
+	// A passing sentence that points back to a dropped one does not move up
+	// (new2 h2-limit-05, new g2-remove-22).
+	ways := &replyBlock{
+		nothingSaved: true, facts: []fact{refusedLine("This meal cannot get heartier on its own: the day holds 1691 kcal and a good amount for it ends at 1785 kcal.", "x")},
+		offer: &offerLine{EN: `I can also Thu 3 Dec lunch: add 120 g "Ciabatta" (+311 kcal), add 200 g "Tofu (firm)" (+288 kcal): say so if you want it.`, DE: "x"},
+	}
+	drops = nil
+	turn = replyTurn{user: "make Thursday's lunch a really filling meal", write: true, drops: &drops, numbers: map[string]bool{"927": true}, block: ways}
+	got = composeReply("I could add bread and tofu, if you want. That brings lunch to about 927 kcal, keeps the day inside its range, and adds a warning about tofu being repeated as a side. Nothing has been changed.", turn)
+	assert.True(t, strings.HasPrefix(got, "Nothing has been changed.\n\n- "+nothingChangedEN), got)
+	assert.Equal(t, "dangling", drops[1].Reason)
 }
 
 // M1: "extra" as the plate position or a quantity is no planner word; the
