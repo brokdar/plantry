@@ -21,10 +21,10 @@ func TestReplyLint_DroppedSentencesAreStoredWithTheirReason(t *testing.T) {
 		"Done on Tuesday. It now has 800 kcal. The leftovers stay. Want more?", true)
 	assert.Equal(t, []string{
 		"question: Want more?",
-		"third_sentence: The leftovers stay.",
 		"weekday: Done on Tuesday.",
 		"number: It now has 800 kcal.",
-	}, got)
+		"cooking_claim: The leftovers stay.",
+	}, got, "the two-sentence cap counts the sentences the lint passes (round 9 M5)")
 
 	var result string
 	require.NoError(t, e.db.QueryRow(`SELECT result_json FROM ai_run_steps WHERE type = 'tool_call' AND name = 'reply.lint'`).Scan(&result))
@@ -33,8 +33,8 @@ func TestReplyLint_DroppedSentencesAreStoredWithTheirReason(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal([]byte(result), &stored))
 	require.Len(t, stored.Dropped, 4)
-	assert.Equal(t, "weekday", stored.Dropped[2].Reason)
-	assert.Equal(t, "Done on Tuesday.", stored.Dropped[2].Sentence)
+	assert.Equal(t, "weekday", stored.Dropped[1].Reason)
+	assert.Equal(t, "Done on Tuesday.", stored.Dropped[1].Sentence)
 
 	// A turn whose text passes stores nothing.
 	ctx2, _ := e.chat()

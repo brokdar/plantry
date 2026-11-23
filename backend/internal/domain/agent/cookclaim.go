@@ -41,6 +41,10 @@ var (
 	dishStop = map[string]bool{
 		"with": true, "and": true, "the": true, "for": true, "mit": true, "und": true, "von": true, "fuer": true,
 		"der": true, "die": true, "das": true, "den": true, "dem": true, "ein": true, "eine": true, "einen": true, "oder": true, "bei": true, "aus": true, "from": true, "all": true, "both": true,
+		// Words that praise a dish say nothing about which one ("Kartoffelgratin
+		// – einfach und klassisch", "Easy chicken curry"; round 9 M3: "nicht
+		// einfach streichen" is no loose dish name).
+		"einfach": true, "klassisch": true, "easy": true, "simple": true, "classic": true, "quick": true, "schnell": true,
 	}
 )
 
@@ -92,6 +96,31 @@ var eatMarker = regexp.MustCompile(`(?i)\b(covers?|covering|feeds?|feeding|lasts
 // cookOnDay is a preposition that puts the cooking on the day ("for 4 on
 // Wednesday"): the weekday after it is a cooking day again.
 var cookOnDay = regexp.MustCompile(`(?i)\b(on|at|am|an)\s*$`)
+
+// movedTo ends a span before the weekday the cooking moved to ("moved to",
+// "auf ... verschoben").
+var (
+	movedTo     = regexp.MustCompile(`(?i)\b(?:moved|moves|shifted|shifts)\s+(?:over\s+)?to\s+(?:the\s+)?$`)
+	movedToDE   = regexp.MustCompile(`(?i)\b(?:auf|nach)\s+(?:den\s+)?$`)
+	movedVerbDE = regexp.MustCompile(`(?i)^[^.,;!?]{0,24}\b(?:verschoben|verlegt)\b`)
+	// eatAnd joins a weekday to the eating day before it.
+	eatAnd = regexp.MustCompile(`(?i)^\s*(?:(?:breakfast|lunch|dinner|supper|mittag\w*|abend\w*|fr(?:ü|ue)hst(?:ü|ue)ck)\s*)?(?:,|and|und|or|oder|&)\s*$`)
+	// eatAfter is a weekday (and meal) that eats: the subject of "eats".
+	eatAfter = regexp.MustCompile(`(?i)^\w*\s*(?:(?:breakfast|lunch|dinner|supper)\s+)?(?:eats?|isst|essen)\b`)
+)
+
+// listJoin is a comma, semicolon, colon or "and"/"or" between two days.
+var listJoin = regexp.MustCompile(`(?i)[,;:]|\b(?:and|und|or|oder)\b`)
+
+// afterPunct is the part of a span after its last comma, semicolon, colon,
+// "and" or "or": a meal word before them belongs to the day before ("for
+// Thursday dinner and Friday lunch").
+func afterPunct(span string) string {
+	if all := listJoin.FindAllStringIndex(span, -1); len(all) > 0 {
+		return span[all[len(all)-1][1]:]
+	}
+	return span
+}
 
 // claimCells parses the block's cooking lines into cells.
 func claimCells(facts []fact) []claimCell {
@@ -275,7 +304,7 @@ func countCells(cells []claimCell, dish string) int {
 
 // cookingBacked reports whether the block backs every cooking claim of text.
 func cookingBacked(text string, t replyTurn) bool {
-	if t.block == nil || cookDenial.MatchString(text) {
+	if t.block == nil {
 		return false
 	}
 	var cookLines strings.Builder
@@ -286,6 +315,12 @@ func cookingBacked(text string, t replyTurn) bool {
 	}
 	cooking := cookLines.String()
 	if strings.TrimSpace(cooking) == "" {
+		if t.block.nothingSaved {
+			return refusalBacked(text, t)
+		}
+		return false
+	}
+	if cookDenial.MatchString(text) {
 		return false
 	}
 	cells := claimCells(t.block.facts)
@@ -320,7 +355,23 @@ func cookingBacked(text string, t replyTurn) bool {
 			lo = days[i-1][1]
 		}
 		before := text[lo:d[0]]
-		if m := eatMarker.FindStringIndex(before); m != nil && !cookVerb.MatchString(before[m[0]:]) && !cookOnDay.MatchString(before) {
+		after := text[d[1]:]
+		if i+1 < len(days) {
+			after = text[d[1]:days[i+1][0]]
+		}
+		switch {
+		case movedTo.MatchString(before) || movedToDE.MatchString(before) && movedVerbDE.MatchString(after):
+			// The day the cooking moved to is a cooking day, however far
+			// from the cooking word (round 9 M2, dev-v2d g2-away-17: "the
+			// cooking for Friday dinner has moved to Friday lunch").
+			tiedDays[i] = true
+		case i > 0 && eatDays[i-1] && eatAnd.MatchString(before), eatAfter.MatchString(after):
+			// "for Thursday dinner and Friday lunch", "Thursday dinner eats
+			// from it": eaten, not cooked, then (round 9 M2, dev-v2d
+			// g2-cook_elsewhere-17).
+			eatDays[i] = true
+		}
+		if m := eatMarker.FindStringIndex(before); m != nil && !tiedDays[i] && !cookVerb.MatchString(before[m[0]:]) && !cookOnDay.MatchString(before) {
 			eatDays[i] = true
 		}
 	}
@@ -343,7 +394,11 @@ func cookingBacked(text string, t replyTurn) bool {
 		if i+1 < len(days) {
 			hi = min(hi, days[i+1][0])
 		}
-		meals := mealsNear(text[lo:days[i][0]])
+		before := text[lo:days[i][0]]
+		if i > 0 && lo == days[i-1][1] {
+			before = afterPunct(before) // the meal words of the day before stay its own
+		}
+		meals := mealsNear(before)
 		for m := range mealsNear(text[days[i][1]:hi]) {
 			meals[m] = true
 		}
@@ -394,7 +449,11 @@ func cookingBacked(text string, t replyTurn) bool {
 		if i+1 < len(days) {
 			hi = min(hi, days[i+1][0])
 		}
-		meals := mealsNear(text[lo:days[i][0]])
+		before := text[lo:days[i][0]]
+		if i > 0 && lo == days[i-1][1] {
+			before = afterPunct(before) // the meal words of the day before stay its own
+		}
+		meals := mealsNear(before)
 		for m := range mealsNear(text[days[i][1]:hi]) {
 			meals[m] = true
 		}
@@ -477,6 +536,96 @@ func cookingBacked(text string, t replyTurn) bool {
 	for _, phrase := range loose {
 		if !uniqueDishFor(phrase, dishes) {
 			return false // no dish, or several, cooked on that day has these words
+		}
+	}
+	return true
+}
+
+// Refusal reasons (round 9 M3, dev-v2d g2-remove-22, g2-swap-23,
+// h2-named-00, h2-cookref-03, g2-cook_elsewhere-03): on a turn that saved
+// nothing, the block holds no cooking line, only the code-rendered refused
+// part ("Left out: ... (it would create a problem on Mon 7 Dec: cooking times
+// per day (2 cooking times, at most 1))", "Left out: cooking "X" on Tue 1 Dec
+// lunch (Sat 28 Nov dinner ... eat it before then)"). A sentence with a
+// cooking word is backed by those lines when it names only their days, meals
+// and dishes, says nothing was done, and refuses ("can't", "geht nicht") or
+// gives the refused line's own rule: cooking times for a cooking-times
+// refusal, eating before the cook for a move_cook refusal. Anything else is
+// dropped (G2: the refused part is told with its reason; RP6).
+var (
+	refusalPhrase  = regexp.MustCompile(`(?i)\b(?:can'?t|cannot|can not|could ?n[o']?t|not possible|isn'?t possible|won'?t work|doesn'?t work|nicht möglich|geht (?:\S+ ){0,3}nicht|klappt (?:\S+ ){0,3}nicht|(?:kann|könnte) ich (?:\S+ ){0,6}nicht|lässt sich (?:\S+ ){0,6}nicht)`)
+	cookTimesWords = regexp.MustCompile(`(?i)cooking times?|cooking sessions?|kochzeit\w*|kochvorg(?:a|ä)ng\w*`)
+	eatWords       = regexp.MustCompile(`(?i)\b(?:eat|eats|eaten|eating|essen|isst|gegessen|before|by then|vorher|davor|zuvor|bis dahin)\b`)
+	// pastOfEating are the cookPast words a move_cook reason uses for the
+	// meals that eat first ("already eaten", "essen schon vorher davon").
+	pastOfEating = regexp.MustCompile(`(?i)\b(?:already|before|earlier|bereits|schon|vorher|zuvor|davor)\b`)
+	// mealCompound is a meal word inside a weekday compound ("Montagmittag").
+	mealCompound = regexp.MustCompile(`(?i)(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)(mittag|abend|fruehstueck)`)
+)
+
+// mealsIn are the meals a text names, also inside a weekday compound.
+func mealsIn(text string) map[string]bool {
+	out := mealsNear(text)
+	for _, m := range mealCompound.FindAllStringSubmatch(diet.Fold(text), -1) {
+		out[mealKey[strings.ToLower(m[1])]] = true
+	}
+	return out
+}
+
+// refusalBacked reports whether the refused lines of a no-save block back a
+// cooking sentence.
+func refusalBacked(text string, t replyTurn) bool {
+	var b strings.Builder
+	for _, f := range t.block.facts {
+		if f.Class == classRefused {
+			b.WriteString(" " + f.EN + " " + f.DE)
+		}
+	}
+	refused := b.String()
+	if strings.TrimSpace(refused) == "" || doneClaim.MatchString(text) && !negation.MatchString(text) {
+		return false
+	}
+	times := strings.Contains(refused, "cooking times per day")
+	eating := strings.Contains(refused, "eat it before then") || strings.Contains(refused, "past its keeping time")
+	timesReason, eatReason := cookTimesWords.MatchString(text), eatWords.MatchString(text)
+	// The past tense only of the meals that eat before the cook.
+	pastOK := eating && !cookPast.MatchString(pastOfEating.ReplaceAllString(text, " "))
+	switch {
+	case timesReason && !times:
+		return false // a cooking-times reason the refusal does not give
+	case eatReason && !eating:
+		return false // an eating claim the refusal does not make
+	case cookPast.MatchString(text) && !pastOK:
+		return false
+	case !refusalPhrase.MatchString(text) && !timesReason && !eatReason:
+		return false // no refusal and no reason of the refused line
+	}
+	for _, w := range weekdayName.FindAllString(text, -1) {
+		if !namesWeekday(refused, weekdayKey(w)) {
+			return false
+		}
+	}
+	have := mealsIn(refused)
+	for m := range mealsIn(text) {
+		if !have[m] {
+			return false
+		}
+	}
+	var named, dishes []string
+	for _, name := range t.foods {
+		if namesFood(text, name) {
+			if !namesFood(refused, name) {
+				return false
+			}
+			named = append(named, name)
+		}
+	}
+	for _, q := range quotedRe.FindAllString(refused, -1) {
+		dishes = append(dishes, strings.Trim(q, `"„“”`))
+	}
+	for _, phrase := range loosePhrases(text, t.foods, named) {
+		if !uniqueDishFor(phrase, dishes) {
+			return false
 		}
 	}
 	return true

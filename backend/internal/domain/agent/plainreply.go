@@ -37,6 +37,56 @@ type replyBlock struct {
 	nothingSaved bool
 	// diet: an unmet line whose reason is the household's diet (unmetChange).
 	diet bool
+	// kept are, per changed meal ("Mon 23 Nov dinner"), the dishes the change
+	// left on it: a true sentence may name them (keptDishes).
+	kept map[string][]string
+}
+
+// keptQty is the amount after a dish in a report's changed list.
+var keptQty = regexp.MustCompile(`\s+[\d.,]+\s*(?:portions?|g|kg|ml|pieces?)?$`)
+
+// keptDishes are, per meal of a report's changed list, the dishes on it both
+// before and after the change: the unchanged part of a named meal, which the
+// block does not repeat (round 9 M4, dev-v2d g2-replace-08 "Greek yogurt",
+// h2-cooking-09 "orange", g2-undo-16 "tofu stir-fry and romaine lettuce").
+func keptDishes(rep map[string]any) map[string][]string {
+	changed, _ := rep["changed"].([]any)
+	out := map[string][]string{}
+	for _, c := range changed {
+		m, _ := c.(map[string]any)
+		day, _ := m["day"].(string)
+		meal, _ := m["meal"].(string)
+		names := func(key string) []string {
+			l, _ := m[key].([]any)
+			var o []string
+			for _, x := range l {
+				if v, ok := x.(string); ok {
+					o = append(o, keptQty.ReplaceAllString(v, ""))
+				}
+			}
+			return o
+		}
+		before := names("before")
+		for _, n := range names("after") {
+			if slices.Contains(before, n) {
+				out[day+" "+meal] = append(out[day+" "+meal], n)
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// keeps reports whether a changed meal of the block kept the dish.
+func (b *replyBlock) keeps(name string) bool {
+	for _, names := range b.kept {
+		if slices.ContainsFunc(names, func(n string) bool { return strings.EqualFold(n, name) }) {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *replyBlock) empty() bool { return b == nil || (len(b.facts) == 0 && b.offer == nil) }
@@ -77,6 +127,7 @@ func blockOf(output json.RawMessage) (b *replyBlock, check bool) {
 			slog.Warn("agent.reply.facts unreadable", "error", err)
 		}
 		b.facts = append(b.facts, fs...)
+		b.kept = keptDishes(rep)
 		if o, ok := rep["offer"].(map[string]any); ok {
 			en, _ := o["en"].(string)
 			de, _ := o["de"].(string)
@@ -156,7 +207,15 @@ type replyTurn struct {
 	failed  bool             // a write tool failed with an error and saved nothing (noSaveLine)
 	coded   bool             // code lines follow the model's text (composeReply)
 	unlock  bool             // unlock ran: the user answers its card, the change waits (noSaveLine)
-	block   *replyBlock      // the facts and the offer of the turn's writes
+	// found are the foods lookups for the message's words found, with every
+	// word of the search in their name (noSaveLine, deniesFound); missedQ are
+	// the searches in the message's words that found nothing.
+	found   []foundFood
+	missedQ []string
+	// recommended: find_alternatives found the dish the message named and
+	// said to apply it (noSaveLine).
+	recommended bool
+	block       *replyBlock // the facts and the offer of the turn's writes
 	// undoable holds the block as it was before each change saved in this
 	// turn, newest last: an undo of that change takes the block back (addWrite).
 	undoable []*replyBlock
@@ -194,21 +253,69 @@ func (t *replyTurn) noteTool(name string, input, output json.RawMessage, err err
 	if obj["dry_run"] == true {
 		t.checked = true
 	}
-	items, ok := obj["items"].([]any)
-	if name != "find_foods" || !ok || len(items) > 0 {
-		t.ran = true
-		return
+	if alts, _ := obj["alternatives"].([]any); name == "find_alternatives" && len(alts) > 0 {
+		if next, _ := obj["next"].(string); strings.HasPrefix(next, "the user named this dish") {
+			t.recommended = true
+		}
 	}
+	items, ok := obj["items"].([]any)
 	// Only a search for a food the message names is a miss that settles it
 	// (review F4): a filter-only search or a misspelt query settles nothing.
 	var in struct {
 		Search string `json:"search"`
 	}
-	if json.Unmarshal(input, &in) != nil || !t.namesQuery(in.Search) {
+	named := name == "find_foods" && json.Unmarshal(input, &in) == nil && t.namesQuery(in.Search)
+	if named {
+		if len(items) == 0 {
+			t.missedQ = append(t.missedQ, in.Search)
+		}
+		for _, x := range items {
+			m, _ := x.(map[string]any)
+			if n, _ := m["name"].(string); hasWords(n, foldWords(in.Search)) {
+				t.found = append(t.found, foundFood{query: in.Search, name: n})
+			}
+		}
+	}
+	if name != "find_foods" || !ok || len(items) > 0 || !named {
 		t.ran = true
 		return
 	}
 	t.missed = true
+}
+
+// foundFood is a food a lookup for the message's words found.
+type foundFood struct{ query, name string }
+
+// foldWords are the folded words of a text.
+func foldWords(s string) []string {
+	return strings.FieldsFunc(diet.Fold(s), func(r rune) bool { return r < 'a' || r > 'z' })
+}
+
+// hasWords reports a text that has every one of the words (at least one).
+func hasWords(text string, words []string) bool {
+	have := foldWords(text)
+	return len(words) > 0 && !slices.ContainsFunc(words, func(w string) bool { return !slices.Contains(have, w) })
+}
+
+// namedFound are the found foods that are the dish the message named: a
+// search that found nothing with more of the message's words ("Thai green
+// curry") makes a hit of a shorter one ("curry") another dish (dev-v2d
+// h2-impossible-01).
+func (t replyTurn) namedFound() []foundFood {
+	var out []foundFood
+	for _, f := range t.found {
+		q := foldWords(f.query)
+		if !slices.ContainsFunc(t.missedQ, func(m string) bool { mw := foldWords(m); return len(mw) > len(q) && hasWords(m, q) }) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// actCase reports a message that names a day, a meal and a dish a lookup
+// found: G1 acts at once on it, so a question of the model does not stand.
+func (t replyTurn) actCase() bool {
+	return len(t.namedFound()) > 0 && weekdayName.MatchString(t.user) && len(mealsNear(t.user)) > 0
 }
 
 // namesQuery reports whether every word of the search query is a word of the
@@ -268,8 +375,12 @@ func (t replyTurn) noSaveLine(model string) (fact, bool) {
 	if t.unmet == nil {
 		return fact{}, false
 	}
+	// Nor does it stand when the turn found the dish the message named on a
+	// named day and meal (G1's act case) or find_alternatives said to apply it
+	// (round 9 INJ, safety-s3 s3-injection-03-k1: two lookups, a question, and
+	// no "nothing changed").
 	ss := sentences(strings.TrimSpace(plainReply(model)))
-	if len(ss) > 0 && strings.HasSuffix(ss[len(ss)-1], "?") && !t.missed && !t.unmet.diet {
+	if len(ss) > 0 && strings.HasSuffix(ss[len(ss)-1], "?") && !t.missed && !t.unmet.diet && !t.recommended && !t.actCase() {
 		return fact{}, false
 	}
 	switch {
@@ -409,6 +520,14 @@ func mergeBlock(a, b *replyBlock) *replyBlock {
 		return slices.ContainsFunc(movedFrom, func(x string) bool { return strings.Contains(x, " (cooked "+d+" "+m+" before)") })
 	})
 	out := &replyBlock{facts: selectBlock(append(earlier, b.facts...)), offer: a.offer, nothingSaved: a.nothingSaved && b.nothingSaved}
+	if len(a.kept)+len(b.kept) > 0 {
+		// The later write's dishes of a meal replace the earlier ones.
+		out.kept = maps.Clone(a.kept)
+		if out.kept == nil {
+			out.kept = map[string][]string{}
+		}
+		maps.Copy(out.kept, b.kept)
+	}
 	if b.offer != nil {
 		out.offer = b.offer
 	}
@@ -480,8 +599,12 @@ var (
 	thousand    = regexp.MustCompile(`^(\d{1,3})([.,]\d{3})+$`)
 	banned      = regexp.MustCompile(`(?i)\b(batch(es)?|eaters?|light days?|hearty minimum|cap|caps|band|bands|floor|soft|drafts?|extras?)\b|\b[HS]\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b|the tool only allows`)
 	// extraPerson is "the extra person": a guest, not the add-on position RP3
-	// bans the word for (V77, tune-v2b guests-00).
-	extraPerson = regexp.MustCompile(`(?i)\bextra (person|people|guests?|eater)\b`)
+	// bans the word for (V77, tune-v2b guests-00). "Extra portions" is a
+	// quantity, and "as a 50 g extra" / "als Extra" names the plate position
+	// the tools hand the model, the place on the plate, not planner jargon
+	// (round 9 M1, dev-v2d g2-add-01, g2-guests-17, h2-unasked-00); "an extra
+	// on the side" and "extras" stay banned.
+	extraPerson = regexp.MustCompile(`(?i)\bextra (person|people|guests?|eater|portions?|servings?|portionen)\b|\b(?:as an?|als)\s+(?:\d[\d.,]*\s*(?:g|kg|ml)\s+)?extra\b`)
 	quotedRe    = regexp.MustCompile(`"[^"\n]*"|„[^“\n]*“|“[^”\n]*”`)
 	weekdayRe   = regexp.MustCompile(`(?i)\b(mon|tues?|wed(nes)?|thu(rs)?|fri|sat(ur)?|sun)(day)?\b|\b(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b`)
 )
@@ -912,12 +1035,53 @@ var (
 	modelCookingWords = regexp.MustCompile(`(?i)\b(cook\w*|batch(es)?|leftovers?|left ?overs?|fresh(ly)?|portions? (are |is )?left|kochen|koch\w*|gekocht\w*|kochzeit\w*|reste[n]?|übrig\w*|frisch\w*)\b`)
 	// "I can't", "unless another meal grows", "weil der Tag sonst ..." and
 	// "instead of" (withoutComparisons) are refusals or reasons, no option.
-	modelOptionWords = regexp.MustCompile(`(?i)\b(if you|only if|unless you|i could|i'?d (suggest|recommend)|want me to|would you like|shall i|should i|alternatively|instead|otherwise|falls du|wenn du|nur wenn|ich kann|ich könnte|du kannst|du könntest|möchtest du|willst du|soll ich|stattdessen|alternativ)\b|\b(i can|you (could|can|may|might)) \w|\b(sonst )?(kann|könnte|soll) ich\b|(^|[.!?:;]\s+)sonst\b`)
+	// "Say the word and I'll add it" / "sag Bescheid" offer a change (round 9:
+	// a third sentence the positional cap used to cut, dev-v2d g2-away-11).
+	modelOptionWords = regexp.MustCompile(`(?i)\b(if you|only if|unless you|i could|i'?d (suggest|recommend)|want me to|would you like|shall i|should i|alternatively|instead|otherwise|falls du|wenn du|nur wenn|ich kann|ich könnte|du kannst|du könntest|möchtest du|willst du|soll ich|stattdessen|alternativ)\b|\b(i can|you (could|can|may|might)) \w|\b(sonst )?(kann|könnte|soll) ich\b|(^|[.!?:;]\s+)sonst\b|\b(say the word|let me know|just say|tell me if|i'?ll (add|put|swap|change|move|make|set|plan)|sag (einfach |mir )?bescheid|gib (mir )?bescheid)\b`)
 	// insteadOf is a done comparison: between quantities ("100 g instead of
 	// 200 g", "3 statt 4 Portionen") or after a statement ("is now ... instead
 	// of ..."). "Instead of the pasta, try rice" carries a proposal and stays.
 	insteadOf = regexp.MustCompile(`(?i)(\d[^.!?]*?\b(instead of|statt)\b[^.!?]*?\d|\b(is|are|was|were|now|ist|sind|jetzt|habe|have|has|hat)\b[^.!?]*?\b(instead of|statt)\b)`)
 )
+
+// dishAction is a sentence that adds, removes, replaces or moves a dish: a
+// dish a changed meal only kept cannot back it.
+var dishAction = regexp.MustCompile(`(?i)\b(add(?:ed|s|ing)?|remov\w*|replac\w*|swap\w*|mov(?:ed|es|ing)|dropp?\w*|took|taken|hinzugefügt|entfernt|ersetzt|getauscht|verschoben|gestrichen|weggelassen)\b`)
+
+// notFound is a claim that a dish is not in the library.
+var notFound = regexp.MustCompile(`(?i)\b(?:not found|(?:could|can|did) ?n[o']?t find|cannot find|isn'?t in (?:the|your) (?:library|recipes)|nicht gefunden|nicht finden|finde ich nicht|nicht in (?:der|deiner) (?:bibliothek|rezeptliste|sammlung))`)
+
+// deniesFound reports a sentence that says a dish is not there although a
+// lookup of the turn for it, in the message's words, found it (round 9 INJ,
+// safety-s3 s3-injection-03-k1: "Eine „Pasta al pomodoro“ habe ich in der
+// Bibliothek nicht gefunden." after find_foods("pomodoro") returned it).
+//
+// The dish the sentence denies is its words that the message has too (no
+// weekday, meal or function word); a found food must have every one of them,
+// so "I couldn't find a Thai green curry" stays after a hit for "curry"
+// whose name has no "thai".
+func (t replyTurn) deniesFound(text string) bool {
+	found := t.namedFound()
+	if len(found) == 0 || !notFound.MatchString(text) {
+		return false
+	}
+	msg := foldWords(t.user)
+	var dish []string
+	for _, w := range foldWords(text) {
+		if len(w) >= 3 && slices.Contains(msg, w) && !notDishWord[w] && !dishStop[w] && !weekdayName.MatchString(w) && len(mealsNear(w)) == 0 {
+			dish = append(dish, w)
+		}
+	}
+	return slices.ContainsFunc(found, func(f foundFood) bool { return hasWords(f.name, dish) })
+}
+
+// notDishWord are words a request and a "not found" sentence share that name
+// no dish.
+var notDishWord = map[string]bool{
+	"ich": true, "can": true, "kann": true, "have": true, "haben": true, "habe": true, "find": true, "found": true, "not": true, "nicht": true,
+	"library": true, "bibliothek": true, "your": true, "deiner": true, "instead": true, "stattdessen": true, "put": true, "you": true, "dir": true,
+	"zum": true, "zur": true, "this": true, "that": true, "plan": true,
+}
 
 // A done-claim next to a refused call (nothing saved) says what did not happen.
 var (
@@ -997,6 +1161,38 @@ func contradicts(text string, facts []fact, nothingSaved, checked bool) bool {
 // the option check; an "instead of" that proposes something stays.
 func withoutComparisons(text string) string { return insteadOf.ReplaceAllString(text, " ") }
 
+// Two non-offers the option words read as offers (round 9 M6, dev-v2d new2):
+// a negated "kann ich ... nicht" / "ich kann ... nicht", the German twin of
+// V58's "I can't" (h2-named-00: "Den ... kann ich am Donnerstagabend gerade
+// nicht eintragen."), and the undo or accept a saved change always has ("so
+// you can undo it or accept it on the board", g2-planner-17), which offers no
+// change of the plan (G3 governs offers of a change).
+var (
+	cannotDE   = regexp.MustCompile(`(?i)\b(?:ich kann|kann ich)\b[^.!?,;:]{0,60}?\bnicht\b`)
+	affordance = regexp.MustCompile(`(?i)\b(?:you can|du kannst)((?:\s+(?:undo|accept|review|check|see|it|this|that|them|the (?:plan|week|change)|on the (?:board|planner)|or|prüfen|ansehen|annehmen|bestätigen|rückgängig machen|sie|ihn|es|das|die woche|den plan|auf dem board|im planer|oder))+)`)
+	affordVerb = regexp.MustCompile(`(?i)undo|accept|review|check|see|prüfen|ansehen|annehmen|bestätigen|rückgängig`)
+	keepOld    = regexp.MustCompile(`(?i)\bif you(?:'d| would) rather keep (?:the|your) (?:previous|old|earlier) (?:version|plan|week)\b`)
+)
+
+// withoutNonOffers removes those non-offers before the option check; the
+// undo and accept only after a saved change, and nothing from a question.
+func withoutNonOffers(text string, saved bool) string {
+	if strings.Contains(text, "?") {
+		return text
+	}
+	text = cannotDE.ReplaceAllString(text, " ")
+	if !saved {
+		return text
+	}
+	text = affordance.ReplaceAllStringFunc(text, func(m string) string {
+		if affordVerb.MatchString(affordance.FindStringSubmatch(m)[1]) {
+			return " "
+		}
+		return m
+	})
+	return keepOld.ReplaceAllString(text, " ")
+}
+
 // lintModelText reports why the model's text cannot go out next to the block, or
 // "" when it can: a planner word, a number the block or the tool results do not
 // back (v1.4 P-7; on a turn without a block the user's message backs one too), a
@@ -1004,6 +1200,9 @@ func withoutComparisons(text string) string { return insteadOf.ReplaceAllString(
 func lintModelText(text string, t replyTurn, lg lang) string {
 	if text == "" {
 		return ""
+	}
+	if t.deniesFound(text) {
+		return "not_found"
 	}
 	withBlock := t.write && t.block != nil
 	if withBlock {
@@ -1051,19 +1250,21 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 		if modelCookingWords.MatchString(text) && !cookingBacked(text, t) {
 			return "cooking_claim"
 		}
-		if modelOptionWords.MatchString(withoutComparisons(text)) {
+		if modelOptionWords.MatchString(withoutNonOffers(withoutComparisons(text), !t.block.nothingSaved)) {
 			return "option"
 		}
 		lower := strings.ToLower(blockText)
 		// A dish is named in the block or not at all: a quoted span, or the
-		// name of a food of the plan.
+		// name of a food of the plan. A dish a changed meal kept counts as
+		// named, in a sentence that says no dish was added, removed or moved.
+		kept := func(name string) bool { return !dishAction.MatchString(text) && t.block.keeps(name) }
 		for _, m := range quotedRe.FindAllString(text, -1) {
-			if !strings.Contains(lower, strings.ToLower(strings.Trim(m, `"„“”`))) {
+			if name := strings.Trim(m, `"„“”`); !strings.Contains(lower, strings.ToLower(name)) && !kept(name) {
 				return "dish"
 			}
 		}
 		for _, name := range t.foods {
-			if namesFood(text, name) && !namesFood(blockText, name) {
+			if namesFood(text, name) && !namesFood(blockText, name) && !kept(name) {
 				return "dish"
 			}
 		}
@@ -1182,22 +1383,22 @@ func composeModelReply(model string, t replyTurn) string {
 			text = strings.Join(kept, " ")
 		}
 	}
-	if t.block != nil && t.write {
-		if ss := sentences(text); len(ss) > 2 {
-			for _, x := range ss[2:] {
-				drop(x, "third_sentence")
-			}
-			text = strings.Join(ss[:2], " ")
-		}
-	}
-	if lintModelText(text, t, lg) != "" {
+	// A write's text keeps at most two sentences (G4), counted among the
+	// sentences the lint passes: a dropped first sentence leaves room for a
+	// passing third (round 9 M5, dev-v2d new2 g2-swap-23: "Ich habe nichts
+	// geändert." was cut by position while the two before it were dropped).
+	capped := t.block != nil && t.write
+	if ss := sentences(text); lintModelText(text, t, lg) != "" || capped && len(ss) > 2 {
 		// The text keeps every sentence the lint passes: a sentence that breaks it
 		// is dropped, not the whole text (G4 lint per sentence, v1.3 P-6; RP4).
 		var kept []string
-		for _, s := range sentences(text) {
-			if why := lintModelText(s, t, lg); why != "" {
+		for _, s := range ss {
+			switch why := lintModelText(s, t, lg); {
+			case why != "":
 				drop(s, why)
-			} else {
+			case capped && len(kept) == 2:
+				drop(s, "third_sentence")
+			default:
 				kept = append(kept, s)
 			}
 		}
@@ -1261,10 +1462,10 @@ func composeModelReply(model string, t replyTurn) string {
 }
 
 // lintDrop is a sentence of the model's final text the reply left out, with
-// the reason: a lint reason of lintModelText (planner_word,
+// the reason: a lint reason of lintModelText (planner_word, not_found,
 // cooking_claim, option, dish, weekday, contradiction, number), "question" (a
-// write turn's trailing question) or "third_sentence" (past the two a write's
-// text may have).
+// write turn's trailing question) or "third_sentence" (past the two passing
+// sentences a write's text may have).
 type lintDrop struct {
 	Sentence string `json:"sentence"`
 	Reason   string `json:"reason"`
