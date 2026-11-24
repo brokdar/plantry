@@ -278,6 +278,9 @@ func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessag
 		input = json.RawMessage("{}")
 	}
 	input = unwrapParams(input)
+	if name == findWaysName {
+		input = flattenGoal(input)
+	}
 	result, err := s.schemas[name].Validate(gojsonschema.NewBytesLoader(input))
 	if err != nil {
 		return nil, ToolEffectNone, fmt.Errorf("%w: schema validation: %v", domain.ErrInvalidInput, err)
@@ -312,6 +315,48 @@ func unwrapParams(input json.RawMessage) json.RawMessage {
 		return input
 	}
 	return inner
+}
+
+// flattenGoal turns a find_ways goal sent as the object apply_changes takes
+// ({"kind": "lighter", "plate_id": 5}, or that object as a string) into the
+// kind string, keeping its plate_id and date unless the call has its own. The
+// model sent the object in 13 of 145 calls, which the schema refused.
+func flattenGoal(input json.RawMessage) json.RawMessage {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(input, &m) != nil || m == nil {
+		return input
+	}
+	raw := m["goal"]
+	if len(raw) == 0 {
+		return input
+	}
+	if raw[0] == '"' {
+		var str string
+		if json.Unmarshal(raw, &str) != nil || !strings.HasPrefix(strings.TrimSpace(str), "{") {
+			return input
+		}
+		raw = json.RawMessage(str)
+	}
+	var g struct {
+		Kind    string          `json:"kind"`
+		PlateID json.RawMessage `json:"plate_id"`
+		Date    json.RawMessage `json:"date"`
+	}
+	if !strings.HasPrefix(strings.TrimSpace(string(raw)), "{") || json.Unmarshal(raw, &g) != nil || g.Kind == "" {
+		return input
+	}
+	kind, _ := json.Marshal(g.Kind)
+	m["goal"] = kind
+	for k, v := range map[string]json.RawMessage{"plate_id": g.PlateID, "date": g.Date} {
+		if _, has := m[k]; !has && len(v) > 0 && string(v) != "null" {
+			m[k] = v
+		}
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		return input
+	}
+	return out
 }
 
 func schemaErrors(r *gojsonschema.Result) string {

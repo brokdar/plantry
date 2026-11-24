@@ -366,7 +366,7 @@ func TestFindWays_NextStepWithAnOffer(t *testing.T) {
 		case hasOffer:
 			assert.Contains(t, next, "only when the user says yes")
 		default:
-			assert.Contains(t, next, "nothing to apply")
+			assert.Contains(t, next, "change nothing this turn")
 		}
 	})
 }

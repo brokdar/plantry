@@ -93,9 +93,9 @@ func recommend(ways, offers []planning.Way, toLimit bool) {
 	case len(offers) > 0 && clean(offers[0]):
 		mark(&offers[0], "the only way to reach it that keeps the day in its range, no new warning")
 	case len(ways) > 0:
-		mark(&ways[0], "the closest way, but it creates a new warning (see why)")
+		mark(&ways[0], "the closest way, but it creates a new warning (see why); warnings do not block")
 	case len(offers) > 0:
-		mark(&offers[0], "the closest way, but it creates a new warning (see why)")
+		mark(&offers[0], "the closest way, but it creates a new warning (see why); warnings do not block")
 	}
 }
 
@@ -190,9 +190,11 @@ func adviceFor(ctx context.Context, svc Services, w window.Window, before, after
 	}
 	// A check says what the change would do; a saved change says what it did.
 	// The offer is the extra step: it is never applied unasked.
-	lead, tail, told := "the change is done as asked and", "; do not apply the offer unasked and do not offer it in your text (the program does)", ": the program tells it and its offer"
+	lead, tail, told := "the change is done as asked and", "; do not apply the offer unasked and do not offer it in your text (the program does)", ": the program tells it"
 	if len(offers) > 0 {
 		told = ": the program tells it and offers offers[0]"
+	} else if options {
+		told += " and its offer" // the issue's own options
 	}
 	var what string
 	switch {
