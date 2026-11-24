@@ -17,6 +17,20 @@ import (
 
 const findWaysName = "find_ways"
 
+// zeroDayKcal stands for a day target of 0 kcal ("eat nothing"): positive so
+// that it counts as named, under any floor, and rounds to 0 in every line.
+const zeroDayKcal = 0.01
+
+// hasKey reports whether the JSON object has the key (a null value counts as absent).
+func hasKey(raw json.RawMessage, key string) bool {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil {
+		return false
+	}
+	v, ok := m[key]
+	return ok && string(v) != "null"
+}
+
 const findWaysSchema = `{
   "type":"object",
   "required":["goal"],
@@ -25,7 +39,7 @@ const findWaysSchema = `{
     "plate_id":{"type":"integer","minimum":1},
     "date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$","description":"more_protein, lower_day, raise_day: the day"},
     "limit":{"type":"integer","minimum":1,"maximum":4},
-    "target_kcal":{"type":"number","minimum":1,"description":"lower_day: the kcal the user named for the day, when they named one"},
+    "target_kcal":{"type":"number","minimum":0,"description":"lower_day: the kcal the user named for the day, when they named one (0 for no food that day: the program refuses it as under the minimum)"},
     "to_limit":{"type":"boolean","description":"true when the user asked for a LIGHT or FILLING meal itself (a light dinner, properly light, leicht; a filling dinner, really filling, satt machend), not just a lighter or heartier one: only a way at the light limit meets it, so the search also swaps the main for a lighter dish"}
   },
   "additionalProperties":false
@@ -51,6 +65,12 @@ func toolFindWays(svc Services) Tool {
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
+			}
+			if in.TargetKcal == 0 && hasKey(input, "target_kcal") {
+				// A named 0 is a number under every minimum: the search treats 0
+				// as "no number named", so it gets a value that is named and shows
+				// as 0 kcal.
+				in.TargetKcal = zeroDayKcal
 			}
 			if svc.State == nil || svc.Tx == nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: find_ways is not available (no plan reader)", domain.ErrInvalidInput)

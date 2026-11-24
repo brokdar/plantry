@@ -30,7 +30,7 @@ func refusalOffer(ctx context.Context, svc Services, w window.Window, op changeO
 	switch op.Op {
 	case "remove":
 		return replacementOffer(ctx, svc, w, op, first)
-	case "replace", "set_quantity", "move":
+	case "replace", "set_quantity", "move", "add":
 	default:
 		return nil
 	}
@@ -44,8 +44,15 @@ func refusalOffer(ctx context.Context, svc Services, w window.Window, op changeO
 	st.Avoid, st.PairAddOns = svc.Removed.avoid(ctx), true
 	var o map[string]any
 	switch op.Op {
+	case "add":
+		o = existingBatchOffer(ctx, svc, w, st, op)
 	case "replace":
-		o = replaceAlternative(ctx, svc, w, st, op)
+		// A dish that already has a batch on another day is eaten from that
+		// batch (its cooking moved to the day's cooking time when it must):
+		// checked first, since it is what the user asked for.
+		if o = existingBatchOffer(ctx, svc, w, st, op); o == nil {
+			o = replaceAlternative(ctx, svc, w, st, op)
+		}
 	case "set_quantity":
 		o = smallerStep(ctx, svc, w, st, op)
 	case "move":
@@ -56,6 +63,81 @@ func refusalOffer(ctx context.Context, svc Services, w window.Window, op changeO
 		o["recommended_because"] = "checked on a copy of the plan: no new problem, no new warning"
 	}
 	return o
+}
+
+// existingBatchOffer is, for a refused add or replace of a dish that already
+// has a batch cooked on another day, the checked offer to eat it from that
+// batch, with the batch's cooking moved first to a cooking time the day
+// already has (the user's one cooking time per day stays) or, with none, to the
+// meal itself. The offer is made only when the whole change passes the check.
+func existingBatchOffer(ctx context.Context, svc Services, w window.Window, st planning.State, op changeOp) map[string]any {
+	if op.FoodID == 0 || op.SessionID != 0 || op.CookAt != nil {
+		return nil
+	}
+	var date string
+	var slotID int64
+	next := planning.OptionOp{Op: op.Op, FoodID: op.FoodID, Portions: op.Portions}
+	switch op.Op {
+	case "replace":
+		p, c, ok := componentOf(st, op)
+		if !ok {
+			return nil
+		}
+		date, slotID = p.Date.Format(time.DateOnly), p.SlotID
+		next.PlateComponentID = &c.ID
+	case "add":
+		date, slotID = op.Date, op.SlotID
+		if op.PlateID != 0 {
+			i := indexPlate(st, op.PlateID)
+			if i < 0 {
+				return nil
+			}
+			date, slotID = st.Plates[i].Date.Format(time.DateOnly), st.Plates[i].SlotID
+			next.PlateID = &op.PlateID
+		} else {
+			next.Date, next.SlotID = date, slotID
+		}
+	default:
+		return nil
+	}
+	if date == "" || slotID == 0 {
+		return nil
+	}
+	cell := func(d string, slot int64) string {
+		return dayLabelStr(d) + " " + strings.TrimPrefix(st.SlotNames[slot], "slot.")
+	}
+	// Where the day already cooks, then the meal's own cell.
+	targets := []planning.OptionCell{}
+	for _, s := range st.Sessions {
+		if s.CookDate.Format(time.DateOnly) == date && !slices.ContainsFunc(targets, func(c planning.OptionCell) bool { return c.SlotID == s.CookSlotID }) {
+			targets = append(targets, planning.OptionCell{Date: date, SlotID: s.CookSlotID})
+		}
+	}
+	targets = append(targets, planning.OptionCell{Date: date, SlotID: slotID})
+	for _, s := range st.Sessions {
+		if s.FoodID != op.FoodID || s.CookedAt != nil || s.Confirmed || s.Proposed() || s.CookDate.Format(time.DateOnly) == date {
+			continue
+		}
+		sid := s.ID
+		for _, to := range targets {
+			to := to
+			move := planning.OptionOp{Op: "move_cook", SessionID: &sid, CookAt: &to}
+			eat := next
+			eat.SessionID = &sid
+			ops := []planning.OptionOp{move, eat}
+			if !offerIsClean(ctx, svc, w, ops) {
+				continue
+			}
+			dish, from, at := food.Quote(foodNameOf(st, s.FoodID)), cell(s.CookDate.Format(time.DateOnly), s.CookSlotID), cell(to.Date, to.SlotID)
+			fromDE, atDE := deCell(from), deCell(at)
+			return map[string]any{
+				"what":    fmt.Sprintf("cook %s at %s instead of %s and eat it from that batch at %s: the batch already exists, so nothing new is cooked", dish, at, from, cell(date, slotID)),
+				"what_de": fmt.Sprintf("%s bei %s statt bei %s kochen und bei %s davon essen: den Vorrat gibt es schon, es wird nichts Neues gekocht", deQuote(foodNameOf(st, s.FoodID)), atDE, fromDE, deCell(cell(date, slotID))),
+				"ops":     ops,
+			}
+		}
+	}
+	return nil
 }
 
 // componentOf finds the plate and component an op names: by component id, or

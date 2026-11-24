@@ -91,6 +91,9 @@ type chatTurn struct {
 	cells map[string]bool
 	// dayKcal are the days the message sets to a kcal number (namedDayKcal).
 	dayKcal map[string]float64
+	// away is set when the message says the user is away (awayStated): a day
+	// that leaves the plan is then an away day, not a day of 0 kcal.
+	away bool
 }
 
 type turnKey struct{}

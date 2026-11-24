@@ -11,12 +11,14 @@ import (
 	"unicode"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
 // changeAsk is a message that asks for a change (folded text): "instead",
 // "swap", "can I have", "stattdessen", "kann ich ... haben".
-var changeAsk = regexp.MustCompile(`\b(?:instead|stattdessen|statt|swap\w*|tausch\w*|replace\w*|ersetz\w*|put|setz\w*|change|aender\w*|add|hinzu\w*|remove|entfern\w*|move|verschieb\w*|(?:can|could|may) i (?:get|have)|(?:kann|koennte|darf) ich)\b`)
+var changeAsk = regexp.MustCompile(`\b(?:instead|stattdessen|statt|swap\w*|tausch\w*|replace\w*|ersetz\w*|put|setz\w*|change|aender\w*|add|hinzu\w*|remove|entfern\w*|move|verschieb\w*|lieber|rather|(?:can|could|may) i (?:get|have)|(?:kann|koennte|darf) ich)\b`)
 
 // infoAsk is a message that only asks what is there ("what is on Sunday
 // dinner?", "why did you put pasta on Monday dinner?", "warum gibt es ...").
@@ -34,6 +36,52 @@ func asksOnly(msg string) bool {
 		return true
 	}
 	return strings.HasSuffix(strings.TrimSpace(msg), "?") && !requestAsk.MatchString(msg)
+}
+
+// shortAnswerWords is the longest message that answers the agent's question
+// without a change word of its own ("Das am Sonntag, bitte.").
+const shortAnswerWords = 8
+
+// inheritedAsk is the change request an answer turn carries: the user's
+// previous message, when it asked for a change, the agent's reply to it ended
+// in a question (a G1 ask) and this message is a short statement with no
+// change word of its own ("Das am Sonntag, bitte."). "" when the message
+// stands on its own: a question, a message with its own change word, a long
+// one, a reply to a statement, or an earlier request that was read-only.
+func inheritedAsk(history []llm.Message, text string) string {
+	msg := diet.Fold(text)
+	if changeAsk.MatchString(msg) || asksOnly(msg) || len(strings.Fields(msg)) > shortAnswerWords {
+		return ""
+	}
+	// history ends with this turn's message: walk back to the agent's reply,
+	// then to the user message before it.
+	i := len(history) - 2
+	if i < 1 || history[i].Role != llm.RoleAssistant {
+		return ""
+	}
+	ss := sentences(strings.TrimSpace(plainReply(messageText(history[i]))))
+	if len(ss) == 0 || !strings.HasSuffix(ss[len(ss)-1], "?") || history[i-1].Role != llm.RoleUser {
+		return ""
+	}
+	prev := messageText(history[i-1])
+	if pm := diet.Fold(prev); !changeAsk.MatchString(pm) || asksOnly(pm) {
+		return ""
+	}
+	return prev
+}
+
+// unmetOfTurn is unmetChange for a turn: an answer turn that names no change
+// word inherits the request it answers, with the cells of its own words when
+// they name a meal, else the earlier message's.
+func unmetOfTurn(history []llm.Message, text string, w window.Window, slotNames map[int64]string, st planning.State) (map[string]bool, *replyBlock) {
+	cells := namedCells(text, w, slotNames)
+	if prev := inheritedAsk(history, text); prev != "" {
+		text = prev + " " + text
+		if len(cells) == 0 {
+			cells = namedCells(text, w, slotNames)
+		}
+	}
+	return cells, unmetChange(text, cells, slotNames, st)
 }
 
 // meatWords are words for meat or fish (folded), with the class they need.

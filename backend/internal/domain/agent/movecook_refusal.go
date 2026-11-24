@@ -87,7 +87,7 @@ func moveCookRefusal(ctx context.Context, svc Services, w window.Window, op chan
 		whyDE = append(whyDE, joinAnd(lateDE, "und")+" würden es nach seiner Haltbarkeit essen")
 	}
 	whyEN, whyDEs := strings.Join(why, "; "), strings.Join(whyDE, "; ")
-	entry := map[string]any{"op": 1, "what": whatEN, "why": whyEN}
+	entry := map[string]any{"op": 1, "what": whatEN, "why": whyEN, "why_de": whyDEs}
 	for k, v := range refusedFact(whatEN, whatDE, whyEN, whyDEs) {
 		entry[k] = v
 	}
