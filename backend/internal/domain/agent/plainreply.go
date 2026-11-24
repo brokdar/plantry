@@ -604,7 +604,11 @@ var (
 	// the tools hand the model, the place on the plate, not planner jargon
 	// (round 9 M1, dev-v2d g2-add-01, g2-guests-17, h2-unasked-00); "an extra
 	// on the side" and "extras" stay banned.
-	extraPerson = regexp.MustCompile(`(?i)\bextra (person|people|guests?|eater|portions?|servings?|portionen)\b|\b(?:as an?|als)\s+(?:\d[\d.,]*\s*(?:g|kg|ml)\s+)?extra\b`)
+	extraPerson = regexp.MustCompile(`(?i)\bextra (person|people|guests?|eater|portions?|servings?|portionen)\b`)
+	// extraAs is "as a 50 g extra" / "als Extra"; stripExtraPerson keeps it
+	// when "on the side" follows (RE2 has no lookahead).
+	extraAs     = regexp.MustCompile(`(?i)\b(?:as an?|als)\s+(?:\d[\d.,]*\s*(?:g|kg|ml)\s+)?extra\b`)
+	extraOnSide = regexp.MustCompile(`(?i)^\s+(?:on the side|(?:auf|an) d(?:er|ie) seite)`)
 	quotedRe    = regexp.MustCompile(`"[^"\n]*"|„[^“\n]*“|“[^”\n]*”`)
 	weekdayRe   = regexp.MustCompile(`(?i)\b(mon|tues?|wed(nes)?|thu(rs)?|fri|sat(ur)?|sun)(day)?\b|\b(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b`)
 )
@@ -1046,7 +1050,7 @@ var (
 
 // dishAction is a sentence that adds, removes, replaces or moves a dish: a
 // dish a changed meal only kept cannot back it.
-var dishAction = regexp.MustCompile(`(?i)\b(add(?:ed|s|ing)?|remov\w*|replac\w*|swap\w*|mov(?:ed|es|ing)|dropp?\w*|took|taken|hinzugefügt|entfernt|ersetzt|getauscht|verschoben|gestrichen|weggelassen)\b`)
+var dishAction = regexp.MustCompile(`(?i)\b(add(?:ed|s|ing)?|remov\w*|replac\w*|swap\w*|mov(?:ed|es|ing)|dropp?\w*|took|taken|switch\w*|put|insert\w*|cut|skipp\w*|left out|now has|hinzugefügt|entfernt|ersetzt|\w*getauscht|ergänzt|eingefügt|aufgenommen|eingetragen|weggenommen|gewechselt|verschoben|gestrichen|weggelassen)\b`)
 
 // notFound is a claim that a dish is not in the library.
 var notFound = regexp.MustCompile(`(?i)\b(?:not found|(?:could|can|did) ?n[o']?t find|cannot find|isn'?t in (?:the|your) (?:library|recipes)|nicht gefunden|nicht finden|finde ich nicht|nicht in (?:der|deiner) (?:bibliothek|rezeptliste|sammlung))`)
@@ -1100,6 +1104,23 @@ func underMinimum(facts []fact) bool {
 	return slices.ContainsFunc(facts, func(f fact) bool {
 		return f.Kind == kindDay && f.Status == statusUnder && (strings.Contains(strings.ToLower(f.EN), "minimum") || strings.Contains(strings.ToLower(f.DE), "mindest"))
 	})
+}
+
+// stripExtraPerson removes the extra-person and plate-position uses of "extra"
+// before the banned-word check.
+func stripExtraPerson(text string) string {
+	text = extraPerson.ReplaceAllString(text, " ")
+	var b strings.Builder
+	last := 0
+	for _, m := range extraAs.FindAllStringIndex(text, -1) {
+		if extraOnSide.MatchString(text[m[1]:]) {
+			continue
+		}
+		b.WriteString(text[last:m[0]] + " ")
+		last = m[1]
+	}
+	b.WriteString(text[last:])
+	return b.String()
 }
 
 // contradicts reports a model text that denies what the block states.
@@ -1169,6 +1190,7 @@ func withoutComparisons(text string) string { return insteadOf.ReplaceAllString(
 // change of the plan (G3 governs offers of a change).
 var (
 	cannotDE   = regexp.MustCompile(`(?i)\b(?:ich kann|kann ich)\b[^.!?,;:]{0,60}?\bnicht\b`)
+	offerDE    = regexp.MustCompile(`(?i)tausch|ersetz|eintrag|hinzufüg`)
 	affordance = regexp.MustCompile(`(?i)\b(?:you can|du kannst)((?:\s+(?:undo|accept|review|check|see|it|this|that|them|the (?:plan|week|change)|on the (?:board|planner)|or|prüfen|ansehen|annehmen|bestätigen|rückgängig machen|sie|ihn|es|das|die woche|den plan|auf dem board|im planer|oder))+)`)
 	affordVerb = regexp.MustCompile(`(?i)undo|accept|review|check|see|prüfen|ansehen|annehmen|bestätigen|rückgängig`)
 	keepOld    = regexp.MustCompile(`(?i)\bif you(?:'d| would) rather keep (?:the|your) (?:previous|old|earlier) (?:version|plan|week)\b`)
@@ -1180,7 +1202,12 @@ func withoutNonOffers(text string, saved bool) string {
 	if strings.Contains(text, "?") {
 		return text
 	}
-	text = cannotDE.ReplaceAllString(text, " ")
+	text = cannotDE.ReplaceAllStringFunc(text, func(m string) string {
+		if offerDE.MatchString(strings.TrimSuffix(m, "nicht")) {
+			return m // the span offers a change before the "nicht"
+		}
+		return " "
+	})
 	if !saved {
 		return text
 	}
@@ -1206,7 +1233,7 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 	}
 	withBlock := t.write && t.block != nil
 	if withBlock {
-		if banned.MatchString(extraPerson.ReplaceAllString(text, " ")) {
+		if banned.MatchString(stripExtraPerson(text)) {
 			return "planner_word"
 		}
 		blockText := ""
@@ -1279,7 +1306,7 @@ func lintModelText(text string, t replyTurn, lg lang) string {
 		}
 		return ""
 	}
-	if banned.MatchString(extraPerson.ReplaceAllString(quotedRe.ReplaceAllString(text, ""), " ")) {
+	if banned.MatchString(stripExtraPerson(quotedRe.ReplaceAllString(text, ""))) {
 		return "planner_word"
 	}
 	have := map[string]bool{}

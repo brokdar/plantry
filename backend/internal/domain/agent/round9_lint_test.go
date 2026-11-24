@@ -355,3 +355,77 @@ func TestNoSaveLine_ActCaseQuestionDoesNotStand(t *testing.T) {
 	ask := "Zum Mittag- oder zum Abendessen?"
 	assert.Equal(t, ask, composeReply(ask, turn.final()))
 }
+
+// Review fixes: a done word on a nothing-saved turn drops the sentence unless
+// the same clause negates it.
+func TestLint_RefusalBackedRejectsDoneWords(t *testing.T) {
+	t.Parallel()
+	line := refusedLine(
+		`Left out: removing "Green salad" from Mon 7 Dec lunch (it would create a problem on Mon 7 Dec: cooking times per day (2 cooking times, at most 1)).`,
+		`Weggelassen: „Green salad“ von Montag, 7. Dez. Mittagessen entfernen (es würde am Montag, 7. Dez. ein Problem entstehen: mehr getrennte Kochzeiten an einem Tag als erlaubt (2 Kochzeiten, höchstens 1)).`)
+	foods := []string{"Green salad"}
+	for _, tc := range []struct {
+		text string
+		lg   lang
+		keep bool
+	}{
+		{"Saved, but I can't cook twice on Monday.", langEN, false},
+		{"Ist eingetragen, aber zweimal kochen geht am Montag nicht.", langDE, false},
+		{"I swapped the lunch, but couldn't cook it twice on Monday.", langEN, false},
+		{"Updated, but I can't cook twice on Monday.", langEN, false},
+		{"Ist erledigt, aber zweimal kochen geht am Montag nicht.", langDE, false},
+		{"I can't cook twice on Monday.", langEN, true},
+		{"I didn't move it: Monday would have two cooking times.", langEN, true},
+		{"Ich habe nichts verschoben: Montag hätte zwei Kochzeiten.", langDE, true},
+	} {
+		turn := replyTurn{user: "no Green salad at Monday lunch", write: true, foods: foods, block: &replyBlock{nothingSaved: true, facts: []fact{line}}}
+		got := lintModelText(tc.text, turn, tc.lg)
+		if tc.keep {
+			assert.Empty(t, got, tc.text)
+		} else {
+			assert.NotEmpty(t, got, tc.text)
+		}
+	}
+}
+
+func TestLint_KeptDishNeedsNoChangeVerb(t *testing.T) {
+	t.Parallel()
+	replace08, _ := blockOf(json.RawMessage(`{"saved":true,"report":{
+		"facts":[{"class":2,"kind":"meal","status":"ok","en":"Mon 23 Nov dinner: \"Lachs\" replaced by \"Chili sin carne\" (1528 → 1297 kcal).","de":"x"}],
+		"changed":[{"day":"Mon 23 Nov","meal":"dinner","after":["Chili sin carne 1 portion","Greek yogurt 200 g"],"before":["Lachs 1 portion","Greek yogurt 200 g"]}]}}`))
+	require.NotNil(t, replace08)
+	turn := replyTurn{user: "could Monday's dinner be something different?", write: true, foods: []string{"Chili sin carne", "Greek yogurt", "Hummus"}, block: replace08}
+	for _, tc := range []struct {
+		text string
+		lg   lang
+	}{
+		{"I switched out the Greek yogurt for Hummus on Monday dinner.", langEN},
+		{"I put the Greek yogurt on Monday dinner.", langEN},
+		{"I left out the Greek yogurt on Monday dinner.", langEN},
+		{"Ich habe den Greek yogurt ergänzt.", langDE},
+		{"Ich habe den Greek yogurt eingefügt.", langDE},
+		{"Ich habe den Greek yogurt umgetauscht.", langDE},
+	} {
+		assert.Equal(t, "dish", lintModelText(tc.text, turn, tc.lg), tc.text)
+	}
+	assert.Empty(t, lintModelText("Monday dinner is now Chili sin carne with Greek yogurt.", turn, langEN))
+}
+
+func TestLint_CannotDEKeepsTheOffer(t *testing.T) {
+	t.Parallel()
+	saved := replyTurn{
+		user: "x", write: true, numbers: map[string]bool{},
+		block: &replyBlock{facts: []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: "Mon 30 Nov dinner: added \"Orange\" (680 → 774 kcal).", DE: "Montag, 30. Nov. Abendessen: hinzugefügt: „Orange“ (680 → 774 kcal)."}}},
+	}
+	assert.Equal(t, "option", lintModelText("Ich kann den Salat gegen Hummus tauschen und das Brot nicht ändern.", saved, langDE))
+}
+
+func TestLint_ExtraAsAnExtraOnTheSideStaysBanned(t *testing.T) {
+	t.Parallel()
+	add01 := replyTurn{
+		user: "add nuts to Saturday dinner", write: true, foods: []string{"Hummus"}, numbers: map[string]bool{"50": true},
+		block: &replyBlock{facts: []fact{{Class: classChanged, Kind: kindMeal, Status: statusOK, EN: `Sat 28 Nov dinner: added "Hummus" (604 → 729 kcal).`, DE: `x`}}},
+	}
+	assert.Equal(t, "planner_word", lintModelText("I put the nuts in as an extra on the side.", add01, langEN))
+	assert.Equal(t, "planner_word", lintModelText("Ich habe es als Extra auf die Seite gelegt.", add01, langDE))
+}

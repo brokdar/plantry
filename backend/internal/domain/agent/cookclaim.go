@@ -574,6 +574,23 @@ func mealsIn(text string) map[string]bool {
 	return out
 }
 
+// savedWords are the words that tell a change as done, wider than doneClaim.
+var savedWords = regexp.MustCompile(`(?i)\b(?:saved|done|updated|planned|moved|swapped|replaced|added|removed|changed|(?:is|are) now|gespeichert|eingetragen|erledigt|aktualisiert|ergänzt|eingefügt|verschoben|getauscht|ersetzt|hinzugefügt|entfernt|geändert|ist jetzt)\b`)
+
+// clauseSplit cuts a sentence into its clauses.
+var clauseSplit = regexp.MustCompile(`(?i)[.!?,;:]|\b(?:but|aber|and|und)\b`)
+
+// unnegatedDone reports a clause that tells a change as done without a
+// negation of its own.
+func unnegatedDone(text string) bool {
+	for _, c := range clauseSplit.Split(text, -1) {
+		if (savedWords.MatchString(c) || doneClaim.MatchString(c)) && !negation.MatchString(c) {
+			return true
+		}
+	}
+	return false
+}
+
 // refusalBacked reports whether the refused lines of a no-save block back a
 // cooking sentence.
 func refusalBacked(text string, t replyTurn) bool {
@@ -584,7 +601,7 @@ func refusalBacked(text string, t replyTurn) bool {
 		}
 	}
 	refused := b.String()
-	if strings.TrimSpace(refused) == "" || doneClaim.MatchString(text) && !negation.MatchString(text) {
+	if strings.TrimSpace(refused) == "" || unnegatedDone(text) {
 		return false
 	}
 	times := strings.Contains(refused, "cooking times per day")
