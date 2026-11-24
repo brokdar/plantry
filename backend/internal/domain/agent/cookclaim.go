@@ -674,7 +674,9 @@ func refusalBacked(text string, t replyTurn) bool {
 		}
 	}
 	for _, phrase := range loosePhrases(text, t.foods, named) {
-		if !uniqueDishFor(phrase, dishes) {
+		if timesReason || !uniqueDishFor(phrase, dishes) {
+			// A cooking count for a dish named in part cannot be tied to the
+			// day and meal of the refused line (R12b replay).
 			return false
 		}
 	}

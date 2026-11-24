@@ -137,3 +137,47 @@ func TestLint_R12b_YearAfterAKnownDate(t *testing.T) {
 	assert.Equal(t, "number", lintModelText("Ja, Sonntag, der 29. November 2026 kcal, liegt im Planungszeitraum.", turn, langDE))
 	assert.Equal(t, "number", lintModelText("Ja, Sonntag, der 29. November hat 2026 Kalorien.", turn, langDE))
 }
+
+// A refusal sentence that names a cooking count or a cook day for the move that
+// was not made, with a dish named only in part, is a cooking claim the refused
+// line does not back (it cannot tell which dish, day or meal the count is for):
+// the line carries the true reason (replay of the recorded runs, round 12b).
+func TestLint_R12b_HypotheticalCookingCountStaysDropped(t *testing.T) {
+	t.Parallel()
+	mk := func(user, dish, from, day string, foods ...string) replyTurn {
+		en := `Left out: moving "` + dish + `" ` + from + ` (it would create a problem on ` + day + `: cooking times per day (2 cooking times, at most 1)).`
+		de := `Weggelassen: „` + dish + `“ ` + from + ` verschieben (es würde am ` + day + ` ein Problem entstehen: mehr getrennte Kochzeiten an einem Tag als erlaubt (2 Kochzeiten, höchstens 1)).`
+		return replyTurn{
+			user: user, write: true, foods: foods,
+			block: &replyBlock{nothingSaved: true, facts: []fact{refusedLine(en, de)}},
+		}
+	}
+	for _, c := range []struct {
+		turn replyTurn
+		text string
+		lang lang
+	}{
+		{
+			mk("move the pasta to friday", "Pasta with pesto and peas", "from Mon 7 Dec dinner to Fri 11 Dec dinner", "Mon 7 Dec", "Pasta with pesto and peas", "Green salad"),
+			"Moving the Monday pasta to Friday dinner would give Monday a second cooking time, and the plan allows only one per day.", langEN,
+		},
+		{
+			mk("move the lasagne to friday", "Lasagne bolognese", "from Sun 6 Dec dinner to Fri 11 Dec dinner", "Mon 7 Dec", "Lasagne bolognese", "Couscous"),
+			"Moving Sunday's lasagne to Friday would leave Monday dinner with a second cooking time, and the planner allows only one per day.", langEN,
+		},
+		{
+			mk("Verschiebe die Bolognese", "Linsen-Bolognese aus dem Slow Cooker", "to Wed 25 Nov dinner", "Wed 25 Nov", "Linsen-Bolognese aus dem Slow Cooker"),
+			"die Linsen-Bolognese bräuchte am Abend eine zweite Kochzeit an diesem Tag.", langDE,
+		},
+		{
+			mk("Schnitzel am Montagmittag", "Pork schnitzel", "to Mon 7 Dec lunch", "Mon 7 Dec", "Pork schnitzel", "Boiled potatoes"),
+			"Das Schnitzel wird am Montagmittag gekocht, und dann gäbe es am Montag zwei Kochzeiten, erlaubt ist nur eine.", langDE,
+		},
+		{
+			mk("Gratin auf Donnerstag", "Kartoffelgratin – einfach und klassisch", "from Tue 8 Dec dinner to Thu 10 Dec dinner", "Wed 9 Dec", "Kartoffelgratin – einfach und klassisch"),
+			"Das Kartoffelgratin vom Dienstagabend lässt sich nicht an den Donnerstag verschieben, weil es dann am Mittwoch zwei Kochzeiten gäbe, und erlaubt ist höchstens eine pro Tag.", langDE,
+		},
+	} {
+		assert.Equal(t, "cooking_claim", lintModelText(c.text, c.turn, c.lang), c.text)
+	}
+}
