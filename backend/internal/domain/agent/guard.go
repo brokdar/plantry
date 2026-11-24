@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -57,14 +59,107 @@ func hardWhyL(is planning.Issue) (en, de string) {
 
 // hardLabelDE is the plain label of a hard issue in German.
 var hardLabelDE = map[string]string{
-	planning.CodeTooManyCookOccasions: "mehr getrennte Kochzeiten an einem Tag als erlaubt",
-	planning.CodeMeatDaysExceeded:     "mehr Fleischtage in der Woche als erlaubt",
-	planning.CodeDietIncompatible:     "ein Lebensmittel passt nicht zur Ernährungsweise",
-	planning.CodeKcalBelowFloor:       "der Tag läge unter seinem Mindestwert",
-	planning.CodeVarietyRepeat:        "ein Hauptgericht wurde zu kürzlich gekocht oder gegessen",
-	"leftover_before_cook":            "Reste würden vor dem Kochen gegessen",
-	"past_keep_days":                  "Reste wären nicht mehr haltbar",
-	"deficit":                         "es würde mehr gegessen, als gekocht wird",
+	planning.CodeTooManyCookOccasions:  "mehr getrennte Kochzeiten an einem Tag als erlaubt",
+	planning.CodeMeatDaysExceeded:      "mehr Fleischtage in der Woche als erlaubt",
+	planning.CodeDietIncompatible:      "ein Lebensmittel passt nicht zur Ernährungsweise",
+	planning.CodeKcalBelowFloor:        "der Tag läge unter seinem Mindestwert",
+	planning.CodeVarietyRepeat:         "ein Hauptgericht wurde zu kürzlich gekocht oder gegessen",
+	"leftover_before_cook":             "Reste würden vor dem Kochen gegessen",
+	"past_keep_days":                   "Reste wären nicht mehr haltbar",
+	"deficit":                          "es würde mehr gegessen, als gekocht wird",
+	"frozen_deficit":                   "es würde mehr vom eingefrorenen Vorrat gegessen, als eingefroren ist",
+	planning.CodeMissingPlate:          "einer Mahlzeit fehlt der Teller",
+	planning.CodeExtraPlate:            "ein Teller steht in einem Slot, der leer bleiben soll",
+	planning.CodePlateInNoneCell:       "ein Teller steht in einem Slot ohne Mahlzeit",
+	planning.CodeCookInNoneCell:        "es würde in einem Slot ohne Mahlzeit gekocht",
+	planning.CodeConfirmedInTarget:     "die Änderung würde eine bestätigte Mahlzeit berühren",
+	planning.CodeSessionOutsideTarget:  "ein Gericht, das außerhalb des Bereichs gekocht wird, wäre betroffen",
+	planning.CodeDuplicateSessionKey:   "zwei Kochvorgänge hätten denselben Namen",
+	planning.CodeInvalidPortions:       "eine Portionsangabe ist ungültig",
+	planning.CodeNotComposed:           "ein Lebensmittel, das kein Rezept ist, würde wie eines verwendet",
+	planning.CodePlateOnConfirmedCell:  "ein Teller läge auf einem bereits bestätigten Slot",
+	planning.CodePlateOutsideTarget:    "ein Teller läge außerhalb des geplanten Bereichs",
+	planning.CodePlateWithoutComponent: "ein Teller hätte kein Essen darauf",
+	planning.CodePortionsOverCap:       "die Portionen lägen über dem erlaubten Höchstwert",
+	planning.CodeSessionFoodMismatch:   "ein Teller äße von einem Kochvorgang eines anderen Rezepts",
+	planning.CodeUnknownFood:           "ein Lebensmittel im Plan existiert nicht",
+	planning.CodeUnknownSession:        "ein Teller äße von einem Kochvorgang, den es nicht gibt",
+}
+
+// hardWhyIn is hardWhyL with, for a day of too many cooking times, the
+// batches and meals that already cook that day, so the reason names what is in
+// the way and not only the count.
+func hardWhyIn(ctx context.Context, svc Services, w window.Window, is planning.Issue) (en, de string) {
+	en, de = hardWhyL(is)
+	if is.Code != planning.CodeTooManyCookOccasions || svc.State == nil || is.Date == "" {
+		return en, de
+	}
+	st, err := svc.State(ctx, w, todayFrom(ctx))
+	if err != nil {
+		return en, de
+	}
+	cooks, cooksDE := cooksOnDay(st, is.Date)
+	if len(cooks) == 0 || !strings.HasSuffix(en, ")") || !strings.HasSuffix(de, ")") {
+		return en, de
+	}
+	return strings.TrimSuffix(en, ")") + "; already cooking that day: " + strings.Join(cooks, ", ") + ")",
+		strings.TrimSuffix(de, ")") + "; an dem Tag wird schon gekocht: " + strings.Join(cooksDE, ", ") + ")"
+}
+
+// cooksOnDay lists the cooking times of a day in the plan as it is: each batch
+// cooked there and each meal that cooks its own dish, with the cell, in
+// English and German, one entry per cooking cell.
+func cooksOnDay(st planning.State, date string) (en, de []string) {
+	routine := map[string]bool{}
+	for _, c := range st.Cells {
+		if c.Mode == availability.ModeRoutine {
+			routine[fmt.Sprintf("%s|%d", c.Date.Format(time.DateOnly), c.SlotID)] = true
+		}
+	}
+	type cook struct {
+		cell   string
+		slot   int64
+		dishes []string
+	}
+	var cooks []*cook
+	add := func(slot int64, dish string) {
+		if routine[fmt.Sprintf("%s|%d", date, slot)] || dish == "" {
+			return
+		}
+		for _, c := range cooks {
+			if c.slot == slot {
+				if !slices.Contains(c.dishes, dish) {
+					c.dishes = append(c.dishes, dish)
+				}
+				return
+			}
+		}
+		cooks = append(cooks, &cook{cell: dayLabelStr(date) + " " + strings.TrimPrefix(st.SlotNames[slot], "slot."), slot: slot, dishes: []string{dish}})
+	}
+	for _, s := range st.Sessions {
+		if s.CookDate.Format(time.DateOnly) == date {
+			add(s.CookSlotID, foodName(st, s.FoodID))
+		}
+	}
+	for _, p := range st.Plates {
+		if p.Date.Format(time.DateOnly) != date {
+			continue
+		}
+		for _, c := range p.Components {
+			if c.SessionID == 0 && c.SessionKey == "" && c.Portions != nil {
+				add(p.SlotID, foodName(st, c.FoodID))
+			}
+		}
+	}
+	for _, c := range cooks {
+		var q, qd []string
+		for _, d := range c.dishes {
+			q, qd = append(q, food.Quote(d)), append(qd, deQuote(d))
+		}
+		en = append(en, joinAnd(q, "and")+" at "+c.cell)
+		de = append(de, joinAnd(qd, "und")+" bei "+deCell(c.cell))
+	}
+	return en, de
 }
 
 // refusedPart names what the guard left out: the action with the dish and the
@@ -197,7 +292,21 @@ func refusedFact(whatEN, whatDE, why, whyDE string) map[string]any {
 // the reason and the offer. The model gets the right outcome in one call: it
 // never has to work out the subset itself.
 func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInput, ignored map[int][]string) (applyRun, error) {
-	if in.quiet || len(in.Ops) == 0 || !slicesAnyOp(in.Ops, func(o changeOp) bool { return !exemptOps[o.Op] }) {
+	if in.quiet || len(in.Ops) == 0 {
+		return runApply(ctx, svc, w, in, ignored)
+	}
+	if !slicesAnyOp(in.Ops, func(o changeOp) bool { return !exemptOps[o.Op] }) {
+		// Explicit ops are not judged, except against a day the user set to a
+		// number under its minimum: an away mark must not carry out "0 kcal".
+		if t, ok := turnFrom(ctx); ok && len(t.dayKcal) > 0 {
+			probe := in
+			probe.DryRun, probe.quiet = true, !in.DryRun
+			if pr, err := runApply(ctx, svc, w, probe, ignored); err == nil {
+				if res, ok := underFloorRequest(ctx, pr, in.DryRun); ok {
+					return res, nil
+				}
+			}
+		}
 		return runApply(ctx, svc, w, in, ignored)
 	}
 	probe := in
@@ -238,7 +347,7 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 			continue
 		}
 		if hs := newHard(r.before, r.after); len(hs) > 0 {
-			en, de := hardWhyL(hs[0])
+			en, de := hardWhyIn(ctx, svc, w, hs[0])
 			wEN, wDE := refusedPart(ctx, svc, w, op, r)
 			skipped = append(skipped, skip{i, wEN, wDE, en, de})
 			continue
@@ -262,7 +371,7 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 		last := safe[len(safe)-1]
 		why, whyDE := "together with the other changes it would leave a day under its minimum", "zusammen mit den anderen Änderungen würde ein Tag unter seinen Mindestwert fallen"
 		if err == nil {
-			en, de := hardWhyL(newHard(r.before, r.after)[0])
+			en, de := hardWhyIn(ctx, svc, w, newHard(r.before, r.after)[0])
 			why, whyDE = en+" together with the other changes", de+" zusammen mit den anderen Änderungen"
 		}
 		wEN, wDE := refusedPart(ctx, svc, w, in.Ops[last], applyRun{})
@@ -274,7 +383,7 @@ func runGuarded(ctx context.Context, svc Services, w window.Window, in applyInpu
 	var skippedList []map[string]any
 	var offers []map[string]any
 	for _, s := range skipped {
-		entry := map[string]any{"op": s.idx + 1, "what": s.what, "why": s.why}
+		entry := map[string]any{"op": s.idx + 1, "what": s.what, "why": s.why, "why_de": s.whyDE}
 		for k, v := range refusedFact(s.what, s.whatDE, s.why, s.whyDE) {
 			entry[k] = v
 		}
@@ -349,7 +458,11 @@ func underFloorRequest(ctx context.Context, pr applyRun, dryRun bool) (applyRun,
 			continue
 		}
 		i := slices.IndexFunc(pr.after.Days, func(a planning.DayEval) bool { return a.Date == b.Date })
-		if i < 0 || pr.after.Days[i].Kcal >= b.Kcal-0.5 {
+		if i < 0 && t.away {
+			continue // the user is away that day: it may leave the plan
+		}
+		// A day that left the plan counts as 0 kcal.
+		if i >= 0 && pr.after.Days[i].Kcal >= b.Kcal-0.5 {
 			continue // the call leaves that day as it is or raises it: never refused
 		}
 		day := dayLabelStr(b.Date)
@@ -357,7 +470,7 @@ func underFloorRequest(ctx context.Context, pr applyRun, dryRun bool) (applyRun,
 		whatDE := fmt.Sprintf("%s auf etwa %.0f kcal bringen", deDay(day), want)
 		why := fmt.Sprintf("%.0f kcal is below the day's minimum of %.0f kcal", want, b.FloorKcal)
 		whyDE := fmt.Sprintf("%.0f kcal liegen unter dem Mindestwert des Tages von %.0f kcal", want, b.FloorKcal)
-		entry := map[string]any{"op": 1, "what": whatEN, "why": why}
+		entry := map[string]any{"op": 1, "what": whatEN, "why": why, "why_de": whyDE}
 		for k, v := range refusedFact(whatEN, whatDE, why, whyDE) {
 			entry[k] = v
 		}

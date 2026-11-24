@@ -204,9 +204,12 @@ type replyTurn struct {
 	checked bool             // a check (dry run, preview) ran: "not saved" may be true of it
 	ran     bool             // a tool ran that is no food lookup finding nothing (noSaveLine)
 	missed  bool             // a food lookup found nothing: the food asked for is not in the library (noSaveLine)
-	failed  bool             // a write tool failed with an error and saved nothing (noSaveLine)
-	coded   bool             // code lines follow the model's text (composeReply)
-	unlock  bool             // unlock ran: the user answers its card, the change waits (noSaveLine)
+	guardEN string           // the reason the guard refused a checked change (noSaveLine)
+	guardDE string
+	noAlt   bool // find_alternatives found nothing: the question of the model does not stand (noSaveLine)
+	failed  bool // a write tool failed with an error and saved nothing (noSaveLine)
+	coded   bool // code lines follow the model's text (composeReply)
+	unlock  bool // unlock ran: the user answers its card, the change waits (noSaveLine)
 	// found are the foods lookups for the message's words found, with every
 	// word of the search in their name (noSaveLine, deniesFound); missedQ are
 	// the searches in the message's words that found nothing.
@@ -252,6 +255,20 @@ func (t *replyTurn) noteTool(name string, input, output json.RawMessage, err err
 	}
 	if obj["dry_run"] == true {
 		t.checked = true
+		// The guard refused the checked change: its reason is told, not "only checked".
+		if skipped, _ := obj["skipped"].([]any); len(skipped) > 0 {
+			if m, _ := skipped[0].(map[string]any); m != nil {
+				en, _ := m["why"].(string)
+				de, _ := m["why_de"].(string)
+				if en != "" && de != "" {
+					t.guardEN, t.guardDE = en, de
+				}
+			}
+		}
+	}
+	if alts, _ := obj["alternatives"].([]any); name == "find_alternatives" && len(alts) == 0 {
+		// An empty search settles the request the way an empty lookup does.
+		t.noAlt = true
 	}
 	if alts, _ := obj["alternatives"].([]any); name == "find_alternatives" && len(alts) > 0 {
 		if next, _ := obj["next"].(string); strings.HasPrefix(next, "the user named this dish") {
@@ -380,18 +397,23 @@ func (t replyTurn) noSaveLine(model string) (fact, bool) {
 	// (round 9 INJ, safety-s3 s3-injection-03-k1: two lookups, a question, and
 	// no "nothing changed").
 	ss := sentences(strings.TrimSpace(plainReply(model)))
-	if len(ss) > 0 && strings.HasSuffix(ss[len(ss)-1], "?") && !t.missed && !t.unmet.diet && !t.recommended && !t.actCase() {
+	if len(ss) > 0 && strings.HasSuffix(ss[len(ss)-1], "?") && !t.missed && !t.noAlt && !t.unmet.diet && !t.recommended && !t.actCase() {
 		return fact{}, false
 	}
 	switch {
 	case t.failed:
 		return reason(failedWhyEN, failedWhyDE)
+	case t.write && t.checked && t.guardEN != "":
+		return reason("the check refused it: "+t.guardEN, "die Prüfung hat sie abgelehnt: "+t.guardDE)
 	case t.write && t.checked:
 		return reason(checkedWhyEN, checkedWhyDE)
 	case t.write:
 		return fact{}, false
 	case t.ran:
 		return reason(lookedWhyEN, lookedWhyDE)
+	case t.missed && len(t.missedQ) > 0:
+		q := t.missedQ[0]
+		return reason(fmt.Sprintf("%q is not in your library", q), fmt.Sprintf("„%s“ ist nicht in deiner Bibliothek", q))
 	}
 	return t.unmet.facts[0], true
 }

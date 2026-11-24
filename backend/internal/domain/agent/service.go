@@ -13,6 +13,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -203,9 +204,9 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	// Drive the loop. Tools read today (D25), the window and the turn from
 	// ctx.
 	ctx = withWindow(withToday(ctx, req.Today), w)
-	cells := namedCells(req.UserText, w, st.SlotNames)
+	cells, unmet := unmetOfTurn(history, req.UserText, w, st.SlotNames, st)
 	dayKcal := namedDayKcal(req.UserText, w, req.Today)
-	ctx = withTurn(ctx, chatTurn{conversationID: conv.ID, seq: s.turns.Add(1), unlocks: s.unlocks, named: namedFoods(req.UserText, st.Foods), cells: cells, dayKcal: dayKcal})
+	ctx = withTurn(ctx, chatTurn{conversationID: conv.ID, seq: s.turns.Add(1), unlocks: s.unlocks, named: namedFoods(req.UserText, st.Foods), cells: cells, dayKcal: dayKcal, away: awayStated.MatchString(diet.Fold(req.UserText))})
 	runReq := RunRequest{
 		ConversationID: conv.ID,
 		Model:          model,
@@ -217,7 +218,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		Tools:          s.tools.Describe(),
 		Effort:         s.effort(ctx),
 		MaxTokens:      chatMaxTokens,
-		unmet:          unmetChange(req.UserText, cells, st.SlotNames, st),
+		unmet:          unmet,
 		underFloor:     underFloorBlock(dayKcal, st),
 	}
 	if chatProgrammatic {

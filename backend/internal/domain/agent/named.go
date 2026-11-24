@@ -116,7 +116,16 @@ func namedCells(text string, w window.Window, slotNames map[int64]string) map[st
 // dayKcalNumber is a kcal number in a message with its unit: "600 kcal",
 // "650 kalorien", "1,500 kcals", "2.000 kcal/day". The thousands separator is
 // part of the number ("1,500" and "1.800" are 1500 and 1800).
-var dayKcalNumber = regexp.MustCompile(`\b(\d{1,3}(?:[.,]\d{3})+|\d{3,4})\s*(?:kcals?|kilokalorien|kalorien|calories|cal)\b(\s*/\s*(?:day|tag))?`)
+var dayKcalNumber = regexp.MustCompile(`\b(\d{1,3}(?:[.,]\d{3})+|\d{1,4})\s*(?:kcals?|kilokalorien|kalorien|calories|cal)\b(\s*/\s*(?:day|tag))?`)
+
+// eatNothing says a day of no food without a number ("gar nichts essen",
+// "eat nothing"): a day of 0 kcal.
+var eatNothing = regexp.MustCompile(`\b(?:eat (?:absolutely )?nothing|nothing to eat|(?:gar )?nichts (?:zu )?essen|nichts zu mir nehmen)\b`)
+
+// awayStated says the message gives a reason the day has no meals at home:
+// the user is away. Such a day may leave the plan (an away mark), and "eat
+// nothing" then means no meal at home, not no food.
+var awayStated = regexp.MustCompile(`\b(?:away|abwesend|verreis\w*|unterwegs|travel\w*|trip|urlaub|vacation|holiday|out of town|auswaerts|eat(?:ing)? out|not (?:at )?home|nicht (?:zu hause|daheim|da)|bin weg)\b`)
 
 // kcalWord is a folded word run of a message (and "~").
 var kcalWord = regexp.MustCompile(`[a-z0-9~]+`)
@@ -182,6 +191,14 @@ var shortDayDE = regexp.MustCompile(`\b(mo|di|mi|do|fr|sa|so)(?:\.|\s+\d)`)
 func namedDayKcal(text string, w window.Window, today time.Time) map[string]float64 {
 	msg := " " + diet.Fold(text) + " "
 	nums := dayKcalNumber.FindAllStringSubmatchIndex(msg, -1)
+	if len(nums) == 0 && eatNothing.MatchString(msg) && !awayStated.MatchString(msg) && !namesMeal(msg) {
+		if days := daysNamed(msg, w, today); len(days) == 1 {
+			for d := range days {
+				return map[string]float64{d: 0}
+			}
+		}
+		return nil
+	}
 	if len(nums) != 1 {
 		return nil
 	}
@@ -190,6 +207,44 @@ func namedDayKcal(text string, w window.Window, today time.Time) map[string]floa
 	if anyIn(lastWords(before, 3), relativeWord) || anyIn(firstWords(after, 2), relativeWord) {
 		return nil
 	}
+	day := daysNamed(msg, w, today)
+	if len(day) != 1 {
+		return nil
+	}
+	total := m[4] >= 0 || anyIn(firstWords(after, 3), totalCue) || anyIn(lastWords(before, 2), totalCue)
+	if !total && namesMeal(msg) {
+		return nil
+	}
+	prev := lastWords(before, 2)
+	dayBefore := len(prev) > 0 && isDayWord(prev[len(prev)-1])
+	if !total && !anyIn(prev, absoluteCue) && !dayBefore {
+		return nil
+	}
+	n, err := strconv.ParseFloat(strings.NewReplacer(".", "", ",", "").Replace(msg[m[2]:m[3]]), 64)
+	if err != nil || n == 0 && awayStated.MatchString(msg) {
+		return nil // "0 kcal" while away is no meal at home, not a day without food
+	}
+	for d := range day {
+		return map[string]float64{d: n}
+	}
+	return nil
+}
+
+// namesMeal reports a folded message that has a meal word.
+func namesMeal(msg string) bool {
+	for _, words := range mealWords {
+		for _, x := range words {
+			if strings.Contains(msg, " "+x) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// daysNamed are the days of the window a folded message names: a weekday name
+// or abbreviation, today or tomorrow against today.
+func daysNamed(msg string, w window.Window, today time.Time) map[string]bool {
 	day := map[string]bool{}
 	for d := w.Start; !d.After(w.End); d = d.AddDate(0, 0, 1) {
 		for _, x := range weekdayWords[d.Weekday()] {
@@ -220,32 +275,7 @@ func namedDayKcal(text string, w window.Window, today time.Time) map[string]floa
 			}
 		}
 	}
-	if len(day) != 1 {
-		return nil
-	}
-	total := m[4] >= 0 || anyIn(firstWords(after, 3), totalCue) || anyIn(lastWords(before, 2), totalCue)
-	if !total {
-		for _, words := range mealWords {
-			for _, x := range words {
-				if strings.Contains(msg, " "+x) {
-					return nil
-				}
-			}
-		}
-	}
-	prev := lastWords(before, 2)
-	dayBefore := len(prev) > 0 && isDayWord(prev[len(prev)-1])
-	if !total && !anyIn(prev, absoluteCue) && !dayBefore {
-		return nil
-	}
-	n, err := strconv.ParseFloat(strings.NewReplacer(".", "", ",", "").Replace(msg[m[2]:m[3]]), 64)
-	if err != nil {
-		return nil
-	}
-	for d := range day {
-		return map[string]float64{d: n}
-	}
-	return nil
+	return day
 }
 
 // isDayWord reports a folded word that names a day: a weekday (full, or
