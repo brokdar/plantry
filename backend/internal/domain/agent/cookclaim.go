@@ -302,6 +302,30 @@ func countCells(cells []claimCell, dish string) int {
 	return n
 }
 
+// nothingCookedBacked reports whether a sentence that denies cooking says only
+// that a day the block gives as "nothing is cooked" cooks nothing: it names
+// such days only, no dish, and is not in the past tense.
+func nothingCookedBacked(text string, t replyTurn) bool {
+	days := weekdayName.FindAllString(text, -1)
+	if len(days) == 0 || cookPast.MatchString(text) || unnegatedDone(text) {
+		return false
+	}
+	for _, name := range t.foods {
+		if namesFood(text, name) {
+			return false
+		}
+	}
+	for _, w := range days {
+		key := weekdayKey(w)
+		if !slices.ContainsFunc(t.block.facts, func(f fact) bool {
+			return f.Class == classMoved && strings.Contains(f.EN, "nothing is cooked") && namesWeekday(f.EN[:strings.IndexAny(f.EN+":", ":,")], key)
+		}) {
+			return false
+		}
+	}
+	return true
+}
+
 // cookingBacked reports whether the block backs every cooking claim of text.
 func cookingBacked(text string, t replyTurn) bool {
 	if t.block == nil {
@@ -321,7 +345,7 @@ func cookingBacked(text string, t replyTurn) bool {
 		return false
 	}
 	if cookDenial.MatchString(text) {
-		return false
+		return nothingCookedBacked(text, t)
 	}
 	cells := claimCells(t.block.facts)
 	for _, w := range weekdayName.FindAllString(text, -1) {
@@ -645,7 +669,9 @@ func refusalBacked(text string, t replyTurn) bool {
 		}
 	}
 	for _, q := range quotedRe.FindAllString(refused, -1) {
-		dishes = append(dishes, strings.Trim(q, `"„“”`))
+		if d := strings.Trim(q, `"„“”`); !slices.Contains(dishes, d) {
+			dishes = append(dishes, d) // the EN and the DE line quote each dish
+		}
 	}
 	for _, phrase := range loosePhrases(text, t.foods, named) {
 		if !uniqueDishFor(phrase, dishes) {

@@ -822,12 +822,18 @@ func withoutKnownDates(text string, known map[dateKey]bool, year int) string {
 			b.WriteString(text[last:ix[0]])
 			b.WriteString(" ")
 			last = ix[1]
+			if y := yearAfter.FindStringSubmatch(text[last:]); year > 0 && y != nil && y[1] == strconv.Itoa(year) && y[2] == "" {
+				last += len(y[0]) // "29. November 2026": the turn's own year
+			}
 		}
 		b.WriteString(text[last:])
 		text = b.String()
 	}
 	return text
 }
+
+// yearAfter is a year right after a date, not the start of a figure with a unit.
+var yearAfter = regexp.MustCompile(`(?i)^,?\s+(\d{4})\b(\s*(?:kcal|kalorien|calories|g|gramm|min\w*|%))?`)
 
 // isoYear is the year of the first ISO date of text, 0 for none.
 func isoYear(text string) int {
@@ -1067,7 +1073,11 @@ var (
 	// insteadOf is a done comparison: between quantities ("100 g instead of
 	// 200 g", "3 statt 4 Portionen") or after a statement ("is now ... instead
 	// of ..."). "Instead of the pasta, try rice" carries a proposal and stays.
-	insteadOf = regexp.MustCompile(`(?i)(\d[^.!?]*?\b(instead of|statt)\b[^.!?]*?\d|\b(is|are|was|were|now|ist|sind|jetzt|habe|have|has|hat)\b[^.!?]*?\b(instead of|statt)\b)`)
+	// insteadDone is "instead" inside a statement of what is now so ("X wird
+	// stattdessen gekocht"); a modal or a question makes it an offer again.
+	insteadDone  = regexp.MustCompile(`(?i)\b(wird|werden|ist|sind|is|are|now|jetzt)\b[^.!?]*?\b(stattdessen|instead)\b`)
+	insteadModal = regexp.MustCompile(`(?i)\?|\b(kann|kannst|könnte|könntest|können|soll|sollte|möchte|würde|can|could|would|should|may|might|will|wenn|falls|if)\b`)
+	insteadOf    = regexp.MustCompile(`(?i)(\d[^.!?]*?\b(instead of|statt)\b[^.!?]*?\d|\b(is|are|was|were|now|ist|sind|jetzt|habe|have|has|hat)\b[^.!?]*?\b(instead of|statt)\b)`)
 )
 
 // dishAction is a sentence that adds, removes, replaces or moves a dish: a
@@ -1238,7 +1248,12 @@ func contradicts(text string, facts []fact, nothingSaved, checked bool) bool {
 
 // withoutComparisons drops a done comparison ("100 g instead of 200 g") before
 // the option check; an "instead of" that proposes something stays.
-func withoutComparisons(text string) string { return insteadOf.ReplaceAllString(text, " ") }
+func withoutComparisons(text string) string {
+	if !insteadModal.MatchString(text) {
+		text = insteadDone.ReplaceAllString(text, " ")
+	}
+	return insteadOf.ReplaceAllString(text, " ")
+}
 
 // Two non-offers the option words read as offers (round 9 M6, dev-v2d new2):
 // a negated "kann ich ... nicht" / "ich kann ... nicht", the German twin of
@@ -1505,10 +1520,11 @@ func composeModelReply(model string, t replyTurn) string {
 		}
 		return fallbackEN
 	}
-	if why := lintModelText(text, t, lg); why != "" && why != "cooking_claim" {
+	if why := lintModelText(text, t, lg); why != "" && why != "cooking_claim" && why != "dish" {
 		// The kept sentences pass alone but not together (a weekday or a
-		// number one names and another needs). A cooking claim is judged per
-		// sentence: a dish the next sentence names is no claim of this one
+		// number one names and another needs). A cooking claim and a dish are
+		// judged per sentence (R12b: "added" in one sentence hid the kept dish
+		// of the next): a dish the next sentence names is no claim of this one
 		// (V81 L2, tune-v2c guests-09).
 		drop(text, why)
 		text = ""

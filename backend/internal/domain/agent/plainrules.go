@@ -162,6 +162,8 @@ var kitchenWords = []struct {
 	{regexp.MustCompile(`\bdrafts\b`), "pending plans"},
 	{regexp.MustCompile(`\bDraft\b`), "Pending:"},
 	{regexp.MustCompile(`\bdraft\b`), "pending"},
+	{regexp.MustCompile(`\bcook (?:sessions|batches)\b`), "cookings"},
+	{regexp.MustCompile(`\bcook (?:session|batch)\b`), "cooking"},
 	{regexp.MustCompile(`\b(sessions|batches)\b`), "cookings"},
 	{regexp.MustCompile(`\b(Sessions|Batches)\b`), "Cookings"},
 	{regexp.MustCompile(`\b(session|batch)\b`), "cooking"},
@@ -305,7 +307,8 @@ func plainStatic(s string) string {
 	if v, ok := staticPlain.Load(s); ok {
 		return v.(string)
 	}
-	out := plainWords(s)
+	// A description names the result key as the result carries it (plainKeys).
+	out := strings.ReplaceAll(plainWords(s), "cookings:[", "batches:[")
 	staticPlain.Store(s, out)
 	return out
 }
