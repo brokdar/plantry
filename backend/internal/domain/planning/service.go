@@ -27,7 +27,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h21"
+const HeuristicVersion = "h22"
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.
@@ -1110,6 +1110,11 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 				var quickNotes []string
 				prop, quickNotes = fixQuick(cin, prop)
 				finishNotes = append(finishNotes, quickNotes...)
+				// The finishing steps may leave a repeat the variety weeks forbid
+				// (H8); the repair keeps a wish's limit (h2-planner-00).
+				var varietyNotes []string
+				prop, varietyNotes = fixVariety(cin, prop)
+				finishNotes = append(finishNotes, varietyNotes...)
 			} else {
 				prop, finishNotes = finishProposal(cin, prop)
 			}

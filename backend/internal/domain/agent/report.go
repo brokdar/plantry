@@ -567,6 +567,29 @@ func alsoChanged(st planning.State, applied []map[string]any, sink *factSink) {
 	}
 }
 
+// addAlsoChangedSaid gives each cook_moved entry of the applied results a
+// plain sentence: the cooking moved, the meals did not (the model told a
+// moved cook as a moved meal).
+func addAlsoChangedSaid(st planning.State, applied []map[string]any) {
+	for _, e := range applied {
+		list, _ := e["also_changed"].([]any)
+		for _, x := range list {
+			m, ok := x.(map[string]any)
+			if !ok || m["what"] != plate.AlsoCookMoved {
+				continue
+			}
+			to, okTo := asDate(m["date"])
+			from, okFrom := asDate(m["from_date"])
+			dish := sessionDish(st, asInt64(m["session_id"]))
+			if !okTo || !okFrom || dish == "" {
+				continue
+			}
+			m["said"] = fmt.Sprintf("The cooking of %s moved from %s to %s; the meals stay where they are.",
+				dish, cellLabel(st, from, asInt64(m["from_slot_id"])), cellLabel(st, to, asInt64(m["slot_id"])))
+		}
+	}
+}
+
 // weekFacts is what this change made worse for the week, with the numbers: a
 // figure that crossed its limit or moved further past it, or that fell short
 // (beans, fish, protein). A figure that moved without crossing is no news.
