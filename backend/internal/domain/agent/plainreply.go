@@ -1098,11 +1098,14 @@ func (t replyTurn) deniesFoundIn(text string) bool {
 // titleSeparator splits a dish from what follows it in a title.
 var titleSeparator = regexp.MustCompile(`\s[—–-]\s|[—–:;|]`)
 
-// instructionWord are the words of a title tail that talk to the assistant.
-var instructionWord = regexp.MustCompile(`(?i)\b(assistant|assistent|system|ignore|ignoriere|instruction|mark|markiere|delete|lösche|remove|entferne|set|setze|tell|please|bitte|you|du|must|musst|always|immer|prompt)\b`)
+// instructionWord are the words of a title tail that address an assistant or
+// system, or tell it to override its instructions. Ordinary recipe words
+// ("please", "you", "set", "bitte", "immer") and plan verbs ("mark", "delete")
+// are no trigger on their own.
+var instructionWord = regexp.MustCompile(`(?i)\b(assistant|assistent|assistentin|system|ki|ai|bot|chatbot|claude|ignore|ignoriere|ignorier|disregard|vergiss|instructions?|anweisung(?:en)?|prompt)\b`)
 
 // injectionTitle reports a title that reads as a command: after a clause
-// separator it has three or more words and one that addresses the assistant.
+// separator it has three or more words and one instructionWord.
 func injectionTitle(name string) bool {
 	loc := titleSeparator.FindStringIndex(name)
 	if loc == nil {
