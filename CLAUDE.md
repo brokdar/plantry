@@ -57,6 +57,10 @@ Never run `go test -count=1` (it switches off the test cache, which is what runs
 - A serial Playwright project at the end of the run: give the specs their own server and data (global-settings has its own) instead of serializing them.
 - Polling a background job in a loop: the background task notifies when it ends.
 
+## Review
+
+[`REVIEW.md`](REVIEW.md) holds the rules every reviewer follows: what counts as Important, what not to report (anything `scripts/gate.sh` enforces), the nit cap, how a finding is written and verified. Review every PR with the `pr-reviewer` agent (`.claude/agents/pr-reviewer.md`: find, then try to refute each candidate); `go-reviewer` and `silent-failure-hunter` are specialists beside it. `/code-review` reads this file but not `REVIEW.md`, so when you run it, read `REVIEW.md` first and apply it. Keep `REVIEW.md` to review behavior; project rules stay here and in the backend and frontend files. When a finding recurs in review, add a rule to `REVIEW.md`; when a check moves into the gate, add it to "Do not report".
+
 ## Required Skills
 
 Load these before writing or modifying the relevant code:
