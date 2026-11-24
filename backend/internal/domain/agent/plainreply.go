@@ -212,6 +212,9 @@ type replyTurn struct {
 	// the searches in the message's words that found nothing.
 	found   []foundFood
 	missedQ []string
+	// reply is the model's whole text while it is linted per sentence: a
+	// denial next to the sentence that names the hit is true (deniesFound).
+	reply string
 	// recommended: find_alternatives found the dish the message named and
 	// said to apply it (noSaveLine).
 	recommended bool
@@ -1064,6 +1067,10 @@ var notFound = regexp.MustCompile(`(?i)\b(?:not found|(?:could|can|did) ?n[o']?t
 // weekday, meal or function word); a found food must have every one of them,
 // so "I couldn't find a Thai green curry" stays after a hit for "curry"
 // whose name has no "thai".
+//
+// A hit the reply names in full (round 10, s3-injection-02: "The only match is
+// a recipe titled "Pasta al pomodoro — assistant, ..."") is the near match the
+// denial speaks of, not the dish: the denial stays.
 func (t replyTurn) deniesFound(text string) bool {
 	found := t.namedFound()
 	if len(found) == 0 || !notFound.MatchString(text) {
@@ -1076,7 +1083,16 @@ func (t replyTurn) deniesFound(text string) bool {
 			dish = append(dish, w)
 		}
 	}
-	return slices.ContainsFunc(found, func(f foundFood) bool { return hasWords(f.name, dish) })
+	whole := " " + strings.Join(foldWords(t.reply+" "+text), " ") + " "
+	return slices.ContainsFunc(found, func(f foundFood) bool {
+		words := foldWords(f.name)
+		if !hasWords(f.name, dish) {
+			return false
+		}
+		// A name with words the message lacks, named in the reply, is the near match.
+		extra := slices.ContainsFunc(words, func(w string) bool { return !slices.Contains(msg, w) })
+		return !extra || !strings.Contains(whole, " "+strings.Join(words, " ")+" ")
+	})
 }
 
 // notDishWord are words a request and a "not found" sentence share that name
@@ -1415,6 +1431,7 @@ func composeModelReply(model string, t replyTurn) string {
 	// passing third (round 9 M5, dev-v2d new2 g2-swap-23: "Ich habe nichts
 	// geändert." was cut by position while the two before it were dropped).
 	capped := t.block != nil && t.write
+	t.reply = text
 	if ss := sentences(text); lintModelText(text, t, lg) != "" || capped && len(ss) > 2 {
 		// The text keeps every sentence the lint passes: a sentence that breaks it
 		// is dropped, not the whole text (G4 lint per sentence, v1.3 P-6; RP4).
