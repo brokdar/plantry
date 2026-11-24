@@ -9,6 +9,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // fixVariety settles H8 in the preview the way the guards settle the week's
@@ -82,9 +83,18 @@ func variantFor(in ChooseInput, merged State, prop Proposal, is Issue, skip map[
 		}
 	}
 	household := merged.Profile.DietType
+	// A wish's time limit holds for the swap: a batch is judged where it
+	// cooks, a single meal where it is eaten.
+	cell := plate.CellKey{Date: cookDate}
+	if is.SlotID != nil {
+		cell.SlotID = *is.SlotID
+	}
+	if si := slices.IndexFunc(prop.Sessions, func(s ProposedSession) bool { return key != "" && s.Key == key }); si >= 0 {
+		cell = plate.CellKey{Date: prop.Sessions[si].CookDate, SlotID: prop.Sessions[si].CookSlotID}
+	}
 	var cands []FoodFacts
 	for id, f := range merged.Foods {
-		if id == oldID || skip[id] || inPlan[id] || !f.Composed() || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 ||
+		if id == oldID || merged.tooSlow(f, cell) || skip[id] || inPlan[id] || !f.Composed() || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 ||
 			!f.NutritionComplete || (DietRestricts(household) && !fitsDiet(f.DietClass, diet.Class(household))) {
 			continue
 		}

@@ -107,7 +107,7 @@ func chatFacts(st planning.State) string {
 			fmt.Fprintf(&b, " | target %.0f", *d.TargetKcal)
 		}
 		if d.BandHigh > 0 {
-			fmt.Fprintf(&b, " | range %.0f-%.0f | minimum %.0f | room %.0f", d.BandLow, d.BandHigh, d.FloorKcal, d.RoomKcal)
+			fmt.Fprintf(&b, " | range %.0f-%.0f | minimum %.0f | %s", d.BandLow, d.BandHigh, d.FloorKcal, dayRoom(d))
 		}
 		if len(d.CookSlots) > 0 {
 			b.WriteString(" | cooks " + strings.Join(d.CookSlots, ", "))
@@ -118,4 +118,13 @@ func chatFacts(st planning.State) string {
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+// dayRoom is the kcal left to the top of the day's range, or, for a day over
+// it, how far above it is ("room 0" told no status).
+func dayRoom(d planning.DayEval) string {
+	if d.Kcal > d.BandHigh+0.5 {
+		return vsRange(d.Kcal, d.BandLow, d.BandHigh)
+	}
+	return fmt.Sprintf("room %.0f", d.RoomKcal)
 }

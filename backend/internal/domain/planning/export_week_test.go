@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // GuardWeek exposes the last guard to the external tests.
@@ -157,3 +158,11 @@ var EmptyDayMeals = emptyDayMeals
 
 // OpenHard exposes the hard issues a plan holds.
 var OpenHard = openHard
+
+// FixVariety exposes the H8 repair to the external tests.
+var FixVariety = fixVariety
+
+// MaxMinutesAt builds a State.MaxMinutes limit for one cell.
+func MaxMinutesAt(c plate.CellKey, minutes int) map[cellID]int {
+	return map[cellID]int{idOf(c): minutes}
+}

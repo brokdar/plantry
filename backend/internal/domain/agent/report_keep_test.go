@@ -101,3 +101,32 @@ func TestOddNameFacts_Flag(t *testing.T) {
 	oddNameFacts(reportInput{facts: none}, []reportMeal{{After: []string{"Pasta al pomodoro 1 portion"}}})
 	assert.Empty(t, none.items)
 }
+
+// replace-08 (audit 2026-11-24): the model said "the salmon moved to Tuesday"
+// when only its cooking moved. A cook_moved entry carries a plain sentence
+// that says the cooking moved and the meals stay; the other kinds get none.
+func TestSaidAlsoChanged_CookMovedSaysTheMealsStay(t *testing.T) {
+	t.Parallel()
+	two := 2
+	st := keepState(21, &two)
+	applied := []map[string]any{{"also_changed": []any{
+		map[string]any{"what": "cook_moved", "session_id": float64(1), "date": "2026-11-24", "slot_id": float64(3), "from_date": "2026-11-21", "from_slot_id": float64(3)},
+		map[string]any{"what": "cooks_fresh", "session_id": float64(1), "date": "2026-11-27", "slot_id": float64(3)},
+	}}}
+	addAlsoChangedSaid(st, applied)
+	list := applied[0]["also_changed"].([]any)
+	assert.Equal(t, `The cooking of "Chili con carne" moved from Sat 21 Nov dinner to Tue 24 Nov dinner; the meals stay where they are.`, list[0].(map[string]any)["said"])
+	assert.NotContains(t, list[1], "said", "only a moved cook gets the sentence")
+}
+
+// h2-readonly-02 (audit 2026-11-24): "room 0" gives no status for a day over
+// its range; the plan-state line says how far above it is (vsRange).
+func TestDayRoom_OverTheRangeSaysHowFar(t *testing.T) {
+	t.Parallel()
+	over := planning.DayEval{Kcal: 1137, BandLow: 951, BandHigh: 1110, RoomKcal: 0}
+	assert.Equal(t, "27 kcal above its range", dayRoom(over))
+	inside := planning.DayEval{Kcal: 1000, BandLow: 951, BandHigh: 1110, RoomKcal: 110}
+	assert.Equal(t, "room 110", dayRoom(inside))
+	below := planning.DayEval{Kcal: 800, BandLow: 951, BandHigh: 1110, RoomKcal: 310}
+	assert.Equal(t, "room 310", dayRoom(below))
+}
