@@ -3,6 +3,7 @@ package config_test
 import (
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -97,6 +98,28 @@ func TestLoadOFFDisabled(t *testing.T) {
 
 func TestLoadOFFDisabledInvalid(t *testing.T) {
 	t.Setenv("PLANTRY_OFF_DISABLED", "bogus")
+	_, err := config.Load()
+	assert.Error(t, err)
+}
+
+func TestLoadDevClock(t *testing.T) {
+	t.Setenv("PLANTRY_DEV_MODE", "1")
+	t.Setenv("PLANTRY_DEV_CLOCK", "2031-03-01")
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2031, 3, 1, 8, 0, 0, 0, time.UTC), cfg.DevClock)
+}
+
+func TestLoadDevClockRefusedOutsideDevMode(t *testing.T) {
+	t.Setenv("PLANTRY_DEV_MODE", "")
+	t.Setenv("PLANTRY_DEV_CLOCK", "2031-03-01")
+	_, err := config.Load()
+	assert.ErrorContains(t, err, "PLANTRY_DEV_MODE")
+}
+
+func TestLoadDevClockInvalid(t *testing.T) {
+	t.Setenv("PLANTRY_DEV_MODE", "1")
+	t.Setenv("PLANTRY_DEV_CLOCK", "soon")
 	_, err := config.Load()
 	assert.Error(t, err)
 }

@@ -482,3 +482,9 @@ func affectedJSON(ps []planning.AffectedPlate) []replanAffected {
 	}
 	return out
 }
+
+// WithClock makes "today" read the given clock (the dev clock).
+func (h *PlanGenerateHandler) WithClock(now func() time.Time) *PlanGenerateHandler {
+	h.now = now
+	return h
+}

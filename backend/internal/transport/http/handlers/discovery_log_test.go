@@ -71,3 +71,26 @@ func TestDiscoveryHandler_Logs5xx(t *testing.T) {
 	assert.Less(t, w.Code, 500)
 	assert.NotContains(t, logs.String(), "level=ERROR")
 }
+
+// todayRecorder keeps the day Discover was started for.
+type todayRecorder struct {
+	failingDiscovery
+	got time.Time
+}
+
+func (r *todayRecorder) Discover(_ context.Context, _ discovery.Request, today time.Time) (int64, error) {
+	r.got = today
+	return 1, nil
+}
+
+// A discovery started without a date uses the injected (dev) clock.
+func TestDiscoveryHandler_StartUsesInjectedClock(t *testing.T) {
+	rec := &todayRecorder{}
+	h := handlers.NewDiscoveryHandler(rec).WithClock(func() time.Time {
+		return time.Date(2031, 3, 1, 15, 0, 0, 0, time.UTC)
+	})
+	w := httptest.NewRecorder()
+	h.Start(w, httptest.NewRequest(http.MethodPost, "/api/discovery", strings.NewReader(`{"mode":"daily"}`)))
+	assert.Less(t, w.Code, 300, w.Body.String())
+	assert.Equal(t, "2031-03-01", rec.got.Format(time.DateOnly))
+}

@@ -427,3 +427,7 @@ Inside `.claude/worktrees/*`, prefix Go commands with `GOWORK=off` (e.g. `GOWORK
 
 - Pragmas are per-connection. `sql.DB` pools — use `SetMaxOpenConns(1)` so all queries share WAL + `busy_timeout`.
 - Timestamps: stored as `TEXT` via `datetime('now')`, Go parse layout `"2006-01-02 15:04:05"`, serialize as RFC3339 in API responses.
+
+### Dev clock
+
+`internal/devclock` is the one clock for "today", plan windows, plate events and the agent's date. `cmd/plantry` builds it once and hands `clock.Now` to the plate service, the agent and the date handlers (`WithClock`). `PLANTRY_DEV_CLOCK` (RFC 3339 or `YYYY-MM-DD`, 08:00 UTC) sets the start and `config.Load` refuses it unless `PLANTRY_DEV_MODE` is on; `PUT /api/dev/clock` with `{"now":...}` or `{"advance_hours":N}` moves it, `GET` reads it; both routes exist only in dev mode. SQL `datetime('now')` defaults (rated_at, updated_at) still use the real clock.

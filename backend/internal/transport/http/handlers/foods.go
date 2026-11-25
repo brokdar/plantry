@@ -26,13 +26,14 @@ type FoodHandler struct {
 	svc      *food.Service
 	resolver *food.NutritionResolver
 	store    *imagestore.Store
+	now      func() time.Time
 }
 
 const maxImageSize = 10 << 20 // 10 MB
 
 // NewFoodHandler wires services into the handler.
 func NewFoodHandler(svc *food.Service, resolver *food.NutritionResolver, store *imagestore.Store) *FoodHandler {
-	return &FoodHandler{svc: svc, resolver: resolver, store: store}
+	return &FoodHandler{svc: svc, resolver: resolver, store: store, now: time.Now}
 }
 
 // HasImageStore reports whether image upload/delete is available.
@@ -513,7 +514,7 @@ func (h *FoodHandler) writeFood(w http.ResponseWriter, r *http.Request, status i
 // ── Handlers ──────────────────────────────────────────────────────────
 
 func (h *FoodHandler) Create(w http.ResponseWriter, r *http.Request) {
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
 	if !ok {
 		return
 	}
@@ -584,7 +585,7 @@ func (h *FoodHandler) saveImageFromURL(r *http.Request, f *food.Food, imageURL s
 }
 
 func (h *FoodHandler) Get(w http.ResponseWriter, r *http.Request) {
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
 	if !ok {
 		return
 	}
@@ -603,7 +604,7 @@ func (h *FoodHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FoodHandler) Update(w http.ResponseWriter, r *http.Request) {
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
 	if !ok {
 		return
 	}
@@ -674,7 +675,7 @@ func (h *FoodHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *FoodHandler) List(w http.ResponseWriter, r *http.Request) {
 	var q food.ListQuery
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
 	if !ok {
 		return
 	}
@@ -830,7 +831,7 @@ type foodFavoriteRequest struct {
 }
 
 func (h *FoodHandler) SetFavorite(w http.ResponseWriter, r *http.Request) {
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
 	if !ok {
 		return
 	}
@@ -860,7 +861,7 @@ type foodShopSectionRequest struct {
 // SetShopSection handles PUT /api/foods/{id}/shop-section {section | null}:
 // a leaf's store section override; null reverts to the classification.
 func (h *FoodHandler) SetShopSection(w http.ResponseWriter, r *http.Request) {
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
 	if !ok {
 		return
 	}
@@ -890,7 +891,7 @@ type foodDietClassRequest struct {
 // SetDietClass handles PUT /api/foods/{id}/diet-class {class | null}: a
 // food's diet class override; null reverts to the derived class.
 func (h *FoodHandler) SetDietClass(w http.ResponseWriter, r *http.Request) {
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
 	if !ok {
 		return
 	}
@@ -942,7 +943,7 @@ func (b *foodNoCookBody) UnmarshalJSON(data []byte) error {
 // serving_g sets the serving size; an explicit null clears it and an absent
 // field keeps the stored one.
 func (h *FoodHandler) SetNoCook(w http.ResponseWriter, r *http.Request) {
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
 	if !ok {
 		return
 	}
@@ -976,7 +977,7 @@ func (h *FoodHandler) SetNoCook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FoodHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
 	if !ok {
 		return
 	}
@@ -999,7 +1000,7 @@ type foodVariantListResponse struct {
 }
 
 func (h *FoodHandler) ListVariants(w http.ResponseWriter, r *http.Request) {
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
 	if !ok {
 		return
 	}
@@ -1239,3 +1240,6 @@ func (h *FoodHandler) SyncPortions(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
+
+// WithClock makes "today" read the given clock (the dev clock).
+func (h *FoodHandler) WithClock(now func() time.Time) *FoodHandler { h.now = now; return h }

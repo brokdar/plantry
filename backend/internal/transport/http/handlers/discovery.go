@@ -39,6 +39,9 @@ func NewDiscoveryHandler(svc discoveryService) *DiscoveryHandler {
 	return &DiscoveryHandler{svc: svc, now: time.Now}
 }
 
+// WithClock makes "today" read the given clock (the dev clock).
+func (h *DiscoveryHandler) WithClock(now func() time.Time) *DiscoveryHandler { h.now = now; return h }
+
 type discoverRequest struct {
 	Mode    discovery.Mode `json:"mode"`
 	Cuisine string         `json:"cuisine"`

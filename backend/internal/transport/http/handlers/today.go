@@ -145,3 +145,6 @@ func toTodayResponse(td *planview.Today) todayResponse {
 	}
 	return resp
 }
+
+// WithClock makes "today" read the given clock (the dev clock).
+func (h *TodayHandler) WithClock(now func() time.Time) *TodayHandler { h.now = now; return h }
