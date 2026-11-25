@@ -336,6 +336,14 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 			})
 		}
 	}
+	raised := map[[2]int64]int{} // plate fit per (plate, food), when on
+	if h.s.Settings.PlateFit && !protein {
+		for _, c := range cands {
+			if _, _, r := merged.plateFitOf(merged.Plates[c.plate], merged.Foods[c.opt.FoodID]); r > 0 {
+				raised[[2]int64{int64(c.plate), c.opt.FoodID}] = r
+			}
+		}
+	}
 	slices.SortStableFunc(cands, func(a, b optCand) int {
 		if protein {
 			// Staying at or under the day's target first, then the most
@@ -351,6 +359,15 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		// Sweets are out and the protein pass has its own add, so a filler
 		// is the food that fits the kcal gap best. A model's plan gets, within 25 kcal
 		// of each other, a vegetable or salad before bread before the rest (sideFitRank).
+		// With plate fit on, within kcalBucket of each other the plate with
+		// fewer raised gaps comes first (PLATE-4).
+		if h.s.Settings.PlateFit {
+			ba, bb := math.Round(math.Abs(need-a.kcal)/kcalBucket), math.Round(math.Abs(need-b.kcal)/kcalBucket)
+			ra, rb := raised[[2]int64{int64(a.plate), a.opt.FoodID}], raised[[2]int64{int64(b.plate), b.opt.FoodID}]
+			if c := cmp.Or(cmp.Compare(ba, bb), cmp.Compare(ra, rb)); c != 0 {
+				return c
+			}
+		}
 		if h.balance {
 			if ba, bb := math.Round(math.Abs(need-a.kcal)/25), math.Round(math.Abs(need-b.kcal)/25); ba != bb || sideFitRank(h.s.Foods[a.opt.FoodID]) != sideFitRank(h.s.Foods[b.opt.FoodID]) {
 				return cmp.Or(cmp.Compare(ba, bb), cmp.Compare(sideFitRank(h.s.Foods[a.opt.FoodID]), sideFitRank(h.s.Foods[b.opt.FoodID])))

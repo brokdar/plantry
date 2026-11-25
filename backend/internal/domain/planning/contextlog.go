@@ -79,6 +79,7 @@ type contextRecord struct {
 		DefaultKeepDays        int  `json:"default_keep_days"`
 		FreezingEnabled        bool `json:"freezing_enabled"`
 		FreezerKeepDays        int  `json:"freezer_keep_days"`
+		PlateFit               bool `json:"plate_fit"`
 	} `json:"settings"`
 	Profile struct {
 		KcalTarget         *float64 `json:"kcal_target"`
@@ -147,6 +148,7 @@ func recordContext(ctx context.Context, in ChooseInput, chooser string, trimmed 
 	rec.Window.Today = s.Today.Format(time.DateOnly)
 	rec.Settings.MaxCookOccasionsPerDay, rec.Settings.VarietyWeeks, rec.Settings.BatchCooking = s.Settings.MaxCookOccasionsPerDay, s.Settings.VarietyWeeks, s.Settings.BatchCooking
 	rec.Settings.DefaultKeepDays, rec.Settings.FreezingEnabled, rec.Settings.FreezerKeepDays = s.Settings.DefaultKeepDays, s.Settings.FreezingEnabled, s.Settings.FreezerKeepDays
+	rec.Settings.PlateFit = s.Settings.PlateFit
 	p := s.Profile
 	rec.Profile.KcalTarget, rec.Profile.ProteinPct, rec.Profile.FatPct, rec.Profile.CarbsPct = p.KcalTarget, p.ProteinPct, p.FatPct, p.CarbsPct
 	rec.Profile.DietType, rec.Profile.MeatDaysPerWeekMax, rec.Profile.HouseholdPortions = string(p.DietType), p.MeatDaysPerWeekMax, p.HouseholdPortions

@@ -1,0 +1,126 @@
+package planning
+
+import (
+	"slices"
+	"strings"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/platefit"
+)
+
+// Plate fit in the heuristic (PLATE-4, PLATE-5): when plan.plate_fit is on,
+// a side or add-on that brings a clash to its plate is no candidate, and the
+// candidates rank by the plate's raised gaps after nutrition and before the
+// existing keys. Minor gaps never filter or rank.
+
+// freshWords are ingredients that make a raw, green or citrus element.
+var freshWords = []string{
+	"salat", "salad", "lettuce", "gurke", "cucumber", "rucola", "rocket", "arugula", "kresse", "cress",
+	"petersilie", "parsley", "basilikum", "basil", "koriander", "cilantro", "coriander", "schnittlauch", "chive",
+	"dill", "minze", "mint", "zitrone", "lemon", "limette", "lime", "fruehlingszwiebel", "spring onion", "radieschen", "radish",
+}
+
+// starchLeafWords are ingredients that make a dish a starch (with
+// pastaWords and starchWords) once a portion holds starchMinG of them.
+var starchLeafWords = []string{"tortilla", "quinoa", "spaetzle", "mehl", "flour", "teig", "dough"}
+
+// starchMinG is the grams per portion of starch ingredients that make a
+// dish a starch: a roux's flour does not, a quiche's crust does.
+const starchMinG = 40
+
+// kcalBucket: candidates whose kcal differ from the need by about the same
+// (within this) are equal for nutrition, so plate fit orders them.
+const kcalBucket = 25
+
+// sideKcalBucket is kcalBucket for a side cooked with its main, chosen
+// before the day's top-ups: sides within it are equal for nutrition.
+const sideKcalBucket = 100
+
+func hasWord(name string, lists ...[]string) bool {
+	n := diet.Fold(name)
+	for _, words := range lists {
+		if slices.ContainsFunc(words, func(w string) bool { return strings.Contains(n, w) }) {
+			return true
+		}
+	}
+	return false
+}
+
+// freshStarch derives plate fit's fresh and starch inputs from a food's
+// name and ingredients (A1 has no such attributes). A leaf is judged by its
+// name; a recipe without ingredients is unknown (nil).
+func freshStarch(f FoodFacts, leaves []food.LeafGrams) (fresh, starch *bool) {
+	if f.Kind != food.KindComposed {
+		v := hasWord(f.Name, freshWords)
+		return &v, nil
+	}
+	if len(leaves) == 0 {
+		return nil, nil
+	}
+	fr := hasWord(f.Name, freshWords, saladWords)
+	st := f.Role == food.RoleSideStarch || hasWord(f.Name, pastaWords, starchWords, starchLeafWords)
+	starchG := 0.0
+	for _, l := range leaves {
+		fr = fr || hasWord(l.Name, freshWords)
+		if hasWord(l.Name, pastaWords, starchWords, starchLeafWords) {
+			starchG += l.Grams
+		}
+	}
+	st = st || starchG >= starchMinG
+	return &fr, &st
+}
+
+// plateComponent is f as plate fit reads it.
+func plateComponent(f FoodFacts) platefit.Component {
+	return platefit.Component{
+		ID: f.ID, Name: f.Name, Role: f.Role, Leaf: !f.Composed(),
+		Attrs: f.Attrs, Fresh: f.Fresh, Starch: f.Starch,
+	}
+}
+
+// plateFitOn reports whether plate fit judges a plate with main mainID.
+func (s State) plateFitOn(mainID int64) bool {
+	_, ok := s.Foods[mainID]
+	return s.Settings.PlateFit && ok
+}
+
+// sideFit reads the plate of main with the sides others plus cand: clash
+// when cand adds a clash the plate did not have, raised the count of the
+// plate's raised gaps with cand (lower is better).
+func (s State) sideFit(mainID int64, others []int64, cand FoodFacts) (clash bool, raised int) {
+	pl := platefit.Plate{Main: plateComponent(s.Foods[mainID])}
+	for _, id := range others {
+		if f, ok := s.Foods[id]; ok && id != mainID && id != cand.ID {
+			pl.Sides = append(pl.Sides, plateComponent(f))
+		}
+	}
+	before := platefit.Read(pl)
+	pl.Sides = append(pl.Sides, plateComponent(cand))
+	with := platefit.Read(pl)
+	for _, d := range with.Clashes {
+		if !slices.Contains(before.Clashes, d) {
+			clash = true
+		}
+	}
+	for _, g := range with.Gaps {
+		if !g.Minor {
+			raised++
+		}
+	}
+	return clash, raised
+}
+
+// plateFitOf is sideFit for cand added to the merged plate p.
+func (s State) plateFitOf(p Plate, cand FoodFacts) (on, clash bool, raised int) {
+	mainID := s.mainOf(p)
+	if !s.plateFitOn(mainID) {
+		return false, false, 0
+	}
+	others := make([]int64, 0, len(p.Components))
+	for _, c := range p.Components {
+		others = append(others, c.FoodID)
+	}
+	clash, raised = s.sideFit(mainID, others, cand)
+	return true, clash, raised
+}

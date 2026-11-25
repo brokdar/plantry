@@ -327,6 +327,7 @@ const ExploreTag = "explore"
 func WithNutrition(ff FoodFacts, d food.Detailed) FoodFacts {
 	ff.Macros, ff.NutritionComplete, ff.FiberMissing = d.Macros, d.Complete, d.FiberMissing
 	ff.Groups = GroupsOf(d.Leaves)
+	ff.Fresh, ff.Starch = freshStarch(ff, d.Leaves)
 	ff.Leaves = nil
 	if len(d.Leaves) > 0 {
 		ff.Leaves = map[int64]float64{}
@@ -491,7 +492,15 @@ func ReadSettings(ctx context.Context, r SettingsReader) (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	return Settings{BatchSettings: batch, MaxCookOccasionsPerDay: maxCook, VarietyWeeks: variety, BatchCooking: batchCooking, MaxDishMealsPerWeek: maxDish}, nil
+	v, err = r.Get(ctx, settings.KeyPlanPlateFit)
+	if err != nil {
+		return Settings{}, fmt.Errorf("read %s: %w", settings.KeyPlanPlateFit, err)
+	}
+	plateFit, err := strconv.ParseBool(v.Raw)
+	if err != nil {
+		return Settings{}, fmt.Errorf("parse %s: %w", settings.KeyPlanPlateFit, err)
+	}
+	return Settings{BatchSettings: batch, MaxCookOccasionsPerDay: maxCook, VarietyWeeks: variety, BatchCooking: batchCooking, MaxDishMealsPerWeek: maxDish, PlateFit: plateFit}, nil
 }
 
 // routineBase is the id of the first routine plate in a state (D8): they
