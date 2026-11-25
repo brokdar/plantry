@@ -209,6 +209,20 @@ func TestAddNoCook_PlateFitNoSecondStarchFiller(t *testing.T) {
 	}
 }
 
+// The safety floor lift takes any verified food: with only bread reachable
+// beside a starch side, the floor lift still adds it.
+func TestAddNoCook_FloorLiftIgnoresSecondStarch(t *testing.T) {
+	h, tgt := fillerPlanner(true, 30, true)
+	f := h.s.Foods[pfBread]
+	f.Kind, f.LeafRole = food.KindLeaf, food.RoleSideStarch
+	h.s.Foods[pfBread] = f
+	h.s.NoCook = []int64{pfBread}
+	h.in.State = h.s
+	h.floorLift = true
+	ev := evaluateLean(Merge(h.s, tgt, h.prop), tgt)
+	assert.Equal(t, int64(pfBread), added(t, h, ev.Days[0].Kcal+250))
+}
+
 // While the week's fat is above range, the filler with the least fat above
 // the range comes before the carb and order keys.
 func TestAddNoCook_PlateFitFillerKeepsFatInRange(t *testing.T) {

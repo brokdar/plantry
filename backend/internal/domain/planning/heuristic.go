@@ -114,6 +114,9 @@ type planner struct {
 	// topUpBase is the portions of a component (plate, component index) before
 	// the kcal passes grew it: the 1.5x cap holds over all of them.
 	topUpBase map[[2]int]float64
+	// floorLift is set while topUpFloors lifts a day to its safety floor: any
+	// verified food may fill the gap, so the plate-fit starch filter is off.
+	floorLift bool
 	// adds counts each day's no-cook adds over every pass (dayAdds).
 	adds map[int]*dayAdds
 	// choices log what was chosen per cell and why (the run's
@@ -901,11 +904,11 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 				continue
 			}
 			fat := excessFat(nutrition.Macros{Kcal: held.Kcal + f.Macros.Kcal, Fat: held.Fat + f.Macros.Fat}, 1, h.x.pol.FatHigh)
-			nutrition := 0.0
+			kcalKey := 0.0
 			if need > 0 {
-				nutrition = math.Round(math.Abs(need-f.Macros.Kcal) / sideKcalBucket)
+				kcalKey = math.Round(math.Abs(need-f.Macros.Kcal) / sideKcalBucket)
 			}
-			keys = append(keys, fat, nutrition, float64(raised))
+			keys = append(keys, fat, kcalKey, float64(raised))
 		}
 		cands = append(cands, candidate{id: f.ID, keys: append(keys,
 			b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore,

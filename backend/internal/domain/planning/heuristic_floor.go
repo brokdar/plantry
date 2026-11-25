@@ -76,9 +76,9 @@ func (h *planner) topUpFloors() {
 		if floor := dk.Floor(y.pol); dk.Kcal < floor {
 			// The safety floor comes before how the plate looks: any verified food.
 			pair := h.s.PairAddOns
-			h.s.PairAddOns = false
+			h.s.PairAddOns, h.floorLift = false, true
 			h.liftDay(dk, floor, true, false)
-			h.s.PairAddOns = pair
+			h.s.PairAddOns, h.floorLift = pair, false
 		}
 	}
 	h.closeProteinGaps()
@@ -344,9 +344,9 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		}
 	}
 	cands = spreadAdds(y, merged, date, cands, adds.used)
-	if h.s.Settings.PlateFit {
+	if h.s.Settings.PlateFit && !h.floorLift {
 		// No second starch: bread beside a pasta, rice or potato main or a
-		// starch side (PLATE-4 keeps the plate's proportions).
+		// starch side (PLATE-4 keeps the plate's proportions); the safety floor lift skips it.
 		cands = slices.DeleteFunc(cands, func(c optCand) bool {
 			f := merged.Foods[c.opt.FoodID]
 			return merged.secondStarch(merged.Plates[c.plate], f, diet.Fold(f.Name))
