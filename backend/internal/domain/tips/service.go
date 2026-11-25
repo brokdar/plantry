@@ -383,7 +383,7 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 		}
 	}
 	y.before = planning.EvaluateLean(y.st, planning.WindowTarget(y.st))
-	for _, id := range y.st.NoCook {
+	for _, id := range slices.Concat(y.st.NoCook, y.st.Garnish) {
 		if f := y.st.Foods[id]; !f.Composed() && !y.never[id] {
 			y.garnish = append(y.garnish, componentOf(f))
 		}

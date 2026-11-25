@@ -514,3 +514,31 @@ func TestSync_ClashBeforeGap(t *testing.T) {
 		t.Fatalf("clash tip %+v, want the salad swapped in", v.Tips[0])
 	}
 }
+
+// TestSync_HerbGarnishFromGarnishList: a fresh herb that is not a no-cook
+// food (State.Garnish) is offered as fresh herbs, 4 g per eater.
+func TestSync_HerbGarnishFromGarnishList(t *testing.T) {
+	t.Parallel()
+	const parsleyID = 901
+	f := newFixture()
+	f.st.NoCook = nil
+	f.st.Garnish = []int64{parsleyID}
+	f.st.Foods[parsleyID] = planning.FoodFacts{
+		ID: parsleyID, Name: "Petersilie", Kind: food.KindLeaf, DietClass: diet.Vegan,
+		Macros: nutrition.Macros{Kcal: 36}, NutritionComplete: true,
+		Fresh: ptr(true), Attrs: flavor.Attributes{Texture: "soft", Colour: "green", Taste: &flavor.Taste{}},
+	}
+	for id, m := range f.st.Foods {
+		if id != parsleyID {
+			m.Fresh, m.Attrs.Colour, m.Attrs.Texture, m.Attrs.Taste = ptr(false), "red", "crunchy", &flavor.Taste{Salt: 2, Umami: 2, Acid: 1}
+			f.st.Foods[id] = m
+		}
+	}
+	v, err := f.svc().Sync(context.Background(), start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Tips) == 0 || v.Tips[0].Dimension != "fresh" || v.Tips[0].Kind != tips.KindHerbs || v.Tips[0].Op != (tips.Op{Action: "add", FoodID: parsleyID, Grams: 4}) {
+		t.Fatalf("tips = %+v", v.Tips)
+	}
+}
