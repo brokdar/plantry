@@ -38,6 +38,7 @@ var (
 	_ plate.RunOutcomes = (*AIRunRepo)(nil)
 	_ planview.RunNotes = (*AIRunRepo)(nil)
 	_ planning.Runs     = (*AIRunRepo)(nil)
+	_ airun.SpendStore  = (*AIRunRepo)(nil)
 )
 
 // RunNote returns the run's chooser and notes for the plan's draft summary.
@@ -166,6 +167,9 @@ func nullIDs(ids []int64) []sql.NullInt64 {
 }
 
 func (r *AIRunRepo) CreateRun(ctx context.Context, start airun.RunStart) (int64, error) {
+	if !start.Kind.Valid() {
+		return 0, fmt.Errorf("%w: ai run kind %q", domain.ErrInvalidInput, start.Kind)
+	}
 	id, err := r.queriesFor(ctx).CreateAIRun(ctx, sqlcgen.CreateAIRunParams{
 		Kind:           string(start.Kind),
 		StartedAt:      formatTime(start.StartedAt),
@@ -206,6 +210,7 @@ func (r *AIRunRepo) FinishRun(ctx context.Context, end airun.RunEnd) error {
 		ScoreJson:         toNullStringEmpty(end.ScoreJSON),
 		Notes:             toNullStringEmpty(end.Notes),
 		ContainerID:       toNullStringEmpty(end.ContainerID),
+		CostUsd:           toNullFloat(end.CostUSD),
 		ScopeJson:         toNullStringEmpty(end.ScopeJSON),
 		ID:                end.ID,
 	})

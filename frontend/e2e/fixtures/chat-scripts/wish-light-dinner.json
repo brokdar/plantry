@@ -7,7 +7,11 @@
     {
       "for_tool": "set_constraints",
       "events": [
-        { "delay_ms": 50, "type": "message_start", "payload": { "model": "fake-e2e" } }
+        {
+          "delay_ms": 50,
+          "type": "message_start",
+          "payload": { "model": "fake-e2e" }
+        }
       ],
       "stop_reason": "tool_use",
       "message": {
@@ -16,7 +20,9 @@
             "type": "tool_use",
             "tool_use_id": "tu_wish_1",
             "tool_name": "set_constraints",
-            "tool_input": { "light": [{ "date": "{{d2}}", "scope": "meal", "slot": "dinner" }] }
+            "tool_input": {
+              "light": [{ "date": "{{d2}}", "scope": "meal", "slot": "dinner" }]
+            }
           }
         ]
       },

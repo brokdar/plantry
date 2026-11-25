@@ -298,8 +298,9 @@ UPDATE ai_runs SET
     score_json         = ?,
     notes              = ?,
     container_id       = ?,
-    scope_json         = COALESCE(?20, scope_json)
-WHERE id = ?21
+    cost_usd           = ?,
+    scope_json         = COALESCE(?21, scope_json)
+WHERE id = ?22
 `
 
 type FinishAIRunParams struct {
@@ -322,6 +323,7 @@ type FinishAIRunParams struct {
 	ScoreJson         sql.NullString
 	Notes             sql.NullString
 	ContainerID       sql.NullString
+	CostUsd           sql.NullFloat64
 	ScopeJson         sql.NullString
 	ID                int64
 }
@@ -349,6 +351,7 @@ func (q *Queries) FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.R
 		arg.ScoreJson,
 		arg.Notes,
 		arg.ContainerID,
+		arg.CostUsd,
 		arg.ScopeJson,
 		arg.ID,
 	)
@@ -719,6 +722,42 @@ type SetRunOutcomeParams struct {
 func (q *Queries) SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) error {
 	_, err := q.db.ExecContext(ctx, setRunOutcome, arg.Event, arg.ID)
 	return err
+}
+
+const spendAIRuns = `-- name: SpendAIRuns :one
+SELECT CAST(COALESCE(SUM(cost_usd), 0) AS REAL) AS usd
+FROM ai_runs
+WHERE started_at >= ?1 AND started_at < ?2
+  AND (CAST(?3 AS INTEGER) = 1 OR kind IN (/*SLICE:kinds*/?))
+`
+
+type SpendAIRunsParams struct {
+	FromTs   string
+	ToTs     string
+	AllKinds int64
+	Kinds    []string
+}
+
+// The summed cost_usd of the runs started in [from_ts, to_ts) whose kind is
+// in kinds; all kinds when all_kinds is 1. Unpriced runs add nothing.
+func (q *Queries) SpendAIRuns(ctx context.Context, arg SpendAIRunsParams) (float64, error) {
+	query := spendAIRuns
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.FromTs)
+	queryParams = append(queryParams, arg.ToTs)
+	queryParams = append(queryParams, arg.AllKinds)
+	if len(arg.Kinds) > 0 {
+		for _, v := range arg.Kinds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:kinds*/?", strings.Repeat(",?", len(arg.Kinds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:kinds*/?", "NULL", 1)
+	}
+	row := q.db.QueryRowContext(ctx, query, queryParams...)
+	var usd float64
+	err := row.Scan(&usd)
+	return usd, err
 }
 
 const updateAIRunStepResult = `-- name: UpdateAIRunStepResult :exec

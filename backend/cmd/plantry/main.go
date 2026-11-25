@@ -202,8 +202,18 @@ func run() error {
 	// Every client is metered so each LLM call lands in the AI run log.
 	// Steps of runs older than ai.run_retention_days are pruned now and after
 	// a finished run, at most once per hour.
+	// A finished run stores its cost at the prices of that moment: the
+	// built-in table plus ai.price_overrides.
+	priceOverrides := func(ctx context.Context) (map[string]airun.Price, error) {
+		v, err := settingsSvc.Get(ctx, settingsdom.KeyAIPriceOverrides)
+		if err != nil {
+			return nil, err
+		}
+		return airun.ParsePriceOverrides(v.Raw)
+	}
 	runRecorder := airun.NewRecorder(aiRunRepo, logger, time.Now).
 		WithAppVersion(appVersion()).
+		WithPrices(priceOverrides).
 		WithRetention(func(ctx context.Context) (int, error) {
 			v, err := settingsSvc.Get(ctx, settingsdom.KeyAIRunRetentionDays)
 			if err != nil {
@@ -328,13 +338,7 @@ func run() error {
 
 	// Run log read side: runs, insights and prices. Costs are computed on
 	// read from the built-in table plus ai.price_overrides.
-	insightsSvc := airun.NewInsights(aiRunRepo, func(ctx context.Context) (map[string]airun.Price, error) {
-		v, err := settingsSvc.Get(ctx, settingsdom.KeyAIPriceOverrides)
-		if err != nil {
-			return nil, err
-		}
-		return airun.ParsePriceOverrides(v.Raw)
-	})
+	insightsSvc := airun.NewInsights(aiRunRepo, priceOverrides)
 	aiRunsHandler := handlers.NewAIRunsHandler(insightsSvc, func(ctx context.Context) (string, error) {
 		cfg, err := settingsSvc.EffectiveAI(ctx)
 		return cfg.Model, err

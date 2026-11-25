@@ -445,7 +445,13 @@
         "classify": "Einordnen",
         "import_fallback": "Import",
         "lookup": "Nachschlagen",
-        "untracked": "Sonstiges"
+        "untracked": "Sonstiges",
+        "chef_attributes": "Rezeptmerkmale",
+        "chef_match": "Zutatenabgleich",
+        "chef_import_check": "Importprüfung",
+        "chef_find": "Rezeptfunde",
+        "chef_help": "Kochhilfe",
+        "chef_library_review": "Sammlungsdurchsicht"
       },
       "status": {
         "running": "Läuft",

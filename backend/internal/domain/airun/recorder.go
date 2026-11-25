@@ -53,6 +53,10 @@ type Recorder struct {
 	closed        bool           // set by Wait: no new prunes start
 
 	appVersion string // stored on every run
+
+	// prices returns the current ai.price_overrides; nil uses the built-in
+	// table alone.
+	prices func(context.Context) (map[string]Price, error)
 }
 
 // NewRecorder builds a Recorder. now is injected so tests can pin time.
@@ -65,6 +69,28 @@ func NewRecorder(store Store, logger *slog.Logger, now func() time.Time) *Record
 func (r *Recorder) WithAppVersion(v string) *Recorder {
 	r.appVersion = v
 	return r
+}
+
+// WithPrices sets where a finished run's cost reads the price overrides
+// from (ai.price_overrides). A failed read logs a warning and prices the run
+// from the built-in table. Call it before the Recorder is used.
+func (r *Recorder) WithPrices(prices func(context.Context) (map[string]Price, error)) *Recorder {
+	r.prices = prices
+	return r
+}
+
+// overrides returns the price overrides, or nil when there are none or they
+// cannot be read.
+func (r *Recorder) overrides(ctx context.Context) map[string]Price {
+	if r.prices == nil {
+		return nil
+	}
+	o, err := r.prices(ctx)
+	if err != nil {
+		r.logger.WarnContext(ctx, "ai.run.prices failed", "error", err)
+		return nil
+	}
+	return o
 }
 
 // WithRetention enables pruning: Prune, and Finish at most once per hour,
@@ -285,6 +311,10 @@ func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, re
 	}
 	run.mu.Unlock()
 
+	end.CostUSD = Cost(end.Model, end.Provider, Tokens{
+		Input: end.InputTokens, Output: end.OutputTokens, CacheRead: end.CacheReadTokens,
+		CacheWrite: end.CacheWriteTokens, WebSearchRequests: end.WebSearchRequests,
+	}, run.rec.overrides(context.WithoutCancel(ctx)))
 	run.closeCode(ctx, finishedAt)
 	if run.id != 0 {
 		if err := run.rec.store.FinishRun(context.WithoutCancel(ctx), end); err != nil {

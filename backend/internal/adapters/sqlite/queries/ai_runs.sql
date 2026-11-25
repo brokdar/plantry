@@ -27,6 +27,7 @@ UPDATE ai_runs SET
     score_json         = ?,
     notes              = ?,
     container_id       = ?,
+    cost_usd           = ?,
     scope_json         = COALESCE(sqlc.narg(scope_json), scope_json)
 WHERE id = sqlc.arg(id);
 
@@ -105,6 +106,14 @@ UPDATE ai_runs SET
     END,
     outcome_at = datetime('now')
 WHERE id = sqlc.arg(id);
+
+-- name: SpendAIRuns :one
+-- The summed cost_usd of the runs started in [from_ts, to_ts) whose kind is
+-- in kinds; all kinds when all_kinds is 1. Unpriced runs add nothing.
+SELECT CAST(COALESCE(SUM(cost_usd), 0) AS REAL) AS usd
+FROM ai_runs
+WHERE started_at >= sqlc.arg(from_ts) AND started_at < sqlc.arg(to_ts)
+  AND (CAST(sqlc.arg(all_kinds) AS INTEGER) = 1 OR kind IN (sqlc.slice(kinds)));
 
 -- name: ListAIRuns :many
 -- Runs newest first (by id), optionally filtered by kind, a started_at range
