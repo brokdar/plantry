@@ -36,6 +36,7 @@ type Handlers struct {
 	Import        *handlers.ImportHandler
 	Discovery     *handlers.DiscoveryHandler
 	Chef          *handlers.ChefHandler
+	Tips          *handlers.TipHandler
 	Settings      *handlers.SettingsHandler
 	Shopping      *handlers.ShoppingHandler
 	Availability  *handlers.AvailabilityHandler
@@ -289,6 +290,14 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			api.Get("/chef/spend", h.Chef.Spend)
 			api.Get("/chef/labelling", h.Chef.LabellingEstimate)
 			api.Post("/chef/labelling", h.Chef.LabelLibrary)
+		}
+
+		if h.Tips != nil {
+			api.Get("/tips", h.Tips.List)
+			api.Post("/tips/{id}/apply", h.Tips.Apply)
+			api.Post("/tips/{id}/dismiss", h.Tips.Dismiss)
+			api.Get("/chef/insights", h.Tips.Insights)
+			api.Get("/chef/trial-export", h.Tips.TrialExport)
 		}
 
 		if h.Shopping != nil {

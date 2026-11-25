@@ -161,6 +161,19 @@ type ChefJob struct {
 	UpdatedAt string
 }
 
+type ChefTip struct {
+	ID          int64
+	PlateID     sql.NullInt64
+	RecipeID    sql.NullInt64
+	WindowStart string
+	Kind        string
+	Dimension   string
+	Change      string
+	State       string
+	CreatedAt   string
+	UpdatedAt   string
+}
+
 type CookSession struct {
 	ID             int64
 	FoodID         int64

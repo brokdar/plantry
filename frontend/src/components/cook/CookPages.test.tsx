@@ -6,8 +6,11 @@ import type { ScaledRecipe } from "@/lib/api/foods"
 import i18n from "@/lib/i18n"
 import {
   mockChili,
+  mockPlate,
+  mockPlateComponent,
   mockScaled,
   mockSession,
+  mockSettingsList,
   mockTimeSlots,
 } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
@@ -22,9 +25,13 @@ vi.mock("@/lib/api/foods", () => ({
   getScaled: vi.fn(),
 }))
 vi.mock("@/lib/api/slots", () => ({ listTimeSlots: vi.fn() }))
+vi.mock("@/lib/api/plates", () => ({ getPlate: vi.fn() }))
+vi.mock("@/lib/api/settings", () => ({ listSettings: vi.fn() }))
 vi.mock("@/lib/toast", () => ({ toast: vi.fn(), toastError: vi.fn() }))
 
 import { getFood, getScaled } from "@/lib/api/foods"
+import { getPlate } from "@/lib/api/plates"
+import { listSettings } from "@/lib/api/settings"
 import { getSession, setSessionCooked, updateSession } from "@/lib/api/sessions"
 import { listTimeSlots } from "@/lib/api/slots"
 
@@ -67,6 +74,10 @@ describe("cook pages", () => {
     vi.mocked(getScaled).mockImplementation(scaledFor)
     vi.mocked(listTimeSlots).mockResolvedValue({ items: mockTimeSlots })
     vi.mocked(getSession).mockResolvedValue(mockSession)
+    vi.mocked(listSettings).mockResolvedValue(
+      mockSettingsList([{ key: "chef.enabled", value: "true", source: "db" }])
+    )
+    vi.mocked(getPlate).mockImplementation(async (id) => mockPlate({ id }))
     vi.mocked(updateSession).mockImplementation(async (_id, input) => ({
       ...mockSession,
       ...input,
@@ -192,6 +203,65 @@ describe("cook pages", () => {
         await screen.findByRole("status", { name: "Loading the recipe" })
       ).toBeInTheDocument()
     })
+  })
+
+  it("lists the garnishes on the batch's plates to finish (a tip's Apply)", async () => {
+    const lime = (plateId: number) =>
+      mockPlateComponent({
+        id: 50 + plateId,
+        plate_id: plateId,
+        food_name: "Lime wedges",
+        kind: "leaf",
+        position: "extra",
+        grams: 10,
+      })
+    vi.mocked(getPlate).mockImplementation(async (id) =>
+      id === 1
+        ? mockPlate({
+            id,
+            eaters: 2,
+            components: [mockPlateComponent(), lime(1)],
+          })
+        : mockPlate({ id, components: id === 2 ? [lime(2)] : [] })
+    )
+    renderWithRouter(<CookSessionPage sessionId={7} />)
+
+    const finish = await screen.findByTestId("cook-finish")
+    expect(finish).toHaveTextContent("To finish")
+    expect(finish).toHaveTextContent("Lime wedges, 30 g")
+    expect(getPlate).toHaveBeenCalledWith(1)
+    expect(getPlate).toHaveBeenCalledWith(2)
+  })
+
+  it("shows no finish list while the Chef is off", async () => {
+    vi.mocked(listSettings).mockResolvedValue(mockSettingsList())
+    vi.mocked(getPlate).mockImplementation(async (id) =>
+      mockPlate({
+        id,
+        components: [
+          mockPlateComponent({
+            id: 60 + id,
+            plate_id: id,
+            food_name: "Lime wedges",
+            kind: "leaf",
+            position: "extra",
+            grams: 10,
+          }),
+        ],
+      })
+    )
+    renderWithRouter(<CookSessionPage sessionId={7} />)
+    await screen.findAllByTestId("cook-ingredient")
+    await waitFor(() => expect(listSettings).toHaveBeenCalled())
+    expect(screen.queryByTestId("cook-finish")).toBeNull()
+    expect(getPlate).not.toHaveBeenCalled()
+  })
+
+  it("shows no finish list without garnishes", async () => {
+    renderWithRouter(<CookSessionPage sessionId={7} />)
+    await screen.findAllByTestId("cook-ingredient")
+    await waitFor(() => expect(getPlate).toHaveBeenCalledTimes(3))
+    expect(screen.queryByTestId("cook-finish")).toBeNull()
   })
 
   describe("recipe mode", () => {

@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next"
 
 import { BatchBadge } from "@/components/batch/BatchBadge"
 import { DraftTag } from "@/components/batch/DraftTag"
+import { TipMark } from "@/components/tips/Tips"
 import type { TodayRow } from "@/lib/plan/today"
 
 /** One meal slot of the day (UX §5.2): the slot in italic, then
@@ -34,6 +35,7 @@ function MealContent({ row: { cell, draft } }: { row: TodayRow }) {
         )}
         {cell.badge && <BatchBadge {...cell.badge} />}
         {draft && <DraftTag />}
+        <TipMark plateId={cell.plate.id} />
       </span>
     )
   }

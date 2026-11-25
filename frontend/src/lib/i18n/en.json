@@ -578,7 +578,22 @@
         "H8": "Variety"
       },
       "violation": "{{rule}} × {{count}}",
-      "scroll_hint": "Scroll sideways for more columns"
+      "scroll_hint": "Scroll sideways for more columns",
+      "chef": {
+        "title": "Chef",
+        "shown": "Tips shown",
+        "applied": "Tips applied",
+        "dismissed": "Tips dismissed",
+        "apply_rate": "Tip apply rate",
+        "kind": {
+          "chef_attributes": "Spend: attribute labelling",
+          "chef_match": "Spend: ingredient matching",
+          "chef_import_check": "Spend: import checks",
+          "chef_find": "Spend: finding recipes",
+          "chef_help": "Spend: help",
+          "chef_library_review": "Spend: library review"
+        }
+      }
     },
     "kitchen": {
       "time_group": "Cooking time",
@@ -1238,6 +1253,9 @@
       "invalid_output": "The assistant's research could not be read. Try again.",
       "invalid_mode": "That kind of discovery isn't available. Pick another one.",
       "cuisine_required": "Name a cuisine to explore."
+    },
+    "tip": {
+      "stale": "This tip no longer fits the meal."
     }
   },
   "nutrition": {
@@ -2409,7 +2427,9 @@
       "body": "Your running timers will stop.",
       "stay": "Keep cooking",
       "leave": "Leave"
-    }
+    },
+    "finish_title": "To finish",
+    "finish_line": "{{name}}, {{grams}} g"
   },
   "diet": {
     "label": "Diet",
@@ -2569,6 +2589,51 @@
       "wrap": "Wrap",
       "soup": "Soup",
       "salad": "Salad"
+    }
+  },
+  "tips": {
+    "title": "Tip",
+    "mark_label": "Tip for this meal",
+    "apply": "Apply",
+    "dismiss": "Not now",
+    "applied": "Tip applied",
+    "sentence": {
+      "finishing_acid": "Finish with {{food}}.",
+      "fresh_herbs": "Scatter {{food}} over it.",
+      "crunch": "Top it with {{food}}.",
+      "quick_pickle": "Serve {{food}} on the side.",
+      "cool_element": "Swap {{from}} for {{food}}.",
+      "sauce": "Swap {{from}} for {{food}}.",
+      "side_swap": "Swap {{from}} for {{food}}.",
+      "cuisine_fix": "Swap {{from}} for {{food}}."
+    },
+    "because": {
+      "taste_balance": "Something sharp lifts the rich plate.",
+      "fresh": "It brings something fresh.",
+      "texture": "It adds crunch to a soft plate.",
+      "colour": "It brings colour to the plate.",
+      "temperature": "Something cool or sharp cuts the heat.",
+      "cuisine": "It belongs to the same kitchen as the main.",
+      "pairing": "It gives the dish the contrast it wants.",
+      "sauce_starch": "Something to soak up the sauce.",
+      "proportions": "One starch is enough on the plate.",
+      "richness": "One rich part is enough on the plate."
+    },
+    "fit": {
+      "good": "A well-rounded plate.",
+      "lacks": "This plate could use {{what}}.",
+      "dim": {
+        "taste_balance": "something sharp",
+        "fresh": "something fresh",
+        "texture": "crunch",
+        "colour": "colour",
+        "temperature": "something cool",
+        "cuisine": "one kitchen",
+        "pairing": "contrast",
+        "sauce_starch": "something for the sauce",
+        "proportions": "balance (two starches or mains)",
+        "richness": "lightness (two rich parts)"
+      }
     }
   }
 }

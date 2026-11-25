@@ -201,6 +201,10 @@ func Evaluate(s State, t Target) Evaluation { return evaluate(s, t, false) }
 // figures, never the options (each option costs a re-evaluation).
 func evaluateLean(s State, t Target) Evaluation { return evaluateWith(s, t, false, true) }
 
+// EvaluateLean is evaluateLean for callers outside the planner that check a
+// candidate change (the Chef's tips).
+func EvaluateLean(s State, t Target) Evaluation { return evaluateLean(s, t) }
+
 // EvaluateWeek is Evaluate with verified swap options on the week's meat and
 // fish issues (S7); the planner's evaluate_plan, its repair feedback and its
 // guard read it. It costs a re-evaluation per candidate swap.

@@ -52,6 +52,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/setup"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/tips"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
@@ -452,6 +453,50 @@ func run() error {
 		}
 	}()
 
+	// Chef tips (TIP): computed by rules on read of a window, applied as a
+	// normal plate change with the plate Undo token.
+	kitchenRepo := sqlite.NewKitchenRepo(conn)
+	tipSvc := tips.NewService(tips.Deps{
+		Store: sqlite.NewChefTipRepo(conn), Plates: plateSvc,
+		State: func(ctx context.Context, w window.Window, today time.Time) (planning.State, error) {
+			return planBuilder.Build(ctx, w, today, w.Start, w.End)
+		},
+		ChefOn: settingsSvc.ChefEnabled,
+		ShoppingDay: func(ctx context.Context) (int, error) {
+			return plate.IntSetting(ctx, settingsSvc, settingsdom.KeyPlanShoppingDay)
+		},
+		Never: func(ctx context.Context) (map[int64]bool, error) {
+			items, err := kitchenRepo.NeverItems(ctx)
+			if err != nil {
+				return nil, err
+			}
+			out := make(map[int64]bool, len(items))
+			for _, f := range items {
+				out[f.ID] = true
+			}
+			return out, nil
+		},
+		Equipment: func(ctx context.Context) ([]string, error) {
+			p, err := profileSvc.Get(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return p.Kitchen.Equipment, nil
+		},
+		Now: clock.Now,
+	})
+	spendByKind := func(ctx context.Context, t time.Time) ([]handlers.KindSpend, error) {
+		out := make([]handlers.KindSpend, 0, len(chef.CappedKinds))
+		for _, k := range chef.CappedKinds {
+			usd, err := airun.Spend(ctx, aiRunRepo, t, []airun.Kind{k})
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, handlers.KindSpend{Kind: k, USD: usd})
+		}
+		return out, nil
+	}
+
 	// Rate limiter for /api/ai/chat. Initial limit comes from effective
 	// settings; the SettingsHandler reconfigures it when the user changes
 	// ai.rate_limit_per_min from the UI.
@@ -484,7 +529,7 @@ func run() error {
 		PlanGenerate:  handlers.NewPlanGenerateHandler(planningSvc).WithClock(clock.Now),
 		Today:         handlers.NewTodayHandler(planViewSvc).WithClock(clock.Now),
 		Profile:       handlers.NewProfileHandler(profileSvc),
-		Kitchen:       handlers.NewKitchenHandler(profileSvc, kitchen.NewService(sqlite.NewKitchenRepo(conn))),
+		Kitchen:       handlers.NewKitchenHandler(profileSvc, kitchen.NewService(kitchenRepo)),
 		Presets:       handlers.NewPresetHandler(presetSvc),
 		AI:            aiHandler,
 		AIRuns:        aiRunsHandler,
@@ -493,6 +538,7 @@ func run() error {
 		Import:        importHandler,
 		Discovery:     handlers.NewDiscoveryHandler(discoverySvc).WithClock(clock.Now),
 		Chef:          handlers.NewChefHandler(chefGuard.Spent, labelling),
+		Tips:          handlers.NewTipHandler(tipSvc, plateSvc, spendByKind).WithClock(clock.Now),
 		Settings:      settingsHandler,
 		Shopping:      handlers.NewShoppingHandler(shoppingSvc).WithClock(clock.Now),
 		Availability:  handlers.NewAvailabilityHandler(availabilitySvc).WithClock(clock.Now),

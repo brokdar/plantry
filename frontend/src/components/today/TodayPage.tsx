@@ -1,3 +1,4 @@
+import { TipsProvider } from "@/components/tips/Tips"
 import { Link } from "@tanstack/react-router"
 import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
@@ -129,7 +130,9 @@ function TodayLoaded({
             )}
             {!busyDay && <RecipesCard missing={header.recipesMissing} />}
             {view ? (
-              <DayPlan view={view} />
+              <TipsProvider date={date}>
+                <DayPlan view={view} />
+              </TipsProvider>
             ) : plan.isError ? (
               <LoadError retry={plan.refetch} />
             ) : (

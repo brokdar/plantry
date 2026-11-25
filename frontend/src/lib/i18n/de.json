@@ -578,7 +578,22 @@
         "H8": "Abwechslung"
       },
       "violation": "{{rule}} × {{count}}",
-      "scroll_hint": "Seitlich scrollen für weitere Spalten"
+      "scroll_hint": "Seitlich scrollen für weitere Spalten",
+      "chef": {
+        "title": "Chef",
+        "shown": "Gezeigte Tipps",
+        "applied": "Übernommene Tipps",
+        "dismissed": "Abgelehnte Tipps",
+        "apply_rate": "Anteil übernommener Tipps",
+        "kind": {
+          "chef_attributes": "Ausgaben: Merkmale bestimmen",
+          "chef_match": "Ausgaben: Zutaten zuordnen",
+          "chef_import_check": "Ausgaben: Import prüfen",
+          "chef_find": "Ausgaben: Rezepte finden",
+          "chef_help": "Ausgaben: Hilfe",
+          "chef_library_review": "Ausgaben: Sammlung prüfen"
+        }
+      }
     },
     "kitchen": {
       "time_group": "Kochzeit",
@@ -1265,6 +1280,9 @@
       "invalid_output": "Die Recherche des Assistenten war nicht lesbar. Versuch es noch einmal.",
       "invalid_mode": "Diese Art der Rezeptsuche gibt es nicht. Wähl eine andere.",
       "cuisine_required": "Nenn eine Küche, die du entdecken möchtest."
+    },
+    "tip": {
+      "stale": "Dieser Tipp passt nicht mehr zur Mahlzeit."
     }
   },
   "common": {
@@ -2409,7 +2427,9 @@
       "body": "Laufende Timer werden dann beendet.",
       "stay": "Weiterkochen",
       "leave": "Verlassen"
-    }
+    },
+    "finish_title": "Zum Schluss",
+    "finish_line": "{{name}}, {{grams}} g"
   },
   "diet": {
     "label": "Ernährung",
@@ -2569,6 +2589,51 @@
       "wrap": "Wrap",
       "soup": "Suppe",
       "salad": "Salat"
+    }
+  },
+  "tips": {
+    "title": "Tipp",
+    "mark_label": "Tipp für diese Mahlzeit",
+    "apply": "Übernehmen",
+    "dismiss": "Nicht jetzt",
+    "applied": "Tipp übernommen",
+    "sentence": {
+      "finishing_acid": "Zum Schluss mit {{food}} beträufeln.",
+      "fresh_herbs": "{{food}} darüberstreuen.",
+      "crunch": "Mit {{food}} bestreuen.",
+      "quick_pickle": "{{food}} dazu reichen.",
+      "cool_element": "{{food}} statt {{from}}.",
+      "sauce": "{{food}} statt {{from}}.",
+      "side_swap": "{{food}} statt {{from}}.",
+      "cuisine_fix": "{{food}} statt {{from}}."
+    },
+    "because": {
+      "taste_balance": "Etwas Säure hebt den gehaltvollen Teller.",
+      "fresh": "Das bringt Frische.",
+      "texture": "Das bringt Biss auf einen weichen Teller.",
+      "colour": "Das bringt Farbe auf den Teller.",
+      "temperature": "Etwas Kühles oder Saures nimmt der Schärfe die Spitze.",
+      "cuisine": "Das passt zur Küche des Hauptgerichts.",
+      "pairing": "Das gibt dem Gericht den Kontrast, den es braucht.",
+      "sauce_starch": "Etwas, das die Soße aufnimmt.",
+      "proportions": "Eine Sättigungsbeilage reicht.",
+      "richness": "Eine gehaltvolle Komponente reicht."
+    },
+    "fit": {
+      "good": "Ein runder Teller.",
+      "lacks": "Diesem Teller fehlt {{what}}.",
+      "dim": {
+        "taste_balance": "etwas Säure",
+        "fresh": "etwas Frisches",
+        "texture": "Biss",
+        "colour": "Farbe",
+        "temperature": "etwas Kühles",
+        "cuisine": "eine einheitliche Küche",
+        "pairing": "Kontrast",
+        "sauce_starch": "etwas für die Soße",
+        "proportions": "Ausgewogenheit (zwei Sättigungsbeilagen oder Hauptgerichte)",
+        "richness": "Leichtigkeit (zwei gehaltvolle Teile)"
+      }
     }
   }
 }
