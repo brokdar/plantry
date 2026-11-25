@@ -98,3 +98,16 @@ func sessionFoods(p planning.Proposal) []int64 {
 	}
 	return out
 }
+
+// An excluded food is no re-picked side: the guard's picker skips it.
+func TestSidePickerFor_SkipsExcludedFoods(t *testing.T) {
+	s := meatyPlateWeek(false)
+	in := planning.ChooseInput{State: s, Target: windowTarget(s)}
+	first, ok := planning.SidePickerFor(in, planning.Proposal{})(cell(mon, lunch), 108, nil)
+	require.True(t, ok)
+
+	in.Exclude = []int64{first}
+	got, ok := planning.SidePickerFor(in, planning.Proposal{})(cell(mon, lunch), 108, nil)
+	require.True(t, ok)
+	assert.NotEqual(t, first, got, "the excluded side is no candidate")
+}

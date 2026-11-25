@@ -864,7 +864,8 @@ func (h *planner) reachesForced(f FoodFacts, c plate.CellKey) bool {
 // the proposal (the week's side rotation), then with plate fit on: no clash
 // with the plate, the side whose kcal come closest to what the plate lacks
 // to its share (in sideKcalBucket steps), the fewest raised gaps (PLATE-4,
-// PLATE-5), then as pickMain. The excluded food is no candidate.
+// PLATE-5), then as pickMain. The swapped-out food and, with plate fit on,
+// the proposal's excluded foods are no candidate.
 func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude int64, role food.Role) (int64, bool) {
 	fit := h.s.plateFitOn(main)
 	need := 0.0 // with plate fit on: the kcal the plate lacks to its share
@@ -878,7 +879,7 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 	}
 	var cands []candidate
 	for _, f := range h.s.Foods {
-		if !f.Composed() || !sideRole(f.Role) || f.ID == exclude || !h.fits(f) || !h.reachesForced(f, c) {
+		if !f.Composed() || !sideRole(f.Role) || f.ID == exclude || (fit && h.exclude[f.ID]) || !h.fits(f) || !h.reachesForced(f, c) {
 			continue
 		}
 		last := 0.0

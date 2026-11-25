@@ -10,9 +10,11 @@ import (
 )
 
 // Plate fit in the heuristic (PLATE-4, PLATE-5): when plan.plate_fit is on,
-// a side or add-on that brings a clash to its plate is no candidate, and the
-// candidates rank by the plate's raised gaps after nutrition and before the
-// existing keys. Minor gaps never filter or rank.
+// a side (pickSide, addSide) that brings a clash to its plate is no
+// candidate, and the candidates rank by the plate's raised gaps after
+// nutrition and before the existing keys. No-cook add-ons (addNoCook) are
+// not filtered: they carry no cuisine or starch. Minor gaps never filter or
+// rank.
 
 // freshWords are ingredients that make a raw, green or citrus element.
 var freshWords = []string{
