@@ -69,7 +69,7 @@ export function ChefOnDialog({
           <Button
             type="button"
             className="h-11 md:pointer-fine:h-9"
-            disabled={pending}
+            disabled={pending || !estimate.data}
             onClick={onConfirm}
           >
             {t("settings_page.assistant.chef_on_confirm")}

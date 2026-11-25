@@ -80,3 +80,13 @@ func (r *ChefJobRepo) Recover(ctx context.Context, maxAttempts int, now time.Tim
 	}
 	return n, nil
 }
+
+// Queued reports whether a job of kind with this payload waits in the queue
+// (not yet running).
+func (r *ChefJobRepo) Queued(ctx context.Context, kind airun.Kind, payload string) (bool, error) {
+	n, err := r.queriesFor(ctx).HasQueuedChefJob(ctx, sqlcgen.HasQueuedChefJobParams{Kind: string(kind), Payload: payload})
+	if err != nil {
+		return false, fmt.Errorf("check queued chef job: %w", err)
+	}
+	return n, nil
+}

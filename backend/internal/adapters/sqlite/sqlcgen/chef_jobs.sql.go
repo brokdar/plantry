@@ -83,6 +83,24 @@ func (q *Queries) FinishChefJob(ctx context.Context, arg FinishChefJobParams) er
 	return err
 }
 
+const hasQueuedChefJob = `-- name: HasQueuedChefJob :one
+SELECT EXISTS (
+  SELECT 1 FROM chef_jobs WHERE kind = ?1 AND payload = ?2 AND status = 'queued'
+) AS queued
+`
+
+type HasQueuedChefJobParams struct {
+	Kind    string
+	Payload string
+}
+
+func (q *Queries) HasQueuedChefJob(ctx context.Context, arg HasQueuedChefJobParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasQueuedChefJob, arg.Kind, arg.Payload)
+	var queued bool
+	err := row.Scan(&queued)
+	return queued, err
+}
+
 const recoverChefJobs = `-- name: RecoverChefJobs :execrows
 UPDATE chef_jobs
 SET status = CASE WHEN attempts >= ?1 THEN 'failed' ELSE 'queued' END,

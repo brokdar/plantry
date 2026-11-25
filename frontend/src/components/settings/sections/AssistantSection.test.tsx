@@ -171,6 +171,18 @@ describe("AssistantSection", () => {
       expect(screen.getByLabelText("Chef")).not.toBeChecked()
     })
 
+    it("cannot turn on without an estimate", async () => {
+      serveSettings([{ key: "ai.provider", value: "fake", source: "db" }])
+      vi.mocked(getLabellingEstimate).mockRejectedValue(new Error("boom"))
+      const user = userEvent.setup()
+      renderSection()
+      await user.click(await screen.findByLabelText("Chef"))
+      expect(
+        await screen.findByTestId("chef-on-estimate")
+      ).not.toHaveTextContent("recipes")
+      expect(screen.getByRole("button", { name: "Turn on" })).toBeDisabled()
+    })
+
     it("turns off without asking", async () => {
       serveSettings([
         { key: "ai.provider", value: "fake", source: "db" },

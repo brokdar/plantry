@@ -221,6 +221,20 @@ func (q *inlineQueue) Enqueue(ctx context.Context, kind airun.Kind, payload stri
 	return int64(q.jobs), q.l.Handle(ctx, payload)
 }
 
+func (q *inlineQueue) Queued(context.Context, airun.Kind, string) (bool, error) { return false, nil }
+
+// holdQueue keeps jobs queued until run.
+type holdQueue struct{ waiting map[string]bool }
+
+func (q *holdQueue) Enqueue(_ context.Context, _ airun.Kind, payload string, _ bool) (int64, error) {
+	q.waiting[payload] = true
+	return int64(len(q.waiting)), nil
+}
+
+func (q *holdQueue) Queued(_ context.Context, _ airun.Kind, payload string) (bool, error) {
+	return q.waiting[payload], nil
+}
+
 type chefSwitch bool
 
 func (c chefSwitch) ChefEnabled(context.Context) (bool, error) { return bool(c), nil }
@@ -336,4 +350,21 @@ func TestLabelling_EstimateUnpricedAndEmpty(t *testing.T) {
 	assert.Equal(t, 1, est.Recipes)
 	assert.Nil(t, est.CostUSD, "an unpriced model has no cost estimate")
 	assert.Equal(t, 1, est.Minutes)
+}
+
+func TestLabelling_SavedSkipsAlreadyQueued(t *testing.T) {
+	ctx := context.Background()
+	r := newServiceRig(t)
+	f := r.recipe(t, "Curry", nil, map[string]float64{"Hähnchenbrust": 300, "Tomaten": 200})
+	labeler, _ := newLabeler(r.db, fake.NewFromScript(&fake.Script{}))
+	q := &holdQueue{waiting: map[string]bool{}}
+	l := flavor.NewLabelling(labeler, r.store, q, chefSwitch(true), flatPrice, 2)
+
+	require.NoError(t, l.Saved(ctx, f.ID))
+	require.NoError(t, l.Saved(ctx, f.ID))
+	assert.Len(t, q.waiting, 1, "repeat saves share the waiting job")
+
+	clear(q.waiting) // the job ran
+	require.NoError(t, l.Saved(ctx, f.ID))
+	assert.Len(t, q.waiting, 1, "a save after it ran queues again")
 }

@@ -126,6 +126,7 @@ type Querier interface {
 	// D12: the suggestion assigned to a day.
 	GetShownSuggestion(ctx context.Context, shownOn sql.NullString) (RecipeSuggestion, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
+	HasQueuedChefJob(ctx context.Context, arg HasQueuedChefJobParams) (bool, error)
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
 	LastFoodEventID(ctx context.Context) (int64, error)
 	LastPlateEventID(ctx context.Context) (int64, error)

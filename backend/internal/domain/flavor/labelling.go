@@ -30,6 +30,8 @@ type Library interface {
 // Queue enqueues a capped job (chef.Runner).
 type Queue interface {
 	Enqueue(ctx context.Context, kind airun.Kind, payload string, requested bool) (int64, error)
+	// Queued reports whether such a job waits, not yet running.
+	Queued(ctx context.Context, kind airun.Kind, payload string) (bool, error)
 }
 
 // Switch reads chef.enabled.
@@ -76,6 +78,14 @@ func (s *Labelling) enqueue(ctx context.Context, ids []int64) error {
 func (s *Labelling) Saved(ctx context.Context, foodID int64) error {
 	on, err := s.chef.ChefEnabled(ctx)
 	if err != nil || !on {
+		return err
+	}
+	b, err := json.Marshal(labelJob{FoodIDs: []int64{foodID}})
+	if err != nil {
+		return err
+	}
+	// Rapid repeat saves share the job already waiting: one paid call.
+	if waiting, err := s.queue.Queued(ctx, airun.KindChefAttributes, string(b)); err != nil || waiting {
 		return err
 	}
 	return s.enqueue(ctx, []int64{foodID})
