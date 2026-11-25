@@ -2362,5 +2362,120 @@
     "auto_hint": "auto",
     "serving_label": "Serving size (g)",
     "serving_hint": "What one serving weighs when the planner adds it. Empty uses a typical amount."
+  },
+  "attributes": {
+    "title": "Attributes",
+    "changed": "Attributes changed",
+    "automatic": "Automatic",
+    "by_you": "set by you",
+    "heroes_hint": "Pick up to {{count}} ingredients the dish is about.",
+    "field": {
+      "cuisine": "Cuisine",
+      "kind": "Dish",
+      "heroes": "Hero ingredients",
+      "texture": "Texture",
+      "temperature": "Served",
+      "saucy": "Sauce",
+      "richness": "Richness",
+      "colour": "Colour",
+      "taste": "Taste",
+      "technique": "Technique",
+      "format": "Format"
+    },
+    "cuisine": {
+      "german": "German",
+      "italian": "Italian",
+      "french": "French",
+      "mediterranean": "Mediterranean",
+      "indian": "Indian",
+      "chinese": "Chinese",
+      "japanese": "Japanese",
+      "thai": "Thai",
+      "mexican": "Mexican",
+      "middle_eastern": "Middle Eastern",
+      "neutral": "No particular cuisine"
+    },
+    "kind": {
+      "stew": "Stew",
+      "curry": "Curry",
+      "pasta": "Pasta",
+      "roast": "Roast",
+      "pan": "Pan dish",
+      "bake": "Bake",
+      "salad": "Salad",
+      "soup": "Soup",
+      "bowl": "Bowl",
+      "grain": "Grain dish",
+      "veg": "Vegetable dish",
+      "egg": "Egg dish",
+      "breakfast": "Breakfast",
+      "sauce": "Sauce or dip",
+      "pickle": "Pickle",
+      "bread": "Bread",
+      "fish": "Fish dish",
+      "wrap": "Wrap"
+    },
+    "texture": {
+      "soft": "Soft",
+      "creamy": "Creamy",
+      "chewy": "Chewy",
+      "crisp": "Crisp",
+      "crunchy": "Crunchy"
+    },
+    "temperature": {
+      "hot": "Hot",
+      "warm": "Warm",
+      "cold": "Cold"
+    },
+    "saucy": {
+      "true": "Saucy",
+      "false": "Dry"
+    },
+    "richness": {
+      "0": "Light",
+      "1": "Medium",
+      "2": "Rich",
+      "3": "Very rich"
+    },
+    "colour": {
+      "green": "Green",
+      "red": "Red",
+      "orange": "Orange",
+      "beige": "Beige",
+      "brown": "Brown",
+      "white": "White",
+      "purple": "Purple",
+      "mixed": "Colourful"
+    },
+    "taste": {
+      "none": "Mild",
+      "salt": "Salty",
+      "acid": "Sour",
+      "sweet": "Sweet",
+      "bitter": "Bitter",
+      "umami": "Umami",
+      "heat": "Spicy"
+    },
+    "technique": {
+      "braise": "Braised",
+      "roast": "Roasted",
+      "fry": "Fried",
+      "saute": "Sautéed",
+      "grill": "Grilled",
+      "boil": "Boiled",
+      "bake": "Baked",
+      "raw": "Raw",
+      "steam": "Steamed",
+      "simmer": "Simmered"
+    },
+    "format": {
+      "plate": "Plate",
+      "bowl": "Bowl",
+      "one_pot": "One pot",
+      "casserole": "Casserole",
+      "wrap": "Wrap",
+      "soup": "Soup",
+      "salad": "Salad"
+    }
   }
 }

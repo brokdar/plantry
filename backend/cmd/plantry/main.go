@@ -37,6 +37,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/chef"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
@@ -258,8 +259,9 @@ func run() error {
 	// chooser in the request it uses the LLM when a provider is configured,
 	// else the heuristic (D11).
 	planLight := sqlite.NewPlanLightRepo(conn)
+	foodAttributeRepo := sqlite.NewFoodAttributeRepo(conn)
 	planBuilder := planning.NewBuilder(planning.BuilderDeps{
-		Light: planLight,
+		Light: planLight, Attributes: foodAttributeRepo,
 		Foods: foodSvc, FoodRows: foodRepo, Nutrition: nutritionResolver, Cells: availabilitySvc,
 		Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
 		Settings: settingsSvc, Profile: profileSvc, Corrections: sqlite.NewPlateEventRepo(conn),
@@ -400,7 +402,12 @@ func run() error {
 	// Shutdown waits for running jobs (before the recorder and the
 	// database), cancelling them when the wait runs out.
 	// Food change log (VAR-5): each producer registers its Restorer here.
-	foodEventSvc := foodevent.NewService(sqlite.NewTxRunner(conn), sqlite.NewFoodEventRepo(conn), map[foodevent.Kind]foodevent.Restorer{}, clock.Now)
+	foodRestorers := map[foodevent.Kind]foodevent.Restorer{}
+	foodEventSvc := foodevent.NewService(sqlite.NewTxRunner(conn), sqlite.NewFoodEventRepo(conn), foodRestorers, clock.Now)
+	// Recipe attributes (ATTR): derived on read, user edits logged as
+	// attribute food events.
+	flavorSvc := flavor.NewService(foodAttributeRepo, foodRepo, nutritionResolver, foodEventSvc)
+	foodRestorers[foodevent.KindAttribute] = flavorSvc
 	chefGuard := &chef.Guard{Settings: settingsSvc, Spend: aiRunRepo, Prices: priceOverrides, Now: time.Now}
 	chefRunner := chef.NewRunner(chef.RunnerConfig{
 		Store: sqlite.NewChefJobRepo(conn), Guard: chefGuard,
@@ -461,6 +468,7 @@ func run() error {
 		Shopping:      handlers.NewShoppingHandler(shoppingSvc).WithClock(clock.Now),
 		Availability:  handlers.NewAvailabilityHandler(availabilitySvc).WithClock(clock.Now),
 		FoodEvents:    handlers.NewFoodEventHandler(foodEventSvc),
+		Attributes:    handlers.NewAttributeHandler(flavorSvc),
 		Setup:         handlers.NewSetupHandler(setup.NewService(settingsSvc, foodRepo)),
 		DevMode:       cfg.DevMode,
 		Dev:           devHandler,

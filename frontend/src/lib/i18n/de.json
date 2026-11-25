@@ -2362,5 +2362,120 @@
     "auto_hint": "auto",
     "serving_label": "Portionsgröße (g)",
     "serving_hint": "Was eine Portion wiegt, wenn der Planer sie hinzufügt. Leer nimmt eine übliche Menge."
+  },
+  "attributes": {
+    "title": "Merkmale",
+    "changed": "Merkmale geändert",
+    "automatic": "Automatisch",
+    "by_you": "von dir festgelegt",
+    "heroes_hint": "Wähle bis zu {{count}} Zutaten, um die es im Gericht geht.",
+    "field": {
+      "cuisine": "Küche",
+      "kind": "Gericht",
+      "heroes": "Hauptzutaten",
+      "texture": "Textur",
+      "temperature": "Serviert",
+      "saucy": "Soße",
+      "richness": "Gehalt",
+      "colour": "Farbe",
+      "taste": "Geschmack",
+      "technique": "Zubereitung",
+      "format": "Anrichten"
+    },
+    "cuisine": {
+      "german": "Deutsch",
+      "italian": "Italienisch",
+      "french": "Französisch",
+      "mediterranean": "Mediterran",
+      "indian": "Indisch",
+      "chinese": "Chinesisch",
+      "japanese": "Japanisch",
+      "thai": "Thailändisch",
+      "mexican": "Mexikanisch",
+      "middle_eastern": "Orientalisch",
+      "neutral": "Keine bestimmte Küche"
+    },
+    "kind": {
+      "stew": "Eintopf",
+      "curry": "Curry",
+      "pasta": "Nudelgericht",
+      "roast": "Braten",
+      "pan": "Pfannengericht",
+      "bake": "Auflauf",
+      "salad": "Salat",
+      "soup": "Suppe",
+      "bowl": "Bowl",
+      "grain": "Getreidegericht",
+      "veg": "Gemüsegericht",
+      "egg": "Eiergericht",
+      "breakfast": "Frühstück",
+      "sauce": "Soße oder Dip",
+      "pickle": "Eingelegtes",
+      "bread": "Brot",
+      "fish": "Fischgericht",
+      "wrap": "Wrap"
+    },
+    "texture": {
+      "soft": "Weich",
+      "creamy": "Cremig",
+      "chewy": "Bissfest",
+      "crisp": "Knusprig",
+      "crunchy": "Knackig"
+    },
+    "temperature": {
+      "hot": "Heiß",
+      "warm": "Warm",
+      "cold": "Kalt"
+    },
+    "saucy": {
+      "true": "Mit Soße",
+      "false": "Ohne Soße"
+    },
+    "richness": {
+      "0": "Leicht",
+      "1": "Mittel",
+      "2": "Gehaltvoll",
+      "3": "Sehr gehaltvoll"
+    },
+    "colour": {
+      "green": "Grün",
+      "red": "Rot",
+      "orange": "Orange",
+      "beige": "Beige",
+      "brown": "Braun",
+      "white": "Weiß",
+      "purple": "Violett",
+      "mixed": "Bunt"
+    },
+    "taste": {
+      "none": "Mild",
+      "salt": "Salzig",
+      "acid": "Sauer",
+      "sweet": "Süß",
+      "bitter": "Bitter",
+      "umami": "Umami",
+      "heat": "Scharf"
+    },
+    "technique": {
+      "braise": "Geschmort",
+      "roast": "Im Ofen geröstet",
+      "fry": "Gebraten",
+      "saute": "Sautiert",
+      "grill": "Gegrillt",
+      "boil": "Gekocht",
+      "bake": "Gebacken",
+      "raw": "Roh",
+      "steam": "Gedämpft",
+      "simmer": "Geköchelt"
+    },
+    "format": {
+      "plate": "Auf dem Teller",
+      "bowl": "In der Schüssel",
+      "one_pot": "Aus einem Topf",
+      "casserole": "Aus der Form",
+      "wrap": "Wrap",
+      "soup": "Suppe",
+      "salad": "Salat"
+    }
   }
 }

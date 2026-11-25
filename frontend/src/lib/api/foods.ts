@@ -498,3 +498,93 @@ export function refetchFood(id: number, lang?: string): Promise<Food> {
   const qs = lang ? `?lang=${encodeURIComponent(lang)}` : ""
   return apiFetch(`/foods/${id}/refetch${qs}`, { method: "POST" })
 }
+
+// ── Recipe attributes (spec §3, ATTR) ──
+
+export type AttributeField =
+  | "cuisine"
+  | "kind"
+  | "heroes"
+  | "texture"
+  | "temperature"
+  | "saucy"
+  | "richness"
+  | "colour"
+  | "taste"
+  | "technique"
+  | "format"
+
+/** rule: derived from the ingredients; auto: the assistant; user: set by the
+ *  user (always wins). */
+export type AttributeSource = "rule" | "auto" | "user"
+
+export interface Taste {
+  salt: number
+  acid: number
+  sweet: number
+  bitter: number
+  umami: number
+  heat: number
+}
+
+/** A missing key is unknown. */
+export interface AttributeValues {
+  cuisine?: string
+  kind?: string
+  heroes?: string[]
+  texture?: string
+  temperature?: string
+  saucy?: boolean
+  richness?: number
+  colour?: string
+  taste?: Taste
+  technique?: string
+  format?: string
+}
+
+/** The revert token of a food change (POST /api/food-events/revert). */
+export interface FoodEventUndo {
+  first_event_id: number
+  last_event_id: number
+}
+
+export interface FoodAttributes {
+  food_id: number
+  /** The stored record's schema version, 0 when nothing is stored. */
+  version: number
+  attributes: AttributeValues
+  sources: Partial<Record<AttributeField, AttributeSource>>
+  /** Only after a PUT that changed something. */
+  undo?: FoodEventUndo
+}
+
+/** A user edit: each value becomes the user's, null resets the field to its
+ *  automatic value. */
+export type AttributePatch = {
+  [K in AttributeField]?: AttributeValues[K] | null
+}
+
+/** GET /api/foods/{id}/attributes */
+export function getFoodAttributes(id: number): Promise<FoodAttributes> {
+  return apiFetch(`/foods/${id}/attributes`)
+}
+
+/** PUT /api/foods/{id}/attributes */
+export function setFoodAttributes(
+  id: number,
+  patch: AttributePatch
+): Promise<FoodAttributes> {
+  return apiFetch(`/foods/${id}/attributes`, {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  })
+}
+
+/** POST /api/food-events/revert — undoes a food change; 409
+ *  `error.plan.change_stale` once a later change touched the row. */
+export function revertFoodChange(undo: FoodEventUndo): Promise<unknown> {
+  return apiFetch(`/food-events/revert`, {
+    method: "POST",
+    body: JSON.stringify(undo),
+  })
+}

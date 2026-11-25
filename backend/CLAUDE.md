@@ -394,6 +394,10 @@ Capped work (COST-1): the run kinds in `chef.CappedKinds` (`chef_*`). Every capp
 
 Queued capped work goes through `chef.Runner` over `chef_jobs` (00056): `Enqueue(kind, payload, requested)` needs a handler for the kind; at most `chefJobConcurrency` (2) jobs run at once; each claimed job counts an attempt and asks the guard (refused → `skipped`, the reason in `error`); handler error → `failed`. Shutdown waits `chefShutdownWait`, then cancels: a cancelled job stays `running`, and `Start` (boot) puts running jobs back to `queued`, or `failed` once they reach `chefJobMaxAttempts` (3). Tests drive simulated days with `ProcessOne` (export_test.go) and a stored clock, never sleeps.
 
+## Recipe attributes
+
+`domain/flavor` (Chef A1, ATTR): the §3 attributes of a food (cuisine, kind, heroes, texture, temperature, saucy, richness, colour family, taste 0-3, technique, format; a leaf carries taste, texture, colour). Sources: `rule` (derived from the ingredients, `Derive`: heroes by weight, richness from the fat share of energy, saucy from the liquid share, colour family, cuisine from tags; name lexicons German and English, memoized per name), `auto` (the assistant, checked by `Validate`, ATTR-3) and `user` (always wins). Only auto and user values are stored (`food_attributes`, 00058: `values_json`, `sources_json`, `version` = `flavor.Version`); rule values are derived on every read, so they follow ingredient edits. `Resolve` merges user > valid auto > rule. `GET/PUT /api/foods/{id}/attributes` (`{field: value | null}`, null resets to automatic) records an `attribute` food event (the service is the kind's `foodevent.Restorer`) and returns its `undo`. `planning.Builder` reads the stored records in one query (`BuilderDeps.Attributes`) and sets `FoodFacts.Attrs`; no rule reads them yet. `derive_test.go` states the tolerance against the DATA-1 dev labels.
+
 ## Coding Rules
 
 - **`errors.Is()`, never `==`** for sentinel errors. Wrapped errors break `==` silently.

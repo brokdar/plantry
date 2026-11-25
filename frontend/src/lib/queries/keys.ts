@@ -10,6 +10,8 @@ export const foodKeys = {
   nutrition: (id: number) => [...foodKeys.detail(id), "nutrition"] as const,
   variants: (id: number) => [...foodKeys.detail(id), "variants"] as const,
   portions: (id: number) => [...foodKeys.detail(id), "portions"] as const,
+  // Under detail(id): an ingredient edit changes the derived attributes.
+  attributes: (id: number) => [...foodKeys.detail(id), "attributes"] as const,
   // Under detail(id): a food update also drops its scaled lists.
   scaled: (id: number, portions: number) =>
     [...foodKeys.detail(id), "scaled", portions] as const,

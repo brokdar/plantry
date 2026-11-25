@@ -120,7 +120,7 @@ func PlanningDeps(db *sql.DB) planning.Deps {
 			Cells: avail, Plates: sqlite.NewPlateRepo(db), Sessions: sqlite.NewCookSessionRepo(db),
 			Presets: sqlite.NewPresetRepo(db), Slots: sqlite.NewSlotRepo(db), Settings: set,
 			Profile: profile.NewService(sqlite.NewProfileRepo(db)), Corrections: sqlite.NewPlateEventRepo(db),
-			Light: sqlite.NewPlanLightRepo(db), Version: sqlite.NewDataVersion(db),
+			Light: sqlite.NewPlanLightRepo(db), Attributes: sqlite.NewFoodAttributeRepo(db), Version: sqlite.NewDataVersion(db),
 		}),
 		Light:  sqlite.NewPlanLightRepo(db),
 		Plates: plates, PlateRows: sqlite.NewPlateRepo(db), Sessions: sqlite.NewCookSessionRepo(db), Cells: avail, Overrides: avail, FoodRows: foods, Settings: set,

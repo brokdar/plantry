@@ -1,4 +1,9 @@
-import { keepPreviousData, useQuery, useMutation } from "@tanstack/react-query"
+import {
+  keepPreviousData,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 import {
   createFood,
@@ -6,6 +11,7 @@ import {
   deleteFood,
   deletePortion,
   getFood,
+  getFoodAttributes,
   getFoodNutrition,
   getScaled,
   listFoodMacros,
@@ -13,7 +19,9 @@ import {
   listPortions,
   listVariants,
   refetchFood,
+  revertFoodChange,
   setDietClass,
+  setFoodAttributes,
   setNoCook,
   setFoodFavorite,
   setShopSection,
@@ -21,6 +29,8 @@ import {
   updateFood,
   upsertPortion,
   type DietClass,
+  type AttributePatch,
+  type FoodEventUndo,
   type FoodInput,
   type LeafFoodInput,
   type FoodListParams,
@@ -30,6 +40,7 @@ import { ApiError } from "@/lib/api/client"
 import { queryClient } from "@/lib/query-client"
 import { toastError } from "@/lib/toast"
 import { foodKeys, planKeys, setupKeys, shoppingKeys } from "./keys"
+import { useUndoToast } from "./plan"
 
 export function useFoods(
   params?: FoodListParams,
@@ -316,6 +327,40 @@ export function useDeletePortion() {
       void queryClient.invalidateQueries({
         queryKey: foodKeys.portions(foodId),
       })
+    },
+    onError: (err) => toastError(err, t),
+  })
+}
+
+/** A food's recipe attributes (derived, the assistant's and the user's). */
+export function useFoodAttributes(id: number) {
+  return useQuery({
+    queryKey: foodKeys.attributes(id),
+    queryFn: () => getFoodAttributes(id),
+  })
+}
+
+/** Sets or resets attributes as the user's; a change offers Undo through the
+ *  food change log. */
+export function useSetFoodAttributes(id: number) {
+  const { t } = useTranslation()
+  const offerUndo = useUndoToast()
+  const qc = useQueryClient()
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: foodKeys.attributes(id) })
+  const revert = useMutation({
+    mutationFn: (undo: FoodEventUndo) => revertFoodChange(undo),
+    onSuccess: invalidate,
+    onError: (err) => toastError(err, t),
+  })
+  return useMutation({
+    mutationFn: (patch: AttributePatch) => setFoodAttributes(id, patch),
+    onSuccess: (res) => {
+      qc.setQueryData(foodKeys.attributes(id), res)
+      const undo = res.undo
+      if (undo) {
+        offerUndo(t("attributes.changed"), () => revert.mutate(undo))
+      }
     },
     onError: (err) => toastError(err, t),
   })

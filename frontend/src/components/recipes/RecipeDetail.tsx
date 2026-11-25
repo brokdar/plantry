@@ -33,6 +33,7 @@ import { AddToPlanSheet } from "./AddToPlanSheet"
 import { FoodDietSelect } from "./DietClassSelect"
 import { DietUnknownWarning } from "./DietUnknownWarning"
 import { NutritionCompletenessWarning } from "./NutritionCompletenessWarning"
+import { RecipeAttributes } from "./RecipeAttributes"
 
 type RecipeDetailProps = {
   recipe: ComposedFood
@@ -43,7 +44,8 @@ type RecipeDetailProps = {
 }
 
 /** Reading view of a recipe (UX §5.8, D6): photo, name, source, facts with
- *  a portion stepper and the diet class (with its override), Add to plan,
+ *  a portion stepper and the diet class (with its override), the attribute
+ *  chips, Add to plan,
  *  the scaled ingredients, the cook history, steps, My
  *  notes and the imported description. Changing portions never writes the
  *  recipe. */
@@ -293,6 +295,7 @@ export function RecipeDetail({
           <p className="text-small text-ink-muted" data-testid="recipe-history">
             {history}
           </p>
+          <RecipeAttributes recipe={recipe} />
           {nutrition && !nutrition.complete && (
             <NutritionCompletenessWarning missing={nutrition.missing} />
           )}

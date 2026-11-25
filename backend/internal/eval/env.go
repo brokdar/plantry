@@ -106,7 +106,7 @@ func newEnv(conn *sql.DB, cfg Config) *env {
 		Foods: foodSvc, FoodRows: foodRepo, Nutrition: food.NewNutritionResolver(foodRepo), Cells: avail,
 		Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
 		Settings: settingsSvc, Profile: profileSvc, Corrections: sqlite.NewPlateEventRepo(conn),
-		Light: sqlite.NewPlanLightRepo(conn), Version: sqlite.NewDataVersion(conn),
+		Light: sqlite.NewPlanLightRepo(conn), Attributes: sqlite.NewFoodAttributeRepo(conn), Version: sqlite.NewDataVersion(conn),
 	})
 	e.svc = planning.NewService(planning.Deps{
 		Builder: e.builder,
