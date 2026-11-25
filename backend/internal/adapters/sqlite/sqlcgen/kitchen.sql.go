@@ -10,7 +10,7 @@ import (
 )
 
 const addBasicAtHome = `-- name: AddBasicAtHome :exec
-INSERT INTO basics_at_home (food_id) VALUES (?) ON CONFLICT DO NOTHING
+INSERT INTO basics_at_home (food_id) VALUES (?) ON CONFLICT (food_id) DO UPDATE SET removed = 0
 `
 
 func (q *Queries) AddBasicAtHome(ctx context.Context, foodID int64) error {
@@ -28,7 +28,7 @@ func (q *Queries) AddNeverItem(ctx context.Context, foodID int64) error {
 }
 
 const listBasicsAtHome = `-- name: ListBasicsAtHome :many
-SELECT f.id, f.name FROM basics_at_home b JOIN foods f ON f.id = b.food_id ORDER BY f.name
+SELECT f.id, f.name FROM basics_at_home b JOIN foods f ON f.id = b.food_id WHERE b.removed = 0 ORDER BY f.name
 `
 
 type ListBasicsAtHomeRow struct {
@@ -91,8 +91,17 @@ func (q *Queries) ListNeverItems(ctx context.Context) ([]ListNeverItemsRow, erro
 	return items, nil
 }
 
+const matchBasicAtHome = `-- name: MatchBasicAtHome :exec
+INSERT INTO basics_at_home (food_id) VALUES (?) ON CONFLICT DO NOTHING
+`
+
+func (q *Queries) MatchBasicAtHome(ctx context.Context, foodID int64) error {
+	_, err := q.db.ExecContext(ctx, matchBasicAtHome, foodID)
+	return err
+}
+
 const removeBasicAtHome = `-- name: RemoveBasicAtHome :exec
-DELETE FROM basics_at_home WHERE food_id = ?
+UPDATE basics_at_home SET removed = 1 WHERE food_id = ?
 `
 
 func (q *Queries) RemoveBasicAtHome(ctx context.Context, foodID int64) error {

@@ -12,7 +12,9 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/db"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite/sqlcgen"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/kitchen"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
@@ -135,4 +137,33 @@ func TestMigration00059_PrefillsBasicsFromCatalogue(t *testing.T) {
 		ids = append(ids, id)
 	}
 	assert.Equal(t, []int64{1, 2, 4}, ids)
+}
+
+// KIT-4 on a fresh install: a leaf created later with a basic's name joins the
+// basics; one the user removed is not brought back by matching.
+func TestBasics_NewLeafJoinsAndRemovalSticks(t *testing.T) {
+	conn := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	foods := sqlite.NewFoodRepo(conn)
+	svc := kitchen.NewService(sqlite.NewKitchenRepo(conn))
+
+	manual := food.SourceManual
+	salt := &food.Food{Name: "Salz", Kind: food.KindLeaf, Source: &manual}
+	require.NoError(t, foods.Create(ctx, salt))
+	require.NoError(t, foods.Create(ctx, &food.Food{Name: "Gurke", Kind: food.KindLeaf, Source: &manual}))
+
+	got, err := svc.Basics(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []kitchen.Food{{ID: salt.ID, Name: "Salz"}}, got)
+
+	require.NoError(t, svc.RemoveBasic(ctx, salt.ID))
+	require.NoError(t, sqlcgen.New(conn).MatchBasicAtHome(ctx, salt.ID), "rematch")
+	got, err = svc.Basics(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+
+	require.NoError(t, svc.AddBasic(ctx, salt.ID), "explicit add undoes the removal")
+	got, err = svc.Basics(ctx)
+	require.NoError(t, err)
+	assert.Len(t, got, 1)
 }

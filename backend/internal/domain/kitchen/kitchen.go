@@ -3,7 +3,10 @@
 // reference; the kitchen settings themselves live on the profile.
 package kitchen
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // Food is a listed food.
 type Food struct {
@@ -42,3 +45,22 @@ func (s *Service) AddBasic(ctx context.Context, foodID int64) error {
 func (s *Service) RemoveBasic(ctx context.Context, foodID int64) error {
 	return s.repo.RemoveBasic(ctx, foodID)
 }
+
+// basicNames are the foods a kitchen has at home (KIT-4): salt, pepper, oil,
+// sugar, flour and common dried spices, in English and German. Migration
+// 00059 backfills the same list for foods that already exist.
+var basicNames = map[string]bool{
+	"salt": true, "salz": true, "pepper": true, "pfeffer": true, "black pepper": true, "schwarzer pfeffer": true,
+	"oil": true, "öl": true, "olive oil": true, "olivenöl": true, "vegetable oil": true, "pflanzenöl": true,
+	"sunflower oil": true, "sonnenblumenöl": true, "rapeseed oil": true, "rapsöl": true,
+	"sugar": true, "zucker": true, "flour": true, "mehl": true, "wheat flour": true, "weizenmehl": true,
+	"oregano": true, "thyme": true, "thymian": true, "dried basil": true, "basilikum getrocknet": true,
+	"paprika powder": true, "paprikapulver": true, "cumin": true, "kreuzkümmel": true, "cinnamon": true, "zimt": true,
+	"curry powder": true, "currypulver": true, "bay leaf": true, "bay leaves": true, "lorbeerblatt": true, "lorbeerblätter": true,
+	"chili flakes": true, "chiliflocken": true, "nutmeg": true, "muskat": true, "muskatnuss": true,
+	"turmeric": true, "kurkuma": true, "garlic powder": true, "knoblauchpulver": true,
+}
+
+// IsBasicName reports whether a leaf food of this name belongs on the
+// prefilled basics list.
+func IsBasicName(name string) bool { return basicNames[strings.ToLower(strings.TrimSpace(name))] }

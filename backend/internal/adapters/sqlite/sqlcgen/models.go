@@ -145,7 +145,8 @@ type AvailabilityOverride struct {
 }
 
 type BasicsAtHome struct {
-	FoodID int64
+	FoodID  int64
+	Removed int64
 }
 
 type ChefJob struct {

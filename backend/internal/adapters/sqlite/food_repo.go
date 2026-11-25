@@ -14,6 +14,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/kitchen"
 )
 
 var allowedFoodSortColumns = map[string]string{
@@ -83,6 +84,13 @@ func (r *FoodRepo) createWith(ctx context.Context, qtx *sqlcgen.Queries, f *food
 		return err
 	}
 	mapFoodToDomain(&row, f)
+
+	// A new leaf named like a basic joins the basics at home (KIT-4).
+	if f.Kind == food.KindLeaf && kitchen.IsBasicName(f.Name) {
+		if err := qtx.MatchBasicAtHome(ctx, f.ID); err != nil {
+			return fmt.Errorf("match basic at home: %w", err)
+		}
+	}
 
 	return r.insertComposedChildren(ctx, qtx, f)
 }

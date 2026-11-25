@@ -13,7 +13,10 @@ ALTER TABLE user_profile ADD COLUMN heat TEXT;
 ALTER TABLE user_profile ADD COLUMN leanings TEXT NOT NULL DEFAULT '[]';
 
 CREATE TABLE basics_at_home (
-    food_id INTEGER PRIMARY KEY REFERENCES foods(id) ON DELETE CASCADE
+    food_id INTEGER PRIMARY KEY REFERENCES foods(id) ON DELETE CASCADE,
+    -- removed = 1 is a tombstone: the user took a prefilled basic off the
+    -- list, so matching never brings it back.
+    removed INTEGER NOT NULL DEFAULT 0 CHECK (removed IN (0, 1))
 );
 
 CREATE TABLE never_items (
@@ -21,7 +24,8 @@ CREATE TABLE never_items (
 );
 
 -- Prefill from the catalogue: salt, pepper, oil, sugar, flour and common
--- dried spices, by name in English and German.
+-- dried spices, by name in English and German (same list as
+-- kitchen.BasicNames, which matches foods created later).
 INSERT INTO basics_at_home (food_id)
 SELECT id FROM foods
 WHERE kind = 'leaf' AND lower(name) IN (
