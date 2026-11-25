@@ -597,3 +597,81 @@ func TestSync_SideSwapRespectsWeekRules(t *testing.T) {
 		}
 	})
 }
+
+// TestSync_SideSwapKeepsBatchCookDay: swapping a side out of a batch that
+// plate 4 cooks and plate 5 eats the next day moves the batch's cook to
+// plate 5 (D11), a second cook occasion on its day (H2 over 1). The check
+// sees the move: the shared polenta is not swapped, the ciabatta is.
+func TestSync_SideSwapKeepsBatchCookDay(t *testing.T) {
+	t.Parallel()
+	run := func(t *testing.T, shared bool) tips.Op {
+		f := newFixture()
+		f.st.Settings.MaxCookOccasionsPerDay = 1
+		side := func(id int64, name string, texture string) planning.FoodFacts {
+			return planning.FoodFacts{
+				ID: id, Name: name, Kind: food.KindComposed, Role: food.RoleSideStarch, DietClass: diet.Vegan,
+				Macros: nutrition.Macros{Kcal: 150}, NutritionComplete: true, Minutes: 10, Starch: ptr(true), Fresh: ptr(false),
+				Attrs: flavor.Attributes{Cuisine: "italian", Texture: texture, Temperature: "hot", Colour: "beige", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{}},
+			}
+		}
+		f.st.Foods[200] = side(200, "Polenta", "soft")
+		f.st.Foods[201] = side(201, "Ciabatta", "crisp")
+		f.st.Foods[202] = planning.FoodFacts{
+			ID: 202, Name: "Insalata mista", Kind: food.KindComposed, Role: food.RoleSideVeg, DietClass: diet.Vegan,
+			Macros: nutrition.Macros{Kcal: 150}, NutritionComplete: true, Minutes: 10, Starch: ptr(false), Fresh: ptr(false),
+			Attrs: flavor.Attributes{Cuisine: "italian", Texture: "crisp", Temperature: "cold", Colour: "green", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{Acid: 2}},
+		}
+		f.st.Foods[104] = f.st.Foods[103]
+		for id, fd := range f.st.Foods {
+			if fd.Role == food.RoleMain {
+				fd.ID, fd.Starch = id, ptr(false)
+				f.st.Foods[id] = fd
+			}
+		}
+		f.st.Plates = append(f.st.Plates, planning.Plate{
+			ID: 5, Date: start.AddDate(0, 0, 4), SlotID: 1, Eaters: 1,
+			Components: []planning.Component{{ID: 14, FoodID: 104, Portions: ptr(1.0), SessionID: 54, Position: plate.PositionMain}},
+		})
+		for i, p := range f.st.Plates {
+			f.st.Sessions = append(f.st.Sessions, planning.Session{CookSession: plate.CookSession{ID: int64(50 + i), FoodID: p.Components[0].FoodID, CookDate: p.Date, CookSlotID: 1, Portions: 1}})
+		}
+		// Plate 5's pasta is cooked at an earlier slot of its day: the
+		// polenta's cook at plate 5 would be a second occasion.
+		f.st.SlotOrder[2] = 0
+		f.st.Sessions[4].CookSlotID = 2
+		for _, p := range f.st.Plates {
+			f.st.Cells = append(f.st.Cells, planning.Cell{Date: p.Date, SlotID: p.SlotID})
+		}
+		f.st.Sessions = append(f.st.Sessions, planning.Session{CookSession: plate.CookSession{ID: 60, FoodID: 200, CookDate: f.st.Plates[3].Date, CookSlotID: 1, Portions: 1}})
+		f.st.Plates[3].Components = append(f.st.Plates[3].Components,
+			planning.Component{ID: 30, FoodID: 200, Portions: ptr(1.0), SessionID: 60, Position: plate.PositionSide},
+			planning.Component{ID: 31, FoodID: 201, Portions: ptr(1.0), Position: plate.PositionSide})
+		if shared {
+			f.st.Sessions[len(f.st.Sessions)-1].Portions = 2
+			f.st.Plates[4].Components = append(f.st.Plates[4].Components, planning.Component{ID: 32, FoodID: 200, Portions: ptr(1.0), SessionID: 60, Position: plate.PositionSide})
+		}
+		v, err := f.svc().Sync(context.Background(), start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, tp := range v.Tips {
+			if *tp.PlateID == 4 {
+				return tp.Op
+			}
+		}
+		t.Fatalf("no tip on plate 4: %+v", v.Tips)
+		return tips.Op{}
+	}
+	t.Run("own batch: the polenta is swapped", func(t *testing.T) {
+		t.Parallel()
+		if op := run(t, false); op.Action != "swap" || op.ComponentID != 30 {
+			t.Fatalf("op %+v, want the polenta (component 30) swapped", op)
+		}
+	})
+	t.Run("shared batch: the ciabatta is swapped", func(t *testing.T) {
+		t.Parallel()
+		if op := run(t, true); op.Action != "swap" || op.ComponentID != 31 {
+			t.Fatalf("op %+v, want the ciabatta (component 31) swapped", op)
+		}
+	})
+}
