@@ -106,6 +106,7 @@ export const settingsKeys = {
 export const chefKeys = {
   all: ["chef"] as const,
   spend: () => [...chefKeys.all, "spend"] as const,
+  labelling: () => [...chefKeys.all, "labelling"] as const,
 }
 
 export const setupKeys = {

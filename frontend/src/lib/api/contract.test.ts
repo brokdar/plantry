@@ -25,6 +25,7 @@ import {
   rejectSuggestion,
 } from "./discovery"
 import { deleteFeedback, putFeedback } from "./feedback"
+import { getLabellingEstimate, startLibraryLabelling } from "./chef"
 import {
   getFood,
   getFoodAttributes,
@@ -345,6 +346,19 @@ const cases: Case[] = [
     method: "POST",
     path: "/food-events/revert",
     body: { first_event_id: 3, last_event_id: 4 },
+  },
+  // Attribute labelling (Chef A3)
+  {
+    name: "getLabellingEstimate",
+    call: () => getLabellingEstimate(),
+    method: "GET",
+    path: "/chef/labelling",
+  },
+  {
+    name: "startLibraryLabelling",
+    call: () => startLibraryLabelling(),
+    method: "POST",
+    path: "/chef/labelling",
   },
   // ── Phase 3 ──
   // State (§3.1)
