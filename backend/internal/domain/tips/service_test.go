@@ -513,6 +513,19 @@ func TestSync_ClashBeforeGap(t *testing.T) {
 	if op := v.Tips[0].Op; op.Action != "swap" || op.FoodID != 202 {
 		t.Fatalf("clash tip %+v, want the salad swapped in", v.Tips[0])
 	}
+	// A side the household would rather not get is never swapped in.
+	f2 := newFixture()
+	f2.st.Foods, f2.st.Plates = f.st.Foods, f.st.Plates
+	f2.st.RatherNot = map[int64]bool{202: true}
+	v, err = f2.svc().Sync(context.Background(), start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tp := range v.Tips {
+		if tp.Op.FoodID == 202 {
+			t.Fatalf("rather-not salad suggested: %+v", tp)
+		}
+	}
 }
 
 // TestSync_HerbGarnishFromGarnishList: a fresh herb that is not a no-cook

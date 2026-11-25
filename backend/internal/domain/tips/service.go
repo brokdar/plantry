@@ -384,7 +384,7 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 	}
 	y.before = planning.EvaluateLean(y.st, planning.WindowTarget(y.st))
 	for _, id := range slices.Concat(y.st.NoCook, y.st.Garnish) {
-		if f := y.st.Foods[id]; !f.Composed() && !y.never[id] {
+		if f := y.st.Foods[id]; !f.Composed() && !y.never[id] && !y.st.RatherNot[id] {
 			y.garnish = append(y.garnish, componentOf(f))
 		}
 	}
@@ -395,7 +395,9 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 	slices.Sort(ids)
 	for _, id := range ids {
 		f := y.st.Foods[id]
-		if f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] {
+		// A food the household would rather not get beside a meal
+		// (State.RatherNot) is never suggested.
+		if f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] && !y.st.RatherNot[id] {
 			y.sides = append(y.sides, componentOf(f))
 		}
 	}
