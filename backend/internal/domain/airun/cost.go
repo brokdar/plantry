@@ -80,6 +80,9 @@ func pOAI(in, cached, out float64) Price {
 //   - Anthropic: https://platform.claude.com/docs/en/about-claude/pricing,
 //     re-checked 2026-11-25 against the claude-api reference (Fable 5.2
 //     added at $8 / $40, cache reads $0.20; Sonnet 5.5 cache reads $0.10;
+//     source: Anthropic models table (claude-api reference, cached
+//     2026-11-03): Sonnet 5.5 $2/$10, cache reads $0.10; the earlier 0.20
+//     was Opus/Fable-tier;
 //     web search $10 per 1,000 searches). Cache write = the 5-minute write
 //     price (1.25x input), which the adapter requests.
 //   - OpenAI: https://developers.openai.com/api/docs/pricing (Standard tier),
