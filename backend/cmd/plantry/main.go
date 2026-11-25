@@ -30,6 +30,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/openai"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/config"
+	"github.com/jaltszeimer/plantry/backend/internal/devclock"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
@@ -176,7 +177,12 @@ func run() error {
 	} else if n > 0 {
 		logger.Warn("ai.run.interrupted", "runs", n)
 	}
+	clock := devclock.New()
+	if !cfg.DevClock.IsZero() {
+		clock.Set(cfg.DevClock)
+	}
 	plateSvc := plate.NewService(plate.Deps{
+		Now:      clock.Now,
 		Plates:   plateRepo,
 		Sessions: sessionRepo,
 		Slots:    slotRepo,
@@ -309,7 +315,7 @@ func run() error {
 
 	aiRepo := sqlite.NewAIRepo(conn)
 	changeRepo := sqlite.NewAIChangeRepo(conn)
-	changes := agent.NewChanges(changeRepo, plateSvc, availabilitySvc, planLight, txRunner, time.Now)
+	changes := agent.NewChanges(changeRepo, plateSvc, availabilitySvc, planLight, txRunner, clock.Now)
 	tools, err := agent.NewToolSet(agent.Services{
 		Foods:             foodSvc,
 		NutritionResolver: nutritionResolver,
@@ -334,7 +340,7 @@ func run() error {
 		return fmt.Errorf("build tool set: %w", err)
 	}
 	agentSvc := agent.NewService(aiRepo, llmResolver, tools, profileSvc, settingsSvc,
-		agent.PlanContext{Build: planBuilder.Build, Summary: planning.RenderPlanSummary}, time.Now).WithRecorder(runRecorder)
+		agent.PlanContext{Build: planBuilder.Build, Summary: planning.RenderPlanSummary}, clock.Now).WithRecorder(runRecorder)
 	aiHandler := handlers.NewAIHandler(agentSvc, changes, llmResolver)
 
 	// Run log read side: runs, insights and prices. Costs are computed on
@@ -348,6 +354,10 @@ func run() error {
 	// Recipe importer (Phase 11).
 	// Guarded fetches (discovery's LLM-supplied URLs) are re-checked at dial
 	// time; user-pasted import URLs stay unguarded.
+	var devHandler *handlers.DevHandler
+	if cfg.DevMode {
+		devHandler = handlers.NewDevHandler(clock)
+	}
 	importFetcher := httpfetch.New(httpfetch.WithDialGuard(nil, cfg.DevMode))
 	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver, foodSvc).WithRecorder(runRecorder)
 	importHandler := handlers.NewImportHandler(importSvc)
@@ -424,7 +434,7 @@ func run() error {
 	}, aiRateLimiter)
 
 	h := transport.Handlers{
-		Foods:         handlers.NewFoodHandler(foodSvc, nutritionResolver, imgStore),
+		Foods:         handlers.NewFoodHandler(foodSvc, nutritionResolver, imgStore).WithClock(clock.Now),
 		Lookup:        handlers.NewLookupHandler(resolver, foodSvc, fdcProvider),
 		ImageProxy:    handlers.NewImageProxyHandler(),
 		ImageStore:    imgStore,
@@ -432,9 +442,9 @@ func run() error {
 		Plates:        handlers.NewPlateHandler(plateSvc),
 		CookSessions:  handlers.NewCookSessionHandler(plateSvc),
 		PlanWrite:     handlers.NewPlanWriteHandler(plateSvc),
-		PlanRead:      handlers.NewPlanReadHandler(planViewSvc),
-		PlanGenerate:  handlers.NewPlanGenerateHandler(planningSvc),
-		Today:         handlers.NewTodayHandler(planViewSvc),
+		PlanRead:      handlers.NewPlanReadHandler(planViewSvc).WithClock(clock.Now),
+		PlanGenerate:  handlers.NewPlanGenerateHandler(planningSvc).WithClock(clock.Now),
+		Today:         handlers.NewTodayHandler(planViewSvc).WithClock(clock.Now),
 		Profile:       handlers.NewProfileHandler(profileSvc),
 		Presets:       handlers.NewPresetHandler(presetSvc),
 		AI:            aiHandler,
@@ -445,10 +455,11 @@ func run() error {
 		Discovery:     handlers.NewDiscoveryHandler(discoverySvc),
 		Chef:          handlers.NewChefHandler(chefGuard.Spent),
 		Settings:      settingsHandler,
-		Shopping:      handlers.NewShoppingHandler(shoppingSvc),
-		Availability:  handlers.NewAvailabilityHandler(availabilitySvc),
+		Shopping:      handlers.NewShoppingHandler(shoppingSvc).WithClock(clock.Now),
+		Availability:  handlers.NewAvailabilityHandler(availabilitySvc).WithClock(clock.Now),
 		Setup:         handlers.NewSetupHandler(setup.NewService(settingsSvc, foodRepo)),
 		DevMode:       cfg.DevMode,
+		Dev:           devHandler,
 		Version:       version,
 	}
 	handler := transport.NewRouter(logger, static, h)

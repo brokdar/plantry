@@ -19,11 +19,12 @@ const maxAvailabilityRangeDays = 62
 // AvailabilityHandler exposes the availability defaults and per-cell overrides.
 type AvailabilityHandler struct {
 	svc *availability.Service
+	now func() time.Time
 }
 
 // NewAvailabilityHandler creates an AvailabilityHandler.
 func NewAvailabilityHandler(svc *availability.Service) *AvailabilityHandler {
-	return &AvailabilityHandler{svc: svc}
+	return &AvailabilityHandler{svc: svc, now: time.Now}
 }
 
 type availabilityDefaultJSON struct {
@@ -222,7 +223,7 @@ func (h *AvailabilityHandler) PutOverride(w http.ResponseWriter, r *http.Request
 // No plate and their plates are removed in one unit of work; ?dry_run=1
 // previews it.
 func (h *AvailabilityHandler) PostAway(w http.ResponseWriter, r *http.Request) {
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
 	if !ok {
 		return
 	}
@@ -288,4 +289,10 @@ func (h *AvailabilityHandler) DeleteOverride(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// WithClock makes "today" read the given clock (the dev clock).
+func (h *AvailabilityHandler) WithClock(now func() time.Time) *AvailabilityHandler {
+	h.now = now
+	return h
 }

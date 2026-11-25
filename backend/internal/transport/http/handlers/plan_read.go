@@ -211,3 +211,6 @@ func parseToday(w http.ResponseWriter, s string, now func() time.Time) (time.Tim
 }
 
 func dateString(t time.Time) string { return t.Format(time.DateOnly) }
+
+// WithClock makes "today" read the given clock (the dev clock).
+func (h *PlanReadHandler) WithClock(now func() time.Time) *PlanReadHandler { h.now = now; return h }

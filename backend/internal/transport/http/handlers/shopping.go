@@ -164,3 +164,6 @@ func parseDateRange(w http.ResponseWriter, r *http.Request) (from, to time.Time,
 
 	return from, to, true
 }
+
+// WithClock makes "today" read the given clock (the dev clock).
+func (h *ShoppingHandler) WithClock(now func() time.Time) *ShoppingHandler { h.now = now; return h }

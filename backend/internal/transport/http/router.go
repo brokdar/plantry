@@ -39,8 +39,9 @@ type Handlers struct {
 	Shopping      *handlers.ShoppingHandler
 	Availability  *handlers.AvailabilityHandler
 	Setup         *handlers.SetupHandler
-	Version       string // build version shown by /api/health
-	DevMode       bool   // gates dev-only debug endpoints
+	Version       string               // build version shown by /api/health
+	DevMode       bool                 // gates dev-only debug endpoints
+	Dev           *handlers.DevHandler // /api/dev/*; set only in dev mode
 }
 
 func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
@@ -170,6 +171,11 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Post("/alternatives", h.PlanGenerate.Alternatives)
 				}
 			})
+		}
+
+		if h.DevMode && h.Dev != nil {
+			api.Get("/dev/clock", h.Dev.GetClock)
+			api.Put("/dev/clock", h.Dev.SetClock)
 		}
 
 		if h.Today != nil {

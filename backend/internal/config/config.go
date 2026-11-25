@@ -6,6 +6,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/jaltszeimer/plantry/backend/internal/devclock"
 )
 
 type Config struct {
@@ -19,9 +22,10 @@ type Config struct {
 	AIAPIKey          string
 	AIRateLimitPerMin int
 	AIFakeScript      string
-	DevMode           bool   // exposes dev-only debug endpoints; PLANTRY_DEV_MODE
-	SecretKey         string // PLANTRY_SECRET_KEY: optional; falls back to <data>/secret.key (see EnsureSecretKey)
-	OFFDisabled       bool   // PLANTRY_OFF_DISABLED: skip Open Food Facts lookups (hermetic e2e)
+	DevMode           bool      // exposes dev-only debug endpoints; PLANTRY_DEV_MODE
+	SecretKey         string    // PLANTRY_SECRET_KEY: optional; falls back to <data>/secret.key (see EnsureSecretKey)
+	OFFDisabled       bool      // PLANTRY_OFF_DISABLED: skip Open Food Facts lookups (hermetic e2e)
+	DevClock          time.Time // PLANTRY_DEV_CLOCK: simulated start time; zero is the real clock; needs DevMode
 }
 
 func Load() (Config, error) {
@@ -117,6 +121,17 @@ func Load() (Config, error) {
 		default:
 			return Config{}, fmt.Errorf("PLANTRY_OFF_DISABLED invalid: %q", v)
 		}
+	}
+
+	if v := os.Getenv("PLANTRY_DEV_CLOCK"); v != "" {
+		if !cfg.DevMode {
+			return Config{}, fmt.Errorf("PLANTRY_DEV_CLOCK needs PLANTRY_DEV_MODE=1")
+		}
+		t, err := devclock.Parse(v)
+		if err != nil {
+			return Config{}, fmt.Errorf("PLANTRY_DEV_CLOCK invalid: %w", err)
+		}
+		cfg.DevClock = t
 	}
 
 	// Validate AI config: if a provider is set, model must also be set. API
