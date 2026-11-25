@@ -236,7 +236,9 @@ func (b *Builder) build(ctx context.Context, w window.Window, today, from, to ti
 			referenced[c.FoodID] = true
 		}
 	}
-	s.RatherNot = RatherNotSides(rated)
+	if s.Settings.PlateFit { // behind the plate-fit kill switch (PLATE-9): off is the planner without it
+		s.RatherNot = RatherNotSides(rated)
+	}
 	if s.Corrections, err = b.d.Corrections.UserReplacements(ctx, w.Start.AddDate(0, 0, -historyDays), w.Start); err != nil {
 		return State{}, fmt.Errorf("read corrections: %w", err)
 	}
@@ -345,7 +347,8 @@ const ratherNotMin = 2
 // ratherNotMin plates rated disliked or not_eaten and on no loved plate
 // among the given rated plates (the builder passes those of the last
 // timesEatenIn days): a side the household refuses, which the heuristic's
-// side choice ranks after every acceptable alternative. Nil without one.
+// side choice never picks (pickSide, batch variation) or ranks after every
+// other side (addSide). Nil without one.
 func RatherNotSides(rated []plate.Plate) map[int64]bool {
 	refused, loved := map[int64]int{}, map[int64]bool{}
 	for _, p := range rated {

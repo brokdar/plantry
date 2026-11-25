@@ -865,13 +865,14 @@ func (h *planner) reachesForced(f FoodFacts, c plate.CellKey) bool {
 
 // pickSide ranks the side recipes for main (beside the plate's others)
 // cooked on c: of role when given (a swap keeps veg veg and starch starch
-// unless none exists), within the meat limit, not replaced, not a side the
-// household would rather not get (State.RatherNot), used least in
+// unless none exists), within the meat limit, not replaced, used least in
 // the proposal (the week's side rotation), then with plate fit on: no clash
 // with the plate, the least plate fat above the week's range (excessFat),
 // the side whose kcal come closest to what the plate lacks to its share (in
 // sideKcalBucket steps), the fewest raised gaps (PLATE-4, PLATE-5), then as
-// pickMain. The swapped-out food and, with plate fit on, the proposal's
+// pickMain. The swapped-out food, a side the household would rather not
+// get (State.RatherNot: the plate goes without a side instead; addSide may
+// still add one for nutrition) and, with plate fit on, the proposal's
 // excluded foods are no candidate.
 func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude int64, role food.Role) (int64, bool) {
 	fit := h.s.plateFitOn(main)
@@ -891,14 +892,14 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 	}
 	var cands []candidate
 	for _, f := range h.s.Foods {
-		if !f.Composed() || !sideRole(f.Role) || f.ID == exclude || (fit && h.exclude[f.ID]) || !h.fits(f) || !h.reachesForced(f, c) {
+		if !f.Composed() || !sideRole(f.Role) || f.ID == exclude || (fit && h.exclude[f.ID]) || h.s.RatherNot[f.ID] || !h.fits(f) || !h.reachesForced(f, c) {
 			continue
 		}
 		last := 0.0
 		if f.LastEaten != nil {
 			last = float64(f.LastEaten.Unix())
 		}
-		keys := []float64{b2f(role != "" && f.Role != role), b2f(h.overMeat(f, c)), b2f(h.avoid[f.ID]), b2f(h.s.RatherNot[f.ID]), float64(h.used[f.ID])}
+		keys := []float64{b2f(role != "" && f.Role != role), b2f(h.overMeat(f, c)), b2f(h.avoid[f.ID]), float64(h.used[f.ID])}
 		if fit {
 			clash, raised := h.s.sideFit(main, others, f)
 			if clash {
