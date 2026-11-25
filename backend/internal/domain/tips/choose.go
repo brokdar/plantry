@@ -283,21 +283,38 @@ func known(p platefit.Plate, skip int, cand platefit.Component) bool {
 	return true
 }
 
-// pickleRe names pickled garnishes (German and English).
-var pickleRe = regexp.MustCompile(`(?i)eingelegt|pickle|gewürzgurke|cornichon|sauerkraut|kimchi`)
+// Garnish kinds by name (German and English), from culinary principle: a
+// pickle is pickled; a cool element is cucumber or a cultured dairy dip (raw
+// cucumber cools, it is not a herb); a finishing acid is citrus or vinegar;
+// crunch is a nut, seed or crisp topping; herbs are fresh soft herbs and the
+// green toppings used like them (spring onion, chives, cress). A leaf of none
+// of these is no garnish tip: silence beats noise. notGarnishRe are the
+// cooking forms of those foods (an oil, a butter, a ground nut, a dried herb,
+// a spice seed, coconut milk), never scattered on a plate.
+var (
+	notGarnishRe = regexp.MustCompile(`(?i)\böl\b|öl$|oil\b|butter|mus\b|milk|milch|gemahlen|ground|getrocknet|dried|pesto|paste|nutmeg|muskat|caraway|kümmel|cumin|fennel|fenchel|mustard|senf|pulver|powder`)
+	pickleRe     = regexp.MustCompile(`(?i)eingelegt|pickle|gewürzgurke|cornichon|sauerkraut|kimchi`)
+	coolRe       = regexp.MustCompile(`(?i)gurke|cucumber|joghurt|yogh?urt|raita|tzatziki|quark|schmand|saure sahne|sour cream|crème fraîche|creme fraiche`)
+	acidRe       = regexp.MustCompile(`(?i)zitrone|lemon|limette|lime|essig|vinegar`)
+	crunchRe     = regexp.MustCompile(`(?i)nuss|nüsse|nut|mandel|almond|pinienkern|pine nut|cashew|pistazie|pistachio|sesam|kerne|seed|crouton|röstzwiebel|fried onion|semmelbrösel|breadcrumb|panko`)
+	herbsRe      = regexp.MustCompile(`(?i)petersilie|parsley|schnittlauch|chive|dill|koriander|coriander|cilantro|basilikum|basil|minze|mint|kerbel|chervil|estragon|tarragon|kresse|cress|frühlingszwiebel|spring onion|scallion`)
+)
 
-// garnishKind is the one kind a garnish leaf can be, from the food itself: a
-// pickle by name, a sharp leaf (lemon, vinegar) a finishing acid, a crisp
-// one crunch, a fresh one herbs; any other leaf is no tip.
+// garnishKind is the one kind a garnish leaf can be, from its name (the
+// first match in the order above); any other leaf is no tip.
 func garnishKind(g platefit.Component) Kind {
 	switch {
+	case notGarnishRe.MatchString(g.Name):
+		return ""
 	case pickleRe.MatchString(g.Name):
 		return KindPickle
-	case g.Attrs.Taste != nil && g.Attrs.Taste.Acid >= 2:
+	case coolRe.MatchString(g.Name):
+		return KindCool
+	case acidRe.MatchString(g.Name):
 		return KindAcid
-	case g.Attrs.Texture == "crisp" || g.Attrs.Texture == "crunchy":
+	case crunchRe.MatchString(g.Name):
 		return KindCrunch
-	case g.Fresh != nil && *g.Fresh:
+	case herbsRe.MatchString(g.Name):
 		return KindHerbs
 	}
 	return ""

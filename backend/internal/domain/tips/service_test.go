@@ -16,6 +16,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/tips"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
@@ -425,5 +426,91 @@ func TestSync_WithdrawsTipThePlateNoLongerNeeds(t *testing.T) {
 	}
 	if !slices.ContainsFunc(v.Ended, func(t tips.Tip) bool { return t.ID == id && t.State == tips.StateWithdrawn }) {
 		t.Fatalf("tip %d not withdrawn: %+v", id, v.Ended)
+	}
+}
+
+// TestSync_OnlyMainMeals: plate fit's dimensions are dinner rules, so a light
+// slot, a breakfast or snack slot and a plate without a main get no tip
+// (CP1: 22 of 28 tips were on breakfast oats).
+func TestSync_OnlyMainMeals(t *testing.T) {
+	t.Parallel()
+	f := newFixture()
+	f.st.SlotOrder = plate.SlotOrder{1: 1, 2: 0, 3: 2}
+	f.st.SlotKind = map[int64]slot.Kind{2: slot.KindLight}
+	f.st.SlotNames = map[int64]string{1: "slot.breakfast", 2: "slot.coffee", 3: "slot.dinner"}
+	oats := f.st.Foods[103]
+	oats.Role = food.RoleStandalone
+	f.st.Foods[103] = oats
+	f.st.Plates[0].SlotID = 1 // breakfast, a meal-kind slot
+	f.st.Plates[1].SlotID = 2 // light
+	f.st.Plates[2].SlotID = 3 // dinner with a main
+	f.st.Plates[3].SlotID = 3 // dinner without a main
+	v, err := f.svc().Sync(context.Background(), start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plateIDs(v.Tips); !slices.Equal(got, []int64{3}) {
+		t.Fatalf("tips on plates %v, want only the dinner main [3]", got)
+	}
+	// A shown tip whose plate stops being a main meal is withdrawn.
+	f.st.SlotKind[3] = slot.KindLight
+	v, _ = f.svc().Sync(context.Background(), start)
+	if len(v.Tips) != 0 || len(v.Ended) != 1 || v.Ended[0].State != tips.StateWithdrawn {
+		t.Fatalf("after the slot turned light: tips %+v, ended %+v", v.Tips, v.Ended)
+	}
+}
+
+// TestSync_RanksByLift: when more plates qualify than the window allows, a
+// dinner wins over a lunch and the nearest plate over a later one, whatever
+// the date order.
+func TestSync_RanksByLift(t *testing.T) {
+	t.Parallel()
+	f := newFixture()
+	f.st.SlotOrder = plate.SlotOrder{1: 2, 2: 1}
+	f.st.SlotNames = map[int64]string{1: "slot.dinner", 2: "slot.lunch"}
+	f.st.Plates[0].SlotID = 2
+	f.st.Plates[1].SlotID = 2
+	v, err := f.svc().Sync(context.Background(), start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plateIDs(v.Tips); !slices.Equal(got, []int64{3, 4, 1}) {
+		t.Fatalf("tips on plates %v, want the dinners [3 4] then the nearest lunch [1]", got)
+	}
+}
+
+// TestSync_ClashBeforeGap: a plate with a clash (two starches) takes a tip
+// before earlier plates that only miss something.
+func TestSync_ClashBeforeGap(t *testing.T) {
+	t.Parallel()
+	f := newFixture()
+	side := func(id int64, name string, role food.Role, starch bool, temp, colour, texture string, taste flavor.Taste) planning.FoodFacts {
+		return planning.FoodFacts{
+			ID: id, Name: name, Kind: food.KindComposed, Role: role, DietClass: diet.Vegan,
+			Macros: nutrition.Macros{Kcal: 150}, NutritionComplete: true, Minutes: 10, Starch: ptr(starch), Fresh: ptr(false),
+			Attrs: flavor.Attributes{Cuisine: "italian", Texture: texture, Temperature: temp, Colour: colour, Richness: ptr(0), Saucy: ptr(false), Taste: &taste},
+		}
+	}
+	f.st.Foods[200] = side(200, "Polenta", food.RoleSideStarch, true, "hot", "beige", "soft", flavor.Taste{})
+	f.st.Foods[201] = side(201, "Ciabatta", food.RoleSideStarch, true, "hot", "beige", "crisp", flavor.Taste{})
+	f.st.Foods[202] = side(202, "Insalata mista", food.RoleSideVeg, false, "cold", "green", "crisp", flavor.Taste{Acid: 2})
+	for id := range f.st.Foods {
+		if fd := f.st.Foods[id]; fd.Role == food.RoleMain {
+			fd.Starch = ptr(false)
+			f.st.Foods[id] = fd
+		}
+	}
+	f.st.Plates[3].Components = append(f.st.Plates[3].Components,
+		planning.Component{ID: 30, FoodID: 200, Portions: ptr(1.0), Position: plate.PositionSide},
+		planning.Component{ID: 31, FoodID: 201, Portions: ptr(1.0), Position: plate.PositionSide})
+	v, err := f.svc().Sync(context.Background(), start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plateIDs(v.Tips); !slices.Equal(got, []int64{4, 1, 2}) {
+		t.Fatalf("tips on plates %v, want the clash plate [4] first, then [1 2]", got)
+	}
+	if op := v.Tips[0].Op; op.Action != "swap" || op.FoodID != 202 {
+		t.Fatalf("clash tip %+v, want the salad swapped in", v.Tips[0])
 	}
 }

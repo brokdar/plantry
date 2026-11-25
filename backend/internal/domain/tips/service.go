@@ -7,13 +7,16 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/platefit"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -152,10 +155,10 @@ type View struct {
 	Fit   []PlateFit
 }
 
-// garnishGrams is the amount per eater a garnish of a kind is added in.
-var garnishGrams = map[Kind]float64{KindAcid: 10, KindHerbs: 5, KindCrunch: 15, KindPickle: 30}
-
-const defaultGarnishGrams = 10
+// garnishGrams is the amount per eater a garnish of a kind is added in, as a
+// cook portions it: a scatter of herbs, a spoon of crunch, a few slices of
+// pickle, a wedge of citrus, a side spoon of a cool element.
+var garnishGrams = map[Kind]float64{KindAcid: 10, KindHerbs: 4, KindCrunch: 12, KindPickle: 30, KindCool: 60}
 
 // run is one sync of a window: its state, checks and candidates.
 type run struct {
@@ -245,12 +248,12 @@ func (s *Service) Sync(ctx context.Context, date time.Time) (View, error) {
 			}
 		}
 	}
-	for _, id := range y.order {
+	for _, id := range y.ranked() {
 		if len(live) >= MaxPerWindow {
 			break
 		}
 		pp := y.plates[id]
-		if tipped[id] || (pp.batch != 0 && batches[pp.batch]) || pp.p.Date.Before(y.today) {
+		if tipped[id] || (pp.batch != 0 && batches[pp.batch]) {
 			continue
 		}
 		t, ok := y.pick(pp, func(k Kind) bool { return !y.silenced[k] && !cooled[cooldownKey(pp.mainID, k)] })
@@ -282,6 +285,69 @@ func (s *Service) Sync(ctx context.Context, date time.Time) (View, error) {
 		v.Fit = append(v.Fit, PlateFit{PlateID: id, Raised: raised})
 	}
 	return v, nil
+}
+
+// ranked are the window's plates that may get a new tip (main meals from
+// today on that raise something), by the lift a tip brings: a clash before a
+// major gap, then a dinner before a lunch, then the nearest plate. Ranking
+// before the limits keeps the window's few tips for the plates that need
+// them most, not the first in date order.
+func (y *run) ranked() []int64 {
+	type cand struct {
+		id           int64
+		clash, lunch bool
+		at           int
+	}
+	var cs []cand
+	for i, id := range y.order {
+		pp := y.plates[id]
+		if pp.p.Date.Before(y.today) || !y.mainMeal(pp) {
+			continue
+		}
+		r := platefit.Read(pp.fit)
+		top, ok := Top(r)
+		if !ok {
+			continue
+		}
+		cs = append(cs, cand{id: id, clash: slices.Contains(r.Clashes, top), lunch: y.slotName(pp) != "dinner", at: i})
+	}
+	slices.SortStableFunc(cs, func(a, b cand) int {
+		if a.clash != b.clash {
+			if a.clash {
+				return -1
+			}
+			return 1
+		}
+		if a.lunch != b.lunch {
+			if b.lunch {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Compare(a.at, b.at)
+	})
+	out := make([]int64, len(cs))
+	for i, c := range cs {
+		out[i] = c.id
+	}
+	return out
+}
+
+// mainMeal reports whether a plate may carry a tip: a full meal (not a light
+// slot, breakfast or snack) built around a main. Plate fit's dimensions are
+// rules of a lunch or dinner plate; oats or a snack plate is not judged by them.
+func (y *run) mainMeal(pp planPlate) bool {
+	if y.st.SlotKind[pp.p.SlotID] == slot.KindLight {
+		return false
+	}
+	if n := y.slotName(pp); n == "breakfast" || n == "snack" {
+		return false
+	}
+	return y.st.Foods[pp.mainID].Role == food.RoleMain
+}
+
+func (y *run) slotName(pp planPlate) string {
+	return strings.TrimPrefix(y.st.SlotNames[pp.p.SlotID], "slot.")
 }
 
 func cooldownKey(recipe int64, k Kind) string { return fmt.Sprintf("%d/%s", recipe, k) }
@@ -415,19 +481,18 @@ func (y *run) pick(pp planPlate, allowed func(Kind) bool) (Tip, bool) {
 
 func (y *run) opOf(pp planPlate, ch Change) Op {
 	if ch.Add != nil {
-		g, ok := garnishGrams[ch.Kind]
-		if !ok {
-			g = defaultGarnishGrams
-		}
-		return Op{Action: "add", FoodID: ch.Add.ID, Grams: g}
+		return Op{Action: "add", FoodID: ch.Add.ID, Grams: garnishGrams[ch.Kind]}
 	}
 	return Op{Action: "swap", FoodID: ch.With.ID, ComponentID: pp.compIDs[ch.Swap]}
 }
 
-// holds reports whether a stored shown tip still applies: the plate still
-// raises what the change settles, the change is still a candidate and it
-// still passes the checks.
+// holds reports whether a stored shown tip still applies: the plate is a
+// main meal, it still raises what the change settles, the change is still a
+// candidate and it still passes the checks.
 func (y *run) holds(pp planPlate, t Tip) bool {
+	if !y.mainMeal(pp) {
+		return false
+	}
 	for _, ch := range Candidates(pp.fit, y.garnish, y.sides) {
 		if ch.Kind == t.Kind && y.opOf(pp, ch) == t.Op {
 			return y.passes(pp, ch, t.Op)
