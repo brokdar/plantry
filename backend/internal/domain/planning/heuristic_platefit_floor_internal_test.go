@@ -1,6 +1,7 @@
 package planning
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,7 +28,7 @@ func fillerPlanner(plateFit bool, carbsPct float64, legumeWeek bool) (*planner, 
 	))
 	for id, f := range h.s.Foods {
 		f.Macros.Carbs = f.Macros.Kcal * carbsPct / 100 / 4
-		f.Macros.Fat = f.Macros.Kcal * 0.3 / 9
+		f.Macros.Fat = f.Macros.Kcal * 0.25 / 9 // the cheese keeps the week's fat in range
 		h.s.Foods[id] = f
 	}
 	if legumeWeek {
@@ -49,6 +50,11 @@ func fillerPlanner(plateFit bool, carbsPct float64, legumeWeek bool) (*planner, 
 	big.ServingG = 300 // its smallest add, half a serving, is 375 kcal
 	h.s.Foods[pfBigBread] = big
 	h.s.NoCook = []int64{pfCheese, pfBread, pfChickpeas} // the old order: cheese first
+	// The bake reads as a bowl: chickpeas and cheese fit it (fillerFits), so
+	// the week's keys decide.
+	bake := h.s.Foods[bfBake]
+	bake.Attrs.Kind = "bowl"
+	h.s.Foods[bfBake] = bake
 	h.s.Settings.PlateFit = plateFit
 	h.in.State = h.s
 	h.topUpBase, h.adds = map[[2]int]float64{}, map[int]*dayAdds{} // as topUpFloors sets them
@@ -78,6 +84,7 @@ func TestAddNoCook_PlateFitFillerServesTheWeek(t *testing.T) {
 		carbsPct float64
 		legume   bool
 		big      bool // only the large bread beside chickpeas and cheese
+		breadOrd bool // the bread comes first in the pool
 		want     int64
 	}{
 		{name: "plate fit off: the old order", carbsPct: 30, want: pfCheese},
@@ -85,10 +92,15 @@ func TestAddNoCook_PlateFitFillerServesTheWeek(t *testing.T) {
 		{name: "carb kcal while carbs are below range", plateFit: true, carbsPct: 30, legume: true, want: pfBread},
 		{name: "carbs in range: no carb key", plateFit: true, carbsPct: 55, legume: true, want: pfCheese},
 		{name: "kcal fit first: the large bread is outside the bucket", plateFit: true, carbsPct: 30, legume: true, big: true, want: pfChickpeas}, // more carbs than the cheese
+		{name: "carbs above range: the fewest carbs", plateFit: true, carbsPct: 80, legume: true, breadOrd: true, want: pfCheese},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h, tgt := fillerPlanner(tt.plateFit, tt.carbsPct, tt.legume)
+			if tt.breadOrd {
+				h.s.NoCook = []int64{pfBread, pfChickpeas, pfCheese}
+				h.in.State = h.s
+			}
 			if tt.big {
 				h.s.NoCook = []int64{pfCheese, pfBigBread, pfChickpeas}
 				h.in.State = h.s
@@ -209,34 +221,60 @@ func TestAddNoCook_PlateFitNoSecondStarchFiller(t *testing.T) {
 	}
 }
 
-// The safety floor lift takes any verified food: with only bread reachable
-// beside a starch side, the floor lift still adds it.
+// The safety floor lift takes any verified food, the fitting plates first:
+// bread goes on a plate without a starch, and when only the dinner beside
+// its couscous is left it still goes on.
 func TestAddNoCook_FloorLiftIgnoresSecondStarch(t *testing.T) {
-	h, tgt := fillerPlanner(true, 30, true)
-	f := h.s.Foods[pfBread]
-	f.Kind, f.LeafRole = food.KindLeaf, food.RoleSideStarch
-	h.s.Foods[pfBread] = f
-	h.s.NoCook = []int64{pfBread}
-	h.in.State = h.s
-	h.floorLift = true
-	ev := evaluateLean(Merge(h.s, tgt, h.prop), tgt)
-	assert.Equal(t, int64(pfBread), added(t, h, ev.Days[0].Kcal+250))
+	for _, tc := range []struct {
+		name        string
+		starchLunch bool
+		onDinner    bool
+	}{{"a plate it fits first", false, false}, {"else the plate that is left", true, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, tgt := fillerPlanner(true, 30, true)
+			f := h.s.Foods[pfBread]
+			f.Kind, f.LeafRole = food.KindLeaf, food.RoleSideStarch
+			h.s.Foods[pfBread] = f
+			h.s.NoCook = []int64{pfBread}
+			h.in.State = h.s
+			if tc.starchLunch { // breakfast and lunch already took an add: only the dinner is left
+				h.addsOf(bfMon).used[bfBreakfast], h.addsOf(bfMon).used[bfLunch] = true, true
+			}
+			h.floorLift = true
+			ev := evaluateLean(Merge(h.s, tgt, h.prop), tgt)
+			got := added(t, h, ev.Days[0].Kcal+250)
+			if tc.onDinner {
+				assert.Equal(t, int64(pfBread), got)
+			} else {
+				assert.Zero(t, got, "not on the dinner beside the couscous")
+				assert.True(t, slices.ContainsFunc(h.prop.Plates[:2], func(p ProposedPlate) bool {
+					return slices.ContainsFunc(p.Components, func(c ProposedComponent) bool { return c.FoodID == pfBread })
+				}), "on a plate without a starch")
+			}
+		})
+	}
 }
 
 // While the week's fat is above range, the filler with the least fat above
-// the range comes before the carb and order keys.
+// the range comes before the carb and order keys; a filler that would take
+// a week in range above it is no candidate.
 func TestAddNoCook_PlateFitFillerKeepsFatInRange(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
+		fat    float64 // the dishes' fat share; the fixture's is 0.25
 		fatHot bool
 		want   int64
-	}{{"fat in range: the old order", false, pfCheese}, {"fat above range: the lean filler", true, pfBread}} {
+	}{
+		{"fat in range: the old order", 0, false, pfCheese},
+		{"fat in range, the cheese takes it above: the lean filler", 0.3, false, pfBread},
+		{"fat above range: the lean filler", 0.5, true, pfBread},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, tgt := fillerPlanner(true, 55, true) // carbs in range: no carb key
-			if tc.fatHot {
+			if tc.fat > 0 {
 				for _, id := range []int64{bfOats, bfCurry, bfBake, bfCouscous} {
 					f := h.s.Foods[id]
-					f.Macros.Fat = f.Macros.Kcal * 0.5 / 9
+					f.Macros.Fat = f.Macros.Kcal * tc.fat / 9
 					h.s.Foods[id] = f
 				}
 				h.in.State = h.s

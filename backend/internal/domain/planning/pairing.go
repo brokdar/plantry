@@ -18,6 +18,8 @@ import (
 //   - Cheese is never a filler. Whether a dish takes cheese needs a dish kind
 //     (pasta, gratin) that the data lacks, and a cheese on a salad that
 //     already holds parmesan or on a curry is the mistake the household named.
+//     With plate fit on, the dish kind is read (toppingFits): a cheese or nut
+//     tops a savoury main that takes one.
 //   - Tofu, tempeh and eggs never go on a plate that holds meat or fish (the
 //     DGE groups of its foods say so): a second protein of another kind next
 //     to a meat main is not a meal anyone cooks.
@@ -116,6 +118,13 @@ func (s State) addOnFits(p Plate, f FoodFacts, slot string) bool {
 	}
 	has := func(words []string) bool {
 		return slices.ContainsFunc(words, func(w string) bool { return strings.Contains(name, w) })
+	}
+	if s.Settings.PlateFit && IsCheeseOrNut(f.Name) {
+		// Plate fit reads the dish kind: a cheese or nut tops a dish that
+		// takes one (toppingFits), beside a savoury lunch or dinner main.
+		if m, ok := s.savouryMain(p, slot); ok {
+			return s.toppingFits(p, m, name)
+		}
 	}
 	if has(cheeseWords) {
 		return false

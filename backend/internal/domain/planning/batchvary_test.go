@@ -123,6 +123,32 @@ func TestHeuristic_BatchVariation(t *testing.T) {
 	}
 }
 
+// A varied side must make sense on the plate: fruit leaves are offered to
+// every leftover plate, and none of them is served as a lunch or dinner side.
+func TestHeuristic_BatchVariationSkipsFruitSides(t *testing.T) {
+	s := varyCooker(true)
+	s.SlotNames = map[int64]string{breakfast: "slot.breakfast", lunch: "slot.lunch", dinner: "slot.dinner"}
+	for i, name := range []string{"Banana", "Fruit salad", "Strawberries"} {
+		id := int64(310 + i)
+		s.Foods[id] = planning.FoodFacts{
+			ID: id, Name: name, Kind: food.KindLeaf, LeafRole: food.RoleSideVeg, DietClass: "vegan",
+			NoCook: true, NutritionComplete: true, Macros: nutrition.Macros{Kcal: 150}, ServingG: 100,
+		}
+		s.NoCook = append(s.NoCook, id)
+	}
+	p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+	varied := 0
+	for key, sides := range batchSides(s, p) {
+		if distinct(sides) > 1 {
+			varied++
+		}
+		for _, id := range sides[min(1, len(sides)):] {
+			assert.NotContains(t, []int64{310, 311, 312}, id, "batch %s: a fruit side on a leftover plate: %v", key, sides)
+		}
+	}
+	require.Positive(t, varied, "the fixture still varies over the leaves")
+}
+
 // Variation stays within nutrition: it adds no issue the unvaried week does
 // not have, and a side far from the batch side's kcal is never a variant.
 func TestHeuristic_BatchVariationKeepsNutrition(t *testing.T) {

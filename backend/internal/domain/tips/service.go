@@ -384,7 +384,7 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 	}
 	y.before = planning.EvaluateLean(y.st, planning.WindowTarget(y.st))
 	for _, id := range slices.Concat(y.st.NoCook, y.st.Garnish) {
-		if f := y.st.Foods[id]; !f.Composed() && !y.never[id] {
+		if f := y.st.Foods[id]; !f.Composed() && !y.never[id] && !y.st.RatherNot[id] {
 			y.garnish = append(y.garnish, componentOf(f))
 		}
 	}
@@ -395,7 +395,9 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 	slices.Sort(ids)
 	for _, id := range ids {
 		f := y.st.Foods[id]
-		if f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] {
+		// A food the household would rather not get beside a meal
+		// (State.RatherNot) is never suggested.
+		if f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] && !y.st.RatherNot[id] {
 			y.sides = append(y.sides, componentOf(f))
 		}
 	}
@@ -509,6 +511,7 @@ func (y *run) holds(pp planPlate, t Tip) bool {
 // tools at hand and stays within the slot's time allowance.
 func (y *run) passes(pp planPlate, ch Change, op Op) bool {
 	next := slices.Clone(pp.p.Components)
+	var left int64 // the batch the swapped side ate from
 	if op.Action == "add" {
 		g := op.Grams
 		next = append(next, planning.Component{FoodID: op.FoodID, Grams: &g, Position: plate.PositionExtra})
@@ -517,6 +520,7 @@ func (y *run) passes(pp planPlate, ch Change, op Op) bool {
 		if i < 0 || !y.fitsKitchen(pp, next[i], y.st.Foods[op.FoodID]) {
 			return false
 		}
+		left = next[i].SessionID
 		portions := 1.0
 		if next[i].Portions != nil {
 			portions = *next[i].Portions
@@ -529,6 +533,9 @@ func (y *run) passes(pp planPlate, ch Change, op Op) bool {
 		if st.Plates[i].ID == pp.p.ID {
 			st.Plates[i].Components = next
 		}
+	}
+	if left != 0 {
+		st.Sessions = y.leftBatch(st, pp.p, left)
 	}
 	// The whole window is the target, as for before: a change that raises
 	// an issue anywhere (the week's soft rules included) is not offered; an
@@ -546,6 +553,39 @@ func (y *run) passes(pp planPlate, ch Change, op Op) bool {
 		}
 	}
 	return true
+}
+
+// leftBatch is st's sessions after the swapped plate p left the batch sess,
+// as the plate service settles it (D11, plate.reanchor): a batch no plate
+// eats from any more is gone; an uncooked batch whose cook meal was p moves
+// its cook to its earliest remaining meal from today on. Without this the
+// check missed a new cook occasion on the later day (H2, CP1e family week 2:
+// Monday's rice swapped for couscous moved the rice cook to Tuesday lunch).
+func (y *run) leftBatch(st planning.State, p planning.Plate, sess int64) []planning.Session {
+	var first *planning.Plate
+	eaten := false
+	for i, q := range st.Plates {
+		if !slices.ContainsFunc(q.Components, func(c planning.Component) bool { return c.SessionID == sess }) {
+			continue
+		}
+		eaten = true
+		if q.Date.Before(y.today) {
+			continue
+		}
+		if first == nil || q.Date.Before(first.Date) || (q.Date.Equal(first.Date) && st.SlotOrder[q.SlotID] < st.SlotOrder[first.SlotID]) {
+			first = &st.Plates[i]
+		}
+	}
+	out := slices.Clone(st.Sessions)
+	i := slices.IndexFunc(out, func(s planning.Session) bool { return s.ID == sess })
+	switch {
+	case i < 0:
+	case !eaten:
+		out = slices.Delete(out, i, i+1)
+	case first != nil && out[i].CookedAt == nil && out[i].CookCell().Equal(p.Cell()):
+		out[i].CookDate, out[i].CookSlotID = first.Date, first.SlotID
+	}
+	return out
 }
 
 func issueKey(is planning.Issue) string {

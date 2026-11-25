@@ -660,7 +660,7 @@ func (x *index) swapBatch(base State, t Target, in Proposal, before Evaluation, 
 			// clashes or leaves the plates short.
 			if !kept && x.repick != nil && sk >= 0 {
 				old := in.Sessions[sk]
-				if nf, ok := x.repick(plate.CellKey{Date: old.CookDate, SlotID: old.CookSlotID}, f.ID, others); ok && nf != old.FoodID {
+				if nf, ok := x.repick(plate.CellKey{Date: old.CookDate, SlotID: old.CookSlotID}, f.ID, others); ok && nf != old.FoodID && !batchHolds(next, old.Key, nf) {
 					next.Sessions[sk].FoodID = nf
 					for pi := range next.Plates {
 						for ci, c := range next.Plates[pi].Components {
@@ -684,6 +684,15 @@ func (x *index) swapBatch(base State, t Target, in Proposal, before Evaluation, 
 		}
 	}
 	return in, "", false
+}
+
+// batchHolds reports whether a plate eating from session key already holds
+// food: re-picking the batch's side to it would double it on that plate.
+func batchHolds(p Proposal, key string, food int64) bool {
+	return slices.ContainsFunc(p.Plates, func(pl ProposedPlate) bool {
+		return slices.ContainsFunc(pl.Components, func(c ProposedComponent) bool { return c.SessionKey == key }) &&
+			slices.ContainsFunc(pl.Components, func(c ProposedComponent) bool { return c.FoodID == food && c.SessionKey != key })
+	})
 }
 
 // batchSide is the index of the proposed side session beside the main at

@@ -27,7 +27,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h28"
+const HeuristicVersion = "h29"
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.
@@ -1115,6 +1115,13 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 				var varietyNotes []string
 				prop, varietyNotes = fixVariety(cin, prop)
 				finishNotes = append(finishNotes, varietyNotes...)
+				// A swapped main does not keep a filler picked for the old one;
+				// the day is lifted again with fillers that fit the new main.
+				if kept := dropMisfitAdds(base, j.target, prop); !slices.EqualFunc(kept.Plates, prop.Plates, func(a, b ProposedPlate) bool { return len(a.Components) == len(b.Components) }) {
+					var balNotes []string
+					prop, balNotes = balancePlan(cin, kept)
+					finishNotes = append(finishNotes, balNotes...)
+				}
 			} else {
 				prop, finishNotes = finishProposal(cin, prop)
 			}
