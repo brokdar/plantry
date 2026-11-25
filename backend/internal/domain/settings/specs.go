@@ -179,6 +179,38 @@ var registry = []Spec{
 			return err
 		},
 	},
+	{
+		// ON-1: gates all autonomous Chef work and the Chef UI.
+		Key:     KeyChefEnabled,
+		Kind:    KindBool,
+		Default: "false",
+	},
+	{
+		// COST-1: monthly cap for capped work, USD like the run log.
+		Key:     KeyChefMonthlyCap,
+		Kind:    KindString,
+		Default: "5",
+		Validate: func(raw string) error {
+			_, err := ParseMonthlyCap(raw)
+			return err
+		},
+	},
+	{
+		// FIND-7: the sites finds search.
+		Key:     KeyChefSites,
+		Kind:    KindString,
+		Default: defaultChefSites,
+		Validate: func(raw string) error {
+			_, err := ParseChefSites(raw)
+			return err
+		},
+	},
+	{
+		// Rule-based plate fit in planning; not shown in Settings.
+		Key:     KeyPlanPlateFit,
+		Kind:    KindBool,
+		Default: "true",
+	},
 }
 
 // SpecFor returns the spec for a given key, or (Spec{}, false) if unknown.

@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -121,6 +123,10 @@ const (
 	KeyAIReasoningEffortChat      = "ai.reasoning_effort.chat"
 	KeyAIReasoningEffortGenerate  = "ai.reasoning_effort.generate"
 	KeyAIProgrammaticTools        = "ai.programmatic_tools"
+	KeyChefEnabled                = "chef.enabled"
+	KeyChefMonthlyCap             = "chef.monthly_cap"
+	KeyChefSites                  = "chef.sites"
+	KeyPlanPlateFit               = "plan.plate_fit"
 )
 
 // maxCuisines and maxCuisineLen bound discovery.cuisines (D19).
@@ -145,4 +151,71 @@ func ParseCuisines(raw string) ([]string, error) {
 		}
 	}
 	return names, nil
+}
+
+// ParseMonthlyCap parses chef.monthly_cap: a finite, non-negative USD amount.
+func ParseMonthlyCap(raw string) (float64, error) {
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
+		return 0, fmt.Errorf("%w: %s must be a non-negative amount in USD", ErrInvalidKind, KeyChefMonthlyCap)
+	}
+	return v, nil
+}
+
+// ChefSite is one entry of the chef.sites allow-list (FIND-7).
+type ChefSite struct {
+	Domain string `json:"domain"`
+	Lang   string `json:"lang"`
+	// Enabled sites are searched for finds.
+	Enabled bool `json:"enabled"`
+	// AIGroupsExempt: robots.txt groups for AI user agents do not block
+	// this site (FIND-6).
+	AIGroupsExempt bool `json:"ai_groups_exempt"`
+}
+
+// defaultChefSites is FIND-7's list: the first eleven on, the rest listed
+// but off.
+const defaultChefSites = `[` +
+	`{"domain":"bbcgoodfood.com","lang":"en","enabled":true,"ai_groups_exempt":false},` +
+	`{"domain":"budgetbytes.com","lang":"en","enabled":true,"ai_groups_exempt":false},` +
+	`{"domain":"minimalistbaker.com","lang":"en","enabled":true,"ai_groups_exempt":false},` +
+	`{"domain":"justonecookbook.com","lang":"en","enabled":true,"ai_groups_exempt":false},` +
+	`{"domain":"thewoksoflife.com","lang":"en","enabled":true,"ai_groups_exempt":false},` +
+	`{"domain":"chefkoch.de","lang":"de","enabled":true,"ai_groups_exempt":true},` +
+	`{"domain":"einfachbacken.de","lang":"de","enabled":true,"ai_groups_exempt":false},` +
+	`{"domain":"kuechengoetter.de","lang":"de","enabled":true,"ai_groups_exempt":false},` +
+	`{"domain":"eatsmarter.de","lang":"de","enabled":true,"ai_groups_exempt":false},` +
+	`{"domain":"malteskitchen.de","lang":"de","enabled":true,"ai_groups_exempt":false},` +
+	`{"domain":"zuckerundjagdwurst.com","lang":"de","enabled":true,"ai_groups_exempt":false},` +
+	`{"domain":"bonappetit.com","lang":"en","enabled":false,"ai_groups_exempt":false},` +
+	`{"domain":"epicurious.com","lang":"en","enabled":false,"ai_groups_exempt":false},` +
+	`{"domain":"kitchenstories.com","lang":"de","enabled":false,"ai_groups_exempt":false},` +
+	`{"domain":"recipetineats.com","lang":"en","enabled":false,"ai_groups_exempt":false},` +
+	`{"domain":"essen-und-trinken.de","lang":"de","enabled":false,"ai_groups_exempt":false},` +
+	`{"domain":"cooking.nytimes.com","lang":"en","enabled":false,"ai_groups_exempt":false},` +
+	`{"domain":"seriouseats.com","lang":"en","enabled":false,"ai_groups_exempt":false},` +
+	`{"domain":"allrecipes.com","lang":"en","enabled":false,"ai_groups_exempt":false}` +
+	`]`
+
+// ParseChefSites parses chef.sites: a JSON array of sites with unique,
+// lowercase, trimmed domains and lang en or de.
+func ParseChefSites(raw string) ([]ChefSite, error) {
+	var sites []ChefSite
+	if err := json.Unmarshal([]byte(raw), &sites); err != nil || sites == nil {
+		return nil, fmt.Errorf("%w: %s must be a JSON array of sites", ErrInvalidKind, KeyChefSites)
+	}
+	seen := make(map[string]bool, len(sites))
+	for _, s := range sites {
+		if s.Domain == "" || s.Domain != strings.ToLower(strings.TrimSpace(s.Domain)) {
+			return nil, fmt.Errorf("%w: %s domain %q must be lowercase and trimmed", ErrInvalidKind, KeyChefSites, s.Domain)
+		}
+		if s.Lang != "en" && s.Lang != "de" {
+			return nil, fmt.Errorf("%w: %s lang of %s must be en or de", ErrInvalidKind, KeyChefSites, s.Domain)
+		}
+		if seen[s.Domain] {
+			return nil, fmt.Errorf("%w: %s lists %s twice", ErrInvalidKind, KeyChefSites, s.Domain)
+		}
+		seen[s.Domain] = true
+	}
+	return sites, nil
 }

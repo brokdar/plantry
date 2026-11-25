@@ -97,6 +97,11 @@ export const settingsKeys = {
   system: () => [...settingsKeys.all, "system"] as const,
 }
 
+export const chefKeys = {
+  all: ["chef"] as const,
+  spend: () => [...chefKeys.all, "spend"] as const,
+}
+
 export const setupKeys = {
   all: ["setup"] as const,
   status: () => [...setupKeys.all, "status"] as const,

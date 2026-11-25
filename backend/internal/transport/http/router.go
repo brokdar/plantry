@@ -34,6 +34,7 @@ type Handlers struct {
 	Feedback      *handlers.FeedbackHandler
 	Import        *handlers.ImportHandler
 	Discovery     *handlers.DiscoveryHandler
+	Chef          *handlers.ChefHandler
 	Settings      *handlers.SettingsHandler
 	Shopping      *handlers.ShoppingHandler
 	Availability  *handlers.AvailabilityHandler
@@ -260,6 +261,10 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Post("/suggestions/{id}/accept", h.Discovery.Accept)
 				r.Post("/suggestions/{id}/reject", h.Discovery.Reject)
 			})
+		}
+
+		if h.Chef != nil {
+			api.Get("/chef/spend", h.Chef.Spend)
 		}
 
 		if h.Shopping != nil {

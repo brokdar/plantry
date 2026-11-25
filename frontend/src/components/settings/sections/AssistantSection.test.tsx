@@ -15,12 +15,15 @@ vi.mock("@/lib/api/settings", () => ({
   getSystemInfo: vi.fn(),
 }))
 
+vi.mock("@/lib/api/chef", () => ({ getChefSpend: vi.fn() }))
+
 vi.mock("@/lib/api/profile", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/profile")>()),
   getProfile: vi.fn(),
   updateProfile: vi.fn(),
 }))
 
+import { getChefSpend } from "@/lib/api/chef"
 import { getProfile, updateProfile, type Profile } from "@/lib/api/profile"
 import {
   clearSetting,
@@ -61,6 +64,12 @@ describe("AssistantSection", () => {
     vi.mocked(updateProfile).mockImplementation(
       async (input) => ({ ...mockProfile, ...input }) as Profile
     )
+    vi.mocked(getChefSpend).mockResolvedValue({
+      month: "2026-11",
+      spent_usd: 1.25,
+      cap_usd: 5,
+      at_cap: false,
+    })
     vi.mocked(listAIModels).mockResolvedValue({
       models: [
         { id: "fake-default", display_name: "Fake (default)" },
@@ -84,6 +93,53 @@ describe("AssistantSection", () => {
       screen.getByText("Assistant run details older than 180 days are deleted.")
     ).toBeInTheDocument()
     expect(screen.getByTestId("ai-rate-limit-input")).toHaveValue(10)
+  })
+
+  describe("Chef switch (ON-1)", () => {
+    it("is hidden without a provider key", async () => {
+      serveSettings([{ key: "ai.provider", value: "openai", source: "db" }])
+      renderSection()
+      await screen.findByLabelText("Daily suggestion")
+      expect(screen.queryByLabelText("Chef")).toBeNull()
+      expect(getChefSpend).not.toHaveBeenCalled()
+    })
+
+    it("turns on with a key and shows this month's spend", async () => {
+      serveSettings([
+        { key: "ai.provider", value: "anthropic", source: "db" },
+        {
+          key: "ai.api_key",
+          value: "",
+          source: "db",
+          masked_preview: "sk-****abcd",
+        },
+      ])
+      const user = userEvent.setup()
+      renderSection()
+      const toggle = await screen.findByLabelText("Chef")
+      expect(toggle).not.toBeChecked()
+      expect(await screen.findByTestId("chef-spend")).toHaveTextContent(
+        "This month: $1.25 of $5.00"
+      )
+      await user.click(toggle)
+      await waitFor(() =>
+        expect(setSetting).toHaveBeenCalledWith("chef.enabled", "true")
+      )
+    })
+
+    it("says when the cap is reached", async () => {
+      serveSettings([{ key: "ai.provider", value: "fake", source: "db" }])
+      vi.mocked(getChefSpend).mockResolvedValue({
+        month: "2026-11",
+        spent_usd: 5.1,
+        cap_usd: 5,
+        at_cap: true,
+      })
+      renderSection()
+      expect(await screen.findByTestId("chef-spend")).toHaveTextContent(
+        "The cap is reached"
+      )
+    })
   })
 
   it("never shows a secret-key banner, even without a cipher", async () => {

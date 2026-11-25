@@ -6,10 +6,12 @@ import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { useChefSpend } from "@/lib/queries/chef"
 import { usePatchProfile, useProfile } from "@/lib/queries/profile"
 import { useSettingItems } from "@/lib/queries/settings"
 
 import { AIProviderControls } from "../AIProviderControls"
+import { formatUSD } from "../insights/format"
 import { PricesEditor } from "../PricesEditor"
 import { NumberField, SettingsGroup, Switch } from "../controls"
 import { useSavedNote, useSettingField } from "../setting-field"
@@ -20,12 +22,24 @@ export function AssistantSection() {
   const { t } = useTranslation()
   const { data } = useSettingItems()
   if (!data) return <SectionSkeleton />
+  // A usable provider: one set, with a key unless it is the fake (the
+  // backend's rule for building a client).
+  const provider = data["ai.provider"]?.value ?? ""
+  const hasKey =
+    provider === "fake" ||
+    (provider !== "" && (data["ai.api_key"]?.source ?? "default") !== "default")
 
   return (
     <div className="flex flex-col gap-10">
       <SettingsGroup title={t("settings_page.assistant.connection_group")}>
         <AIProviderControls />
       </SettingsGroup>
+
+      {hasKey && (
+        <SettingsGroup>
+          <ChefRow />
+        </SettingsGroup>
+      )}
 
       <SettingsGroup>
         <NotesRow />
@@ -55,6 +69,49 @@ export function AssistantSection() {
         <FakeScriptRow />
       </SettingsGroup>
     </div>
+  )
+}
+
+/** `chef.enabled` (ON-1) and this month's capped spend against the cap. */
+function ChefRow() {
+  const { t, i18n } = useTranslation()
+  const field = useSettingField("chef.enabled", "false")
+  const on = field.value === "true"
+  const { data: spend } = useChefSpend()
+  return (
+    <SettingRow
+      label={t("settings_page.assistant.chef_label")}
+      description={t(
+        on
+          ? "settings_page.assistant.chef_effect_on"
+          : "settings_page.assistant.chef_effect_off"
+      )}
+      item={field.item}
+      onClearOverride={field.clear}
+      saved={field.saved}
+      htmlFor="setting-chef-enabled"
+    >
+      <div className="flex flex-col gap-2">
+        <Switch
+          id="setting-chef-enabled"
+          checked={on}
+          onChange={(next) => field.save(String(next))}
+        />
+        {spend && (
+          <p className="text-small text-ink-muted" data-testid="chef-spend">
+            {t(
+              spend.at_cap
+                ? "settings_page.assistant.chef_spend_at_cap"
+                : "settings_page.assistant.chef_spend",
+              {
+                spent: formatUSD(spend.spent_usd, i18n),
+                cap: formatUSD(spend.cap_usd, i18n),
+              }
+            )}
+          </p>
+        )}
+      </div>
+    </SettingRow>
   )
 }
 

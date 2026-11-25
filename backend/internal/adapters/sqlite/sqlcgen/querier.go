@@ -22,6 +22,7 @@ type Querier interface {
 	// the unlock is the boundary.
 	AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams) ([]int64, error)
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
+	ClaimChefJob(ctx context.Context, now string) (ClaimChefJobRow, error)
 	// Undoes SetFoodImageIfNone: clears the image only while it is still path.
 	ClearFoodImage(ctx context.Context, arg ClearFoodImageParams) (int64, error)
 	ClearShownOn(ctx context.Context, shownOn sql.NullString) error
@@ -82,11 +83,13 @@ type Querier interface {
 	// B7: per discovery run with an id in [min_id, max_id], the suggestions it
 	// stored and how many of them the user accepted.
 	DiscoverySuggestionCounts(ctx context.Context, arg DiscoverySuggestionCountsParams) ([]DiscoverySuggestionCountsRow, error)
+	EnqueueChefJob(ctx context.Context, arg EnqueueChefJobParams) (int64, error)
 	// At startup no run is running: a row still 'running' was cut off by a stop.
 	FailInterruptedAIRuns(ctx context.Context, finishedAt sql.NullString) (int64, error)
 	// prompt_hash resolves to NULL when the hash is not in ai_prompts, so a failed
 	// UpsertPrompt never makes this UPDATE fail and leave the run 'running'.
 	FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.Result, error)
+	FinishChefJob(ctx context.Context, arg FinishChefJobParams) error
 	// Derived eating history (D16) relative to today, over confirmed rows only
 	// (D26). last_eaten is the latest confirmed plate dated on or before today
 	// that holds the food and is not marked not_eaten (empty when none);
@@ -198,6 +201,7 @@ type Querier interface {
 	// prompts and tool schemas stay. The repo repeats it until nothing is left,
 	// so no single statement holds the write lock for long.
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
+	RecoverChefJobs(ctx context.Context, arg RecoverChefJobsParams) (int64, error)
 	ReinsertPlate(ctx context.Context, arg ReinsertPlateParams) error
 	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
 	SetConversationContainer(ctx context.Context, arg SetConversationContainerParams) (sql.Result, error)

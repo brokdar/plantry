@@ -144,6 +144,18 @@ type AvailabilityOverride struct {
 	UpdatedAt string
 }
 
+type ChefJob struct {
+	ID        int64
+	Kind      string
+	Payload   string
+	Requested int64
+	Status    string
+	Attempts  int64
+	Error     string
+	CreatedAt string
+	UpdatedAt string
+}
+
 type CookSession struct {
 	ID             int64
 	FoodID         int64
