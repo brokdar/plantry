@@ -27,7 +27,8 @@ test("the Chef switch turns on with a provider and shows this month's spend", as
     /^This month: \$\d+\.\d{2,4} of \$5\.00/
   )
 
-  await toggle.check()
+  // Not optimistic: the box follows the saved value.
+  await toggle.click()
   await expect(toggle).toBeChecked()
   await expect(
     page.getByText("The assistant labels your recipes", { exact: false })
@@ -39,6 +40,8 @@ test("the Chef switch turns on with a provider and shows this month's spend", as
   }
   await ctx.dispose()
   expect(body.items.find((i) => i.key === "chef.enabled")?.value).toBe("true")
+  // The save's settings refetch may still be in the mocked route.
+  await page.unrouteAll({ behavior: "ignoreErrors" })
 })
 
 test("the Chef switch is hidden without a provider", async ({ page }) => {
