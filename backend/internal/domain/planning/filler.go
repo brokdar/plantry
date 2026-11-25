@@ -20,7 +20,8 @@ import (
 //     (yogurt, skyr, quark; one per plate) only as a dollop or cold sauce
 //     where the dish takes one: a curry, stew, chili, soup, wrap, bowl, salad,
 //     potato or fish dish, or an Indian, Middle Eastern, Mexican or
-//     Mediterranean main; never a pasta, bake, stir-fry or East Asian main.
+//     Mediterranean main; never a pasta, bake, stir-fry, East Asian main or
+//     a main that carries cheese (a Greek salad: cheeseDishWords).
 //  2. A protein filler (meat, fish, tofu, tempeh, egg, a legume) never joins
 //     a plate that already carries protein (its main or another component).
 //  3. On a plate without one, it must fit the dish: tofu and tempeh with a
@@ -63,7 +64,7 @@ var (
 var dishKindWords = map[string][]string{
 	"curry":   {"curry", "dal", "dhal", "masala", "korma", "tikka"},
 	"stew":    {"stew", "eintopf", "gulasch", "goulash", "chili", "ragout", "tagine", "casserole"},
-	"soup":    {"soup", "suppe", "broth", "bruehe"},
+	"soup":    {"soup", "suppe", "broth", "bruehe", "minestrone"},
 	"salad":   {"salad", "salat"},
 	"wrap":    {"wrap", "burrito", "taco", "tortilla", "quesadilla", "fajita", "kebab", "doener", "pita", "sandwich", "burger"},
 	"stirfry": {"stir-fry", "stir fry", "stirfry", "wok", "fried rice", "noodle", "teriyaki", "pad thai", "ramen"},
@@ -73,6 +74,11 @@ var dishKindWords = map[string][]string{
 	"bake":    {"gratin", "auflauf", "ueberbacken", "lasagn"},
 	"egg":     {"shakshuka", "omelett", "frittata", "ruehrei"},
 }
+
+// cheeseDishWords name mains that already carry cheese without naming it: a
+// gratin or lasagne is baked under cheese, a Greek salad or caprese holds
+// feta or mozzarella. Such a main takes no cheese topping and no dairy.
+var cheeseDishWords = []string{"gratin", "ueberbacken", "lasagn", "greek salad", "griechischer salat", "caprese", "pizza"}
 
 // asianCuisines are the cuisines whose mains take tofu.
 var asianCuisines = []string{"chinese", "japanese", "thai", "indian"}
@@ -171,7 +177,7 @@ func (s State) addFits(p Plate, f FoodFacts, slot string) bool {
 	case fillDairy:
 		// A dollop or a cold sauce (raita, tzatziki, dill yogurt with fish,
 		// herb quark with potatoes); not on a pasta, bake or stir-fry.
-		if in("pasta", "bake", "stirfry") || slices.Contains(asianCuisines[:3], cuisine) {
+		if in("pasta", "bake", "stirfry") || slices.Contains(asianCuisines[:3], cuisine) || containsAny(diet.Fold(m.Name), cheeseDishWords) {
 			return false
 		}
 		fish := m.Groups.FishG > 0 || in("fish")
@@ -226,7 +232,7 @@ func (s State) sidesBeside(p Plate, f FoodFacts) int {
 // potato or egg dish, wrap, bread or chili, or an Italian, French, Mediterranean or
 // Mexican main; never on a curry, stir-fry, soup, fish or Asian main, beside fish, or on
 // a plate that already has a cheese (in its main's name too: no feta on a
-// feta quiche). Nuts: on a salad, bowl, curry or stir-fry, never a pasta.
+// feta quiche, no cheese on a gratin or Greek salad: cheeseDishWords). Nuts: on a salad, bowl, curry or stir-fry, never a pasta.
 func (s State) toppingFits(p Plate, m FoodFacts, name string) bool {
 	kinds := dishKinds(m)
 	in := func(ks ...string) bool { return slices.ContainsFunc(ks, func(k string) bool { return kinds[k] }) }
@@ -234,7 +240,7 @@ func (s State) toppingFits(p Plate, m FoodFacts, name string) bool {
 	if !containsAny(name, cheeseWords) && !strings.Contains(name, "kaese") {
 		return in("salad", "bowl", "curry", "stirfry") && !in("pasta")
 	}
-	if in("curry", "stirfry", "soup", "fish") || slices.Contains(asianCuisines, cuisine) {
+	if in("curry", "stirfry", "soup", "fish") || slices.Contains(asianCuisines, cuisine) || containsAny(diet.Fold(m.Name), cheeseDishWords) {
 		return false
 	}
 	for _, c := range p.Components {
