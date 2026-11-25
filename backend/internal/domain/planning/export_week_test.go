@@ -15,6 +15,17 @@ func GuardWeek(base State, t Target, in Proposal, skip map[int64]bool, instructi
 	return guardWeek(base, t, in, skip, instruction, nil)
 }
 
+// GuardWeekRepick is the last guard with in's side picker (plate fit on: a
+// swapped main's side is re-picked, PLATE-5).
+func GuardWeekRepick(in ChooseInput, prop Proposal) (Proposal, []string) {
+	return guardWeek(in.State, in.Target, prop, idSet(in.Exclude), in.Instruction, sidePickerFor(in, prop))
+}
+
+// SidePickerFor exposes the guard's side picker (nil with plate fit off).
+func SidePickerFor(in ChooseInput, prop Proposal) func(c plate.CellKey, main int64, others []int64) (int64, bool) {
+	return sidePickerFor(in, prop)
+}
+
 // BalancePlan exposes the balancing pass to the external tests.
 var BalancePlan = balancePlan
 
