@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next"
 
-import { useSettingField } from "@/components/settings/setting-field"
 import { formatNumber } from "@/lib/plan/format"
 import { useChefInsights } from "@/lib/queries/tips"
 
@@ -10,15 +9,9 @@ import { formatPercent, formatUSD } from "./format"
  *  over the last eight weeks, and this month's capped spend by kind. Only
  *  while the Chef is on. */
 export function ChefBlock() {
-  const on = useSettingField("chef.enabled", "false").value === "true"
-  if (!on) return null
-  return <ChefBlockContent />
-}
-
-function ChefBlockContent() {
   const { t, i18n } = useTranslation()
   const { data } = useChefInsights()
-  if (!data) return null
+  if (!data?.on) return null
   const { shown, applied, dismissed } = data.tips
   const rows: [label: string, value: string, testId: string][] = [
     [

@@ -586,6 +586,9 @@ func (s *Service) Dismiss(ctx context.Context, id int64) error {
 	return s.d.Store.SetState(ctx, id, StateDismissed, s.d.Now())
 }
 
+// On reports whether the Chef is on (chef.enabled).
+func (s *Service) On(ctx context.Context) (bool, error) { return s.d.ChefOn(ctx) }
+
 // Counts returns the tips created in [from, to): shown counts every one.
 func (s *Service) Counts(ctx context.Context, from, to time.Time) (Counts, error) {
 	m, err := s.d.Store.CountByState(ctx, from, to)

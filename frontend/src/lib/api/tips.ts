@@ -58,6 +58,8 @@ export function dismissTip(id: number): Promise<void> {
 
 /** The Chef block of Insights (§10, first metrics). */
 export interface ChefInsights {
+  /** chef.enabled: the block shows only while the Chef is on. */
+  on: boolean
   from: string
   to: string
   tips: { shown: number; applied: number; dismissed: number }

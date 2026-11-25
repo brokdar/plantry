@@ -19,6 +19,7 @@ type TipService interface {
 	Apply(ctx context.Context, id int64) (plate.Undo, error)
 	Dismiss(ctx context.Context, id int64) error
 	Counts(ctx context.Context, from, to time.Time) (tips.Counts, error)
+	On(ctx context.Context) (bool, error)
 }
 
 // TipPlates reads the plates of a range for the trial export.
@@ -164,6 +165,7 @@ func (h *TipHandler) Dismiss(w http.ResponseWriter, r *http.Request) {
 }
 
 type chefInsightsResponse struct {
+	On    bool        `json:"on"`
 	From  string      `json:"from"`
 	To    string      `json:"to"`
 	Tips  tips.Counts `json:"tips"`
@@ -172,7 +174,7 @@ type chefInsightsResponse struct {
 }
 
 // Insights handles GET /api/chef/insights?from&to (§10, first metrics): the
-// tips created in the range by state (default the last 8 weeks) and this
+// Chef switch, the tips created in the range by state (default the last 8 weeks) and this
 // month's capped spend by kind from the stored run costs.
 func (h *TipHandler) Insights(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -193,6 +195,12 @@ func (h *TipHandler) Insights(w http.ResponseWriter, r *http.Request) {
 		f := to.AddDate(0, 0, -7*defaultInsightsWeeks+1)
 		from = &f
 	}
+	on, err := h.svc.On(r.Context())
+	if err != nil {
+		slog.ErrorContext(r.Context(), "chef.insights.on", "error", err)
+		writeError(w, http.StatusInternalServerError, "error.server")
+		return
+	}
 	counts, err := h.svc.Counts(r.Context(), *from, to.AddDate(0, 0, 1))
 	if err != nil {
 		slog.ErrorContext(r.Context(), "chef.insights.tips", "error", err)
@@ -206,7 +214,7 @@ func (h *TipHandler) Insights(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, chefInsightsResponse{
-		From: from.Format(time.DateOnly), To: to.Format(time.DateOnly), Tips: counts,
+		On: on, From: from.Format(time.DateOnly), To: to.Format(time.DateOnly), Tips: counts,
 		Month: now.Format("2006-01"), Spend: spend,
 	})
 }
