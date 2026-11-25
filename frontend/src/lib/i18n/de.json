@@ -189,6 +189,10 @@
       "system": {
         "title": "Daten & System",
         "summary": "Sprache, Design, Einrichtung und Version"
+      },
+      "kitchen": {
+        "title": "Küche",
+        "summary": "Kochzeit, Können, Ausstattung und Vorräte zu Hause"
       }
     },
     "household": {
@@ -558,6 +562,71 @@
       },
       "violation": "{{rule}} × {{count}}",
       "scroll_hint": "Seitlich scrollen für weitere Spalten"
+    },
+    "kitchen": {
+      "time_group": "Kochzeit",
+      "kitchen_group": "Deine Küche",
+      "home_group": "Zu Hause",
+      "weekday_label": "Kochzeit unter der Woche",
+      "weekday_effect": "Plantry bevorzugt unter der Woche Rezepte mit bis zu {{count}} Minuten aktiver Kochzeit.",
+      "weekend_label": "Kochzeit am Wochenende",
+      "weekend_effect": "Bis zu {{count}} Minuten am Wochenende und an Tagen, an denen du für 3 oder mehr Mahlzeiten vorkochst.",
+      "minutes": "{{count}} Min.",
+      "skill_label": "Kochkönnen",
+      "skill_effect": {
+        "unknown": "Nicht festgelegt. Plantry geht von Hobbykoch aus.",
+        "beginner": "Plantry vermeidet anspruchsvolle Techniken.",
+        "home_cook": "Plantry plant alltägliche Kochtechniken.",
+        "confident": "Plantry plant auch anspruchsvolle Techniken."
+      },
+      "skill": {
+        "beginner": "Einsteiger",
+        "home_cook": "Hobbykoch",
+        "confident": "Erfahren"
+      },
+      "equipment_label": "Ausstattung",
+      "equipment_effect": "Plantry verlässt sich nur auf die angehakten Geräte. Ein Gerät ohne Haken gilt als nicht vorhanden.",
+      "tool": {
+        "oven": "Backofen",
+        "stovetop": "Herd",
+        "microwave": "Mikrowelle",
+        "air_fryer": "Heißluftfritteuse",
+        "pressure_cooker": "Schnellkochtopf",
+        "slow_cooker": "Slow Cooker",
+        "blender": "Standmixer",
+        "food_processor": "Küchenmaschine",
+        "stand_mixer": "Rührmaschine",
+        "wok": "Wok",
+        "grill": "Grill"
+      },
+      "heat_label": "Schärfe",
+      "heat_effect": {
+        "unknown": "Nicht festgelegt. Plantry plant ohne Schärfevorgabe.",
+        "none": "Plantry plant nichts Scharfes.",
+        "mild": "Plantry hält die Schärfe mild.",
+        "medium": "Plantry plant mäßig scharfe Gerichte.",
+        "hot": "Plantry plant auch richtig scharfe Gerichte."
+      },
+      "heat": {
+        "none": "Keine",
+        "mild": "Mild",
+        "medium": "Mittel",
+        "hot": "Scharf"
+      },
+      "leanings_label": "Geschmacksvorlieben",
+      "leanings_effect": "Bis zu {{max}} Geschmacksrichtungen, die du magst, etwa zitronig oder rauchig.",
+      "leanings_placeholder": "Eine Richtung, etwa zitronig",
+      "leanings_add": "Hinzufügen",
+      "leanings_remove": "{{tag}} entfernen",
+      "leanings_full": "Mehr als {{max}} gehen nicht. Entferne eine, um eine neue hinzuzufügen.",
+      "basics_label": "Vorräte zu Hause",
+      "basics_effect": "Zutaten, die du immer da hast. Auf der Einkaufsliste stehen sie eingeklappt unter Wahrscheinlich zu Hause.",
+      "basics_empty": "Noch keine Vorräte.",
+      "basics_remove": "{{name}} aus den Vorräten entfernen",
+      "basics_search_label": "Zutat hinzufügen",
+      "basics_search_placeholder": "In deinen Zutaten suchen",
+      "basics_add": "{{name}} zu den Vorräten hinzufügen",
+      "basics_no_match": "Keine Zutat gefunden."
     }
   },
   "settings": {
@@ -2198,7 +2267,14 @@
       "body": "Die Liste zeigt nur bestätigte Mahlzeiten. Nimm die Entwürfe dazu, um zu sehen, was sie brauchen, oder prüfe den Plan und übernimm ihn.",
       "include": "Essen aus dem Entwurf einbeziehen",
       "review": "Plan prüfen"
-    }
+    },
+    "at_home_group": "Wahrscheinlich zu Hause",
+    "always_at_home": "Immer zu Hause",
+    "not_always_at_home": "Nicht immer zu Hause",
+    "marked_at_home": "{{name}} ist jetzt immer zu Hause.",
+    "unmarked_at_home": "{{name}} ist nicht mehr immer zu Hause.",
+    "at_home_toggle_one": "Wahrscheinlich zu Hause, {{count}} Artikel",
+    "at_home_toggle_other": "Wahrscheinlich zu Hause, {{count}} Artikel"
   },
   "routines": {
     "new": "Neue Routine",

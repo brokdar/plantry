@@ -78,6 +78,10 @@ export const profileKeys = {
   detail: ["profile"] as const,
 }
 
+export const kitchenKeys = {
+  detail: ["kitchen"] as const,
+}
+
 export const presetKeys = {
   all: ["presets"] as const,
   lists: () => [...presetKeys.all, "list"] as const,

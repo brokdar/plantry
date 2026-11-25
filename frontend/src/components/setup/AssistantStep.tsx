@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next"
 
 import { AIProviderControls } from "@/components/settings/AIProviderControls"
 import { Switch } from "@/components/settings/controls"
+import { HeatPicker } from "@/components/settings/KitchenFields"
 import { Textarea } from "@/components/ui/textarea"
 import { useSettingItems } from "@/lib/queries/settings"
 
@@ -39,6 +40,19 @@ export function AssistantStep({
       <div className="border-b border-line py-5">
         <AIProviderControls variant="wizard" />
       </div>
+
+      <SetupField
+        label={t("settings_page.kitchen.heat_label")}
+        description={t(
+          `settings_page.kitchen.heat_effect.${value.heat ?? "unknown"}`
+        )}
+      >
+        <HeatPicker
+          name="setup-heat"
+          value={value.heat}
+          onChange={(heat) => set({ heat })}
+        />
+      </SetupField>
 
       <SetupField
         label={t("settings_page.assistant.notes_label")}

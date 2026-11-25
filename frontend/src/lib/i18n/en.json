@@ -189,6 +189,10 @@
       "system": {
         "title": "Data & system",
         "summary": "Language, theme, setup wizard and version"
+      },
+      "kitchen": {
+        "title": "Kitchen",
+        "summary": "Cooking time, skill, equipment and basics at home"
       }
     },
     "household": {
@@ -558,6 +562,71 @@
       },
       "violation": "{{rule}} × {{count}}",
       "scroll_hint": "Scroll sideways for more columns"
+    },
+    "kitchen": {
+      "time_group": "Cooking time",
+      "kitchen_group": "Your kitchen",
+      "home_group": "At home",
+      "weekday_label": "Cooking time on weekdays",
+      "weekday_effect": "Plantry prefers recipes with up to {{count}} minutes of active cooking on weekdays.",
+      "weekend_label": "Cooking time on weekends",
+      "weekend_effect": "Up to {{count}} minutes on weekends and on days you cook a batch for 3 or more meals.",
+      "minutes": "{{count}} min",
+      "skill_label": "Cooking skill",
+      "skill_effect": {
+        "unknown": "Not set. Plantry treats you as a home cook.",
+        "beginner": "Plantry avoids demanding techniques.",
+        "home_cook": "Plantry plans everyday cooking techniques.",
+        "confident": "Plantry also plans demanding techniques."
+      },
+      "skill": {
+        "beginner": "Beginner",
+        "home_cook": "Home cook",
+        "confident": "Confident"
+      },
+      "equipment_label": "Equipment",
+      "equipment_effect": "Plantry only counts on the tools you tick. A tool not ticked counts as missing.",
+      "tool": {
+        "oven": "Oven",
+        "stovetop": "Stovetop",
+        "microwave": "Microwave",
+        "air_fryer": "Air fryer",
+        "pressure_cooker": "Pressure cooker",
+        "slow_cooker": "Slow cooker",
+        "blender": "Blender",
+        "food_processor": "Food processor",
+        "stand_mixer": "Stand mixer",
+        "wok": "Wok",
+        "grill": "Grill"
+      },
+      "heat_label": "Spice tolerance",
+      "heat_effect": {
+        "unknown": "Not set. Plantry plans without a heat preference.",
+        "none": "Plantry plans nothing spicy.",
+        "mild": "Plantry keeps heat mild.",
+        "medium": "Plantry plans moderately spicy dishes.",
+        "hot": "Plantry also plans hot dishes."
+      },
+      "heat": {
+        "none": "None",
+        "mild": "Mild",
+        "medium": "Medium",
+        "hot": "Hot"
+      },
+      "leanings_label": "Flavour leanings",
+      "leanings_effect": "Up to {{max}} flavours you like, such as lemony or smoky.",
+      "leanings_placeholder": "A flavour, such as lemony",
+      "leanings_add": "Add",
+      "leanings_remove": "Remove {{tag}}",
+      "leanings_full": "That is the limit of {{max}}. Remove one to add another.",
+      "basics_label": "Basics at home",
+      "basics_effect": "Foods you always have. On the shopping list they sit in a collapsed group, Probably at home.",
+      "basics_empty": "No basics yet.",
+      "basics_remove": "Remove {{name}} from the basics",
+      "basics_search_label": "Add a food",
+      "basics_search_placeholder": "Search your ingredients",
+      "basics_add": "Add {{name}} to the basics",
+      "basics_no_match": "No ingredient found."
     }
   },
   "settings": {
@@ -2198,7 +2267,14 @@
       "body": "The list shows accepted plates only. Include the draft plates to see what they need, or review and accept the plan.",
       "include": "Include draft plates",
       "review": "Review plan"
-    }
+    },
+    "at_home_group": "Probably at home",
+    "always_at_home": "Always at home",
+    "not_always_at_home": "Not always at home",
+    "marked_at_home": "{{name}} is now always at home.",
+    "unmarked_at_home": "{{name}} is no longer always at home.",
+    "at_home_toggle_one": "Probably at home, {{count}} item",
+    "at_home_toggle_other": "Probably at home, {{count}} items"
   },
   "routines": {
     "new": "New routine",

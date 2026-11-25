@@ -72,6 +72,31 @@ func (r *ProfileRepo) Update(ctx context.Context, p *profile.Profile) (*profile.
 	return mapProfileToDomain(row), nil
 }
 
+func (r *ProfileRepo) UpdateKitchen(ctx context.Context, k profile.Kitchen) (*profile.Profile, error) {
+	equipment, err := json.Marshal(k.Equipment)
+	if err != nil {
+		return nil, err
+	}
+	leanings, err := json.Marshal(k.Leanings)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.queriesFor(ctx).UpdateKitchen(ctx, sqlcgen.UpdateKitchenParams{
+		MinutesWeekday: int64(k.MinutesWeekday),
+		MinutesWeekend: int64(k.MinutesWeekend),
+		Skill:          nullString(string(k.Skill)),
+		Equipment:      string(equipment),
+		Heat:           nullString(string(k.Heat)),
+		Leanings:       string(leanings),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mapProfileToDomain(row), nil
+}
+
+func nullString(s string) sql.NullString { return sql.NullString{String: s, Valid: s != ""} }
+
 func mapProfileToDomain(row sqlcgen.UserProfile) *profile.Profile {
 	p := &profile.Profile{
 		Locale:              row.Locale,
@@ -86,6 +111,14 @@ func mapProfileToDomain(row sqlcgen.UserProfile) *profile.Profile {
 		HeightCm:            fromNullFloat64(row.HeightCm),
 		BirthYear:           fromNullInt64ToIntPtr(row.BirthYear),
 		ActivityLevel:       fromNullFloat64(row.ActivityLevel),
+		Kitchen: profile.Kitchen{
+			MinutesWeekday: int(row.MinutesWeekday),
+			MinutesWeekend: int(row.MinutesWeekend),
+			Skill:          profile.Skill(row.Skill.String),
+			Heat:           profile.Heat(row.Heat.String),
+			Equipment:      []string{},
+			Leanings:       []string{},
+		},
 	}
 	if row.Sex.Valid {
 		v := profile.Sex(row.Sex.String)
@@ -115,6 +148,8 @@ func mapProfileToDomain(row sqlcgen.UserProfile) *profile.Profile {
 
 	_ = json.Unmarshal([]byte(row.DietaryRestrictions), &p.DietaryRestrictions)
 	_ = json.Unmarshal([]byte(row.Preferences), &p.Preferences)
+	_ = json.Unmarshal([]byte(row.Equipment), &p.Kitchen.Equipment)
+	_ = json.Unmarshal([]byte(row.Leanings), &p.Kitchen.Leanings)
 
 	p.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt)
 	return p

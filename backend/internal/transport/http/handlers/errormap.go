@@ -57,6 +57,7 @@ var sentinelStatus = map[error]int{
 	domain.ErrInvalidHouseholdPortions:  http.StatusBadRequest,
 	domain.ErrInvalidGoal:               http.StatusBadRequest,
 	domain.ErrInvalidBodyData:           http.StatusBadRequest,
+	domain.ErrInvalidKitchen:            http.StatusBadRequest,
 	domain.ErrKcalBelowFloor:            http.StatusBadRequest,
 	domain.ErrCellHasPlate:              http.StatusConflict,
 	domain.ErrPresetRequired:            http.StatusBadRequest,

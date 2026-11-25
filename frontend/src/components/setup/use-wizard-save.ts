@@ -2,8 +2,10 @@ import { useTranslation } from "react-i18next"
 
 import { gridValueToDefaults } from "@/lib/availability-grid"
 import { useSetAvailabilityDefaults } from "@/lib/queries/availability"
+import { useKitchen, usePatchKitchen } from "@/lib/queries/kitchen"
 import { usePatchProfile, useProfile } from "@/lib/queries/profile"
 import { useSetSetting, useSettingItems } from "@/lib/queries/settings"
+import type { Kitchen, KitchenSettings } from "@/lib/api/kitchen"
 import type { TimeSlot } from "@/lib/api/slots"
 import { useCreateTimeSlot, useUpdateTimeSlot } from "@/lib/queries/slots"
 import { NUTRITION_PRESETS } from "@/lib/nutrition-presets"
@@ -38,6 +40,8 @@ export function useWizardSave() {
   const setDefaults = useSetAvailabilityDefaults()
   const { data: stored } = useSettingItems()
   const { data: profile } = useProfile()
+  const { data: kitchen } = useKitchen()
+  const patchKitchen = usePatchKitchen()
 
   // Only values that differ from the stored ones are written, so accepting
   // a default doesn't turn it into a database override.
@@ -91,12 +95,29 @@ export function useWizardSave() {
     }
   }
 
+  // Like settings(), writes only what differs from the stored kitchen.
+  const kitchenPatch = (patch: Partial<KitchenSettings>) => {
+    const changed = Object.entries(patch).filter(
+      ([key, value]) =>
+        value !== null && kitchen?.[key as keyof Kitchen] !== value
+    )
+    return changed.length > 0
+      ? patchKitchen.mutateAsync(Object.fromEntries(changed))
+      : Promise.resolve()
+  }
+
   const saveCooking = (c: CookingDraft) =>
-    settings([
-      [SETTING_KEYS.occasions, String(c.occasions)],
-      [SETTING_KEYS.batch, String(c.batch)],
-      [SETTING_KEYS.keepDays, String(c.keepDays)],
-      [SETTING_KEYS.freezing, String(c.freezing)],
+    Promise.all([
+      kitchenPatch({
+        minutes_weekday: c.minutesWeekday,
+        minutes_weekend: c.minutesWeekend,
+      }),
+      settings([
+        [SETTING_KEYS.occasions, String(c.occasions)],
+        [SETTING_KEYS.batch, String(c.batch)],
+        [SETTING_KEYS.keepDays, String(c.keepDays)],
+        [SETTING_KEYS.freezing, String(c.freezing)],
+      ]),
     ])
 
   const saveVariety = (v: VarietyDraft) =>
@@ -112,6 +133,7 @@ export function useWizardSave() {
         system_prompt: a.notes.trim() === "" ? null : a.notes,
       }),
       settings([[SETTING_KEYS.daily, String(a.daily)]]),
+      kitchenPatch({ heat: a.heat }),
     ])
   }
 

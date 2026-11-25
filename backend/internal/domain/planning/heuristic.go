@@ -734,12 +734,44 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		// else qualifies.
 		atCap := h.x.mealOf(c.SlotID) == mealFull && h.dishFull(f.ID)
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
-			b2f(h.s.tooSlow(f, c)), b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
+			b2f(h.s.tooSlow(f, c)), b2f(h.overAllowance(f, c)), b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
 			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
 	return best(cands)
 }
+
+// batchPlates is the number of plates a recipe cooked on c would feed at most:
+// its reference portions over the eaters of the day (1 without batch cooking).
+// A cheap stand-in for cover, which the candidate loop cannot afford.
+func (h *planner) batchPlates(f FoodFacts, c plate.CellKey) int {
+	eaters := h.eaters(c.Date)
+	if !h.s.Settings.BatchCooking || eaters <= 0 {
+		return 1
+	}
+	return int((f.ReferencePortions + epsilon) / eaters)
+}
+
+// overAllowance reports whether cooking f on c takes longer than the kitchen's
+// time allowance (KIT-1): the weekday one, the weekend one on Saturday and
+// Sunday and on a batch cook day (a recipe for at least 3 plates). A soft
+// preference only: it ranks below the wish's hard limit and above the rest.
+// Unknown minutes never exceed it.
+func (h *planner) overAllowance(f FoodFacts, c plate.CellKey) bool {
+	p := h.s.Profile
+	if !f.Composed() || f.Minutes <= 0 || p.MinutesWeekday == 0 {
+		return false
+	}
+	limit := p.MinutesWeekday
+	if wd := c.Date.Weekday(); wd == time.Saturday || wd == time.Sunday || h.batchPlates(f, c) >= batchDayPlates {
+		limit = p.MinutesWeekend
+	}
+	return f.Minutes > limit
+}
+
+// batchDayPlates is the plates a session must feed to count as a batch cook
+// day (KIT-1).
+const batchDayPlates = 3
 
 // pairInPlanner turns the add-on pairing rules on in the planner's own top-ups (tests switch it off
 // to measure what it changes).

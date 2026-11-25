@@ -235,6 +235,10 @@ type Profile struct {
 	WeightKg      *float64
 	BirthYear     *int
 	ProteinGPerKg *float64
+	// MinutesWeekday and MinutesWeekend are the cooking time allowances (KIT-1);
+	// 0 means no allowance (a hand-built State).
+	MinutesWeekday int
+	MinutesWeekend int
 	// Locale is the language of the chooser's reasons and notes.
 	Locale string
 	// Restrictions and Notes (the user's notes to the assistant) are free

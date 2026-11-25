@@ -3,6 +3,7 @@ import type { TFunction } from "i18next"
 import type { AvailabilityGridValue } from "@/components/availability/AvailabilityGrid"
 import { defaultsToGridValue } from "@/lib/availability-grid"
 import type { AvailabilityDefault } from "@/lib/api/availability"
+import type { Heat, Kitchen } from "@/lib/api/kitchen"
 import type { DietType, Profile } from "@/lib/api/profile"
 import type { SettingItem } from "@/lib/api/settings"
 import type { SlotKind, TimeSlot } from "@/lib/api/slots"
@@ -50,6 +51,9 @@ export interface CookingDraft {
   batch: boolean
   keepDays: number
   freezing: boolean
+  /** The kitchen's cooking time allowances (KIT-1). */
+  minutesWeekday: number
+  minutesWeekend: number
 }
 
 export interface VarietyDraft {
@@ -61,6 +65,8 @@ export interface VarietyDraft {
 export interface AssistantDraft {
   notes: string
   daily: boolean
+  /** null while unknown (KIT-5). */
+  heat: Heat | null
 }
 
 export interface WizardDraft {
@@ -81,6 +87,8 @@ export const COOKING_DEFAULTS: CookingDraft = {
   batch: true,
   keepDays: 3,
   freezing: false,
+  minutesWeekday: 30,
+  minutesWeekend: 60,
 }
 
 export const VARIETY_DEFAULTS: VarietyDraft = {
@@ -131,12 +139,14 @@ export function toLanguage(lang: string | undefined): Language {
 export function buildDraft({
   language,
   profile,
+  kitchen,
   settings,
   slots,
   defaults,
 }: {
   language: string
   profile: Profile
+  kitchen: Kitchen
   settings: Record<string, SettingItem>
   slots: TimeSlot[]
   defaults: AvailabilityDefault[]
@@ -190,6 +200,8 @@ export function buildDraft({
       batch: bool(SETTING_KEYS.batch, COOKING_DEFAULTS.batch),
       keepDays: num(SETTING_KEYS.keepDays, COOKING_DEFAULTS.keepDays),
       freezing: bool(SETTING_KEYS.freezing, COOKING_DEFAULTS.freezing),
+      minutesWeekday: kitchen.minutes_weekday,
+      minutesWeekend: kitchen.minutes_weekend,
     },
     variety: {
       varietyWeeks: num(
@@ -210,6 +222,7 @@ export function buildDraft({
     assistant: {
       notes: profile.system_prompt ?? "",
       daily: bool(SETTING_KEYS.daily, true),
+      heat: kitchen.heat,
     },
   }
 }

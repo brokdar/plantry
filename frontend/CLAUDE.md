@@ -51,7 +51,7 @@ src/routes/
 ├── shop/              # `/shop?from&to&drafts` — Shop (components/shop); without a range, the server's
 │                      #   default for the anchored window; `drafts=1` includes draft plates
 └── settings/          # index.tsx: `/settings` (section list on phone, else redirects);
-                       #   $section.tsx: `/settings/$section` (household, meals, cooking,
+                       #   $section.tsx: `/settings/$section` (household, meals, cooking, kitchen,
                        #   assistant, system — `settings-sections.ts`); assistant/insights.tsx:
                        #   `/settings/assistant/insights?run=` (static, beats $section; D37)
 ```

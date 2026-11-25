@@ -15,6 +15,8 @@ type Querier interface {
 	// before the plate's first accept or confirm event: a user update or delete,
 	// or an agent update or delete made by another run.
 	AIRunCorrections(ctx context.Context, arg AIRunCorrectionsParams) ([]AIRunCorrectionsRow, error)
+	AddBasicAtHome(ctx context.Context, foodID int64) error
+	AddNeverItem(ctx context.Context, foodID int64) error
 	AddPresetTag(ctx context.Context, arg AddPresetTagParams) error
 	// D11: the agent runs that wrote to the given plates or sessions since the
 	// row's last accept/confirm. A live accept/confirm (no later unlock) is not a
@@ -141,6 +143,7 @@ type Querier interface {
 	ListActiveTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	ListAvailabilityDefaults(ctx context.Context) ([]ListAvailabilityDefaultsRow, error)
 	ListAvailabilityOverridesByRange(ctx context.Context, arg ListAvailabilityOverridesByRangeParams) ([]ListAvailabilityOverridesByRangeRow, error)
+	ListBasicsAtHome(ctx context.Context) ([]ListBasicsAtHomeRow, error)
 	ListChildrenByParents(ctx context.Context, parentIds []int64) ([]ListChildrenByParentsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error)
 	ListCookSessionLinks(ctx context.Context, cookSessionID sql.NullInt64) ([]ListCookSessionLinksRow, error)
@@ -166,6 +169,7 @@ type Querier interface {
 	// cell, eaters and state: the ingredient sources of a shopping list.
 	ListLeafPlateComponentsInRange(ctx context.Context, arg ListLeafPlateComponentsInRangeParams) ([]ListLeafPlateComponentsInRangeRow, error)
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
+	ListNeverItems(ctx context.Context) ([]ListNeverItemsRow, error)
 	ListPlanLight(ctx context.Context, arg ListPlanLightParams) ([]PlanLight, error)
 	ListPlateComponentsByDateRange(ctx context.Context, arg ListPlateComponentsByDateRangeParams) ([]ListPlateComponentsByDateRangeRow, error)
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error)
@@ -209,6 +213,8 @@ type Querier interface {
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
 	RecoverChefJobs(ctx context.Context, arg RecoverChefJobsParams) (int64, error)
 	ReinsertPlate(ctx context.Context, arg ReinsertPlateParams) error
+	RemoveBasicAtHome(ctx context.Context, foodID int64) error
+	RemoveNeverItem(ctx context.Context, foodID int64) error
 	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
 	SetConversationContainer(ctx context.Context, arg SetConversationContainerParams) (sql.Result, error)
 	// D11: any suggestion accepted -> accepted; all rejected -> discarded; else
@@ -245,6 +251,7 @@ type Querier interface {
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (AiConversation, error)
 	UpdateCookSession(ctx context.Context, arg UpdateCookSessionParams) (CookSession, error)
 	UpdateFood(ctx context.Context, arg UpdateFoodParams) (Food, error)
+	UpdateKitchen(ctx context.Context, arg UpdateKitchenParams) (UserProfile, error)
 	UpdatePlate(ctx context.Context, arg UpdatePlateParams) (Plate, error)
 	UpdatePlateComponent(ctx context.Context, arg UpdatePlateComponentParams) (PlateComponent, error)
 	UpdatePresetName(ctx context.Context, arg UpdatePresetNameParams) (Preset, error)

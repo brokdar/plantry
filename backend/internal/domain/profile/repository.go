@@ -6,4 +6,5 @@ import "context"
 type Repository interface {
 	Get(ctx context.Context) (*Profile, error)
 	Update(ctx context.Context, p *Profile) (*Profile, error)
+	UpdateKitchen(ctx context.Context, k Kitchen) (*Profile, error)
 }

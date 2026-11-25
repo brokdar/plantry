@@ -11,7 +11,7 @@ import (
 )
 
 const getProfile = `-- name: GetProfile :one
-SELECT id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at, diet_type, meat_days_per_week_max, household_portions, goal, weight_kg, height_cm, birth_year, sex, activity_level, protein_g_per_kg FROM user_profile WHERE id = 1
+SELECT id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at, diet_type, meat_days_per_week_max, household_portions, goal, weight_kg, height_cm, birth_year, sex, activity_level, protein_g_per_kg, minutes_weekday, minutes_weekend, skill, equipment, heat, leanings FROM user_profile WHERE id = 1
 `
 
 func (q *Queries) GetProfile(ctx context.Context) (UserProfile, error) {
@@ -38,6 +38,75 @@ func (q *Queries) GetProfile(ctx context.Context) (UserProfile, error) {
 		&i.Sex,
 		&i.ActivityLevel,
 		&i.ProteinGPerKg,
+		&i.MinutesWeekday,
+		&i.MinutesWeekend,
+		&i.Skill,
+		&i.Equipment,
+		&i.Heat,
+		&i.Leanings,
+	)
+	return i, err
+}
+
+const updateKitchen = `-- name: UpdateKitchen :one
+UPDATE user_profile
+SET minutes_weekday = ?,
+    minutes_weekend = ?,
+    skill           = ?,
+    equipment       = ?,
+    heat            = ?,
+    leanings        = ?,
+    updated_at      = datetime('now')
+WHERE id = 1
+RETURNING id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at, diet_type, meat_days_per_week_max, household_portions, goal, weight_kg, height_cm, birth_year, sex, activity_level, protein_g_per_kg, minutes_weekday, minutes_weekend, skill, equipment, heat, leanings
+`
+
+type UpdateKitchenParams struct {
+	MinutesWeekday int64
+	MinutesWeekend int64
+	Skill          sql.NullString
+	Equipment      string
+	Heat           sql.NullString
+	Leanings       string
+}
+
+func (q *Queries) UpdateKitchen(ctx context.Context, arg UpdateKitchenParams) (UserProfile, error) {
+	row := q.db.QueryRowContext(ctx, updateKitchen,
+		arg.MinutesWeekday,
+		arg.MinutesWeekend,
+		arg.Skill,
+		arg.Equipment,
+		arg.Heat,
+		arg.Leanings,
+	)
+	var i UserProfile
+	err := row.Scan(
+		&i.ID,
+		&i.KcalTarget,
+		&i.ProteinPct,
+		&i.FatPct,
+		&i.CarbsPct,
+		&i.DietaryRestrictions,
+		&i.Preferences,
+		&i.SystemPrompt,
+		&i.Locale,
+		&i.UpdatedAt,
+		&i.DietType,
+		&i.MeatDaysPerWeekMax,
+		&i.HouseholdPortions,
+		&i.Goal,
+		&i.WeightKg,
+		&i.HeightCm,
+		&i.BirthYear,
+		&i.Sex,
+		&i.ActivityLevel,
+		&i.ProteinGPerKg,
+		&i.MinutesWeekday,
+		&i.MinutesWeekend,
+		&i.Skill,
+		&i.Equipment,
+		&i.Heat,
+		&i.Leanings,
 	)
 	return i, err
 }
@@ -64,7 +133,7 @@ SET kcal_target           = ?,
     activity_level        = ?,
     updated_at            = datetime('now')
 WHERE id = 1
-RETURNING id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at, diet_type, meat_days_per_week_max, household_portions, goal, weight_kg, height_cm, birth_year, sex, activity_level, protein_g_per_kg
+RETURNING id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at, diet_type, meat_days_per_week_max, household_portions, goal, weight_kg, height_cm, birth_year, sex, activity_level, protein_g_per_kg, minutes_weekday, minutes_weekend, skill, equipment, heat, leanings
 `
 
 type UpsertProfileParams struct {
@@ -131,6 +200,12 @@ func (q *Queries) UpsertProfile(ctx context.Context, arg UpsertProfileParams) (U
 		&i.Sex,
 		&i.ActivityLevel,
 		&i.ProteinGPerKg,
+		&i.MinutesWeekday,
+		&i.MinutesWeekend,
+		&i.Skill,
+		&i.Equipment,
+		&i.Heat,
+		&i.Leanings,
 	)
 	return i, err
 }

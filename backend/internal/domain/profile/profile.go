@@ -28,7 +28,10 @@ type Profile struct {
 	BirthYear     *int
 	Sex           *Sex
 	ActivityLevel *float64 // PAL: 1.4, 1.6 or 1.8
-	UpdatedAt     time.Time
+	// Kitchen is edited on its own (Service.UpdateKitchen); Update and
+	// Replace leave it as stored.
+	Kitchen   Kitchen
+	UpdatedAt time.Time
 }
 
 // DietType is the household's base diet.

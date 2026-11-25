@@ -9,6 +9,7 @@ import type {
   Suggestion,
 } from "@/lib/api/discovery"
 import type { Insights } from "@/lib/api/insights"
+import type { Kitchen } from "@/lib/api/kitchen"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
 import type { Plan, PlanCell, ReplanPreview } from "@/lib/api/plan"
 import type { PriceInfo } from "@/lib/api/prices"
@@ -322,6 +323,16 @@ export const mockProfile: Profile = {
   sex: null,
   activity_level: null,
   updated_at: "2026-01-01T00:00:00Z",
+}
+
+export const mockKitchen: Kitchen = {
+  minutes_weekday: 30,
+  minutes_weekend: 60,
+  skill: null,
+  equipment: ["oven", "stovetop"],
+  heat: null,
+  leanings: [],
+  basics: [],
 }
 
 export function mockSettingItem(

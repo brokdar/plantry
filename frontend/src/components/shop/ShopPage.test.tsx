@@ -6,7 +6,7 @@ import { useState } from "react"
 import { ApiError } from "@/lib/api/client"
 import type { ShoppingList } from "@/lib/api/shopping"
 import i18n from "@/lib/i18n"
-import { mockPlan, mockShoppingList } from "@/test/fixtures"
+import { mockKitchen, mockPlan, mockShoppingList } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
 
 vi.mock("@/lib/api/shopping", async (importOriginal) => ({
@@ -18,6 +18,12 @@ vi.mock("@/lib/api/plan", () => ({
   clearPlan: vi.fn(),
   restorePlan: vi.fn(),
 }))
+vi.mock("@/lib/api/kitchen", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/kitchen")>()),
+  getKitchen: vi.fn(),
+  addBasic: vi.fn(),
+  removeBasic: vi.fn(),
+}))
 vi.mock("@/lib/api/foods", () => ({
   getFood: vi.fn(),
   setShopSection: vi.fn(),
@@ -28,6 +34,7 @@ const toastMock = vi.hoisted(() =>
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
 import { getFood, setShopSection } from "@/lib/api/foods"
+import { addBasic, getKitchen, removeBasic } from "@/lib/api/kitchen"
 import { getPlan } from "@/lib/api/plan"
 import { getShoppingList } from "@/lib/api/shopping"
 
@@ -65,7 +72,82 @@ describe("ShopPage", () => {
     vi.clearAllMocks()
     localStorage.clear()
     vi.mocked(getPlan).mockResolvedValue(mockPlan)
+    vi.mocked(getKitchen).mockResolvedValue(mockKitchen)
+    vi.mocked(addBasic).mockResolvedValue(undefined)
+    vi.mocked(removeBasic).mockResolvedValue(undefined)
     await i18n.changeLanguage("en")
+  })
+
+  // KIT-4: the basics at home sit in a collapsed group, out of the count.
+  it("moves a basic to a collapsed Probably at home group and leaves it out of the count", async () => {
+    vi.mocked(getKitchen).mockResolvedValue({
+      ...mockKitchen,
+      basics: [{ id: 50, name: "Kidney beans" }],
+    })
+    const user = userEvent.setup()
+    renderShop()
+    const toggle = await screen.findByRole("button", {
+      name: "Probably at home, 1 item",
+    })
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByText("Kidney beans")).toBeNull()
+    expect(screen.getByTestId("shop-count")).toHaveTextContent(
+      "1 item · 0 ticked"
+    )
+    await user.click(toggle)
+    const home = screen.getByTestId("shop-at-home")
+    expect(within(home).getByText("Kidney beans")).toBeInTheDocument()
+    expect(within(section("Produce")).getByText("Onion")).toBeInTheDocument()
+  })
+
+  it("has no group while nothing on the list is a basic", async () => {
+    renderShop()
+    await screen.findByText("Onion")
+    expect(screen.queryByTestId("shop-at-home")).toBeNull()
+  })
+
+  it("Always at home marks the food, with Undo", async () => {
+    const user = userEvent.setup()
+    renderShop()
+    await screen.findByText("Onion")
+    await user.click(screen.getByRole("button", { name: "Options for Onion" }))
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Always at home" })
+    )
+    await waitFor(() => expect(addBasic).toHaveBeenCalledWith(51))
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        "Onion is now always at home.",
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Undo" }),
+        })
+      )
+    )
+    const [, options] = toastMock.mock.calls[0] as [
+      string,
+      { action: { onClick: () => void } },
+    ]
+    options.action.onClick()
+    await waitFor(() => expect(removeBasic).toHaveBeenCalledWith(51))
+  })
+
+  it("a food in the group offers Not always at home", async () => {
+    vi.mocked(getKitchen).mockResolvedValue({
+      ...mockKitchen,
+      basics: [{ id: 50, name: "Kidney beans" }],
+    })
+    const user = userEvent.setup()
+    renderShop()
+    await user.click(
+      await screen.findByRole("button", { name: "Probably at home, 1 item" })
+    )
+    await user.click(
+      screen.getByRole("button", { name: "Options for Kidney beans" })
+    )
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Not always at home" })
+    )
+    await waitFor(() => expect(removeBasic).toHaveBeenCalledWith(50))
   })
 
   it("shows the range and the item count in the header", async () => {
