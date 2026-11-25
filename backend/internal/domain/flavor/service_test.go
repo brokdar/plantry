@@ -2,6 +2,7 @@ package flavor_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,12 +22,13 @@ type serviceRig struct {
 	foods  *sqlite.FoodRepo
 	store  *sqlite.FoodAttributeRepo
 	leaves map[string]int64
+	db     *sql.DB
 }
 
 func newServiceRig(t *testing.T) *serviceRig {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
-	r := &serviceRig{foods: sqlite.NewFoodRepo(db), store: sqlite.NewFoodAttributeRepo(db), leaves: map[string]int64{}}
+	r := &serviceRig{foods: sqlite.NewFoodRepo(db), store: sqlite.NewFoodAttributeRepo(db), leaves: map[string]int64{}, db: db}
 	restorers := map[foodevent.Kind]foodevent.Restorer{}
 	r.events = foodevent.NewService(sqlite.NewTxRunner(db), sqlite.NewFoodEventRepo(db), restorers, nil)
 	r.svc = flavor.NewService(r.store, r.foods, food.NewNutritionResolver(r.foods), r.events)

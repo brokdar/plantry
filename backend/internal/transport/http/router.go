@@ -287,6 +287,8 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 
 		if h.Chef != nil {
 			api.Get("/chef/spend", h.Chef.Spend)
+			api.Get("/chef/labelling", h.Chef.LabellingEstimate)
+			api.Post("/chef/labelling", h.Chef.LabelLibrary)
 		}
 
 		if h.Shopping != nil {

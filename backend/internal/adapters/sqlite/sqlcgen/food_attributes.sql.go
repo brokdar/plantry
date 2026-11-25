@@ -77,6 +77,41 @@ func (q *Queries) ListFoodAttributes(ctx context.Context, ids []int64) ([]FoodAt
 	return items, nil
 }
 
+const listUnlabelledRecipeIDs = `-- name: ListUnlabelledRecipeIDs :many
+SELECT f.id FROM foods f
+WHERE f.kind = 'composed'
+  AND EXISTS (SELECT 1 FROM food_components c WHERE c.parent_id = f.id)
+  AND NOT EXISTS (
+      SELECT 1 FROM food_attributes a
+      WHERE a.food_id = f.id AND a.sources_json LIKE '%"auto"%')
+ORDER BY f.id
+`
+
+// Composed foods with at least one ingredient whose stored attributes hold
+// no assistant (auto) value: what the library labelling pass labels.
+func (q *Queries) ListUnlabelledRecipeIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listUnlabelledRecipeIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertFoodAttributes = `-- name: UpsertFoodAttributes :exec
 INSERT INTO food_attributes (food_id, version, values_json, sources_json)
 VALUES (?, ?, ?, ?)

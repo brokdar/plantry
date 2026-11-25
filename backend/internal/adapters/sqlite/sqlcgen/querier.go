@@ -203,6 +203,9 @@ type Querier interface {
 	// none. The variety rule H8 counts them (D21). The eaten set is one
 	// uncorrelated scan of the date range (ix_plates_date).
 	ListUneatenRecipes(ctx context.Context, arg ListUneatenRecipesParams) ([]ListUneatenRecipesRow, error)
+	// Composed foods with at least one ingredient whose stored attributes hold
+	// no assistant (auto) value: what the library labelling pass labels.
+	ListUnlabelledRecipeIDs(ctx context.Context) ([]int64, error)
 	// Scans plate_events without a date/actor index: fine for a single-user audit
 	// table. Newest first so the cap drops the oldest rows.
 	ListUserPlateUpdates(ctx context.Context, arg ListUserPlateUpdatesParams) ([]ListUserPlateUpdatesRow, error)
