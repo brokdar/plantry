@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import type { Food } from "@/lib/api/foods"
 import { batchBadgeText, coverageText } from "@/lib/plan/format"
 import { useFood, useScaled } from "@/lib/queries/foods"
+import { useSettingItems } from "@/lib/queries/settings"
 import { useSession, useSetSessionCooked } from "@/lib/queries/sessions"
 import { useTimeSlots } from "@/lib/queries/slots"
 import { slotLabel } from "@/lib/slot-label"
@@ -174,7 +175,9 @@ export function CookRecipePage({
  *  extras with their grams for all eaters of each plate, one line each. */
 function useFinishingTouches(links: readonly SessionLink[]): string[] {
   const { t } = useTranslation()
-  const ids = [...new Set(links.map((l) => l.plate_id))]
+  // Chef off, no new UI: the list (and its plate reads) exist only while on.
+  const chefOn = useSettingItems().data?.["chef.enabled"]?.value === "true"
+  const ids = chefOn ? [...new Set(links.map((l) => l.plate_id))] : []
   const plates = useQueries({
     queries: ids.map((id) => ({
       queryKey: [...planKeys.all, "plate", id] as const,

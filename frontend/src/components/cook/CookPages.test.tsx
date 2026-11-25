@@ -10,6 +10,7 @@ import {
   mockPlateComponent,
   mockScaled,
   mockSession,
+  mockSettingsList,
   mockTimeSlots,
 } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
@@ -25,10 +26,12 @@ vi.mock("@/lib/api/foods", () => ({
 }))
 vi.mock("@/lib/api/slots", () => ({ listTimeSlots: vi.fn() }))
 vi.mock("@/lib/api/plates", () => ({ getPlate: vi.fn() }))
+vi.mock("@/lib/api/settings", () => ({ listSettings: vi.fn() }))
 vi.mock("@/lib/toast", () => ({ toast: vi.fn(), toastError: vi.fn() }))
 
 import { getFood, getScaled } from "@/lib/api/foods"
 import { getPlate } from "@/lib/api/plates"
+import { listSettings } from "@/lib/api/settings"
 import { getSession, setSessionCooked, updateSession } from "@/lib/api/sessions"
 import { listTimeSlots } from "@/lib/api/slots"
 
@@ -71,6 +74,9 @@ describe("cook pages", () => {
     vi.mocked(getScaled).mockImplementation(scaledFor)
     vi.mocked(listTimeSlots).mockResolvedValue({ items: mockTimeSlots })
     vi.mocked(getSession).mockResolvedValue(mockSession)
+    vi.mocked(listSettings).mockResolvedValue(
+      mockSettingsList([{ key: "chef.enabled", value: "true", source: "db" }])
+    )
     vi.mocked(getPlate).mockImplementation(async (id) => mockPlate({ id }))
     vi.mocked(updateSession).mockImplementation(async (_id, input) => ({
       ...mockSession,
@@ -225,6 +231,30 @@ describe("cook pages", () => {
     expect(finish).toHaveTextContent("Lime wedges, 30 g")
     expect(getPlate).toHaveBeenCalledWith(1)
     expect(getPlate).toHaveBeenCalledWith(2)
+  })
+
+  it("shows no finish list while the Chef is off", async () => {
+    vi.mocked(listSettings).mockResolvedValue(mockSettingsList())
+    vi.mocked(getPlate).mockImplementation(async (id) =>
+      mockPlate({
+        id,
+        components: [
+          mockPlateComponent({
+            id: 60 + id,
+            plate_id: id,
+            food_name: "Lime wedges",
+            kind: "leaf",
+            position: "extra",
+            grams: 10,
+          }),
+        ],
+      })
+    )
+    renderWithRouter(<CookSessionPage sessionId={7} />)
+    await screen.findAllByTestId("cook-ingredient")
+    await waitFor(() => expect(listSettings).toHaveBeenCalled())
+    expect(screen.queryByTestId("cook-finish")).toBeNull()
+    expect(getPlate).not.toHaveBeenCalled()
   })
 
   it("shows no finish list without garnishes", async () => {

@@ -2,7 +2,9 @@ package tips_test
 
 import (
 	"context"
+	"errors"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,17 +22,22 @@ import (
 
 // memStore is an in-memory tips.Store.
 type memStore struct {
+	mu        sync.Mutex
 	tips      []tips.Tip
 	dismissed []tips.Dismissal
 }
 
 func (m *memStore) Create(_ context.Context, t *tips.Tip) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	t.ID = int64(len(m.tips) + 1)
 	m.tips = append(m.tips, *t)
 	return nil
 }
 
 func (m *memStore) Get(_ context.Context, id int64) (tips.Tip, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for _, t := range m.tips {
 		if t.ID == id {
 			return t, nil
@@ -40,6 +47,8 @@ func (m *memStore) Get(_ context.Context, id int64) (tips.Tip, error) {
 }
 
 func (m *memStore) Window(_ context.Context, start time.Time) ([]tips.Tip, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	var out []tips.Tip
 	for _, t := range m.tips {
 		if t.WindowStart.Equal(start) {
@@ -50,6 +59,8 @@ func (m *memStore) Window(_ context.Context, start time.Time) ([]tips.Tip, error
 }
 
 func (m *memStore) SetState(_ context.Context, id int64, st tips.State, at time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for i := range m.tips {
 		if m.tips[i].ID == id {
 			m.tips[i].State, m.tips[i].UpdatedAt = st, at
@@ -81,6 +92,7 @@ func (m *memStore) CountByState(context.Context, time.Time, time.Time) (map[tips
 
 // fakePlates records the Apply calls.
 type fakePlates struct {
+	mu      sync.Mutex // Recorded serializes like a transaction
 	added   []plate.PlateComponent
 	swapped [][2]int64
 }
@@ -90,6 +102,8 @@ func (f *fakePlates) Get(_ context.Context, id int64) (*plate.Plate, error) {
 }
 
 func (f *fakePlates) Recorded(ctx context.Context, fn func(ctx context.Context) error) (plate.Undo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if err := fn(ctx); err != nil {
 		return plate.Undo{}, err
 	}
@@ -346,6 +360,54 @@ func TestApply_UndoShowsTipAgain(t *testing.T) {
 	v, _ = svc.Sync(ctx, start)
 	if v.Tips[0].State != tips.StateShown {
 		t.Fatalf("tip after undo: %+v", v.Tips[0])
+	}
+}
+
+func TestSync_ConcurrentCallsTipEachPlateOnce(t *testing.T) {
+	t.Parallel()
+	f := newFixture()
+	svc := f.svc()
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			if _, err := svc.Sync(context.Background(), start); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	seen := map[int64]int{}
+	for _, tp := range f.store.tips {
+		seen[*tp.PlateID]++
+	}
+	if len(f.store.tips) != tips.MaxPerWindow || len(seen) != tips.MaxPerWindow {
+		t.Fatalf("%d tips on plates %v, want one each on %d plates", len(f.store.tips), seen, tips.MaxPerWindow)
+	}
+}
+
+func TestApply_ConcurrentDoubleApplyAddsOnce(t *testing.T) {
+	t.Parallel()
+	f := newFixture()
+	ctx := context.Background()
+	svc := f.svc()
+	v, _ := svc.Sync(ctx, start)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	ok := 0
+	for range 2 {
+		wg.Go(func() {
+			if _, err := svc.Apply(ctx, v.Tips[0].ID); err == nil {
+				mu.Lock()
+				ok++
+				mu.Unlock()
+			} else if !errors.Is(err, tips.ErrStale) {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	if ok != 1 || len(f.plates.added) != 1 {
+		t.Fatalf("%d applies succeeded, garnish added %d times, want 1 and 1", ok, len(f.plates.added))
 	}
 }
 

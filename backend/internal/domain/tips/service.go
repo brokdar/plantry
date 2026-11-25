@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -118,7 +119,12 @@ type Deps struct {
 }
 
 // Service computes, stores, applies and dismisses tips.
-type Service struct{ d Deps }
+type Service struct {
+	d Deps
+	// syncMu serializes Sync: it reads the stored tips and then creates, so
+	// overlapping requests would tip one plate twice (one process, one user).
+	syncMu sync.Mutex
+}
 
 // NewService creates a Service.
 func NewService(d Deps) *Service {
@@ -181,6 +187,8 @@ type planPlate struct {
 // holds is withdrawn, an applied tip whose change is gone again (Undo) is
 // shown again, and plates without a tip get one within the limits.
 func (s *Service) Sync(ctx context.Context, date time.Time) (View, error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
 	on, err := s.d.ChefOn(ctx)
 	if err != nil || !on {
 		return View{}, err
@@ -552,6 +560,13 @@ func (s *Service) Apply(ctx context.Context, id int64) (plate.Undo, error) {
 		return plate.Undo{}, err
 	}
 	return s.d.Plates.Recorded(ctx, func(ctx context.Context) error {
+		// Re-read inside the transaction: a second Apply (another tab) that
+		// waited for this one must find the tip applied and refuse.
+		if cur, err := s.d.Store.Get(ctx, id); err != nil {
+			return err
+		} else if cur.State != StateShown {
+			return ErrStale
+		}
 		switch t.Op.Action {
 		case "add":
 			g, unit := t.Op.Grams, "g"
