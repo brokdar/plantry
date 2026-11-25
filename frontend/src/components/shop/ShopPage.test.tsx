@@ -86,7 +86,11 @@ describe("ShopPage", () => {
     })
     const user = userEvent.setup()
     renderShop()
-    const toggle = await screen.findByRole("button", {
+    // Wait on the cheap test id (the group appears once the kitchen query
+    // resolves); a findByRole poll walks the whole tree and can outlast its
+    // timeout on a loaded 4-vCPU runner.
+    await screen.findByTestId("shop-at-home")
+    const toggle = screen.getByRole("button", {
       name: "Probably at home, 1 item",
     })
     expect(toggle).toHaveAttribute("aria-expanded", "false")
@@ -138,8 +142,9 @@ describe("ShopPage", () => {
     })
     const user = userEvent.setup()
     renderShop()
+    await screen.findByTestId("shop-at-home")
     await user.click(
-      await screen.findByRole("button", { name: "Probably at home, 1 item" })
+      screen.getByRole("button", { name: "Probably at home, 1 item" })
     )
     await user.click(
       screen.getByRole("button", { name: "Options for Kidney beans" })
