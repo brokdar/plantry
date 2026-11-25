@@ -28,6 +28,7 @@ type Querier interface {
 	// Undoes SetFoodImageIfNone: clears the image only while it is still path.
 	ClearFoodImage(ctx context.Context, arg ClearFoodImageParams) (int64, error)
 	ClearShownOn(ctx context.Context, shownOn sql.NullString) error
+	CountChefTipsCreatedBetween(ctx context.Context, arg CountChefTipsCreatedBetweenParams) ([]CountChefTipsCreatedBetweenRow, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
 	// What a generation run wrote that still exists (B6).
@@ -38,6 +39,7 @@ type Querier interface {
 	CreateAIChange(ctx context.Context, arg CreateAIChangeParams) (AiChange, error)
 	CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64, error)
 	CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams) error
+	CreateChefTip(ctx context.Context, arg CreateChefTipParams) (int64, error)
 	CreateConversation(ctx context.Context, title sql.NullString) (AiConversation, error)
 	CreateCookSession(ctx context.Context, arg CreateCookSessionParams) (CookSession, error)
 	CreateFood(ctx context.Context, arg CreateFoodParams) (Food, error)
@@ -104,6 +106,7 @@ type Querier interface {
 	GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailRow, error)
 	GetAvailabilityDefault(ctx context.Context, arg GetAvailabilityDefaultParams) (GetAvailabilityDefaultRow, error)
 	GetAvailabilityOverride(ctx context.Context, arg GetAvailabilityOverrideParams) (GetAvailabilityOverrideRow, error)
+	GetChefTip(ctx context.Context, id int64) (ChefTip, error)
 	GetConversation(ctx context.Context, id int64) (AiConversation, error)
 	GetCookSession(ctx context.Context, id int64) (CookSession, error)
 	GetDiscoveryRun(ctx context.Context, id int64) (GetDiscoveryRunRow, error)
@@ -145,6 +148,8 @@ type Querier interface {
 	ListAvailabilityDefaults(ctx context.Context) ([]ListAvailabilityDefaultsRow, error)
 	ListAvailabilityOverridesByRange(ctx context.Context, arg ListAvailabilityOverridesByRangeParams) ([]ListAvailabilityOverridesByRangeRow, error)
 	ListBasicsAtHome(ctx context.Context) ([]ListBasicsAtHomeRow, error)
+	ListChefTipsByWindow(ctx context.Context, windowStart string) ([]ChefTip, error)
+	ListChefTipsDismissedSince(ctx context.Context, updatedAt string) ([]ListChefTipsDismissedSinceRow, error)
 	ListChildrenByParents(ctx context.Context, parentIds []int64) ([]ListChildrenByParentsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error)
 	ListCookSessionLinks(ctx context.Context, cookSessionID sql.NullInt64) ([]ListCookSessionLinksRow, error)
@@ -221,6 +226,7 @@ type Querier interface {
 	RemoveBasicAtHome(ctx context.Context, foodID int64) error
 	RemoveNeverItem(ctx context.Context, foodID int64) error
 	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
+	SetChefTipState(ctx context.Context, arg SetChefTipStateParams) error
 	SetConversationContainer(ctx context.Context, arg SetConversationContainerParams) (sql.Result, error)
 	// D11: any suggestion accepted -> accepted; all rejected -> discarded; else
 	// open. A run without suggestions keeps NULL.
