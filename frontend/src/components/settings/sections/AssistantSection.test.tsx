@@ -137,7 +137,7 @@ describe("AssistantSection", () => {
       })
       renderSection()
       expect(await screen.findByTestId("chef-spend")).toHaveTextContent(
-        "The cap is reached"
+        "The monthly limit is reached"
       )
     })
   })

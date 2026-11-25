@@ -373,10 +373,10 @@
       "cuisines_remove": "Remove {{name}}",
       "cuisines_full": "Up to {{count}} cuisines.",
       "chef_label": "Chef",
-      "chef_effect_on": "The assistant labels your recipes, checks imports and finds new dishes for your plans, within the monthly cap.",
+      "chef_effect_on": "The assistant labels your recipes, checks imports and finds new dishes for your plans, within the monthly limit.",
       "chef_effect_off": "Turn it on to have the assistant label your recipes, check imports and find new dishes on its own.",
       "chef_spend": "This month: {{spent}} of {{cap}}",
-      "chef_spend_at_cap": "This month: {{spent}} of {{cap}}. The cap is reached, so the assistant waits until next month."
+      "chef_spend_at_cap": "This month: {{spent}} of {{cap}}. The monthly limit is reached, so the assistant waits until next month."
     },
     "system_section": {
       "appearance_group": "Language and theme",
