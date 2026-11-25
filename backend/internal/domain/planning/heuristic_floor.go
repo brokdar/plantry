@@ -99,7 +99,59 @@ func (h *planner) topUpFloors() {
 	h.liftWeek(h.s.Settings.PlateFit)
 	if h.s.Settings.PlateFit {
 		h.liftWeek(false)
+		h.nutritionFill()
 	}
+}
+
+// nutritionFill is the second filler pass with plate fit on (PLATE-4: hard
+// rules, then nutrition, then plate fit). The passes above add only fillers
+// that make sense on their plate, under the plate's side cap; where a day
+// still has protein under its target or kcal under its band, or the week is
+// under its band, this pass lifts it the way the planner did before plate
+// fit (the pre-R1 ranking, no filler or side-cap filter; every hard rule
+// still holds), only up to what the target needs. In a heuristic run each
+// no-cook add it makes is logged as a nutrition_fill choice.
+func (h *planner) nutritionFill() {
+	h.s.Settings.PlateFit, h.nutritionPass = false, true
+	defer func() { h.s.Settings.PlateFit, h.nutritionPass = true, false }()
+	// The culinary passes' add counts do not hold the nutrition pass back;
+	// its own caps are the pre-R1 ones. Plates that took an add stay last.
+	for d, a := range h.adds {
+		h.adds[d] = &dayAdds{used: a.used}
+	}
+	h.closeProteinGaps()
+	y, days := h.dayAccounts()
+	for _, d := range days {
+		if dk := h.dayNow(d.Date); dk != nil && dk.Kcal < dk.Adjusted*y.pol.DayLow-epsilon {
+			h.liftDay(*dk, dk.Adjusted*y.pol.DayLow, false, false)
+		}
+	}
+	_, days = h.dayAccounts()
+	kcal, target := 0.0, 0.0
+	for _, dk := range days {
+		kcal, target = kcal+dk.Kcal, target+dk.Adjusted
+	}
+	if kcal < target*y.pol.WeekLow-epsilon {
+		h.liftWeek(false)
+	}
+}
+
+// fatPctAfter is the week's fat share of energy, in %, after an add of kcal
+// with fatKcal from fat.
+func fatPctAfter(w WeekEval, fatKcal, kcal float64) float64 {
+	total := w.AvgKcal * float64(w.Days)
+	return (w.FatPct*total/100 + fatKcal) / (total + kcal) * 100
+}
+
+// dayNow is date's day account over the proposal as planned so far.
+func (h *planner) dayNow(date time.Time) *DayKcal {
+	_, days := h.dayAccounts()
+	for i := range days {
+		if dayOf(days[i].Date) == dayOf(date) {
+			return &days[i]
+		}
+	}
+	return nil
 }
 
 // liftWeek lifts the days furthest under their target while the week is
@@ -406,6 +458,15 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		}
 		return 0
 	}
+	if w := ev.Week; h.s.Settings.PlateFit && !h.floorLift && w != nil && w.Days > 0 {
+		// A fitting add (cheese on the pasta) must not take the week's fat
+		// share above its range or further above it: nutrition before fit
+		// (PLATE-4). The nutrition pass (nutritionFill) covers what is left.
+		cands = slices.DeleteFunc(cands, func(c optCand) bool {
+			after := fatPctAfter(*w, h.s.Foods[c.opt.FoodID].Macros.Fat*9*mult(c), c.kcal)
+			return after > y.pol.FatHigh+epsilon && after > w.FatPct+epsilon
+		})
+	}
 	if h.s.Settings.PlateFit && protein {
 		// The protein add that fits a plate is often a dairy (tofu and fish
 		// rarely fit): a lean one (skyr, quark) before a full-fat one.
@@ -507,6 +568,9 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 				}
 				p.Components = append(p.Components, pc)
 				adds.used[at.SlotID] = true
+				if h.nutritionPass {
+					h.choices = append(h.choices, heuristicChoice{Date: at.Date.Format(time.DateOnly), SlotID: at.SlotID, Foods: []int64{c.opt.FoodID}, Reason: "nutrition_fill"})
+				}
 				if protein {
 					adds.protein++
 				} else {

@@ -28,7 +28,7 @@ func fillerPlanner(plateFit bool, carbsPct float64, legumeWeek bool) (*planner, 
 	))
 	for id, f := range h.s.Foods {
 		f.Macros.Carbs = f.Macros.Kcal * carbsPct / 100 / 4
-		f.Macros.Fat = f.Macros.Kcal * 0.3 / 9
+		f.Macros.Fat = f.Macros.Kcal * 0.25 / 9 // the cheese keeps the week's fat in range
 		h.s.Foods[id] = f
 	}
 	if legumeWeek {
@@ -256,19 +256,25 @@ func TestAddNoCook_FloorLiftIgnoresSecondStarch(t *testing.T) {
 }
 
 // While the week's fat is above range, the filler with the least fat above
-// the range comes before the carb and order keys.
+// the range comes before the carb and order keys; a filler that would take
+// a week in range above it is no candidate.
 func TestAddNoCook_PlateFitFillerKeepsFatInRange(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
+		fat    float64 // the dishes' fat share; the fixture's is 0.25
 		fatHot bool
 		want   int64
-	}{{"fat in range: the old order", false, pfCheese}, {"fat above range: the lean filler", true, pfBread}} {
+	}{
+		{"fat in range: the old order", 0, false, pfCheese},
+		{"fat in range, the cheese takes it above: the lean filler", 0.3, false, pfBread},
+		{"fat above range: the lean filler", 0.5, true, pfBread},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, tgt := fillerPlanner(true, 55, true) // carbs in range: no carb key
-			if tc.fatHot {
+			if tc.fat > 0 {
 				for _, id := range []int64{bfOats, bfCurry, bfBake, bfCouscous} {
 					f := h.s.Foods[id]
-					f.Macros.Fat = f.Macros.Kcal * 0.5 / 9
+					f.Macros.Fat = f.Macros.Kcal * tc.fat / 9
 					h.s.Foods[id] = f
 				}
 				h.in.State = h.s

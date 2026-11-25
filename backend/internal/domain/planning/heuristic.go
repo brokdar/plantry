@@ -117,6 +117,9 @@ type planner struct {
 	// floorLift is set while topUpFloors lifts a day to its safety floor: any
 	// verified food may fill the gap, so the plate-fit starch filter is off.
 	floorLift bool
+	// nutritionPass is set while nutritionFill lifts what the culinary
+	// filler passes left short (plate fit is off for that pass).
+	nutritionPass bool
 	// adds counts each day's no-cook adds over every pass (dayAdds).
 	adds map[int]*dayAdds
 	// choices log what was chosen per cell and why (the run's
