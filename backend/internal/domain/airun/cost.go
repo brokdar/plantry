@@ -48,7 +48,7 @@ var ErrInvalidPrices = errors.New("invalid price overrides")
 
 // PricesAsOf is the date the built-in table was copied from the vendors'
 // public pricing pages.
-const PricesAsOf = "2026-11-02"
+const PricesAsOf = "2026-11-25"
 
 type priceEntry struct {
 	Prefix string
@@ -76,19 +76,25 @@ func pOAI(in, cached, out float64) Price {
 // Tiers and long-context surcharges are ignored (spec §8.1): Haiku 5.5 uses
 // its ≤ 100k-token tier, the OpenAI flagships their < 272k-context price.
 //
-// Sources (as_of PricesAsOf, 2026-11-02):
+// Sources (as_of PricesAsOf, 2026-11-25):
 //   - Anthropic: https://platform.claude.com/docs/en/about-claude/pricing,
-//     re-checked 2026-11-02 against the claude-api reference (Sonnet 5.5 cache
-//     read corrected 0.10 -> 0.20; web search $10 per 1,000 searches).
-//     Cache write = the 5-minute write price, which the adapter requests.
+//     re-checked 2026-11-25 against the claude-api reference (Fable 5.2
+//     added at $8 / $40, cache reads $0.20; Sonnet 5.5 cache reads $0.10;
+//     source: Anthropic models table (claude-api reference, cached
+//     2026-11-03): Sonnet 5.5 $2/$10, cache reads $0.10; the earlier 0.20
+//     was Opus/Fable-tier;
+//     web search $10 per 1,000 searches). Cache write = the 5-minute write
+//     price (1.25x input), which the adapter requests.
 //   - OpenAI: https://developers.openai.com/api/docs/pricing (Standard tier),
 //     values fetched 2026-10-31 and NOT re-fetched on 2026-11-02 (no web
-//     access in the Z4 run); OpenAI has no web search fee here.
+//     access in the Z4 run); OpenAI has no web search fee here. gpt-6.2 has
+//     no verified price yet, so it stays unpriced (Priced is false).
 var builtinPrices = []priceEntry{
 	// Anthropic: in, out, cache read, 5m cache write.
+	{"claude-fable-5-2", p4(8, 40, 0.20, 10)},
 	{"claude-fable-5-1", p4(10, 50, 0.25, 12.5)},
 	{"claude-opus-5-5", p4(4, 20, 0.20, 5)},
-	{"claude-sonnet-5-5", p4(2, 10, 0.20, 2.5)},
+	{"claude-sonnet-5-5", p4(2, 10, 0.10, 2.5)},
 	{"claude-haiku-5-5", p4(0.10, 0.50, 0.01, 0.125)},
 	{"claude-opus-4-7", p4(5, 25, 0.50, 6.25)},
 	{"claude-opus-4-6", p4(5, 25, 0.50, 6.25)},
@@ -157,6 +163,13 @@ func lookupPrice(table []priceEntry, model string, overrides map[string]Price) (
 		return Price{}, PriceNone
 	}
 	return table[best].Price, PriceBuiltin
+}
+
+// Priced reports whether model has a price (built-in or override). A model
+// without one does no autonomous work: its spend could not be capped.
+func Priced(model string, overrides map[string]Price) bool {
+	_, src := LookupPrice(model, overrides)
+	return src != PriceNone
 }
 
 // Cost estimates a run's cost in USD, or nil when the model has no price. A

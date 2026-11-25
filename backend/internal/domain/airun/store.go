@@ -19,12 +19,22 @@ const (
 	KindLookup         Kind = "lookup"
 	// KindUntracked marks a metered call made without a started run.
 	KindUntracked Kind = "untracked"
+
+	// Chef kinds (capped work, spec COST-1).
+	KindChefAttributes    Kind = "chef_attributes"
+	KindChefMatch         Kind = "chef_match"
+	KindChefImportCheck   Kind = "chef_import_check"
+	KindChefFind          Kind = "chef_find"
+	KindChefHelp          Kind = "chef_help"
+	KindChefLibraryReview Kind = "chef_library_review"
 )
 
-// Valid reports whether k is a known kind.
+// Valid reports whether k is a known kind. ai_runs has no kind CHECK, so
+// this is the only guard: the store rejects an invalid kind.
 func (k Kind) Valid() bool {
 	switch k {
-	case KindGenerate, KindRegenerate, KindChat, KindDiscovery, KindImportFallback, KindLookup, KindUntracked:
+	case KindGenerate, KindRegenerate, KindChat, KindDiscovery, KindImportFallback, KindLookup, KindUntracked,
+		KindChefAttributes, KindChefMatch, KindChefImportCheck, KindChefFind, KindChefHelp, KindChefLibraryReview:
 		return true
 	}
 	return false
@@ -108,6 +118,9 @@ type RunEnd struct {
 	ScopeJSON      string
 	// ContainerID is the run's last code execution container; empty is NULL.
 	ContainerID string
+	// CostUSD is the run's cost at the prices of the time of the run; nil
+	// (NULL) when the model has no price.
+	CostUSD *float64
 }
 
 // Step is one LLM call or tool call within a run. Empty string fields are
@@ -156,6 +169,7 @@ type Step struct {
 // concurrent use. Keeping Step.Seq unique per run is the caller's
 // responsibility.
 type Store interface {
+	// CreateRun rejects a kind that is not Valid with domain.ErrInvalidInput.
 	CreateRun(ctx context.Context, start RunStart) (int64, error)
 	FinishRun(ctx context.Context, end RunEnd) error
 	AddStep(ctx context.Context, step Step) error

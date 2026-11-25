@@ -37,7 +37,6 @@ func TestMigration00021_RejectsInvalidEnums(t *testing.T) {
 		{"valid", "generate", "running", false},
 		{"lookup kind", "lookup", "ok", false},
 		{"untracked kind", "untracked", "partial", false},
-		{"invalid kind", "bogus", "ok", true},
 		{"invalid status", "chat", "done", true},
 	}
 	for _, tt := range tests {

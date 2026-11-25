@@ -1114,7 +1114,7 @@ func TestRecorder_StoresGenerationFields(t *testing.T) {
 	assert.Equal(t, `[{"rule":"H2"}]`, f.ViolationsJSON)
 	assert.Equal(t, `{"coverage":1}`, f.ScoreJSON)
 	assert.Equal(t, "Kept Monday.", f.Notes)
-	assert.Equal(t, airun.RunEnd{ID: 2, Status: airun.StatusOK, FinishedAt: finishes[1].FinishedAt}, finishes[1])
+	assert.Equal(t, airun.RunEnd{ID: 2, Status: airun.StatusOK, FinishedAt: finishes[1].FinishedAt, CostUSD: ptr(0.0)}, finishes[1])
 }
 
 // manualClock is a clock tests move by hand.

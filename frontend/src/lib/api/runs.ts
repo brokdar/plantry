@@ -11,6 +11,12 @@ export type RunKind =
   | "import_fallback"
   | "lookup"
   | "untracked"
+  | "chef_attributes"
+  | "chef_match"
+  | "chef_import_check"
+  | "chef_find"
+  | "chef_help"
+  | "chef_library_review"
 
 export type RunStatus =
   | "running"

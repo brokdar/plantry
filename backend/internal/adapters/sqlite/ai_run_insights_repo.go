@@ -242,3 +242,20 @@ func (r *AIRunRepo) DiscoverySuggestions(ctx context.Context, minID, maxID int64
 	}
 	return out, nil
 }
+
+// SpendUSD sums the stored cost of the runs started in [from, to) of kinds
+// (all kinds when empty).
+func (r *AIRunRepo) SpendUSD(ctx context.Context, from, to time.Time, kinds []airun.Kind) (float64, error) {
+	p := sqlcgen.SpendAIRunsParams{FromTs: formatTime(from), ToTs: formatTime(to)}
+	if len(kinds) == 0 {
+		p.AllKinds = 1
+	}
+	for _, k := range kinds {
+		p.Kinds = append(p.Kinds, string(k))
+	}
+	usd, err := r.queriesFor(ctx).SpendAIRuns(ctx, p)
+	if err != nil {
+		return 0, fmt.Errorf("spend ai runs: %w", err)
+	}
+	return usd, nil
+}

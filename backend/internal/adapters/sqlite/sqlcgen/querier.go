@@ -224,6 +224,9 @@ type Querier interface {
 	// D12: assigns the day to the oldest pending, never-shown suggestion after
 	// the given id.
 	ShowNextPending(ctx context.Context, arg ShowNextPendingParams) (RecipeSuggestion, error)
+	// The summed cost_usd of the runs started in [from_ts, to_ts) whose kind is
+	// in kinds; all kinds when all_kinds is 1. Unpriced runs add nothing.
+	SpendAIRuns(ctx context.Context, arg SpendAIRunsParams) (float64, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
 	TouchPlate(ctx context.Context, id int64) error
 	TouchPresetLastUsedAt(ctx context.Context, id int64) error

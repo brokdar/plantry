@@ -445,7 +445,13 @@
         "classify": "Classify",
         "import_fallback": "Import",
         "lookup": "Lookup",
-        "untracked": "Other"
+        "untracked": "Other",
+        "chef_attributes": "Recipe attributes",
+        "chef_match": "Ingredient matching",
+        "chef_import_check": "Import check",
+        "chef_find": "Recipe finds",
+        "chef_help": "Cooking help",
+        "chef_library_review": "Library review"
       },
       "status": {
         "running": "Running",

@@ -84,6 +84,7 @@ type AiRun struct {
 	ReasoningTokens   int64
 	AppVersion        sql.NullString
 	ContainerID       sql.NullString
+	CostUsd           sql.NullFloat64
 }
 
 type AiRunStep struct {

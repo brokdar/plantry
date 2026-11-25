@@ -10,14 +10,15 @@ import (
 // Z4-AC4 (AC-7.4): the built-in table pins each Anthropic family's list
 // prices (USD per 1M tokens) and the web-search fee as of PricesAsOf.
 func TestAnthropicListPricesPinned(t *testing.T) {
-	assert.Equal(t, "2026-11-02", PricesAsOf)
+	assert.Equal(t, "2026-11-25", PricesAsOf)
 	want := []struct {
 		model                       string
 		in, out, cacheRead, cacheWr float64
 	}{
+		{"claude-fable-5-2", 8, 40, 0.20, 10},
 		{"claude-fable-5-1", 10, 50, 0.25, 12.5},
 		{"claude-opus-5-5", 4, 20, 0.20, 5},
-		{"claude-sonnet-5-5", 2, 10, 0.20, 2.5},
+		{"claude-sonnet-5-5", 2, 10, 0.10, 2.5},
 		{"claude-haiku-5-5", 0.10, 0.50, 0.01, 0.125},
 		{"claude-opus-4-7", 5, 25, 0.50, 6.25},
 		{"claude-opus-4-6", 5, 25, 0.50, 6.25},
@@ -43,4 +44,13 @@ func TestOpenAIHasNoSearchFee(t *testing.T) {
 	p, src := LookupPrice("gpt-5.5", nil)
 	require.Equal(t, PriceBuiltin, src)
 	assert.Zero(t, p.PerSearch)
+}
+
+// COST-3: a model without a price does no autonomous work; Priced tells.
+func TestPriced(t *testing.T) {
+	assert.True(t, Priced("claude-sonnet-5-5", nil))
+	assert.True(t, Priced("claude-fable-5-2", nil))
+	assert.False(t, Priced("gpt-6.2", nil), "no verified price yet")
+	assert.False(t, Priced("", nil))
+	assert.True(t, Priced("gpt-6.2", map[string]Price{"gpt-6.2": {In: 1, Out: 2}}), "an override prices it")
 }
