@@ -76,9 +76,10 @@ var dishKindWords = map[string][]string{
 }
 
 // cheeseDishWords name mains that already carry cheese without naming it: a
-// gratin or lasagne is baked under cheese, a Greek salad or caprese holds
-// feta or mozzarella. Such a main takes no cheese topping and no dairy.
-var cheeseDishWords = []string{"gratin", "ueberbacken", "lasagn", "greek salad", "griechischer salat", "caprese", "pizza"}
+// gratin is baked under cheese, a Greek salad or caprese holds
+// feta or mozzarella. Such a main takes no cheese topping and no dairy (a
+// lasagne keeps its parmesan at the table).
+var cheeseDishWords = []string{"gratin", "ueberbacken", "greek salad", "griechischer salat", "caprese", "pizza"}
 
 // asianCuisines are the cuisines whose mains take tofu.
 var asianCuisines = []string{"chinese", "japanese", "thai", "indian"}
