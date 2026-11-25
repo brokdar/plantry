@@ -124,8 +124,6 @@ func (h *TipHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *TipHandler) tipError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, tips.ErrConfirmed):
-		writeError(w, http.StatusConflict, "error.tip.confirmed")
 	case errors.Is(err, tips.ErrStale):
 		writeError(w, http.StatusConflict, "error.tip.stale")
 	default:

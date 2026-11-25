@@ -1255,7 +1255,6 @@
       "cuisine_required": "Name a cuisine to explore."
     },
     "tip": {
-      "confirmed": "This meal is confirmed. Unlock it first to apply the tip.",
       "stale": "This tip no longer fits the meal."
     }
   },
@@ -2428,7 +2427,9 @@
       "body": "Your running timers will stop.",
       "stay": "Keep cooking",
       "leave": "Leave"
-    }
+    },
+    "finish_title": "To finish",
+    "finish_line": "{{name}}, {{grams}} g"
   },
   "diet": {
     "label": "Diet",

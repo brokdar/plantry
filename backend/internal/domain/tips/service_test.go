@@ -81,17 +81,12 @@ func (m *memStore) CountByState(context.Context, time.Time, time.Time) (map[tips
 
 // fakePlates records the Apply calls.
 type fakePlates struct {
-	confirmed bool
-	added     []plate.PlateComponent
-	swapped   [][2]int64
+	added   []plate.PlateComponent
+	swapped [][2]int64
 }
 
 func (f *fakePlates) Get(_ context.Context, id int64) (*plate.Plate, error) {
-	st := plate.StateDraft
-	if f.confirmed {
-		st = plate.StateConfirmed
-	}
-	return &plate.Plate{ID: id, State: st, Components: []plate.PlateComponent{{ID: 11}, {ID: 12}}}, nil
+	return &plate.Plate{ID: id, State: plate.StateConfirmed, Components: []plate.PlateComponent{{ID: 11}, {ID: 12}}}, nil
 }
 
 func (f *fakePlates) Recorded(ctx context.Context, fn func(ctx context.Context) error) (plate.Undo, error) {
@@ -347,16 +342,6 @@ func TestApply_UndoShowsTipAgain(t *testing.T) {
 	v, _ = svc.Sync(ctx, start)
 	if v.Tips[0].State != tips.StateShown {
 		t.Fatalf("tip after undo: %+v", v.Tips[0])
-	}
-}
-
-func TestApply_ConfirmedPlateRefused(t *testing.T) {
-	t.Parallel()
-	f := newFixture()
-	f.plates.confirmed = true
-	v, _ := f.svc().Sync(context.Background(), start)
-	if _, err := f.svc().Apply(context.Background(), v.Tips[0].ID); err != tips.ErrConfirmed {
-		t.Fatalf("err = %v, want ErrConfirmed", err)
 	}
 }
 

@@ -1282,7 +1282,6 @@
       "cuisine_required": "Nenn eine Küche, die du entdecken möchtest."
     },
     "tip": {
-      "confirmed": "Diese Mahlzeit ist bestätigt. Entsperre sie zuerst, um den Tipp zu übernehmen.",
       "stale": "Dieser Tipp passt nicht mehr zur Mahlzeit."
     }
   },
@@ -2428,7 +2427,9 @@
       "body": "Laufende Timer werden dann beendet.",
       "stay": "Weiterkochen",
       "leave": "Verlassen"
-    }
+    },
+    "finish_title": "Zum Schluss",
+    "finish_line": "{{name}}, {{grams}} g"
   },
   "diet": {
     "label": "Ernährung",

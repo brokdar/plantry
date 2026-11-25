@@ -1,3 +1,7 @@
+import { useQueries } from "@tanstack/react-query"
+import { getPlate } from "@/lib/api/plates"
+import type { SessionLink } from "@/lib/api/sessions"
+import { planKeys } from "@/lib/queries/keys"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { X } from "lucide-react"
 import { useState, type ReactNode } from "react"
@@ -73,6 +77,7 @@ export function CookSessionPage({ sessionId }: { sessionId: number }) {
   const { portions, change, flush } = useSessionPortions(session.data)
   const scaled = useScaled(session.data?.food_id ?? 0, portions)
   const cooked = useSetSessionCooked()
+  const finish = useFinishingTouches(session.data?.links ?? [])
 
   if (!valid || session.isError || food.isError) {
     return <CookShell message={t("cook.missing")} />
@@ -98,6 +103,7 @@ export function CookSessionPage({ sessionId }: { sessionId: number }) {
       name={s.food_name}
       steps={stepsOf(food.data)}
       ingredients={scaled.data?.ingredients}
+      finish={finish}
       portions={portions}
       onPortionsChange={change}
       coverage={coverage}
@@ -161,5 +167,29 @@ export function CookRecipePage({
       }
       onDone={() => void navigate(back)}
     />
+  )
+}
+
+/** The garnishes on the batch's plates (a tip's Apply adds one): the leaf
+ *  extras with their grams for all eaters of each plate, one line each. */
+function useFinishingTouches(links: readonly SessionLink[]): string[] {
+  const { t } = useTranslation()
+  const ids = [...new Set(links.map((l) => l.plate_id))]
+  const plates = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: [...planKeys.all, "plate", id] as const,
+      queryFn: () => getPlate(id),
+    })),
+  })
+  const grams = new Map<string, number>()
+  for (const q of plates) {
+    for (const c of q.data?.components ?? []) {
+      if (c.position !== "extra" || c.grams == null) continue
+      const g = c.grams * (q.data?.eaters ?? 1)
+      grams.set(c.food_name, (grams.get(c.food_name) ?? 0) + g)
+    }
+  }
+  return [...grams].map(([name, g]) =>
+    t("cook.finish_line", { name, grams: Math.round(g) })
   )
 }

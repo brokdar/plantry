@@ -47,6 +47,7 @@ const AI_SERIAL_SPECS = [
 // with the parallel chromium specs.
 const GLOBAL_SETTINGS_SPECS = [
   "assistant-drafts.spec.ts",
+  "chef-tips.spec.ts",
   "discovery-explore-plan.spec.ts",
   "plan-anchor-settings.spec.ts",
   "plan-generate-heuristic.spec.ts",

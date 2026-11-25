@@ -41,10 +41,6 @@ const (
 	silenceFor   = 8 * 7 * 24 * time.Hour
 )
 
-// ErrConfirmed: the tip's plate is confirmed; it has to be unlocked first
-// (TIP-7).
-var ErrConfirmed = errors.New("the tip's plate is confirmed")
-
 // ErrStale: the tip is no longer shown, or its plate changed under it.
 var ErrStale = errors.New("the tip is no longer shown")
 
@@ -542,8 +538,8 @@ func (y *run) name(t *Tip) {
 }
 
 // Apply makes a shown tip's change on its plate (TIP-4): a normal plate
-// change whose Undo reverts it through POST /api/plan/revert. A confirmed
-// plate is refused with ErrConfirmed (TIP-7: unlock first).
+// change whose Undo reverts it through POST /api/plan/revert. The plate
+// service's rules for a hand edit apply, a confirmed plate's included (TIP-7).
 func (s *Service) Apply(ctx context.Context, id int64) (plate.Undo, error) {
 	t, err := s.d.Store.Get(ctx, id)
 	if err != nil {
@@ -556,14 +552,11 @@ func (s *Service) Apply(ctx context.Context, id int64) (plate.Undo, error) {
 	if err != nil {
 		return plate.Undo{}, err
 	}
-	if p.State == plate.StateConfirmed {
-		return plate.Undo{}, ErrConfirmed
-	}
 	return s.d.Plates.Recorded(ctx, func(ctx context.Context) error {
 		switch t.Op.Action {
 		case "add":
 			g, unit := t.Op.Grams, "g"
-			if _, err := s.d.Plates.AddComponent(ctx, p.ID, plate.PlateComponent{FoodID: t.Op.FoodID, Amount: &g, Unit: &unit}); err != nil {
+			if _, err := s.d.Plates.AddComponent(ctx, p.ID, plate.PlateComponent{FoodID: t.Op.FoodID, Amount: &g, Unit: &unit, Position: plate.PositionExtra}); err != nil {
 				return err
 			}
 		case "swap":

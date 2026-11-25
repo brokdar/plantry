@@ -161,6 +161,11 @@ export interface UpdatePlateComponentInput {
   unit?: string
 }
 
+/** GET /api/plates/{id}. */
+export function getPlate(id: number): Promise<Plate> {
+  return apiFetch(`/plates/${id}`)
+}
+
 export function createPlate(input: CreatePlateInput): Promise<Plate> {
   return apiFetch("/plates", { method: "POST", body: JSON.stringify(input) })
 }

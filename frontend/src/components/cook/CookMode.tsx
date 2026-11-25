@@ -33,6 +33,8 @@ export interface CookModeProps {
   steps: readonly string[]
   /** Scaled to `portions`; undefined while loading. */
   ingredients: readonly ScaledIngredient[] | undefined
+  /** Session mode: garnishes on the batch's plates, one line each. */
+  finish?: readonly string[]
   portions: number
   onPortionsChange: (portions: number) => void
   /** Session mode: "Covers Sun dinner, Mon lunch · 2 spare". */
@@ -63,6 +65,7 @@ export function CookMode({
   name,
   steps,
   ingredients,
+  finish: garnishes,
   portions,
   onPortionsChange,
   coverage,
@@ -214,6 +217,21 @@ export function CookMode({
               {t("cook.tabs.ingredients")}
             </h2>
             <ScaledIngredients ingredients={ingredients} />
+            {garnishes && garnishes.length > 0 && (
+              <section
+                className="flex flex-col gap-2"
+                data-testid="cook-finish"
+              >
+                <h3 className="text-h3 font-semibold text-ink">
+                  {t("cook.finish_title")}
+                </h3>
+                <ul className="flex flex-col gap-1 text-body text-ink">
+                  {garnishes.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </TabsPrimitive.Content>
           <TabsPrimitive.Content
             value="steps"
