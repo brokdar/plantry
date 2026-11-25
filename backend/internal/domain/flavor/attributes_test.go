@@ -124,3 +124,23 @@ func TestResolve_LeafCarriesItsSubset(t *testing.T) {
 	got := flavor.Resolve(leaf, rec)
 	assert.Equal(t, flavor.Attributes{Texture: "soft", Colour: "beige"}, got.Values)
 }
+
+func TestResolve_UserHeroesFollowIngredients(t *testing.T) {
+	user := func(heroes ...string) flavor.Record {
+		return flavor.Record{
+			Values:  flavor.Attributes{Heroes: heroes, Colour: "red"},
+			Sources: map[flavor.Field]flavor.Source{flavor.FieldHeroes: flavor.SourceUser, flavor.FieldColour: flavor.SourceUser},
+		}
+	}
+	t.Run("a removed ingredient is no longer a hero", func(t *testing.T) {
+		got := flavor.Resolve(curry(), user("Sahne", "Lachs"))
+		assert.Equal(t, []string{"Sahne"}, got.Values.Heroes)
+		assert.Equal(t, flavor.SourceUser, got.Sources[flavor.FieldHeroes])
+		assert.Equal(t, "red", got.Values.Colour, "the user still wins for every other field")
+	})
+	t.Run("no user hero left: the rule value", func(t *testing.T) {
+		got := flavor.Resolve(curry(), user("Lachs"))
+		assert.Equal(t, []string{"Hähnchenbrust", "Tomaten"}, got.Values.Heroes)
+		assert.Equal(t, flavor.SourceRule, got.Sources[flavor.FieldHeroes])
+	})
+}

@@ -27,6 +27,7 @@ func TestRun_ScriptedSeedsLabelsAndReports(t *testing.T) {
 	var stdout bytes.Buffer
 	err := run(context.Background(), []string{"-db", filepath.Join(dir, "c.db"), "-fake-script", script, "-out", out}, func(string) string { return "" }, &stdout)
 	require.NoError(t, err)
-	assert.Contains(t, stdout.String(), "recipes compared: 62")
+	// The count follows the DATA-1 dev split, which grows; only a non-empty comparison matters here.
+	assert.Regexp(t, `recipes compared: [1-9][0-9]*`, stdout.String())
 	assert.FileExists(t, out)
 }
