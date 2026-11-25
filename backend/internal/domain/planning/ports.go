@@ -7,6 +7,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
@@ -125,6 +126,12 @@ type Replacement struct {
 // from the audit trail (bounded, oldest first).
 type Corrections interface {
 	UserReplacements(ctx context.Context, from, to time.Time) ([]Replacement, error)
+}
+
+// Attributes reads the stored recipe attributes of foods (flavor.Store);
+// a food without a record has none.
+type Attributes interface {
+	Many(ctx context.Context, foodIDs []int64) (map[int64]flavor.Record, error)
 }
 
 // LightStore keeps the user's light requests per date (see LightIntent).

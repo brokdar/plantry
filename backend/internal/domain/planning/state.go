@@ -9,6 +9,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -194,6 +195,10 @@ type FoodFacts struct {
 	// LeafRole is a leaf's effective role (shopping.EffectiveRole); Role
 	// stays recipe-only. Alternatives reads it for side and add candidates.
 	LeafRole food.Role
+	// Attrs are the food's recipe attributes (flavor.Resolve: user, then
+	// assistant, then derived values); set by the Builder only. No rule
+	// reads them yet.
+	Attrs flavor.Attributes
 }
 
 // Explore reports whether the food is an explore candidate: tagged explore

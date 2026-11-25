@@ -27,9 +27,12 @@ import {
 import { deleteFeedback, putFeedback } from "./feedback"
 import {
   getFood,
+  getFoodAttributes,
   getScaled,
   listFoods,
+  revertFoodChange,
   setDietClass,
+  setFoodAttributes,
   setShopSection,
 } from "./foods"
 import { generatePlan, getPlanRun, regeneratePlan } from "./generation"
@@ -279,6 +282,27 @@ const cases: Case[] = [
     method: "PUT",
     path: "/foods/50/shop-section",
     body: { section: null },
+  },
+  // Recipe attributes (Chef A1) and the food change log's undo
+  {
+    name: "getFoodAttributes",
+    call: () => getFoodAttributes(42),
+    method: "GET",
+    path: "/foods/42/attributes",
+  },
+  {
+    name: "setFoodAttributes",
+    call: () => setFoodAttributes(42, { cuisine: "thai", colour: null }),
+    method: "PUT",
+    path: "/foods/42/attributes",
+    body: { cuisine: "thai", colour: null },
+  },
+  {
+    name: "revertFoodChange",
+    call: () => revertFoodChange({ first_event_id: 3, last_event_id: 4 }),
+    method: "POST",
+    path: "/food-events/revert",
+    body: { first_event_id: 3, last_event_id: 4 },
   },
   // ── Phase 3 ──
   // State (§3.1)

@@ -222,6 +222,13 @@ type Food struct {
 	Freezable         sql.NullInt64
 }
 
+type FoodAttribute struct {
+	FoodID      int64
+	Version     int64
+	ValuesJson  string
+	SourcesJson string
+}
+
 type FoodComponent struct {
 	ID        int64
 	ParentID  int64

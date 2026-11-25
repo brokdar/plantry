@@ -63,6 +63,7 @@ type Querier interface {
 	DeleteConversation(ctx context.Context, id int64) (sql.Result, error)
 	DeleteCookSession(ctx context.Context, id int64) (sql.Result, error)
 	DeleteFood(ctx context.Context, id int64) (sql.Result, error)
+	DeleteFoodAttributes(ctx context.Context, foodID int64) error
 	DeleteFoodComponents(ctx context.Context, parentID int64) error
 	DeleteFoodInstructions(ctx context.Context, foodID int64) error
 	DeleteFoodPortion(ctx context.Context, arg DeleteFoodPortionParams) (sql.Result, error)
@@ -105,6 +106,7 @@ type Querier interface {
 	GetCookSession(ctx context.Context, id int64) (CookSession, error)
 	GetDiscoveryRun(ctx context.Context, id int64) (GetDiscoveryRunRow, error)
 	GetFood(ctx context.Context, id int64) (Food, error)
+	GetFoodAttributes(ctx context.Context, foodID int64) (FoodAttribute, error)
 	GetFoodKind(ctx context.Context, id int64) (string, error)
 	GetLeafFoodIDByName(ctx context.Context, name string) (int64, error)
 	// A generation run as GET /api/plan/runs/{id} shows it (B6).
@@ -150,6 +152,7 @@ type Querier interface {
 	ListCookSessionsByIDs(ctx context.Context, ids []int64) ([]CookSession, error)
 	// Sessions cooking in [from_date, to_date] or linked to a plate dated in it.
 	ListCookSessionsInRange(ctx context.Context, arg ListCookSessionsInRangeParams) ([]CookSession, error)
+	ListFoodAttributes(ctx context.Context, ids []int64) ([]FoodAttribute, error)
 	ListFoodComponents(ctx context.Context, parentID int64) ([]ListFoodComponentsRow, error)
 	ListFoodEventsInRange(ctx context.Context, arg ListFoodEventsInRangeParams) ([]FoodEvent, error)
 	ListFoodInstructions(ctx context.Context, foodID int64) ([]FoodInstruction, error)
@@ -250,6 +253,7 @@ type Querier interface {
 	UpsertAIToolSchema(ctx context.Context, arg UpsertAIToolSchemaParams) error
 	UpsertAvailabilityOverride(ctx context.Context, arg UpsertAvailabilityOverrideParams) error
 	UpsertCookSession(ctx context.Context, arg UpsertCookSessionParams) error
+	UpsertFoodAttributes(ctx context.Context, arg UpsertFoodAttributesParams) error
 	UpsertFoodPortion(ctx context.Context, arg UpsertFoodPortionParams) error
 	UpsertPlateFeedback(ctx context.Context, arg UpsertPlateFeedbackParams) (PlateFeedback, error)
 	UpsertProfile(ctx context.Context, arg UpsertProfileParams) (UserProfile, error)

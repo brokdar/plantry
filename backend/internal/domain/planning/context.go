@@ -11,6 +11,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
@@ -50,6 +51,9 @@ type BuilderDeps struct {
 	Corrections Corrections
 	// Light reads the stored light requests of the window.
 	Light LightStore
+	// Attributes reads the stored recipe attributes (one bounded query);
+	// the facts carry them merged with the derived ones.
+	Attributes Attributes
 	// Version, when set, lets Build reuse the State it built last for the
 	// same arguments while the data has not changed (see Versioner).
 	Version Versioner
@@ -300,10 +304,16 @@ func (b *Builder) addFoods(ctx context.Context, s *State, foods map[int64]*food.
 	if err != nil {
 		return fmt.Errorf("nutrition: %w", err)
 	}
+	attrs, err := b.d.Attributes.Many(ctx, all)
+	if err != nil {
+		return fmt.Errorf("attributes: %w", err)
+	}
 	likes := stringSet(prof.Preferences[profile.PreferenceKeyLikes])
 	dislikes := stringSet(prof.Preferences[profile.PreferenceKeyDislikes])
 	for _, id := range all {
-		s.Foods[id] = facts(foods[id], macros[id], timesEaten[id], likes, dislikes)
+		ff := facts(foods[id], macros[id], timesEaten[id], likes, dislikes)
+		ff.Attrs = flavor.Resolve(flavor.InputOf(foods[id], macros[id]), attrs[id]).Values
+		s.Foods[id] = ff
 	}
 	return nil
 }
