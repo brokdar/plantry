@@ -7,10 +7,10 @@ code uses it; the attribute derivation (A1), the plate-fit engine (A4a) and the 
 
 Each split is a directory with two JSON files (format below). Two splits exist:
 
-- `dev/` is committed and embedded (`LoadDev`): 62 recipes, 10 leaves, 50 plates. Tune against it.
+- `dev/` is committed and embedded (`LoadDev`): 76 recipes, 11 leaves, 61 plates. Tune against it.
 - **sealed** is never committed. It lives outside the repo; the orchestrator sets
   `PLANTRY_CHEF_SETS_SEALED=<dir>` and `LoadSealed` merges it over dev (sealed plates may use dev foods): 38
-  more recipes (100 in all), 2 leaves, 57 plates. `TestSealedSet` runs only when the variable is set.
+  more recipes (114 in all), 2 leaves, 57 plates. `TestSealedSet` runs only when the variable is set.
 
 The recipes are the 30 of the eval library (`internal/eval/library.json`, labelled in `labels`) plus new ones
 (`foods`), all over the library's German-named ingredients plus extra ones in `ingredients` (per 100 g).

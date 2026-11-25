@@ -163,7 +163,8 @@ func TestDevSet(t *testing.T) {
 }
 
 // TestSealedSet runs the sealed split (dev foods plus the sealed directory) when
-// PLANTRY_CHEF_SETS_SEALED is set; the sealed split is 100 recipes in all.
+// PLANTRY_CHEF_SETS_SEALED is set; the two splits hold at least 100 recipes
+// (dev grew after the sealed split was cut).
 func TestSealedSet(t *testing.T) {
 	s, ok, err := LoadSealed()
 	if !ok {
@@ -181,8 +182,8 @@ func TestSealedSet(t *testing.T) {
 			n++
 		}
 	}
-	if n != 100 {
-		t.Errorf("%d labelled recipes across both splits, want 100", n)
+	if n < 100 {
+		t.Errorf("%d labelled recipes across both splits, want at least 100", n)
 	}
 }
 

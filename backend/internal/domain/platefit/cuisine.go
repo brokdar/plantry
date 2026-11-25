@@ -34,33 +34,42 @@ type Cuisine struct {
 	Rich int
 	// Heat is the heat from which a plate needs something cool.
 	Heat int
-	// SoftOK: soft plates are the norm (braises, curries, stews), so an
-	// all-soft plate is only a minor gap.
-	SoftOK bool
+	// Relaxed are the dimensions the cuisine's own classics do not demand: a
+	// gap there is minor (read, never raised). Soft-on-soft is the norm in
+	// braises, stews, curries, sauced pasta and filled tortillas; brown and
+	// beige plates are the norm in roast-and-potato cooking; a French or
+	// German braise carries no raw element by design, its sauce is the lift.
+	Relaxed []Dimension
 }
+
+// Relaxed dimensions shared by several rows.
+var (
+	softOK  = []Dimension{Texture}
+	braises = []Dimension{Texture, Colour, Fresh}
+)
 
 // Neutral is the fallback for a main of no defined cuisine.
 const Neutral = "neutral"
 
 var cuisines = map[string]Cuisine{
 	"german": {
-		Style: Bridge, Group: "german", Rich: 2, Heat: 2, SoftOK: true,
+		Style: Bridge, Group: "german", Rich: 2, Heat: 2, Relaxed: braises,
 		Palette: []string{"gurke", "dill", "schmand", "sauerrahm", "kümmel", "kraut", "kohl", "senf", "petersilie", "essig", "kartoffel", "apfel"},
 	},
 	"italian": {
-		Style: Bridge, Group: "west_med", Rich: 2, Heat: 2,
+		Style: Bridge, Group: "west_med", Rich: 2, Heat: 2, Relaxed: softOK,
 		Palette: []string{"rucola", "parmesan", "basilikum", "petersilie", "zitrone", "olive", "tomate", "gremolata"},
 	},
 	"french": {
-		Style: Bridge, Group: "west_med", Rich: 2, Heat: 2, SoftOK: true,
-		Palette: []string{"salade", "kopfsalat", "feldsalat", "vinaigrette", "kräuter", "cornichon", "estragon", "petersilie", "kartoffel", "bohne"},
+		Style: Bridge, Group: "west_med", Rich: 2, Heat: 2, Relaxed: braises,
+		Palette: []string{"salade", "kopfsalat", "feldsalat", "vinaigrette", "kräuter", "cornichon", "estragon", "petersilie", "kartoffel", "bohne", "reis"},
 	},
 	"mediterranean": {
-		Style: Bridge, Group: "west_med", Rich: 2, Heat: 2, SoftOK: true,
+		Style: Bridge, Group: "west_med", Rich: 2, Heat: 2, Relaxed: softOK,
 		Palette: []string{"zitrone", "petersilie", "basilikum", "olive", "rucola", "tomate", "gurke", "feta", "zucchini", "paprika", "aubergine"},
 	},
 	"indian": {
-		Style: Contrast, Group: "indian", Rich: 2, Heat: 2, SoftOK: true,
+		Style: Contrast, Group: "indian", Rich: 2, Heat: 2, Relaxed: softOK,
 		Palette: []string{"raita", "joghurt", "kachumber", "gurke", "limette", "koriander", "zwiebel", "chutney", "reis", "naan"},
 	},
 	"chinese": {
@@ -76,14 +85,14 @@ var cuisines = map[string]Cuisine{
 		Palette: []string{"limette", "minze", "basilikum", "koriander", "erdnüss", "gurke", "reis"},
 	},
 	"mexican": {
-		Style: Contrast, Group: "mexican", Rich: 2, Heat: 2,
+		Style: Contrast, Group: "mexican", Rich: 2, Heat: 2, Relaxed: softOK,
 		Palette: []string{"limette", "rote zwiebel", "salsa", "avocado", "kohl", "koriander", "reis"},
 	},
 	"middle_eastern": {
 		Style: Contrast, Group: "middle_eastern", Rich: 2, Heat: 2,
 		Palette: []string{"joghurt", "gurke", "petersilie", "tabouleh", "granatapfel", "sumach", "minze", "hummus", "fladenbrot"},
 	},
-	Neutral: {Rich: 2, Heat: 2, SoftOK: true},
+	Neutral: {Rich: 2, Heat: 2, Relaxed: softOK},
 }
 
 // CuisineOf returns the table row of name; anything not in the table (empty,

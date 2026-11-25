@@ -54,7 +54,8 @@ func TestRead_BridgePairing(t *testing.T) {
 		{"a palette leaf bridges", []string{"Schweinebraten", "Basmatireis", "Frischer Dill"}, false},
 		{"Italian main, side of the same coherence group", []string{"Spaghetti Bolognese", "Ofengemüse"}, false},
 		{"Italian main, steamed broccoli only", []string{"Spaghetti Carbonara", "Gedünsteter Brokkoli"}, true},
-		{"French main, a side from another group", []string{"Coq au Vin", "Basmatireis", "Chinesischer Gurkensalat"}, true},
+		{"French main, a side from another group", []string{"Coq au Vin", "Gedünsteter Brokkoli", "Chinesischer Gurkensalat"}, true},
+		{"French main, rice bridges (blanquette au riz)", []string{"Blanquette de veau", "Basmatireis"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -120,8 +121,30 @@ func TestRead_MinorGaps(t *testing.T) {
 		assert.Equal(t, false, gaps(platefit.Read(plate(t, "Linsen-Dal", "Basmatireis")))[platefit.Fresh])
 	})
 	t.Run("a soft plate is minor where soft plates are the norm", func(t *testing.T) {
-		assert.Equal(t, true, gaps(platefit.Read(plate(t, "Schweinefilet mit Champignons", "Salzkartoffeln")))[platefit.Texture])
-		assert.Equal(t, false, gaps(platefit.Read(plate(t, "Pilzrisotto", "Gedünsteter Brokkoli")))[platefit.Texture])
+		for _, p := range [][]string{
+			{"Schweinefilet mit Champignons", "Salzkartoffeln"},
+			{"Pilzrisotto", "Gedünsteter Brokkoli"},
+			{"Enchiladas mit Hähnchen", "Frijoles refritos", "Tomatensalsa"},
+		} {
+			assert.Equal(t, true, gaps(platefit.Read(plate(t, p...)))[platefit.Texture], p[0])
+		}
+		g, ok := gaps(platefit.Read(plate(t, "Mapo-Tofu", "Basmatireis", "Tomaten mit Zucker")))[platefit.Texture]
+		assert.True(t, ok, "a Chinese soft plate has a texture gap")
+		assert.False(t, g, "and it is major: Chinese plates want crunch")
+	})
+	t.Run("a brown plate is minor in roast-and-potato cuisines", func(t *testing.T) {
+		assert.Equal(t, true, gaps(platefit.Read(plate(t, "Käsespätzle", "Röstzwiebeln")))[platefit.Colour])
+		assert.Equal(t, true, gaps(platefit.Read(plate(t, "Blanquette de veau", "Basmatireis")))[platefit.Colour])
+		g, ok := gaps(platefit.Read(plate(t, "Hähnchen-Curry", "Basmatireis", "Gurken-Raita")))[platefit.Colour]
+		assert.True(t, ok)
+		assert.False(t, g, "a beige Indian plate is a major colour gap")
+	})
+	t.Run("a braise needs no fresh element in French and German cooking", func(t *testing.T) {
+		assert.Equal(t, true, gaps(platefit.Read(plate(t, "Boeuf Bourguignon", "Salzkartoffeln")))[platefit.Fresh])
+		assert.Equal(t, true, gaps(platefit.Read(plate(t, "Rindergulasch", "Butterspätzle")))[platefit.Fresh])
+		g, ok := gaps(platefit.Read(plate(t, "Gemüselasagne", "Ofengemüse")))[platefit.Fresh]
+		assert.True(t, ok)
+		assert.False(t, g, "an Italian plate with nothing fresh or sharp is a major fresh gap")
 	})
 	t.Run("lime makes a missing cool element minor", func(t *testing.T) {
 		g := gaps(platefit.Read(plate(t, "Grünes Thai-Curry", "Basmatireis", "Limettenspalten")))

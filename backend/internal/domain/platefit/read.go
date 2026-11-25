@@ -156,7 +156,7 @@ func Read(p Plate) Reading {
 	}
 	gap := func(d Dimension, ok, minor bool) {
 		if ok {
-			r.Gaps = append(r.Gaps, Gap{Dimension: d, Minor: minor})
+			r.Gaps = append(r.Gaps, Gap{Dimension: d, Minor: minor || slices.Contains(cu.Relaxed, d)})
 		}
 	}
 	sharp := anyOf(all, hasTaste, acid(2)) == yes // an acid element that brightens
@@ -170,7 +170,7 @@ func Read(p Plate) Reading {
 	gap(Fresh, anyOf(all, func(c Component) bool { return c.Fresh != nil }, func(c Component) bool { return *c.Fresh }) == no, sharp)
 	gap(Texture, anyOf(all, func(c Component) bool { return c.Attrs.Texture != "" }, func(c Component) bool {
 		return c.Attrs.Texture == "crisp" || c.Attrs.Texture == "crunchy"
-	}) == no, cu.SoftOK)
+	}) == no, false)
 	gap(Colour, anyOf(all, func(c Component) bool { return c.Attrs.Colour != "" }, func(c Component) bool {
 		return !slices.Contains([]string{"beige", "brown", "white"}, c.Attrs.Colour)
 	}) == no, false)
