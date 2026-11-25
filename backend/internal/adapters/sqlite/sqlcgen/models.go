@@ -232,6 +232,17 @@ type FoodComponent struct {
 	SortOrder int64
 }
 
+type FoodEvent struct {
+	ID         int64
+	Kind       string
+	SubjectID  int64
+	Action     string
+	Actor      string
+	BeforeJson sql.NullString
+	AfterJson  sql.NullString
+	At         string
+}
+
 type FoodInstruction struct {
 	ID         int64
 	FoodID     int64

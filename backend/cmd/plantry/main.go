@@ -38,6 +38,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -398,6 +399,8 @@ func run() error {
 	// Boot recovery requeues jobs a crash or shutdown left running.
 	// Shutdown waits for running jobs (before the recorder and the
 	// database), cancelling them when the wait runs out.
+	// Food change log (VAR-5): each producer registers its Restorer here.
+	foodEventSvc := foodevent.NewService(sqlite.NewTxRunner(conn), sqlite.NewFoodEventRepo(conn), map[foodevent.Kind]foodevent.Restorer{}, clock.Now)
 	chefGuard := &chef.Guard{Settings: settingsSvc, Spend: aiRunRepo, Prices: priceOverrides, Now: time.Now}
 	chefRunner := chef.NewRunner(chef.RunnerConfig{
 		Store: sqlite.NewChefJobRepo(conn), Guard: chefGuard,
@@ -457,6 +460,7 @@ func run() error {
 		Settings:      settingsHandler,
 		Shopping:      handlers.NewShoppingHandler(shoppingSvc).WithClock(clock.Now),
 		Availability:  handlers.NewAvailabilityHandler(availabilitySvc).WithClock(clock.Now),
+		FoodEvents:    handlers.NewFoodEventHandler(foodEventSvc),
 		Setup:         handlers.NewSetupHandler(setup.NewService(settingsSvc, foodRepo)),
 		DevMode:       cfg.DevMode,
 		Dev:           devHandler,
