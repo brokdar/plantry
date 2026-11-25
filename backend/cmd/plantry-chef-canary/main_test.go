@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,7 +39,7 @@ func TestRun_ScriptedSeedsLabelsAndReports(t *testing.T) {
 func settingsDB(t *testing.T, secret string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "plantry.db")
-	conn, err := sql.Open("sqlite", "file:"+path)
+	conn, err := sql.Open("sqlite", testhelper.DSN(path))
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 	_, err = conn.Exec(`CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, encrypted INTEGER NOT NULL DEFAULT 0)`)
