@@ -84,6 +84,7 @@ func TestAddNoCook_PlateFitFillerServesTheWeek(t *testing.T) {
 		carbsPct float64
 		legume   bool
 		big      bool // only the large bread beside chickpeas and cheese
+		breadOrd bool // the bread comes first in the pool
 		want     int64
 	}{
 		{name: "plate fit off: the old order", carbsPct: 30, want: pfCheese},
@@ -91,10 +92,15 @@ func TestAddNoCook_PlateFitFillerServesTheWeek(t *testing.T) {
 		{name: "carb kcal while carbs are below range", plateFit: true, carbsPct: 30, legume: true, want: pfBread},
 		{name: "carbs in range: no carb key", plateFit: true, carbsPct: 55, legume: true, want: pfCheese},
 		{name: "kcal fit first: the large bread is outside the bucket", plateFit: true, carbsPct: 30, legume: true, big: true, want: pfChickpeas}, // more carbs than the cheese
+		{name: "carbs above range: the fewest carbs", plateFit: true, carbsPct: 80, legume: true, breadOrd: true, want: pfCheese},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h, tgt := fillerPlanner(tt.plateFit, tt.carbsPct, tt.legume)
+			if tt.breadOrd {
+				h.s.NoCook = []int64{pfBread, pfChickpeas, pfCheese}
+				h.in.State = h.s
+			}
 			if tt.big {
 				h.s.NoCook = []int64{pfCheese, pfBigBread, pfChickpeas}
 				h.in.State = h.s
