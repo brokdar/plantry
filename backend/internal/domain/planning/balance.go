@@ -288,6 +288,12 @@ func (h *planner) addSide(date time.Time, limit float64) {
 		}
 	}
 	slices.SortStableFunc(opts, func(a, b opt) int {
+		// Every option holds the day's nutrition (verified above); a side
+		// the household would rather not get ranks after every other
+		// option, before plate fit.
+		if c := boolCmp(h.s.RatherNot[a.c.food.ID], h.s.RatherNot[b.c.food.ID]); c != 0 {
+			return c
+		}
 		if h.s.Settings.PlateFit {
 			// Plate fit after nutrition: the least fat above the week's
 			// range (excessFat), then within kcalBucket of the need, the

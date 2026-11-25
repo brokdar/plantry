@@ -82,6 +82,10 @@ type State struct {
 	// Corrections are the user's recipe swaps of the 4 weeks before the
 	// window (D21): what the generator proposed and the user replaced.
 	Corrections []Replacement
+	// RatherNot holds the foods the household would rather not get as a
+	// side or add-on (RatherNotSides); nil where the builder does not load
+	// feedback.
+	RatherNot map[int64]bool
 	// Light are the light requests of this run (see LightIntent); nil
 	// without any.
 	Light []LightIntent
