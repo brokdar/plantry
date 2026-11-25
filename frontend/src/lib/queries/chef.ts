@@ -1,6 +1,12 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 
-import { getChefSpend } from "@/lib/api/chef"
+import {
+  getChefSpend,
+  getLabellingEstimate,
+  startLibraryLabelling,
+} from "@/lib/api/chef"
+import { toastError } from "@/lib/toast"
 
 import { chefKeys } from "./keys"
 
@@ -9,5 +15,24 @@ export function useChefSpend() {
   return useQuery({
     queryKey: chefKeys.spend(),
     queryFn: getChefSpend,
+  })
+}
+
+/** The library labelling estimate, read while `enabled` (the dialog open). */
+export function useLabellingEstimate(enabled: boolean) {
+  return useQuery({
+    queryKey: chefKeys.labelling(),
+    queryFn: getLabellingEstimate,
+    enabled,
+    staleTime: 0,
+  })
+}
+
+/** Queues the one-time library labelling. */
+export function useStartLibraryLabelling() {
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: startLibraryLabelling,
+    onError: (err) => toastError(err, t),
   })
 }

@@ -6,11 +6,12 @@ import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { useChefSpend } from "@/lib/queries/chef"
+import { useChefSpend, useStartLibraryLabelling } from "@/lib/queries/chef"
 import { usePatchProfile, useProfile } from "@/lib/queries/profile"
-import { useSettingItems } from "@/lib/queries/settings"
+import { useSetSetting, useSettingItems } from "@/lib/queries/settings"
 
 import { AIProviderControls } from "../AIProviderControls"
+import { ChefOnDialog } from "../ChefOnDialog"
 import { formatUSD } from "../insights/format"
 import { PricesEditor } from "../PricesEditor"
 import { NumberField, SettingsGroup, Switch } from "../controls"
@@ -38,6 +39,7 @@ export function AssistantSection() {
       {hasKey && (
         <SettingsGroup>
           <ChefRow />
+          <ChefCapRow />
         </SettingsGroup>
       )}
 
@@ -72,12 +74,23 @@ export function AssistantSection() {
   )
 }
 
-/** `chef.enabled` (ON-1) and this month's capped spend against the cap. */
+/** `chef.enabled` (ON-1) and this month's capped spend against the cap.
+ *  Turning it on asks first with the library labelling estimate (ON-2). */
 function ChefRow() {
   const { t, i18n } = useTranslation()
   const field = useSettingField("chef.enabled", "false")
   const on = field.value === "true"
   const { data: spend } = useChefSpend()
+  const [asking, setAsking] = useState(false)
+  const setSetting = useSetSetting()
+  const startLabelling = useStartLibraryLabelling()
+
+  async function turnOn() {
+    await setSetting.mutateAsync({ key: "chef.enabled", value: "true" })
+    await startLabelling.mutateAsync()
+    setAsking(false)
+  }
+
   return (
     <SettingRow
       label={t("settings_page.assistant.chef_label")}
@@ -95,7 +108,7 @@ function ChefRow() {
         <Switch
           id="setting-chef-enabled"
           checked={on}
-          onChange={(next) => field.save(String(next))}
+          onChange={(next) => (next ? setAsking(true) : field.save("false"))}
         />
         {spend && (
           <p className="text-small text-ink-muted" data-testid="chef-spend">
@@ -111,6 +124,39 @@ function ChefRow() {
           </p>
         )}
       </div>
+      <ChefOnDialog
+        open={asking}
+        onOpenChange={setAsking}
+        pending={setSetting.isPending || startLabelling.isPending}
+        onConfirm={() => void turnOn().catch(() => setAsking(false))}
+      />
+    </SettingRow>
+  )
+}
+
+/** `chef.monthly_cap` (COST-1) in whole US dollars. */
+function ChefCapRow() {
+  const { t } = useTranslation()
+  const field = useSettingField("chef.monthly_cap", "5")
+  const cap = Math.round(Number(field.value))
+  return (
+    <SettingRow
+      label={t("settings_page.assistant.chef_cap_label")}
+      description={t("settings_page.assistant.chef_cap_effect")}
+      item={field.item}
+      onClearOverride={field.clear}
+      saved={field.saved}
+      htmlFor="setting-chef-cap"
+    >
+      <NumberField
+        id="setting-chef-cap"
+        value={cap}
+        min={0}
+        max={1000}
+        suffix={t("settings_page.assistant.chef_cap_unit")}
+        onCommit={(n) => field.save(String(n))}
+        testId="chef-cap-input"
+      />
     </SettingRow>
   )
 }

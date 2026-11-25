@@ -382,3 +382,23 @@ func TestRunner_HandlerErrorFailsJob(t *testing.T) {
 	_, err = r.Enqueue(ctx, airun.KindChefMatch, "", false)
 	assert.Error(t, err, "a kind without a handler is refused")
 }
+
+func TestRunner_QueuedUntilClaimed(t *testing.T) {
+	e := newEnv(t, true)
+	ctx := context.Background()
+	r := e.runner(map[airun.Kind]chef.Handler{airun.KindChefAttributes: e.recordRun(0)}, 1)
+	_, err := r.Enqueue(ctx, airun.KindChefAttributes, `{"food_ids":[1]}`, false)
+	require.NoError(t, err)
+
+	queued, err := r.Queued(ctx, airun.KindChefAttributes, `{"food_ids":[1]}`)
+	require.NoError(t, err)
+	assert.True(t, queued)
+	queued, err = r.Queued(ctx, airun.KindChefAttributes, `{"food_ids":[2]}`)
+	require.NoError(t, err)
+	assert.False(t, queued, "another payload")
+
+	drain(t, r)
+	queued, err = r.Queued(ctx, airun.KindChefAttributes, `{"food_ids":[1]}`)
+	require.NoError(t, err)
+	assert.False(t, queued, "it ran")
+}

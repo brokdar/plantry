@@ -42,6 +42,8 @@ type JobStore interface {
 	// Recover puts running jobs back to queued, or fails those with at
 	// least maxAttempts attempts. It returns how many it touched.
 	Recover(ctx context.Context, maxAttempts int, now time.Time) (int64, error)
+	// Queued reports whether a job of kind with payload waits, not yet running.
+	Queued(ctx context.Context, kind airun.Kind, payload string) (bool, error)
 }
 
 // Checker is the cap guard as the runner uses it.
@@ -115,6 +117,11 @@ func (r *Runner) Enqueue(ctx context.Context, kind airun.Kind, payload string, r
 	}
 	r.signal()
 	return id, nil
+}
+
+// Queued reports whether a job of kind with payload waits to run.
+func (r *Runner) Queued(ctx context.Context, kind airun.Kind, payload string) (bool, error) {
+	return r.cfg.Store.Queued(ctx, kind, payload)
 }
 
 // Shutdown stops taking jobs and waits for the running ones. When ctx ends

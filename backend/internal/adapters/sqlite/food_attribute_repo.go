@@ -82,6 +82,16 @@ func (r *FoodAttributeRepo) Delete(ctx context.Context, foodID int64) error {
 	return nil
 }
 
+// UnlabelledRecipes returns the composed foods with ingredients that hold no
+// assistant value yet, by id.
+func (r *FoodAttributeRepo) UnlabelledRecipes(ctx context.Context) ([]int64, error) {
+	ids, err := r.queriesFor(ctx).ListUnlabelledRecipeIDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list unlabelled recipes: %w", err)
+	}
+	return ids, nil
+}
+
 func attributeRecord(row sqlcgen.FoodAttribute) (flavor.Record, error) {
 	rec := flavor.Record{FoodID: row.FoodID, Version: int(row.Version)}
 	if err := json.Unmarshal([]byte(row.ValuesJson), &rec.Values); err != nil {

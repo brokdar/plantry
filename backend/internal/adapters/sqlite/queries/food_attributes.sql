@@ -14,3 +14,14 @@ ON CONFLICT (food_id) DO UPDATE SET
 
 -- name: DeleteFoodAttributes :exec
 DELETE FROM food_attributes WHERE food_id = ?;
+
+-- name: ListUnlabelledRecipeIDs :many
+-- Composed foods with at least one ingredient whose stored attributes hold
+-- no assistant (auto) value: what the library labelling pass labels.
+SELECT f.id FROM foods f
+WHERE f.kind = 'composed'
+  AND EXISTS (SELECT 1 FROM food_components c WHERE c.parent_id = f.id)
+  AND NOT EXISTS (
+      SELECT 1 FROM food_attributes a
+      WHERE a.food_id = f.id AND a.sources_json LIKE '%"auto"%')
+ORDER BY f.id;

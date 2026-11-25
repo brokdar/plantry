@@ -32,9 +32,10 @@ type ImageSaver interface {
 // Service holds business logic for foods (both leaf and composed).
 type Service struct {
 	repo            Repository
-	images          ImageDeleter    // optional; nil-safe
-	imgStore        ImageSaver      // optional; nil-safe
-	portionProvider PortionProvider // optional; SyncPortionsFromFDC returns ErrLookupFailed when nil
+	images          ImageDeleter                        // optional; nil-safe
+	imgStore        ImageSaver                          // optional; nil-safe
+	portionProvider PortionProvider                     // optional; SyncPortionsFromFDC returns ErrLookupFailed when nil
+	saved           func(ctx context.Context, id int64) // optional; see WithSaved
 }
 
 // NewService creates a food service backed by the given repository.
@@ -61,6 +62,20 @@ func (s *Service) WithPortionProvider(p PortionProvider) *Service {
 	return s
 }
 
+// WithSaved sets a hook called after a composed food is created or updated
+// (the Chef's attribute labelling, ATTR-2).
+func (s *Service) WithSaved(fn func(ctx context.Context, id int64)) *Service {
+	s.saved = fn
+	return s
+}
+
+// notifySaved runs the saved hook for a composed food.
+func (s *Service) notifySaved(ctx context.Context, f *Food) {
+	if s.saved != nil && f.Kind == KindComposed {
+		s.saved(ctx, f.ID)
+	}
+}
+
 // ErrNoFdcID is returned when portion sync is requested for a food without
 // an fdc_id (manual or OFF-sourced).
 var ErrNoFdcID = errors.New("food has no fdc_id")
@@ -75,7 +90,11 @@ func (s *Service) Create(ctx context.Context, f *Food) error {
 			return err
 		}
 	}
-	return s.repo.Create(ctx, f)
+	if err := s.repo.Create(ctx, f); err != nil {
+		return err
+	}
+	s.notifySaved(ctx, f)
+	return nil
 }
 
 // CreateFromLookup creates a leaf food and runs best-effort post-create
@@ -137,7 +156,11 @@ func (s *Service) Update(ctx context.Context, f *Food) error {
 			return err
 		}
 	}
-	return s.repo.Update(ctx, f)
+	if err := s.repo.Update(ctx, f); err != nil {
+		return err
+	}
+	s.notifySaved(ctx, f)
+	return nil
 }
 
 // Delete removes a food by ID and best-effort deletes its stored image.

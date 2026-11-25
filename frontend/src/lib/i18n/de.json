@@ -380,7 +380,21 @@
       "chef_effect_on": "Der Assistent beschriftet deine Rezepte, prüft Importe und sucht neue Gerichte für deine Pläne, im Rahmen des Monatslimits.",
       "chef_effect_off": "Schalte ihn ein, damit der Assistent von sich aus Rezepte beschriftet, Importe prüft und neue Gerichte sucht.",
       "chef_spend": "Diesen Monat: {{spent}} von {{cap}}",
-      "chef_spend_at_cap": "Diesen Monat: {{spent}} von {{cap}}. Das Limit ist erreicht, der Assistent wartet bis zum nächsten Monat."
+      "chef_spend_at_cap": "Diesen Monat: {{spent}} von {{cap}}. Das Limit ist erreicht, der Assistent wartet bis zum nächsten Monat.",
+      "chef_on_title": "Chef einschalten?",
+      "chef_on_body": "Zuerst beschriftet der Assistent deine Rezepte einmal (Küche, Hauptzutaten, Geschmack und mehr), damit er deine Teller beurteilen kann.",
+      "chef_on_loading": "Kosten werden berechnet …",
+      "chef_on_error": "Die Kosten ließen sich nicht berechnen.",
+      "chef_on_nothing": "Deine Rezepte sind schon beschriftet, das kostet also nichts.",
+      "chef_on_estimate_one": "{{count}} Rezept, etwa {{cost}} und {{minutes}} Min.",
+      "chef_on_estimate_other": "{{count}} Rezepte, etwa {{cost}} und {{minutes}} Min.",
+      "chef_on_unpriced_one": "{{count}} Rezept. Für dein Modell ist kein Preis hinterlegt: Die Kosten sind unbekannt, und der Assistent arbeitet nicht von selbst, bis du unten einen Preis einträgst.",
+      "chef_on_unpriced_other": "{{count}} Rezepte. Für dein Modell ist kein Preis hinterlegt: Die Kosten sind unbekannt, und der Assistent arbeitet nicht von selbst, bis du unten einen Preis einträgst.",
+      "chef_on_background": "Das läuft im Hintergrund, du kannst also ruhig weiterkochen.",
+      "chef_on_confirm": "Einschalten",
+      "chef_cap_label": "Monatslimit",
+      "chef_cap_effect": "So viel gibt der Assistent höchstens pro Monat für seine eigene Arbeit aus. Planen und Chat zählen nicht.",
+      "chef_cap_unit": "USD"
     },
     "system_section": {
       "appearance_group": "Sprache und Design",

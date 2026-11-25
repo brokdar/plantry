@@ -380,7 +380,21 @@
       "chef_effect_on": "The assistant labels your recipes, checks imports and finds new dishes for your plans, within the monthly limit.",
       "chef_effect_off": "Turn it on to have the assistant label your recipes, check imports and find new dishes on its own.",
       "chef_spend": "This month: {{spent}} of {{cap}}",
-      "chef_spend_at_cap": "This month: {{spent}} of {{cap}}. The monthly limit is reached, so the assistant waits until next month."
+      "chef_spend_at_cap": "This month: {{spent}} of {{cap}}. The monthly limit is reached, so the assistant waits until next month.",
+      "chef_on_title": "Turn on the Chef?",
+      "chef_on_body": "First the assistant labels your recipes once (cuisine, hero ingredients, taste and more), so it can judge your plates.",
+      "chef_on_loading": "Working out the cost…",
+      "chef_on_error": "Couldn't work out the cost.",
+      "chef_on_nothing": "Your recipes are labelled already, so this costs nothing.",
+      "chef_on_estimate_one": "{{count}} recipe, about {{cost}} and {{minutes}} min.",
+      "chef_on_estimate_other": "{{count}} recipes, about {{cost}} and {{minutes}} min.",
+      "chef_on_unpriced_one": "{{count}} recipe. Your model has no price, so the cost is unknown and the assistant does nothing on its own until you add a price below.",
+      "chef_on_unpriced_other": "{{count}} recipes. Your model has no price, so the cost is unknown and the assistant does nothing on its own until you add a price below.",
+      "chef_on_background": "It runs in the background, so keep cooking meanwhile.",
+      "chef_on_confirm": "Turn on",
+      "chef_cap_label": "Monthly limit",
+      "chef_cap_effect": "The most the assistant spends on its own work each month. Planning and chat don't count.",
+      "chef_cap_unit": "USD"
     },
     "system_section": {
       "appearance_group": "Language and theme",

@@ -18,3 +18,8 @@ SET status = CASE WHEN attempts >= sqlc.arg(max_attempts) THEN 'failed' ELSE 'qu
     error = CASE WHEN attempts >= sqlc.arg(max_attempts) THEN 'interrupted ' || attempts || ' times' ELSE error END,
     updated_at = sqlc.arg(now)
 WHERE status = 'running';
+
+-- name: HasQueuedChefJob :one
+SELECT EXISTS (
+  SELECT 1 FROM chef_jobs WHERE kind = sqlc.arg(kind) AND payload = sqlc.arg(payload) AND status = 'queued'
+) AS queued;

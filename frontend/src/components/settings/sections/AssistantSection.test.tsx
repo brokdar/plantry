@@ -15,7 +15,11 @@ vi.mock("@/lib/api/settings", () => ({
   getSystemInfo: vi.fn(),
 }))
 
-vi.mock("@/lib/api/chef", () => ({ getChefSpend: vi.fn() }))
+vi.mock("@/lib/api/chef", () => ({
+  getChefSpend: vi.fn(),
+  getLabellingEstimate: vi.fn(),
+  startLibraryLabelling: vi.fn(),
+}))
 
 vi.mock("@/lib/api/profile", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/profile")>()),
@@ -23,7 +27,11 @@ vi.mock("@/lib/api/profile", async (orig) => ({
   updateProfile: vi.fn(),
 }))
 
-import { getChefSpend } from "@/lib/api/chef"
+import {
+  getChefSpend,
+  getLabellingEstimate,
+  startLibraryLabelling,
+} from "@/lib/api/chef"
 import { getProfile, updateProfile, type Profile } from "@/lib/api/profile"
 import {
   clearSetting,
@@ -70,6 +78,13 @@ describe("AssistantSection", () => {
       cap_usd: 5,
       at_cap: false,
     })
+    vi.mocked(getLabellingEstimate).mockResolvedValue({
+      recipes: 24,
+      calls: 3,
+      cost_usd: 0.12,
+      minutes: 1,
+    })
+    vi.mocked(startLibraryLabelling).mockResolvedValue({ jobs: 3 })
     vi.mocked(listAIModels).mockResolvedValue({
       models: [
         { id: "fake-default", display_name: "Fake (default)" },
@@ -122,8 +137,77 @@ describe("AssistantSection", () => {
         "This month: $1.25 of $5.00"
       )
       await user.click(toggle)
+      // ON-2: the estimate first, the switch saves only on Turn on.
+      expect(await screen.findByTestId("chef-on-estimate")).toHaveTextContent(
+        "24 recipes, about $0.12 and 1 min."
+      )
+      expect(setSetting).not.toHaveBeenCalled()
+      await user.click(screen.getByRole("button", { name: "Turn on" }))
+      await waitFor(() => expect(startLibraryLabelling).toHaveBeenCalled())
+      expect(setSetting).toHaveBeenCalledWith("chef.enabled", "true")
       await waitFor(() =>
-        expect(setSetting).toHaveBeenCalledWith("chef.enabled", "true")
+        expect(screen.queryByTestId("chef-on-dialog")).toBeNull()
+      )
+      expect(toggle).toBeChecked()
+    })
+
+    it("stays off when the estimate is cancelled", async () => {
+      serveSettings([{ key: "ai.provider", value: "fake", source: "db" }])
+      vi.mocked(getLabellingEstimate).mockResolvedValue({
+        recipes: 2,
+        calls: 1,
+        cost_usd: null,
+        minutes: 1,
+      })
+      const user = userEvent.setup()
+      renderSection()
+      await user.click(await screen.findByLabelText("Chef"))
+      expect(await screen.findByTestId("chef-on-estimate")).toHaveTextContent(
+        "Your model has no price"
+      )
+      await user.click(screen.getByRole("button", { name: "Cancel" }))
+      expect(setSetting).not.toHaveBeenCalled()
+      expect(startLibraryLabelling).not.toHaveBeenCalled()
+      expect(screen.getByLabelText("Chef")).not.toBeChecked()
+    })
+
+    it("cannot turn on without an estimate", async () => {
+      serveSettings([{ key: "ai.provider", value: "fake", source: "db" }])
+      vi.mocked(getLabellingEstimate).mockRejectedValue(new Error("boom"))
+      const user = userEvent.setup()
+      renderSection()
+      await user.click(await screen.findByLabelText("Chef"))
+      expect(
+        await screen.findByTestId("chef-on-estimate")
+      ).not.toHaveTextContent("recipes")
+      expect(screen.getByRole("button", { name: "Turn on" })).toBeDisabled()
+    })
+
+    it("turns off without asking", async () => {
+      serveSettings([
+        { key: "ai.provider", value: "fake", source: "db" },
+        { key: "chef.enabled", value: "true", source: "db" },
+      ])
+      const user = userEvent.setup()
+      renderSection()
+      await user.click(await screen.findByLabelText("Chef"))
+      await waitFor(() =>
+        expect(setSetting).toHaveBeenCalledWith("chef.enabled", "false")
+      )
+      expect(screen.queryByTestId("chef-on-dialog")).toBeNull()
+    })
+
+    it("edits the monthly limit", async () => {
+      serveSettings([{ key: "ai.provider", value: "fake", source: "db" }])
+      const user = userEvent.setup()
+      renderSection()
+      const input = await screen.findByLabelText("Monthly limit")
+      expect(input).toHaveValue(5)
+      await user.clear(input)
+      await user.type(input, "8")
+      await user.tab()
+      await waitFor(() =>
+        expect(setSetting).toHaveBeenCalledWith("chef.monthly_cap", "8")
       )
     })
 

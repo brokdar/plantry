@@ -410,9 +410,36 @@ func run() error {
 	flavorSvc := flavor.NewService(foodAttributeRepo, foodRepo, nutritionResolver, foodEventSvc)
 	foodRestorers[foodevent.KindAttribute] = flavorSvc
 	chefGuard := &chef.Guard{Settings: settingsSvc, Spend: aiRunRepo, Prices: priceOverrides, Now: time.Now}
+	// Attribute labelling (ATTR-2): a chef_attributes job per saved recipe
+	// and the one-time library pass, each a capped run.
+	var labelling *flavor.Labelling
 	chefRunner := chef.NewRunner(chef.RunnerConfig{
 		Store: sqlite.NewChefJobRepo(conn), Guard: chefGuard,
+		Handlers: map[airun.Kind]chef.Handler{
+			airun.KindChefAttributes: func(ctx context.Context, job chef.Job) error { return labelling.Handle(ctx, job.Payload) },
+		},
 		Concurrency: chefJobConcurrency, MaxAttempts: chefJobMaxAttempts, Now: time.Now, Logger: logger,
+	})
+	labelling = flavor.NewLabelling(
+		flavor.NewLabeler(foodAttributeRepo, foodRepo, nutritionResolver, txRunner, llmResolver, runRecorder),
+		foodAttributeRepo, chefRunner, settingsSvc,
+		func(ctx context.Context, input, output int64) (*float64, error) {
+			ai, err := settingsSvc.EffectiveAI(ctx)
+			if err != nil {
+				return nil, err
+			}
+			overrides, err := priceOverrides(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return airun.Cost(ai.Model, ai.Provider, airun.Tokens{Input: input, Output: output}, overrides), nil
+		},
+		chefJobConcurrency,
+	)
+	foodSvc.WithSaved(func(ctx context.Context, id int64) {
+		if err := labelling.Saved(ctx, id); err != nil {
+			logger.WarnContext(ctx, "chef.labelling.queue failed", "food_id", id, "error", err)
+		}
 	})
 	if err := chefRunner.Start(context.Background()); err != nil {
 		return err
@@ -465,7 +492,7 @@ func run() error {
 		Feedback:      handlers.NewFeedbackHandler(feedbackSvc),
 		Import:        importHandler,
 		Discovery:     handlers.NewDiscoveryHandler(discoverySvc).WithClock(clock.Now),
-		Chef:          handlers.NewChefHandler(chefGuard.Spent),
+		Chef:          handlers.NewChefHandler(chefGuard.Spent, labelling),
 		Settings:      settingsHandler,
 		Shopping:      handlers.NewShoppingHandler(shoppingSvc).WithClock(clock.Now),
 		Availability:  handlers.NewAvailabilityHandler(availabilitySvc).WithClock(clock.Now),

@@ -191,6 +191,21 @@ func TestService_Create_Composed_OK(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestService_SavedHookRunsForComposedFoods(t *testing.T) {
+	ctx := context.Background()
+	var saved []int64
+	svc := food.NewService(&fakeRepo{}).WithSaved(func(_ context.Context, id int64) { saved = append(saved, id) })
+	recipe := &food.Food{
+		ID: 7, Name: "Pasta", Kind: food.KindComposed, Role: ptrRole(food.RoleMain),
+		Children: []food.FoodComponent{{ChildID: 1, Amount: 200, Unit: "g"}},
+	}
+	require.NoError(t, svc.Create(ctx, recipe))
+	require.NoError(t, svc.Update(ctx, recipe))
+	require.NoError(t, svc.Create(ctx, &food.Food{ID: 8, Name: "Apple", Kind: food.KindLeaf}))
+	require.Error(t, svc.Create(ctx, &food.Food{ID: 9, Kind: food.KindComposed}), "invalid: no hook")
+	assert.Equal(t, []int64{7, 7}, saved)
+}
+
 func TestService_Create_Composed_MissingRole(t *testing.T) {
 	svc := food.NewService(&fakeRepo{})
 	err := svc.Create(context.Background(), &food.Food{
