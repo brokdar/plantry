@@ -17,9 +17,10 @@ import (
 //
 //  1. Breakfast and sweet foods stay at breakfast: no muesli, oats, jam or
 //     honey, no fresh fruit or fruit salad, no milk or kefir. Cultured dairy
-//     (yogurt, skyr, quark; one per plate) only as a dollop where the dish
-//     takes one: a curry, stew, chili, wrap or potato dish, or an Indian,
-//     Middle Eastern or Mexican main.
+//     (yogurt, skyr, quark; one per plate) only as a dollop or cold sauce
+//     where the dish takes one: a curry, stew, chili, soup, wrap, bowl, salad,
+//     potato or fish dish, or an Indian, Middle Eastern, Mexican or
+//     Mediterranean main; never a pasta, bake, stir-fry or East Asian main.
 //  2. A protein filler (meat, fish, tofu, tempeh, egg, a legume) never joins
 //     a plate that already carries protein (its main or another component).
 //  3. On a plate without one, it must fit the dish: tofu and tempeh with a
@@ -28,6 +29,10 @@ import (
 //     wrap, bread or potato dish (never a hot soup or pasta); a legume (hummus,
 //     chickpeas) with a salad, bowl, wrap, curry, stew or soup (or a Middle
 //     Eastern, Indian or Mexican main).
+//
+// A cheese or nut leaf is a topping where the dish takes one (toppingFits:
+// parmesan on a pasta, feta on a salad, cashews on a curry). A plate holds its
+// main and at most maxPlateSides sides and add-ons.
 //
 // Vegetables, bread (not a second starch) and the rest join as before. When
 // no filler fits, the plate keeps its gap; the safety floor lift skips all of
@@ -65,6 +70,8 @@ var dishKindWords = map[string][]string{
 	"bowl":    {"bowl"},
 	"potato":  {"kartoffel", "potato", "roesti"},
 	"bread":   {"brot", "bread", "toast", "bruschetta"},
+	"bake":    {"gratin", "auflauf", "ueberbacken", "lasagn"},
+	"egg":     {"shakshuka", "omelett", "frittata", "ruehrei"},
 }
 
 // asianCuisines are the cuisines whose mains take tofu.
@@ -143,20 +150,18 @@ func (s State) fillerFits(p Plate, f FoodFacts, slot string) bool {
 func (s State) addFits(p Plate, f FoodFacts, slot string) bool {
 	pair := s
 	pair.PairAddOns = true
+	m, savoury := s.savouryMain(p, slot)
+	if savoury && s.sidesBeside(p, f) >= maxPlateSides {
+		return false // no clutter: a main and at most two sides or add-ons
+	}
+	name := diet.Fold(f.Name)
+	pair.Settings.PlateFit = true // a cheese or nut by toppingFits
 	if !pair.addOnFits(p, f, slot) {
 		return false
 	}
-	if slot != "lunch" && slot != "dinner" {
-		return true
+	if !savoury || f.Composed() {
+		return true // no savoury main to judge by; a no-cook recipe add is judged by addOnFits
 	}
-	m, ok := s.Foods[s.mainOf(p)]
-	if !ok || m.Sweet || m.Role == food.RoleDessert || containsAny(diet.Fold(m.Name), breakfastWords) {
-		return true // no savoury main to judge by (a shakshuka tagged brunch is one)
-	}
-	if f.Composed() {
-		return true // a no-cook recipe add is judged by addOnFits
-	}
-	name := diet.Fold(f.Name)
 	kinds := dishKinds(m)
 	in := func(ks ...string) bool { return slices.ContainsFunc(ks, func(k string) bool { return kinds[k] }) }
 	cuisine := m.Attrs.Cuisine
@@ -164,7 +169,14 @@ func (s State) addFits(p Plate, f FoodFacts, slot string) bool {
 	case fillBreakfast, fillFruit, fillDrink:
 		return false
 	case fillDairy:
-		return in("curry", "stew", "wrap", "potato") || slices.Contains([]string{"indian", "middle_eastern", "mexican"}, cuisine)
+		// A dollop or a cold sauce (raita, tzatziki, dill yogurt with fish,
+		// herb quark with potatoes); not on a pasta, bake or stir-fry.
+		if in("pasta", "bake", "stirfry") || slices.Contains(asianCuisines[:3], cuisine) {
+			return false
+		}
+		fish := m.Groups.FishG > 0 || in("fish")
+		return fish || in("curry", "stew", "soup", "wrap", "potato", "bowl", "salad") ||
+			slices.Contains([]string{"indian", "middle_eastern", "mexican", "mediterranean"}, cuisine)
 	case fillProtein:
 		for _, c := range p.Components {
 			if g, ok := s.Foods[c.FoodID]; ok && c.FoodID != f.ID && carriesProtein(g) {
@@ -183,6 +195,57 @@ func (s State) addFits(p Plate, f FoodFacts, slot string) bool {
 		}
 	}
 	return true
+}
+
+// savouryMain is plate p's main when it is a savoury lunch or dinner main
+// (not sweet, not a dessert, not a breakfast dish; a shakshuka tagged brunch
+// is one).
+func (s State) savouryMain(p Plate, slot string) (FoodFacts, bool) {
+	m, ok := s.Foods[s.mainOf(p)]
+	return m, (slot == "lunch" || slot == "dinner") && ok && !m.Sweet && m.Role != food.RoleDessert &&
+		!containsAny(diet.Fold(m.Name), breakfastWords)
+}
+
+// maxPlateSides caps a lunch or dinner plate's sides and add-ons beside its
+// main (CP1: "a dinner of six items"); a tip's garnish is not one.
+const maxPlateSides = 2
+
+// sidesBeside counts plate p's components other than its main and f.
+func (s State) sidesBeside(p Plate, f FoodFacts) int {
+	mainID, n := s.mainOf(p), 0
+	for _, c := range p.Components {
+		if c.FoodID != mainID && c.FoodID != f.ID {
+			n++
+		}
+	}
+	return n
+}
+
+// toppingFits reports whether a cheese or nut leaf (name folded) tops plate p
+// with savoury main m. Cheese: on a pasta, risotto, bake, salad, bowl,
+// potato or egg dish, wrap, bread or chili, or an Italian, French, Mediterranean or
+// Mexican main; never on a curry, stir-fry, soup, fish or Asian main, beside fish, or on
+// a plate that already has a cheese (in its main's name too: no feta on a
+// feta quiche). Nuts: on a salad, bowl, curry or stir-fry, never a pasta.
+func (s State) toppingFits(p Plate, m FoodFacts, name string) bool {
+	kinds := dishKinds(m)
+	in := func(ks ...string) bool { return slices.ContainsFunc(ks, func(k string) bool { return kinds[k] }) }
+	cuisine := m.Attrs.Cuisine
+	if !containsAny(name, cheeseWords) && !strings.Contains(name, "kaese") {
+		return in("salad", "bowl", "curry", "stirfry") && !in("pasta")
+	}
+	if in("curry", "stirfry", "soup", "fish") || slices.Contains(asianCuisines, cuisine) {
+		return false
+	}
+	for _, c := range p.Components {
+		g, ok := s.Foods[c.FoodID]
+		gn := diet.Fold(g.Name)
+		if ok && (g.Groups.FishG > 0 || containsAny(gn, cheeseWords) || strings.Contains(gn, "kaese")) {
+			return false
+		}
+	}
+	return in("pasta", "bake", "salad", "bowl", "potato", "wrap", "bread", "egg") || strings.Contains(diet.Fold(m.Name), "chili") ||
+		slices.Contains([]string{"italian", "french", "mediterranean", "mexican"}, cuisine)
 }
 
 // dropMisfitAdds takes off the proposal's new plates the no-cook adds (a

@@ -187,7 +187,10 @@ func TestDayReplan_KeyDayMealEmptyAndTheStartOpenExemption(t *testing.T) {
 	const noCold = "UPDATE foods SET no_cook = 0"
 	t.Run("a day newly under its minimum saves nothing", func(t *testing.T) {
 		t.Parallel()
-		v := regenDay(t, "chat-newuser", time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC), noCold)
+		// Plate fit off: on, the heuristic lifts the day with a side recipe
+		// of a batch it cooks anyway (CP1), and the day holds its minimum.
+		v := regenDay(t, "chat-newuser", time.Date(2026, 11, 21, 0, 0, 0, 0, time.UTC), noCold,
+			"INSERT OR REPLACE INTO app_settings (key, value) VALUES ('plan.plate_fit', 'false')")
 		assert.Equal(t, airun.StatusError, v.Status)
 		assert.Equal(t, "error.plan.day_meal_empty", v.ErrorKey)
 		assert.Contains(t, v.Notes, "Nothing was saved: Saturday would stay under its minimum")

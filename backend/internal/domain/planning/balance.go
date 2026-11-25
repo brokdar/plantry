@@ -275,6 +275,9 @@ func (h *planner) addSide(date time.Time, limit float64) {
 				f.Macros.Kcal*c.comp.Multiplier() > dk.Adjusted*maxSideKcalShare {
 				continue
 			}
+			if h.s.Settings.PlateFit && !h.floorLift && merged.sidesBeside(p, f) >= maxPlateSides {
+				continue // no clutter: the main and at most two sides or add-ons
+			}
 			on, clash, raised := merged.plateFitOf(p, f)
 			if on && clash {
 				continue

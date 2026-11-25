@@ -50,10 +50,10 @@ func fillerPlanner(plateFit bool, carbsPct float64, legumeWeek bool) (*planner, 
 	big.ServingG = 300 // its smallest add, half a serving, is 375 kcal
 	h.s.Foods[pfBigBread] = big
 	h.s.NoCook = []int64{pfCheese, pfBread, pfChickpeas} // the old order: cheese first
-	// The bake reads as a stew: chickpeas fit it (fillerFits), so the week's
-	// keys decide.
+	// The bake reads as a bowl: chickpeas and cheese fit it (fillerFits), so
+	// the week's keys decide.
 	bake := h.s.Foods[bfBake]
-	bake.Attrs.Kind = "stew"
+	bake.Attrs.Kind = "bowl"
 	h.s.Foods[bfBake] = bake
 	h.s.Settings.PlateFit = plateFit
 	h.in.State = h.s

@@ -145,7 +145,12 @@ func (h *planner) dayAccounts() (*index, []DayKcal) {
 func (h *planner) liftDay(dk DayKcal, limit float64, roundUp, leanOnly bool) {
 	h.topUpDay(dk.Date, limit-dk.Kcal, roundUp || h.s.Settings.PlateFit, leanOnly)
 	h.growLight(dk.Date, limit)
-	if h.balance {
+	if h.balance || h.s.Settings.PlateFit {
+		// Plate fit on: a side recipe of a batch the plan cooks anyway
+		// carries energy better than a filler that does not belong there.
+		if h.sided == nil {
+			h.sided = map[int]bool{}
+		}
 		h.addSide(dk.Date, limit)
 	}
 	for h.addNoCook(dk.Date, false, limit) {
@@ -222,6 +227,21 @@ const (
 	fillerDayShare    = 0.2
 )
 
+// proteinAdds is the day's protein add limit: plate fit on, one per meal
+// (maxPlateFitProteinAdds; the plate's side cap keeps it from clutter and
+// the day's add-on rule still holds), else maxProteinAdds.
+func (h *planner) proteinAdds() int {
+	if h.s.Settings.PlateFit {
+		return maxPlateFitProteinAdds
+	}
+	return maxProteinAdds
+}
+
+// maxPlateFitProteinAdds: with plate fit on, a protein filler must fit its
+// dish, so the day's protein comes from two small fitting adds (feta on
+// the bowl, yogurt on the curry) rather than one that fits nowhere.
+const maxPlateFitProteinAdds = 2
+
 // dayAdds counts a day's no-cook adds and the plates (slots) they went to.
 type dayAdds struct {
 	filler, protein int
@@ -264,6 +284,11 @@ func (h *planner) capAdd(c optCand, maxKcal float64) (optCand, bool) {
 	return c, true
 }
 
+// proteinBucket groups protein adds of about the same protein (steps of
+// 25 %), so the leaner one wins within a group and a vegetable or a yogurt
+// never beats a cheese that brings more protein.
+const proteinBucket = 1.25
+
 // closeProteinGaps lifts every complete day under its g/kg protein target
 // (100 %, so the week average can reach it too; the checker's day floor is
 // 90 %) with up to maxProteinAdds verified no-cook foods, the most protein
@@ -279,7 +304,7 @@ func (h *planner) closeProteinGaps() {
 	}
 	y := newIndex(Merge(h.s, h.in.Target, h.prop), h.in.Target)
 	for _, dk := range y.dayAccounts(y.days) {
-		for range maxProteinAdds {
+		for range h.proteinAdds() {
 			if !h.addNoCook(dk.Date, true, 0) {
 				break
 			}
@@ -296,7 +321,7 @@ func (h *planner) closeProteinGaps() {
 // of the day and never is a sweet; the day's caps hold over all passes.
 func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 	adds := h.addsOf(date)
-	if (protein && adds.protein >= maxProteinAdds) || (!protein && adds.filler >= maxFillerAdds) {
+	if (protein && adds.protein >= h.proteinAdds()) || (!protein && adds.filler >= maxFillerAdds) {
 		return false
 	}
 	merged := Merge(h.s, h.in.Target, h.prop)
@@ -415,14 +440,19 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 	slices.SortStableFunc(cands, func(a, b optCand) int {
 		if protein {
 			// Staying at or under the day's target first, then the most
-			// protein, then the best fit.
+			// protein (plate fit on: by proteinBucket, the leaner add within
+			// one), then the best fit.
 			over := func(c optCand) int {
 				if dk.Kcal+c.kcal > dk.Adjusted+1e-9 {
 					return 1
 				}
 				return 0
 			}
-			return cmp.Or(cmp.Compare(over(a), over(b)), cmp.Compare(fat(a), fat(b)), cmp.Compare(b.protein, a.protein), cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal)))
+			bucket := func(c optCand) float64 { return math.Round(math.Log(max(c.protein, 1)) / math.Log(proteinBucket)) }
+			if !h.s.Settings.PlateFit {
+				bucket = func(optCand) float64 { return 0 }
+			}
+			return cmp.Or(cmp.Compare(over(a), over(b)), cmp.Compare(bucket(b), bucket(a)), cmp.Compare(fat(a), fat(b)), cmp.Compare(b.protein, a.protein), cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal)))
 		}
 		// Sweets are out and the protein pass has its own add, so a filler
 		// is the food that fits the kcal gap best. A model's plan gets, within 25 kcal
@@ -445,7 +475,18 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		return cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal))
 	})
 	if h.floorLift {
-		slices.SortStableFunc(cands, func(a, b optCand) int { return cmp.Compare(b2f(misfit(a)), b2f(misfit(b))) })
+		// A fitting food first only when it reaches the floor: the day's few
+		// adds must not go to a cucumber that leaves the day under it.
+		// Among those, the one closest to the day's target: the floor
+		// lift's add takes a plate's last place, so it serves the week too.
+		short := func(c optCand) bool { return misfit(c) || c.kcal < need-epsilon }
+		gap := math.Max(dk.Adjusted-dk.Kcal, need)
+		slices.SortStableFunc(cands, func(a, b optCand) int {
+			if c := cmp.Compare(b2f(short(a)), b2f(short(b))); c != 0 || short(a) {
+				return c
+			}
+			return cmp.Compare(math.Abs(gap-a.kcal), math.Abs(gap-b.kcal))
+		})
 	}
 	for _, c := range cands {
 		o, ok := y.verify(c, h.in.Target, base, d, band, protein)
@@ -547,7 +588,17 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp, leanOnly bool)
 			return 0, false
 		}
 		last := ss.CookDate.AddDate(0, 0, h.x.keepDays(c.FoodID))
-		return i, !p.Date.After(last) && f.Macros.Kcal > 0 && (f.Role == food.RoleMain || f.Role == food.RoleSideStarch) && !(meatFull && f.Groups.MeatG > 0)
+		role := f.Role == food.RoleMain || f.Role == food.RoleSideStarch || (h.s.Settings.PlateFit && f.Role == food.RoleSideVeg)
+		return i, !p.Date.After(last) && f.Macros.Kcal > 0 && role && !(meatFull && f.Groups.MeatG > 0)
+	}
+	// capOf is how far every pass together raises a component: maxTopUp of
+	// its planned portions.
+	capOf := func(pi, ci int, c ProposedComponent) float64 {
+		base, seen := h.topUpBase[[2]int{pi, ci}]
+		if !seen {
+			base = c.Portions
+		}
+		return min(math.Floor(base*maxTopUp*4+epsilon)/4, MaxDishPortions)
 	}
 	if leanOnly {
 		all := growable
@@ -558,12 +609,13 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp, leanOnly bool)
 		}
 	}
 	var raisable float64
-	for _, p := range h.prop.Plates {
+	for pi, p := range h.prop.Plates {
 		if dayOf(p.Date) != dayOf(date) {
 			continue
 		}
-		for _, c := range p.Components {
-			if _, ok := growable(p, c); ok {
+		for ci, c := range p.Components {
+			// Plate fit on: a component at its cap takes no share of the need.
+			if _, ok := growable(p, c); ok && (!h.s.Settings.PlateFit || c.Portions < capOf(pi, ci, c)-epsilon) {
 				raisable += h.s.Foods[c.FoodID].Macros.Kcal * c.Portions
 			}
 		}
@@ -591,10 +643,11 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp, leanOnly bool)
 			// Every pass together stays within maxTopUp of the portions the
 			// plate was planned with.
 			key := [2]int{pi, ci}
+			top := capOf(pi, ci, *c)
 			if _, seen := h.topUpBase[key]; !seen {
 				h.topUpBase[key] = c.Portions
 			}
-			raised = max(min(raised, math.Floor(h.topUpBase[key]*maxTopUp*4+epsilon)/4, MaxDishPortions), c.Portions)
+			raised = max(min(raised, top), c.Portions)
 			if si >= 0 {
 				h.prop.Sessions[si].Portions += eaters * (raised - c.Portions)
 			}

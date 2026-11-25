@@ -51,6 +51,15 @@ func fillerState(plateFit bool) State {
 		leaf(29, "Milk", FoodGroups{}),
 		leaf(30, "Strawberry jam", FoodGroups{}),
 		leaf(31, "Egg", FoodGroups{}),
+		leaf(32, "Parmesan", FoodGroups{}),
+		leaf(33, "Feta", FoodGroups{}),
+		leaf(34, "Cashew nuts", FoodGroups{}),
+		main(11, "Salmon with broccoli", FoodGroups{FishG: 150}, 35),
+		main(12, "Mushroom risotto", FoodGroups{}, 10),
+		main(13, "Cheese spaetzle", FoodGroups{}, 20),
+		main(14, "Shakshuka", FoodGroups{}, 20),
+		{ID: 41, Name: "Steamed rice", Kind: food.KindComposed, Role: food.RoleSideStarch},
+		{ID: 42, Name: "Carrot salad", Kind: food.KindComposed, Role: food.RoleSideVeg},
 		{ID: 40, Name: "Fruit salad", Kind: food.KindComposed, Role: food.RoleDessert, NoCook: true},
 	} {
 		s.Foods[f.ID] = f
@@ -99,6 +108,26 @@ func TestFillerFits(t *testing.T) {
 		{"tofu on a vegetable stir-fry", 21, fillerPlate(6), "dinner", true},
 		{"egg on a salad bowl", 31, fillerPlate(7), "lunch", true},
 		{"hummus with a lentil-light soup", 28, fillerPlate(10), "lunch", true},
+		// Dairy as a cold sauce: dill yogurt with fish.
+		{"yogurt sauce with salmon", 24, fillerPlate(11), "dinner", true},
+		// Cheese and nuts top a dish that takes one (toppingFits).
+		{"parmesan on a risotto", 32, fillerPlate(12), "dinner", true},
+		{"parmesan on a pesto pasta", 32, fillerPlate(1), "dinner", true},
+		{"feta on a shakshuka", 33, fillerPlate(14), "lunch", true},
+		{"feta on a salad bowl", 33, fillerPlate(7), "lunch", true},
+		{"parmesan on a tuna pasta (fish)", 32, fillerPlate(2), "dinner", false},
+		{"feta beside salmon", 33, fillerPlate(11), "dinner", false},
+		{"parmesan on a curry", 32, fillerPlate(5), "dinner", false},
+		{"parmesan on a tomato soup", 32, fillerPlate(3), "dinner", false},
+		{"feta on cheese spaetzle", 33, fillerPlate(13), "dinner", false},
+		{"feta beside parmesan", 33, fillerPlate(12, 32), "dinner", false},
+		{"cashews on a curry", 34, fillerPlate(5), "dinner", true},
+		{"cashews on a stir-fry", 34, fillerPlate(6), "dinner", true},
+		{"cashews on a pesto pasta", 34, fillerPlate(1), "dinner", false},
+		// A plate holds its main and at most two sides or add-ons.
+		{"cucumber as the second side", 27, fillerPlate(4, 42), "dinner", true},
+		{"cucumber as the third side", 27, fillerPlate(4, 41, 42), "dinner", false},
+		{"muesli at breakfast beside three", 22, fillerPlate(24, 23, 29), "breakfast", true},
 		// Sides that fit as before.
 		{"bread with a soup", 26, fillerPlate(3), "lunch", true},
 		{"cucumber beside a schnitzel", 27, fillerPlate(4), "dinner", true},
@@ -118,13 +147,13 @@ func TestFillerFitsPlateFitOff(t *testing.T) {
 }
 
 func TestFillerFitsCuisine(t *testing.T) {
-	// A yogurt dollop goes on an Indian soup (the cuisine table), not on a plain one.
+	// A yogurt dollop goes on a soup, but not on a Japanese one (the cuisine table).
 	s := fillerState(true)
-	soup := s.Foods[3]
-	soup.Attrs = flavor.Attributes{Cuisine: "indian"}
-	s.Foods[3] = soup
 	assert.True(t, s.fillerFits(fillerPlate(3), s.Foods[24], "dinner"))
-	assert.False(t, fillerState(true).fillerFits(fillerPlate(3), fillerState(true).Foods[24], "dinner"))
+	soup := s.Foods[3]
+	soup.Attrs = flavor.Attributes{Cuisine: "japanese"}
+	s.Foods[3] = soup
+	assert.False(t, s.fillerFits(fillerPlate(3), s.Foods[24], "dinner"))
 }
 
 func TestDropMisfitAdds(t *testing.T) {
