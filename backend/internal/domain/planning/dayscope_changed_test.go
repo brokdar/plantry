@@ -78,5 +78,14 @@ func TestService_DayScopeBatchChangedBetweenDryRunAndSave(t *testing.T) {
 	}
 	afterSessions, _, err := e.deps.Sessions.ListInRange(e.ctx, e.start, e.start.AddDate(0, 0, 6))
 	require.NoError(t, err)
-	assert.Len(t, afterSessions, len(beforeSessions), "the save wrote nothing")
+	// The save wrote nothing: no new session. The user's delete may take a
+	// session that fed only the deleted plate (a varied side, PLATE-6).
+	ids := map[int64]bool{}
+	for _, ss := range beforeSessions {
+		ids[ss.ID] = true
+	}
+	for _, ss := range afterSessions {
+		assert.True(t, ids[ss.ID], "the save wrote session %d", ss.ID)
+	}
+	assert.GreaterOrEqual(t, len(afterSessions), len(beforeSessions)-1)
 }

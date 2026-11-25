@@ -368,6 +368,7 @@ export const mockSettingDefaults: Record<string, string> = {
   "ai.price_overrides": "{}",
   "chef.enabled": "false",
   "chef.monthly_cap": "5",
+  "chef.batch_variation": "true",
 }
 
 const SECRET_KEYS = new Set(["ai.api_key", "fdc.api_key"])

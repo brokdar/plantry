@@ -211,6 +211,12 @@ var registry = []Spec{
 		Kind:    KindBool,
 		Default: "true",
 	},
+	{
+		// PLATE-6: the plates of one batch vary their side.
+		Key:     KeyChefBatchVariation,
+		Kind:    KindBool,
+		Default: "true",
+	},
 }
 
 // SpecFor returns the spec for a given key, or (Spec{}, false) if unknown.
