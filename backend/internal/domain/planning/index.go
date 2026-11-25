@@ -91,6 +91,8 @@ type index struct {
 	// cells of sessions and of fresh components without a session, routine
 	// cells excluded.
 	occasions map[int]map[cellID]bool
+	// repick re-picks the side of a swapped main (guardWeek, plate fit on).
+	repick sidePicker
 }
 
 func newIndex(s State, t Target) *index {

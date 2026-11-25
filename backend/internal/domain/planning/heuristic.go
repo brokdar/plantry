@@ -43,7 +43,7 @@ func (Heuristic) Choose(ctx context.Context, in ChooseInput) (Proposal, error) {
 			// The week's meat budget and one fish meal, by verified swaps
 			// (the picks above only weigh them as tie-breaks).
 			var notes []string
-			prop, notes = guardWeek(in.State, in.Target, prop, idSet(in.Exclude), in.Instruction)
+			prop, notes = guardWeek(in.State, in.Target, prop, idSet(in.Exclude), in.Instruction, sidePickerFor(in, prop))
 			prop.Notes = joinNotes(append([]string{prop.Notes}, notes...)...)
 		}
 	}

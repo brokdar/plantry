@@ -12,6 +12,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // The weekly meat budget and the fish meal (S7) as checklist items: Go
@@ -156,7 +157,91 @@ type weekSwap struct {
 	oldMeatG  float64 // the replaced main's meat per eater
 	newMeatG  float64
 	plateMeat float64
+	// side and sideFood: with plate fit on, the plate's side component that
+	// is re-picked for the new main and the new side (0: the sides stay).
+	side     int
+	sideFood int64
 }
+
+// sidePicker picks the side for main on the plate at cell c beside its
+// other sides (the heuristic's pickSide, PLATE-5: a main swap re-picks the
+// side); nil (plate fit off) leaves the sides as they are.
+type sidePicker func(c plate.CellKey, main int64, others []int64) (int64, bool)
+
+// sidePickerFor is the side picker of in's state over the proposal's
+// sessions (their side rotation), nil when plate fit is off.
+func sidePickerFor(in ChooseInput, prop Proposal) sidePicker {
+	if !in.State.Settings.PlateFit {
+		return nil
+	}
+	h := newPlanner(in)
+	for _, ss := range prop.Sessions {
+		h.used[ss.FoodID]++
+	}
+	return func(c plate.CellKey, main int64, others []int64) (int64, bool) {
+		// A light meal keeps its side: a re-pick would only add to it.
+		if h.s.lightMeal(c.Date, c.SlotID) {
+			return 0, false
+		}
+		return h.pickSide(c, main, others, 0, "")
+	}
+}
+
+// sideOf is the index of plate p's re-pickable side (a proposed side recipe
+// beside the main at old) with the plate's other foods, -1 when none.
+func (x *index) sideOf(p Plate, old int) (int, []int64) {
+	si := -1
+	var others []int64
+	for i, c := range p.Components {
+		if i == old {
+			continue
+		}
+		if f := x.s.Foods[c.FoodID]; si < 0 && c.SessionKey != "" && f.Composed() && sideRole(f.Role) {
+			si = i
+			continue
+		}
+		others = append(others, c.FoodID)
+	}
+	return si, others
+}
+
+// withSide is s with plate pi's side si replaced by food for the plate
+// alone, cooked at at (nil: fresh, as a main without a session); the old
+// side's batch shrinks by the plate's portions.
+func (s State) withSide(pi, si int, food int64, at *plate.CellKey) State {
+	p := s.Plates[pi]
+	oc := p.Components[si]
+	n := p.Eaters * oc.Multiplier()
+	next := s
+	next.Plates = slices.Clone(s.Plates)
+	next.Sessions = slices.Clone(s.Sessions)
+	for k, ss := range next.Sessions {
+		if ss.Key == oc.SessionKey {
+			next.Sessions[k].Portions -= n
+			next.Sessions[k].FrozenPortions = min(ss.FrozenPortions, max(next.Sessions[k].Portions, 0))
+			if next.Sessions[k].Portions <= epsilon {
+				next.Sessions = slices.Delete(next.Sessions, k, k+1)
+			}
+			break
+		}
+	}
+	nc := Component{FoodID: food, Portions: oc.Portions, Proposed: true}
+	if at != nil {
+		next.Sessions = append(next.Sessions, Session{
+			CookSession: plate.CookSession{FoodID: food, CookDate: at.Date, CookSlotID: at.SlotID, Portions: n},
+			Key:         altSideKey,
+		})
+		nc.SessionKey = altSideKey
+	}
+	np := p
+	np.Components = slices.Clone(p.Components)
+	np.Components[si] = nc
+	next.Plates[pi] = np
+	return next
+}
+
+// altSideKey keys the re-picked side's session in a swap's trial state.
+const altSideKey = "alt-side"
 
 // swapPlates are the indices of the plates a swap may change, largest meat
 // first (then date): draft plates of the counted days on a full-meal cell
@@ -220,6 +305,8 @@ func (x *index) swapsFor(t Target, base Evaluation, pis []int, mode swapMode, sk
 		oldMeat := of.Groups.MeatG * oc.Multiplier()
 		plateMeat := x.plateGroups(p).MeatG
 		oldKcal := of.Macros.Kcal * oc.Multiplier()
+		si, others := x.sideOf(p, old)
+		picked := map[int64]int64{} // re-picked side per new main
 		var found []weekSwap
 		for _, c := range x.s.altCandidates(x, p, old, AltRequest{What: AltMain}) {
 			// Cooking the other dish on another cell is a second dish for one cook: not a way
@@ -237,11 +324,37 @@ func (x *index) swapsFor(t Target, base Evaluation, pis []int, mode swapMode, sk
 				case mode == swapFish && c.food.Groups.FishG*m < minMealG:
 					continue
 				}
-				a, why, _ := x.s.tryAlt(t, pi, old, nil, c, base, hard, soft, len(x.occasions[dayOf(p.Date)]), cookedInWindow, false, false)
-				if why != "" || len(a.NewIssues) > 0 || (a.rank.addsCook && mode != swapDistinct) || !x.dayHolds(a, dayPct[p.Date.Format(time.DateOnly)]) {
+				try := func(s State) (Alternative, bool) {
+					a, why, _ := s.tryAlt(t, pi, old, nil, c, base, hard, soft, len(x.occasions[dayOf(p.Date)]), cookedInWindow, false, false)
+					return a, why == "" && len(a.NewIssues) == 0 && (!a.rank.addsCook || mode == swapDistinct) && x.dayHolds(a, dayPct[p.Date.Format(time.DateOnly)])
+				}
+				sw := weekSwap{pi: pi, old: old, c: c, oldMeatG: oldMeat, newMeatG: newMeat, plateMeat: plateMeat}
+				var ok bool
+				clash := false
+				if x.repick != nil && si >= 0 && c.session == nil {
+					clash, _ = x.s.sideFit(c.food.ID, others, x.s.Foods[p.Components[si].FoodID])
+				}
+				if !clash {
+					sw.a, ok = try(x.s)
+				}
+				// PLATE-5: a side that clashes with the new main, or a plate the
+				// old side leaves short, gets the side picked for the new main.
+				if !ok && x.repick != nil && si >= 0 && c.session == nil {
+					nf, seen := picked[c.food.ID]
+					if !seen {
+						nf, _ = x.repick(plate.CellKey{Date: p.Date, SlotID: p.SlotID}, c.food.ID, others)
+						picked[c.food.ID] = nf
+					}
+					if nf != 0 && nf != p.Components[si].FoodID {
+						if sw.a, ok = try(x.s.withSide(pi, si, nf, c.cookAt)); ok {
+							sw.side, sw.sideFood = si, nf
+						}
+					}
+				}
+				if !ok {
 					continue
 				}
-				found = append(found, weekSwap{pi: pi, old: old, c: c, a: a, oldMeatG: oldMeat, newMeatG: newMeat, plateMeat: plateMeat})
+				found = append(found, sw)
 			}
 		}
 		slices.SortStableFunc(found, func(a, b weekSwap) int {
@@ -398,9 +511,10 @@ func (x *index) weekFix(ev Evaluation, t Target, is *Issue, mode swapMode) {
 // and the whole plan re-evaluated: it is kept only when it adds no hard or
 // soft issue, lowers the week's meat (or adds the fish meal) and keeps the
 // weekly protein at 90 % of its target or no lower than it was. Only the
-// proposal's own plates change. skip are foods the target may not hold. One
+// proposal's own plates change. skip are foods the target may not hold.
+// repick (plate fit on) re-picks the side of a swapped main (PLATE-5). One
 // plain-words note per change.
-func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instruction string) (Proposal, []string) {
+func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instruction string, repick sidePicker) (Proposal, []string) {
 	out := in
 	var notes []string
 	step := func(mode swapMode) bool {
@@ -411,6 +525,7 @@ func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instructi
 			return false
 		}
 		x := newIndex(merged, t)
+		x.repick = repick
 		hard, soft := hardKeys(ev.Issues), softKeys(ev.Issues)
 		if next, note, ok := x.swapBatch(base, t, out, ev, hard, soft, mode, skip); ok {
 			out = next
@@ -521,6 +636,7 @@ func (x *index) swapBatch(base State, t Target, in Proposal, before Evaluation, 
 		slices.SortStableFunc(cands, func(a, c FoodFacts) int {
 			return cmp.Or(cmp.Compare(a.Groups.MeatG, c.Groups.MeatG), cmp.Compare(math.Abs(a.Macros.Kcal-of.Macros.Kcal), math.Abs(c.Macros.Kcal-of.Macros.Kcal)), cmp.Compare(a.ID, c.ID))
 		})
+		sk, others := x.batchSide(in, b.uses[0].pi, b.uses[0].ci)
 		for tries, f := range cands {
 			if tries >= maxGuardTries*3 {
 				break
@@ -533,8 +649,30 @@ func (x *index) swapBatch(base State, t Target, in Proposal, before Evaluation, 
 				next.Sessions[b.si].Portions += next.Plates[u.pi].eaters(x.s) * (p - c.Portions)
 				c.FoodID, c.Portions = f.ID, p
 			}
-			after := Evaluate(Merge(base, t, next), t)
-			if !guardKeeps(before, after, hard, soft, mode) {
+			kept, clash := false, false
+			if x.repick != nil && sk >= 0 {
+				clash, _ = x.s.sideFit(f.ID, others, x.s.Foods[in.Sessions[sk].FoodID])
+			}
+			if !clash {
+				kept = guardKeeps(before, Evaluate(Merge(base, t, next), t), hard, soft, mode)
+			}
+			// PLATE-5: the batch's side is re-picked for the new main when it
+			// clashes or leaves the plates short.
+			if !kept && x.repick != nil && sk >= 0 {
+				old := in.Sessions[sk]
+				if nf, ok := x.repick(plate.CellKey{Date: old.CookDate, SlotID: old.CookSlotID}, f.ID, others); ok && nf != old.FoodID {
+					next.Sessions[sk].FoodID = nf
+					for pi := range next.Plates {
+						for ci, c := range next.Plates[pi].Components {
+							if c.SessionKey == old.Key {
+								next.Plates[pi].Components[ci].FoodID = nf
+							}
+						}
+					}
+					kept = guardKeeps(before, Evaluate(Merge(base, t, next), t), hard, soft, mode)
+				}
+			}
+			if !kept {
 				continue
 			}
 			what := "less meat"
@@ -546,6 +684,41 @@ func (x *index) swapBatch(base State, t Target, in Proposal, before Evaluation, 
 		}
 	}
 	return in, "", false
+}
+
+// batchSide is the index of the proposed side session beside the main at
+// (pi, ci) when it feeds only plates of that main's batch, with the plate's
+// other foods; -1 without a re-picker or such a side.
+func (x *index) batchSide(in Proposal, pi, ci int) (int, []int64) {
+	if x.repick == nil {
+		return -1, nil
+	}
+	mainKey := in.Plates[pi].Components[ci].SessionKey
+	for _, c := range in.Plates[pi].Components {
+		si := slices.IndexFunc(in.Sessions, func(s ProposedSession) bool { return s.Key == c.SessionKey })
+		if c.SessionKey == "" || c.SessionKey == mainKey || si < 0 {
+			continue
+		}
+		if f := x.s.Foods[c.FoodID]; !f.Composed() || !sideRole(f.Role) {
+			continue
+		}
+		for _, pl := range in.Plates {
+			eats := func(k string) bool {
+				return slices.ContainsFunc(pl.Components, func(c ProposedComponent) bool { return c.SessionKey == k })
+			}
+			if eats(c.SessionKey) && !eats(mainKey) {
+				return -1, nil
+			}
+		}
+		var others []int64
+		for _, o := range in.Plates[pi].Components {
+			if o.SessionKey != mainKey && o.SessionKey != c.SessionKey {
+				others = append(others, o.FoodID)
+			}
+		}
+		return si, others
+	}
+	return -1, nil
 }
 
 // guardKeeps reports whether the plan after a swap is better: no new hard or
@@ -621,6 +794,33 @@ func applySwap(in Proposal, merged State, sw weekSwap) (Proposal, bool) {
 		}
 	}
 	pl.Components[sw.old] = nc
+	if sw.sideFood != 0 {
+		// The re-picked side is cooked with the new main for this plate.
+		sc := pl.Components[sw.side]
+		key := ""
+		if sw.c.cookAt != nil {
+			key = fmt.Sprintf("swap-%d", len(out.Sessions)+1)
+			for slices.ContainsFunc(out.Sessions, func(s ProposedSession) bool { return s.Key == key }) {
+				key += "x"
+			}
+			out.Sessions = append(out.Sessions, ProposedSession{
+				Key: key, FoodID: sw.sideFood, CookDate: sw.c.cookAt.Date, CookSlotID: sw.c.cookAt.SlotID,
+				Portions: sc.Portions * p.Eaters, Reason: "cooked as the side of the swapped main",
+			})
+		}
+		for k, ss := range out.Sessions {
+			if ss.Key != sc.SessionKey {
+				continue
+			}
+			out.Sessions[k].Portions = ss.Portions - p.Eaters*sc.Portions
+			out.Sessions[k].FrozenPortions = min(ss.FrozenPortions, max(out.Sessions[k].Portions, 0))
+			if out.Sessions[k].Portions <= epsilon {
+				out.Sessions = slices.Delete(out.Sessions, k, k+1)
+			}
+			break
+		}
+		pl.Components[sw.side] = ProposedComponent{FoodID: sw.sideFood, Portions: sc.Portions, SessionKey: key}
+	}
 	out.Plates[i] = pl
 	return out, true
 }

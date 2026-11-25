@@ -44,12 +44,12 @@ func finishProposal(in ChooseInput, prop Proposal) (Proposal, []string) {
 	notes = append(notes, n...)
 	prop, n = guardDayMains(in.State, in.Target, prop, skip)
 	notes = append(notes, n...)
-	prop, n = guardWeek(in.State, in.Target, prop, skip, in.Instruction)
+	prop, n = guardWeek(in.State, in.Target, prop, skip, in.Instruction, sidePickerFor(in, prop))
 	notes = append(notes, n...)
 	prop, n = balancePlan(in, prop)
 	notes = append(notes, n...)
 	// Raised portions may have passed the week's meat limit again.
-	prop, n = guardWeek(in.State, in.Target, prop, skip, in.Instruction)
+	prop, n = guardWeek(in.State, in.Target, prop, skip, in.Instruction, sidePickerFor(in, prop))
 	notes = append(notes, n...)
 	// A wish's time limit outlives the swaps above (V72).
 	prop, n = fixQuick(in, prop)

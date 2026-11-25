@@ -128,7 +128,10 @@ func (h *planner) dayAccounts() (*index, []DayKcal) {
 // liftDay raises a day from its kcal to limit: its growable plates, then
 // verified no-cook foods.
 func (h *planner) liftDay(dk DayKcal, limit float64, roundUp bool) {
-	h.topUpDay(dk.Date, limit-dk.Kcal, roundUp)
+	// With plate fit on, the top-up rounds up to the quarter portion: a
+	// starch main without a second starch carries the plate's energy, not a
+	// filler of cheese on the remainder.
+	h.topUpDay(dk.Date, limit-dk.Kcal, roundUp || h.s.Settings.PlateFit)
 	h.growLight(dk.Date, limit)
 	if h.balance {
 		h.addSide(dk.Date, limit)
@@ -344,6 +347,28 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 			}
 		}
 	}
+	// With plate fit on, a filler serves the week before the plate's fit
+	// (PLATE-4): a legume meal while the week has none, then, while its carb
+	// share is below range, the most carb kcal (bread, not cheese).
+	legume, carbs := func(optCand) float64 { return 0 }, func(optCand) float64 { return 0 }
+	if w := ev.Week; h.s.Settings.PlateFit && !protein && w != nil {
+		mult := func(c optCand) float64 {
+			if f := h.s.Foods[c.opt.FoodID]; f.Macros.Kcal > 0 {
+				return c.kcal / f.Macros.Kcal
+			}
+			return 0
+		}
+		if w.LegumeMeals == 0 {
+			legume = func(c optCand) float64 {
+				return -b2f(h.s.Foods[c.opt.FoodID].Groups.LegumeG*mult(c) >= minMealG)
+			}
+		}
+		if w.CarbsPct < y.pol.CarbsLow {
+			carbs = func(c optCand) float64 {
+				return -math.Round(h.s.Foods[c.opt.FoodID].Macros.Carbs * 4 * mult(c) / 10)
+			}
+		}
+	}
 	slices.SortStableFunc(cands, func(a, b optCand) int {
 		if protein {
 			// Staying at or under the day's target first, then the most
@@ -359,12 +384,13 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		// Sweets are out and the protein pass has its own add, so a filler
 		// is the food that fits the kcal gap best. A model's plan gets, within 25 kcal
 		// of each other, a vegetable or salad before bread before the rest (sideFitRank).
-		// With plate fit on, within kcalBucket of each other the plate with
-		// fewer raised gaps comes first (PLATE-4).
+		// With plate fit on, within kcalBucket of each other the week's
+		// needs (legume, carbs), then the plate with fewer raised gaps
+		// come first (PLATE-4: nutrition before fit).
 		if h.s.Settings.PlateFit {
 			ba, bb := math.Round(math.Abs(need-a.kcal)/kcalBucket), math.Round(math.Abs(need-b.kcal)/kcalBucket)
 			ra, rb := raised[[2]int64{int64(a.plate), a.opt.FoodID}], raised[[2]int64{int64(b.plate), b.opt.FoodID}]
-			if c := cmp.Or(cmp.Compare(ba, bb), cmp.Compare(ra, rb)); c != 0 {
+			if c := cmp.Or(cmp.Compare(ba, bb), cmp.Compare(legume(a), legume(b)), cmp.Compare(carbs(a), carbs(b)), cmp.Compare(ra, rb)); c != 0 {
 				return c
 			}
 		}

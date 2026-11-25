@@ -9,8 +9,11 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
-// GuardWeek exposes the last guard to the external tests.
-var GuardWeek = guardWeek
+// GuardWeek exposes the last guard (plate fit off: no side re-pick) to the
+// external tests.
+func GuardWeek(base State, t Target, in Proposal, skip map[int64]bool, instruction string) (Proposal, []string) {
+	return guardWeek(base, t, in, skip, instruction, nil)
+}
 
 // BalancePlan exposes the balancing pass to the external tests.
 var BalancePlan = balancePlan
