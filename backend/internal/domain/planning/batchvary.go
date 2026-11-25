@@ -18,10 +18,11 @@ const maxVaryKcal = 100
 // never clashes with the main (plate fit) and never repeats a side the batch
 // already serves. A leftover plate never gets a side that needs a new cook
 // session, nor one the household would rather not get (State.RatherNot):
-// keeping the batch's side is the better alternative. Among the variants: nutrition first (closest to the old side's
-// kcal), then plate fit (fewer raised gaps), then rotation (the side the
-// week uses least), the food id. A plate
-// with no variant keeps its side. Off, the proposal is returned as it is.
+// keeping the batch's side is the better alternative. Among the variants:
+// nutrition first (closest to the old side's kcal), then plate fit (fewer
+// raised gaps), then rotation (the side the week uses least), the food id.
+// A plate with no variant keeps its side. Off, the proposal is returned as
+// it is.
 func varyBatches(base State, t Target, in Proposal, skip map[int64]bool) Proposal {
 	if !base.Settings.BatchVariation {
 		return in
