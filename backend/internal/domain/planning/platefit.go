@@ -1,11 +1,13 @@
 package planning
 
 import (
+	"math"
 	"slices"
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/platefit"
 )
 
@@ -38,6 +40,15 @@ const kcalBucket = 25
 // sideKcalBucket is kcalBucket for a side cooked with its main, chosen
 // before the day's top-ups: sides within it are equal for nutrition.
 const sideKcalBucket = 100
+
+// excessFat is the fat kcal of mult portions of m above the week's fat
+// range top (fatHigh, in %) of their own kcal, in sideKcalBucket steps. A
+// side or filler with more (cheese, cream, parmesan salad) lifts the week's
+// fat share where a lean one would not (PLATE-4: nutrition before plate
+// fit); a lean one gives 0.
+func excessFat(m nutrition.Macros, mult, fatHigh float64) float64 {
+	return math.Round(max(0, mult*(m.Fat*9-m.Kcal*fatHigh/100)) / sideKcalBucket)
+}
 
 func hasWord(name string, lists ...[]string) bool {
 	n := diet.Fold(name)

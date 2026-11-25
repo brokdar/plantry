@@ -118,7 +118,7 @@ func TestLiftDay_PlateFitRoundsTheTopUpUp(t *testing.T) {
 		h.topUpBase, h.adds = map[[2]int]float64{}, map[int]*dayAdds{}
 		ev := evaluateLean(Merge(h.s, tgt, h.prop), tgt)
 		kcal := ev.Days[0].Kcal
-		h.liftDay(DayKcal{Date: bfMon, Kcal: kcal}, kcal+100, false)
+		h.liftDay(DayKcal{Date: bfMon, Kcal: kcal}, kcal+100, false, false)
 		for _, slot := range []int64{bfLunch, bfDinner} {
 			for _, c := range plateOf(h, slot).Components {
 				if c.FoodID == bfCurry || c.FoodID == bfBake {

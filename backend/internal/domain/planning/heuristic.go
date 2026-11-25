@@ -14,6 +14,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
@@ -863,14 +864,20 @@ func (h *planner) reachesForced(f FoodFacts, c plate.CellKey) bool {
 // cooked on c: of role when given (a swap keeps veg veg and starch starch
 // unless none exists), within the meat limit, not replaced, used least in
 // the proposal (the week's side rotation), then with plate fit on: no clash
-// with the plate, the side whose kcal come closest to what the plate lacks
-// to its share (in sideKcalBucket steps), the fewest raised gaps (PLATE-4,
-// PLATE-5), then as pickMain. The swapped-out food and, with plate fit on,
-// the proposal's excluded foods are no candidate.
+// with the plate, the least plate fat above the week's range (excessFat),
+// the side whose kcal come closest to what the plate lacks to its share (in
+// sideKcalBucket steps), the fewest raised gaps (PLATE-4, PLATE-5), then as
+// pickMain. The swapped-out food and, with plate fit on, the proposal's
+// excluded foods are no candidate.
 func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude int64, role food.Role) (int64, bool) {
 	fit := h.s.plateFitOn(main)
-	need := 0.0 // with plate fit on: the kcal the plate lacks to its share
+	need := 0.0               // with plate fit on: the kcal the plate lacks to its share
+	var held nutrition.Macros // with plate fit on: the plate without the side
 	if fit {
+		for _, id := range append([]int64{main}, others...) {
+			held.Kcal += h.s.Foods[id].Macros.Kcal
+			held.Fat += h.s.Foods[id].Macros.Fat
+		}
 		if share := h.kcalShare(c); share > 0 {
 			need = share
 			for _, id := range append([]int64{main}, others...) {
@@ -893,11 +900,12 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 			if clash {
 				continue
 			}
+			fat := excessFat(nutrition.Macros{Kcal: held.Kcal + f.Macros.Kcal, Fat: held.Fat + f.Macros.Fat}, 1, h.x.pol.FatHigh)
 			nutrition := 0.0
 			if need > 0 {
 				nutrition = math.Round(math.Abs(need-f.Macros.Kcal) / sideKcalBucket)
 			}
-			keys = append(keys, nutrition, float64(raised))
+			keys = append(keys, fat, nutrition, float64(raised))
 		}
 		cands = append(cands, candidate{id: f.ID, keys: append(keys,
 			b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore,

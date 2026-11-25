@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
@@ -76,7 +77,7 @@ func (h *planner) topUpFloors() {
 			// The safety floor comes before how the plate looks: any verified food.
 			pair := h.s.PairAddOns
 			h.s.PairAddOns = false
-			h.liftDay(dk, floor, true)
+			h.liftDay(dk, floor, true, false)
 			h.s.PairAddOns = pair
 		}
 	}
@@ -93,9 +94,19 @@ func (h *planner) topUpFloors() {
 			}
 		}
 		if limit := min(dk.Adjusted*y.pol.DayLow, dk.Kcal+room); limit > dk.Kcal+epsilon {
-			h.liftDay(dk, limit, false)
+			h.liftDay(dk, limit, false, h.s.Settings.PlateFit)
 		}
 	}
+	h.liftWeek(h.s.Settings.PlateFit)
+	if h.s.Settings.PlateFit {
+		h.liftWeek(false)
+	}
+}
+
+// liftWeek lifts the days furthest under their target while the week is
+// under its own, each day once; with leanOnly, see liftDay.
+func (h *planner) liftWeek(leanOnly bool) {
+	_, days := h.dayAccounts()
 	tried := map[int]bool{}
 	for range days {
 		_, days = h.dayAccounts()
@@ -111,7 +122,7 @@ func (h *planner) topUpFloors() {
 			break
 		}
 		tried[dayOf(worst.Date)] = true
-		h.liftDay(*worst, worst.Kcal+min(worst.Gap, gap), false)
+		h.liftDay(*worst, worst.Kcal+min(worst.Gap, gap), false, leanOnly)
 	}
 }
 
@@ -126,12 +137,14 @@ func (h *planner) dayAccounts() (*index, []DayKcal) {
 }
 
 // liftDay raises a day from its kcal to limit: its growable plates, then
-// verified no-cook foods.
-func (h *planner) liftDay(dk DayKcal, limit float64, roundUp bool) {
-	// With plate fit on, the top-up rounds up to the quarter portion: a
-	// starch main without a second starch carries the plate's energy, not a
-	// filler of cheese on the remainder.
-	h.topUpDay(dk.Date, limit-dk.Kcal, roundUp || h.s.Settings.PlateFit)
+// verified no-cook foods. With plate fit on, the top-up rounds up to the
+// quarter portion: a starch main without a second starch carries the
+// plate's energy, not a filler of cheese on the remainder. With leanOnly, a
+// fatty dish (fat share above the week's range) does not grow: lean dishes,
+// sides and fillers come first and the fatty dishes only lift what the week
+// still lacks after them (PLATE-4: nutrition before fit).
+func (h *planner) liftDay(dk DayKcal, limit float64, roundUp, leanOnly bool) {
+	h.topUpDay(dk.Date, limit-dk.Kcal, roundUp || h.s.Settings.PlateFit, leanOnly)
 	h.growLight(dk.Date, limit)
 	if h.balance {
 		h.addSide(dk.Date, limit)
@@ -331,6 +344,14 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		}
 	}
 	cands = spreadAdds(y, merged, date, cands, adds.used)
+	if h.s.Settings.PlateFit {
+		// No second starch: bread beside a pasta, rice or potato main or a
+		// starch side (PLATE-4 keeps the plate's proportions).
+		cands = slices.DeleteFunc(cands, func(c optCand) bool {
+			f := merged.Foods[c.opt.FoodID]
+			return merged.secondStarch(merged.Plates[c.plate], f, diet.Fold(f.Name))
+		})
+	}
 	if protein {
 		// Week band: the add must not push the running average above it.
 		if w := ev.Week; w != nil && w.TargetKcal > 0 {
@@ -351,6 +372,7 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 	// (PLATE-4): a legume meal while the week has none, then, while its carb
 	// share is below range, the most carb kcal (bread, not cheese).
 	legume, carbs := func(optCand) float64 { return 0 }, func(optCand) float64 { return 0 }
+	fat := carbs
 	if w := ev.Week; h.s.Settings.PlateFit && !protein && w != nil {
 		mult := func(c optCand) float64 {
 			if f := h.s.Foods[c.opt.FoodID]; f.Macros.Kcal > 0 {
@@ -361,6 +383,11 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		if w.LegumeMeals == 0 {
 			legume = func(c optCand) float64 {
 				return -b2f(h.s.Foods[c.opt.FoodID].Groups.LegumeG*mult(c) >= minMealG)
+			}
+		}
+		if w.FatPct > y.pol.FatHigh {
+			fat = func(c optCand) float64 {
+				return excessFat(h.s.Foods[c.opt.FoodID].Macros, mult(c), y.pol.FatHigh)
 			}
 		}
 		if w.CarbsPct < y.pol.CarbsLow {
@@ -390,7 +417,7 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		if h.s.Settings.PlateFit {
 			ba, bb := math.Round(math.Abs(need-a.kcal)/kcalBucket), math.Round(math.Abs(need-b.kcal)/kcalBucket)
 			ra, rb := raised[[2]int64{int64(a.plate), a.opt.FoodID}], raised[[2]int64{int64(b.plate), b.opt.FoodID}]
-			if c := cmp.Or(cmp.Compare(ba, bb), cmp.Compare(legume(a), legume(b)), cmp.Compare(carbs(a), carbs(b)), cmp.Compare(ra, rb)); c != 0 {
+			if c := cmp.Or(cmp.Compare(ba, bb), cmp.Compare(legume(a), legume(b)), cmp.Compare(fat(a), fat(b)), cmp.Compare(carbs(a), carbs(b)), cmp.Compare(ra, rb)); c != 0 {
 				return c
 			}
 		}
@@ -474,8 +501,10 @@ func spreadAdds(y *index, merged State, date time.Time, cands []optCand, used ma
 	return out
 }
 
-// topUpDay adds need kcal per eater to the day's growable components.
-func (h *planner) topUpDay(date time.Time, need float64, roundUp bool) {
+// topUpDay adds need kcal per eater to the day's growable components,
+// rounded up to the quarter portion when roundUp, down otherwise. With
+// leanOnly, only the dishes whose fat share is within the week's range grow.
+func (h *planner) topUpDay(date time.Time, need float64, roundUp, leanOnly bool) {
 	meatFull := h.balance && h.meatFull()
 	sessions := map[string]int{}
 	for i, ss := range h.prop.Sessions {
@@ -500,6 +529,14 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp bool) {
 		}
 		last := ss.CookDate.AddDate(0, 0, h.x.keepDays(c.FoodID))
 		return i, !p.Date.After(last) && f.Macros.Kcal > 0 && (f.Role == food.RoleMain || f.Role == food.RoleSideStarch) && !(meatFull && f.Groups.MeatG > 0)
+	}
+	if leanOnly {
+		all := growable
+		growable = func(p ProposedPlate, c ProposedComponent) (int, bool) {
+			i, ok := all(p, c)
+			m := h.s.Foods[c.FoodID].Macros
+			return i, ok && m.Fat*9 <= m.Kcal*h.x.pol.FatHigh/100
+		}
 	}
 	var raisable float64
 	for _, p := range h.prop.Plates {
