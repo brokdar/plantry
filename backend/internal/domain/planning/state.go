@@ -224,6 +224,9 @@ type Settings struct {
 	// PlateFit is plan.plate_fit: plate fit judges sides and add-ons
 	// (PLATE-4, PLATE-5); false is the planner without it.
 	PlateFit bool
+	// BatchVariation is chef.batch_variation: the leftover plates of a
+	// batch get another side than its cook plate (PLATE-6).
+	BatchVariation bool
 }
 
 // Profile is the part of the user profile the rules read.

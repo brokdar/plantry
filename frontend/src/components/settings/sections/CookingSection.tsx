@@ -42,6 +42,7 @@ function CookingFields() {
 
   const occasions = useSettingField("plan.max_cook_occasions_per_day", "1")
   const batch = useSettingField("plan.batch_cooking", "true")
+  const variation = useSettingField("chef.batch_variation", "true")
   const keep = useSettingField("plan.default_keep_days", "3")
   const freezing = useSettingField("plan.freezing_enabled", "false")
   const freezerKeep = useSettingField("plan.freezer_keep_days", "90")
@@ -70,6 +71,7 @@ function CookingFields() {
   )
   const planAnchor = anchor.value as AnchorValue
   const batchOn = batch.value === "true"
+  const variationOn = variation.value === "true"
   const freezingOn = freezing.value === "true"
 
   return (
@@ -98,6 +100,24 @@ function CookingFields() {
             id="setting-batch-cooking"
             checked={batchOn}
             onChange={(next) => batch.save(String(next))}
+          />
+        </SettingRow>
+        <SettingRow
+          label={t("settings_page.cooking.batch_variation_label")}
+          description={t(
+            variationOn
+              ? "settings_page.cooking.batch_variation_effect_on"
+              : "settings_page.cooking.batch_variation_effect_off"
+          )}
+          item={variation.item}
+          onClearOverride={variation.clear}
+          saved={variation.saved}
+          htmlFor="setting-batch-variation"
+        >
+          <Switch
+            id="setting-batch-variation"
+            checked={variationOn}
+            onChange={(next) => variation.save(String(next))}
           />
         </SettingRow>
       </SettingsGroup>

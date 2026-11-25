@@ -208,6 +208,9 @@ func TestSettingsSpec_Chef(t *testing.T) {
 	fit, err := svc.Get(ctx, settings.KeyPlanPlateFit)
 	require.NoError(t, err)
 	assert.Equal(t, "true", fit.Raw)
+	vary, err := svc.Get(ctx, settings.KeyChefBatchVariation)
+	require.NoError(t, err)
+	assert.Equal(t, "true", vary.Raw, "batch variation is on by default (PLATE-6)")
 
 	sites, err := svc.Get(ctx, settings.KeyChefSites)
 	require.NoError(t, err)

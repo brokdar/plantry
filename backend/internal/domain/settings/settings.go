@@ -127,6 +127,7 @@ const (
 	KeyChefMonthlyCap             = "chef.monthly_cap"
 	KeyChefSites                  = "chef.sites"
 	KeyPlanPlateFit               = "plan.plate_fit"
+	KeyChefBatchVariation         = "chef.batch_variation"
 )
 
 // maxCuisines and maxCuisineLen bound discovery.cuisines (D19).

@@ -44,6 +44,7 @@ func (Heuristic) Choose(ctx context.Context, in ChooseInput) (Proposal, error) {
 			// (the picks above only weigh them as tie-breaks).
 			var notes []string
 			prop, notes = guardWeek(in.State, in.Target, prop, idSet(in.Exclude), in.Instruction, sidePickerFor(in, prop))
+			prop = varyBatches(in.State, in.Target, prop, idSet(in.Exclude))
 			prop.Notes = joinNotes(append([]string{prop.Notes}, notes...)...)
 		}
 	}

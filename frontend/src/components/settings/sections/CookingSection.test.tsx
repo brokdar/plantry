@@ -156,6 +156,20 @@ describe("CookingSection", () => {
     )
   })
 
+  it("toggles batch variation", async () => {
+    const user = userEvent.setup()
+    renderSection()
+    expect(
+      await screen.findByText(
+        "Leftover plates of a batch get a different side, within your nutrition targets."
+      )
+    ).toBeInTheDocument()
+    await user.click(await screen.findByLabelText("Vary batch plates"))
+    await waitFor(() =>
+      expect(setSetting).toHaveBeenCalledWith("chef.batch_variation", "false")
+    )
+  })
+
   describe("plan anchor and shopping day", () => {
     it("saves plan.anchor when the anchor radio changes", async () => {
       const user = userEvent.setup()

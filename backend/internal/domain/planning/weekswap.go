@@ -765,7 +765,14 @@ func applySwap(in Proposal, merged State, sw weekSwap) (Proposal, bool) {
 	pl := out.Plates[i]
 	pl.Components = slices.Clone(pl.Components)
 	oc := pl.Components[sw.old]
-	nc := ProposedComponent{FoodID: sw.c.food.ID, Portions: *sw.c.comp.Portions}
+	nc := ProposedComponent{FoodID: sw.c.food.ID}
+	if sw.c.comp.Portions != nil {
+		nc.Portions = *sw.c.comp.Portions
+	}
+	if sw.c.comp.Grams != nil {
+		// A leaf (batch variation's fresh side) is placed by weight.
+		nc.Grams = *sw.c.comp.Grams
+	}
 	switch {
 	case sw.c.cookAt != nil:
 		key := fmt.Sprintf("swap-%d", len(out.Sessions)+1)
