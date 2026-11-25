@@ -119,6 +119,14 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 	}
 	raised := before.Raised()
 	cu := platefit.CuisineOf(p.Main.Attrs.Cuisine)
+	prefs := herbPrefs(p.Main)
+	// rank orders garnish herbs by fit to the plate; any other change is 0.
+	rank := func(c Change) int {
+		if c.Add != nil && c.Kind == KindHerbs {
+			return herbRank(prefs, *c.Add)
+		}
+		return 0
+	}
 	var out []Change
 	try := func(next platefit.Plate, at int, kinds []Kind, ch Change) {
 		ki := slices.IndexFunc(kinds, func(k Kind) bool { return slices.Contains(Settles[k], top) })
@@ -169,7 +177,14 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 		if c := cmp.Compare(len(b.Settles), len(a.Settles)); c != 0 {
 			return c
 		}
-		if pa, pb := inPalette(cu, a.Food()), inPalette(cu, b.Food()); pa != pb {
+		// A herb is of the palette when it is the plate's preferred one.
+		pal := func(c Change) bool {
+			if c.Add != nil && c.Kind == KindHerbs {
+				return rank(c) == 0
+			}
+			return inPalette(cu, c.Food())
+		}
+		if pa, pb := pal(a), pal(b); pa != pb {
 			if pa {
 				return -1
 			}
@@ -180,6 +195,9 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 				return -1
 			}
 			return 1
+		}
+		if c := cmp.Compare(rank(a), rank(b)); c != 0 {
+			return c
 		}
 		if c := cmp.Compare(slices.Index(kindOrder, a.Kind), slices.Index(kindOrder, b.Kind)); c != 0 {
 			return c

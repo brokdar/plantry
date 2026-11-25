@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"sync"
@@ -250,9 +251,15 @@ func (b *Builder) build(ctx context.Context, w window.Window, today, from, to ti
 	if err != nil {
 		return State{}, fmt.Errorf("list leaves: %w", err)
 	}
+	garnish := map[int64]bool{}
 	for i := range leaves.Items {
-		if f := &leaves.Items[i]; NoCook(f) {
+		f := &leaves.Items[i]
+		switch {
+		case NoCook(f):
 			foods[f.ID], noCook[f.ID] = f, true
+			ptrs = append(ptrs, f)
+		case freshHerbLeaf(f.Name):
+			foods[f.ID], garnish[f.ID] = f, true
 			ptrs = append(ptrs, f)
 		}
 	}
@@ -269,6 +276,12 @@ func (b *Builder) build(ctx context.Context, w window.Window, today, from, to ti
 		}
 	}
 	slices.Sort(s.NoCook)
+	for id := range garnish {
+		if f := s.Foods[id]; f.NutritionComplete && f.Macros.Kcal > 0 && !slices.Contains(s.NoCook, id) {
+			s.Garnish = append(s.Garnish, id)
+		}
+	}
+	slices.Sort(s.Garnish)
 	return s, nil
 }
 
@@ -601,4 +614,14 @@ func maxDate(a, b time.Time) time.Time {
 		return b
 	}
 	return a
+}
+
+// freshHerbRe names the fresh herb leaves a garnish tip may offer; dried or
+// ground forms are not garnish.
+var freshHerbRe = regexp.MustCompile(`(?i)petersilie|parsley|schnittlauch|chive|dill|koriander|coriander|cilantro|basilikum|basil|minze|mint|frühlingszwiebel|spring onion|scallion`)
+
+var driedRe = regexp.MustCompile(`(?i)getrocknet|dried|gemahlen|ground|pulver|powder|paste|pesto`)
+
+func freshHerbLeaf(name string) bool {
+	return freshHerbRe.MatchString(name) && !driedRe.MatchString(name)
 }

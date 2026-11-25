@@ -70,7 +70,11 @@ type State struct {
 	// NoCook lists the ids (in Foods) of the no-cook foods the evaluation
 	// may offer to close a day's gap (Evaluate options); empty where the
 	// builder does not load them.
-	NoCook   []int64
+	NoCook []int64
+	// Garnish lists the ids (in Foods) of fresh herb leaves that are not
+	// no-cook foods: garnish candidates for tips only, never offered by the
+	// planner.
+	Garnish  []int64
 	Settings Settings
 	Profile  Profile
 	// History holds the confirmed plates of the 4 weeks before the window.

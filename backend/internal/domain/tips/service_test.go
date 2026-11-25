@@ -514,3 +514,86 @@ func TestSync_ClashBeforeGap(t *testing.T) {
 		t.Fatalf("clash tip %+v, want the salad swapped in", v.Tips[0])
 	}
 }
+
+// TestSync_HerbGarnishFromGarnishList: a fresh herb that is not a no-cook
+// food (State.Garnish) is offered as fresh herbs, 4 g per eater.
+func TestSync_HerbGarnishFromGarnishList(t *testing.T) {
+	t.Parallel()
+	const parsleyID = 901
+	f := newFixture()
+	f.st.NoCook = nil
+	f.st.Garnish = []int64{parsleyID}
+	f.st.Foods[parsleyID] = planning.FoodFacts{
+		ID: parsleyID, Name: "Petersilie", Kind: food.KindLeaf, DietClass: diet.Vegan,
+		Macros: nutrition.Macros{Kcal: 36}, NutritionComplete: true,
+		Fresh: ptr(true), Attrs: flavor.Attributes{Texture: "soft", Colour: "green", Taste: &flavor.Taste{}},
+	}
+	for id, m := range f.st.Foods {
+		if id != parsleyID {
+			m.Fresh, m.Attrs.Colour, m.Attrs.Texture, m.Attrs.Taste = ptr(false), "red", "crunchy", &flavor.Taste{Salt: 2, Umami: 2, Acid: 1}
+			f.st.Foods[id] = m
+		}
+	}
+	v, err := f.svc().Sync(context.Background(), start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Tips) == 0 || v.Tips[0].Dimension != "fresh" || v.Tips[0].Kind != tips.KindHerbs || v.Tips[0].Op != (tips.Op{Action: "add", FoodID: parsleyID, Grams: 4}) {
+		t.Fatalf("tips = %+v", v.Tips)
+	}
+}
+
+// TestSync_SideSwapRespectsWeekRules: a swap that would push the week's fat
+// share over its range is not offered; the same swap with a lean side is.
+func TestSync_SideSwapRespectsWeekRules(t *testing.T) {
+	t.Parallel()
+	run := func(t *testing.T, saladFatG float64) *tips.Tip {
+		f := newFixture()
+		kcal := 600.0
+		f.st.Profile.KcalTarget = &kcal
+		for _, p := range f.st.Plates {
+			f.st.Cells = append(f.st.Cells, planning.Cell{Date: p.Date, SlotID: p.SlotID})
+		}
+		side := func(id int64, name string, role food.Role, starch bool, temp, colour, texture string, fat float64, taste flavor.Taste) planning.FoodFacts {
+			return planning.FoodFacts{
+				ID: id, Name: name, Kind: food.KindComposed, Role: role, DietClass: diet.Vegan,
+				Macros: nutrition.Macros{Kcal: 150, Fat: fat}, NutritionComplete: true, Minutes: 10, Starch: ptr(starch), Fresh: ptr(false),
+				Attrs: flavor.Attributes{Cuisine: "italian", Texture: texture, Temperature: temp, Colour: colour, Richness: ptr(0), Saucy: ptr(false), Taste: &taste},
+			}
+		}
+		f.st.Foods[200] = side(200, "Polenta", food.RoleSideStarch, true, "hot", "beige", "soft", 0, flavor.Taste{})
+		f.st.Foods[201] = side(201, "Ciabatta", food.RoleSideStarch, true, "hot", "beige", "crisp", 0, flavor.Taste{})
+		f.st.Foods[202] = side(202, "Insalata mista", food.RoleSideVeg, false, "cold", "green", "crisp", saladFatG, flavor.Taste{Acid: 2})
+		for id, fd := range f.st.Foods {
+			if fd.Role == food.RoleMain {
+				fd.Starch, fd.Macros.Fat = ptr(false), 23 // 207 of 600 kcal: week fat share 31% before the swap
+				f.st.Foods[id] = fd
+			}
+		}
+		f.st.Plates[3].Components = append(f.st.Plates[3].Components,
+			planning.Component{ID: 30, FoodID: 200, Portions: ptr(1.0), Position: plate.PositionSide},
+			planning.Component{ID: 31, FoodID: 201, Portions: ptr(1.0), Position: plate.PositionSide})
+		v, err := f.svc().Sync(context.Background(), start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, tp := range v.Tips {
+			if tp.Kind == tips.KindSideSwap && *tp.PlateID == 4 {
+				return &tp
+			}
+		}
+		return nil
+	}
+	t.Run("lean side offered", func(t *testing.T) {
+		t.Parallel()
+		if run(t, 0) == nil {
+			t.Fatal("lean swap not offered")
+		}
+	})
+	t.Run("fat side over range not offered", func(t *testing.T) {
+		t.Parallel()
+		if tp := run(t, 16.7); tp != nil { // +150 kcal of fat: week fat 36% > 35%
+			t.Fatalf("offered %+v", tp)
+		}
+	})
+}

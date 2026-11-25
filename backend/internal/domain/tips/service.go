@@ -383,7 +383,7 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 		}
 	}
 	y.before = planning.EvaluateLean(y.st, planning.WindowTarget(y.st))
-	for _, id := range y.st.NoCook {
+	for _, id := range slices.Concat(y.st.NoCook, y.st.Garnish) {
 		if f := y.st.Foods[id]; !f.Composed() && !y.never[id] {
 			y.garnish = append(y.garnish, componentOf(f))
 		}
@@ -502,9 +502,8 @@ func (y *run) holds(pp planPlate, t Tip) bool {
 }
 
 // passes is TIP-3: the change already passed the checks. Diet, the day's
-// nutrition targets and every hard plan rule through the planner's
-// evaluation (no new violation in the window, no new issue on the plate's
-// day); never items and P3 by the candidate lists (catalogue foods with
+// nutrition targets and every plan rule through the planner's
+// evaluation (no new issue anywhere in the window, week rules included); never items and P3 by the candidate lists (catalogue foods with
 // complete nutrition, never items left out); a garnish is a no-cook leaf (no
 // equipment, well under 5 active minutes); a swapped-in side needs only
 // tools at hand and stays within the slot's time allowance.
@@ -531,19 +530,18 @@ func (y *run) passes(pp planPlate, ch Change, op Op) bool {
 			st.Plates[i].Components = next
 		}
 	}
-	// The plate's own cell is the target: before (the whole window) holds
-	// every issue the plate had.
-	after := planning.EvaluateLean(st, planning.Target{Cells: []plate.CellKey{pp.p.Cell()}})
+	// The whole window is the target, as for before: a change that raises
+	// an issue anywhere (the week's soft rules included) is not offered; an
+	// issue the plan already had does not block.
+	tgt := planning.WindowTarget(st)
+	tgt.Cells = append(tgt.Cells, pp.p.Cell())
+	after := planning.EvaluateLean(st, tgt)
 	was := map[string]bool{}
 	for _, is := range y.before.Issues {
 		was[issueKey(is)] = true
 	}
-	day := pp.p.Date.Format(time.DateOnly)
 	for _, is := range after.Issues {
-		if was[issueKey(is)] || is.Code == planning.CodeMissingPlate {
-			continue
-		}
-		if is.Severity == planning.SeverityViolation || is.Date == day {
+		if !was[issueKey(is)] && is.Code != planning.CodeMissingPlate {
 			return false
 		}
 	}
