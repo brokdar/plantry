@@ -289,10 +289,12 @@ func (h *planner) addSide(date time.Time, limit float64) {
 	}
 	slices.SortStableFunc(opts, func(a, b opt) int {
 		if h.s.Settings.PlateFit {
-			// Plate fit after nutrition: within kcalBucket of the need, the
+			// Plate fit after nutrition: the least fat above the week's
+			// range (excessFat), then within kcalBucket of the need, the
 			// plate with fewer raised gaps first (PLATE-4).
 			ka, kb := math.Abs(need-a.c.food.Macros.Kcal*a.c.comp.Multiplier()), math.Abs(need-b.c.food.Macros.Kcal*b.c.comp.Multiplier())
-			if c := cmp.Or(boolCmp(a.a.rank.addsCook, b.a.rank.addsCook), cmp.Compare(math.Round(ka/kcalBucket), math.Round(kb/kcalBucket)), cmp.Compare(a.raised, b.raised)); c != 0 {
+			fa, fb := excessFat(a.c.food.Macros, a.c.comp.Multiplier(), y.pol.FatHigh), excessFat(b.c.food.Macros, b.c.comp.Multiplier(), y.pol.FatHigh)
+			if c := cmp.Or(boolCmp(a.a.rank.addsCook, b.a.rank.addsCook), cmp.Compare(fa, fb), cmp.Compare(math.Round(ka/kcalBucket), math.Round(kb/kcalBucket)), cmp.Compare(a.raised, b.raised)); c != 0 {
 				return c
 			}
 		}

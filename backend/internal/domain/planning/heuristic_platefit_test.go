@@ -114,3 +114,19 @@ func TestHeuristic_BlankSideNeverOutranksAFit(t *testing.T) {
 	s.Foods[200] = blank
 	assert.Equal(t, sideSalad, firstSide(t, s))
 }
+
+// Nutrition before fit: beside the mains, the side whose fat stays in the
+// week's range wins over the fresh side that settles the fresh gap.
+func TestHeuristic_PlateFitSidePrefersTheLeanPlate(t *testing.T) {
+	s := plateFitCooker(true)
+	salad := s.Foods[sideSalad]
+	salad.Macros.Fat = salad.Macros.Kcal / 9 // all fat kcal: a parmesan salad
+	s.Foods[sideSalad] = salad
+	for id, f := range s.Foods {
+		if f.Role == food.RoleMain {
+			f.Macros.Fat = f.Macros.Kcal * 0.35 / 9 // the plate sits at the range top
+			s.Foods[id] = f
+		}
+	}
+	assert.Equal(t, sideRoast, firstSide(t, s), "the lean side, not the fresh fatty one")
+}

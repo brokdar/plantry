@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 )
 
@@ -118,7 +119,7 @@ func TestLiftDay_PlateFitRoundsTheTopUpUp(t *testing.T) {
 		h.topUpBase, h.adds = map[[2]int]float64{}, map[int]*dayAdds{}
 		ev := evaluateLean(Merge(h.s, tgt, h.prop), tgt)
 		kcal := ev.Days[0].Kcal
-		h.liftDay(DayKcal{Date: bfMon, Kcal: kcal}, kcal+100, false)
+		h.liftDay(DayKcal{Date: bfMon, Kcal: kcal}, kcal+100, false, false)
 		for _, slot := range []int64{bfLunch, bfDinner} {
 			for _, c := range plateOf(h, slot).Components {
 				if c.FoodID == bfCurry || c.FoodID == bfBake {
@@ -126,5 +127,123 @@ func TestLiftDay_PlateFitRoundsTheTopUpUp(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// excessFat counts the fat kcal above the range top in 100 kcal steps.
+func TestExcessFat(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		m    nutrition.Macros
+		mult float64
+		want float64
+	}{
+		{"lean gives 0", nutrition.Macros{Kcal: 200, Fat: 5}, 1, 0},
+		{"at the range top gives 0", nutrition.Macros{Kcal: 200, Fat: 70.0 / 9}, 1, 0},
+		{"fatty: 180 fat kcal - 70", nutrition.Macros{Kcal: 200, Fat: 20}, 1, 1},
+		{"scales with the portion", nutrition.Macros{Kcal: 200, Fat: 20}, 2, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.InDelta(t, tc.want, excessFat(tc.m, tc.mult, 35), 1e-9)
+		})
+	}
+}
+
+// fattenBake makes the bake 60 % fat kcal (above any fat range top).
+func fattenBake(h *planner) {
+	f := h.s.Foods[bfBake]
+	f.Macros.Fat = f.Macros.Kcal * 0.6 / 9
+	h.s.Foods[bfBake] = f
+	h.in.State = h.s
+}
+
+func liftPlanner() *planner {
+	h, _ := bandsPlanner(nil, bfPlates(
+		[]ProposedComponent{{FoodID: bfCurry, Portions: 1, SessionKey: "a"}},
+		[]ProposedComponent{{FoodID: bfBake, Portions: 1, SessionKey: "b"}, {FoodID: bfCouscous, Portions: 1, SessionKey: "c"}},
+	))
+	h.s.Settings.PlateFit = true
+	fattenBake(h)
+	h.topUpBase, h.adds = map[[2]int]float64{}, map[int]*dayAdds{}
+	return h
+}
+
+// The top-up with leanOnly grows the lean dishes and leaves the fatty ones.
+func TestTopUpDay_LeanOnlyGrowsLeanDishesFirst(t *testing.T) {
+	h := liftPlanner()
+	h.topUpDay(bfMon, 400, true, true)
+	assert.Greater(t, portionsOf(plateOf(h, bfLunch), bfCurry), 1.0, "the lean dish grows")
+	assert.InDelta(t, 1.0, portionsOf(plateOf(h, bfDinner), bfBake), 1e-9, "the fatty dish stays")
+
+	h = liftPlanner()
+	h.topUpDay(bfMon, 400, true, false)
+	assert.Greater(t, portionsOf(plateOf(h, bfDinner), bfBake), 1.0, "without leanOnly the fatty dish grows too")
+}
+
+// The last week lift lets fatty dishes grow when the week is still short.
+func TestLiftWeek_FattyDishesLiftOnlyInTheLastPass(t *testing.T) {
+	h := liftPlanner()
+	// Only the fatty bake can grow: drop the lean curry from the week.
+	h.prop.Plates[1].Components = nil
+	h.liftWeek(true)
+	assert.InDelta(t, 1.0, portionsOf(plateOf(h, bfDinner), bfBake), 1e-9, "lean-only pass leaves the fatty dish")
+	h.liftWeek(false)
+	assert.Greater(t, portionsOf(plateOf(h, bfDinner), bfBake), 1.0, "the last pass lifts it")
+}
+
+// With plate fit on, a bread filler beside a starch side is no candidate
+// (no second starch); off, it stays.
+func TestAddNoCook_PlateFitNoSecondStarchFiller(t *testing.T) {
+	for _, tc := range []struct {
+		plateFit bool
+		want     int64
+	}{{false, pfBread}, {true, 0}} { // on: the filler goes to the lunch
+		h, tgt := fillerPlanner(tc.plateFit, 30, true)
+		f := h.s.Foods[pfBread]
+		f.Kind, f.LeafRole = food.KindLeaf, food.RoleSideStarch
+		h.s.Foods[pfBread] = f
+		h.s.NoCook = []int64{pfBread, pfCheese, pfChickpeas}
+		h.in.State = h.s
+		ev := evaluateLean(Merge(h.s, tgt, h.prop), tgt)
+		assert.Equal(t, tc.want, added(t, h, ev.Days[0].Kcal+250), "plate fit %v", tc.plateFit)
+	}
+}
+
+// The safety floor lift takes any verified food: with only bread reachable
+// beside a starch side, the floor lift still adds it.
+func TestAddNoCook_FloorLiftIgnoresSecondStarch(t *testing.T) {
+	h, tgt := fillerPlanner(true, 30, true)
+	f := h.s.Foods[pfBread]
+	f.Kind, f.LeafRole = food.KindLeaf, food.RoleSideStarch
+	h.s.Foods[pfBread] = f
+	h.s.NoCook = []int64{pfBread}
+	h.in.State = h.s
+	h.floorLift = true
+	ev := evaluateLean(Merge(h.s, tgt, h.prop), tgt)
+	assert.Equal(t, int64(pfBread), added(t, h, ev.Days[0].Kcal+250))
+}
+
+// While the week's fat is above range, the filler with the least fat above
+// the range comes before the carb and order keys.
+func TestAddNoCook_PlateFitFillerKeepsFatInRange(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		fatHot bool
+		want   int64
+	}{{"fat in range: the old order", false, pfCheese}, {"fat above range: the lean filler", true, pfBread}} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, tgt := fillerPlanner(true, 55, true) // carbs in range: no carb key
+			if tc.fatHot {
+				for _, id := range []int64{bfOats, bfCurry, bfBake, bfCouscous} {
+					f := h.s.Foods[id]
+					f.Macros.Fat = f.Macros.Kcal * 0.5 / 9
+					h.s.Foods[id] = f
+				}
+				h.in.State = h.s
+			}
+			ev := evaluateLean(Merge(h.s, tgt, h.prop), tgt)
+			assert.Equal(t, tc.fatHot, ev.Week.FatPct > h.x.pol.FatHigh)
+			assert.Equal(t, tc.want, added(t, h, ev.Days[0].Kcal+250))
+		})
 	}
 }
