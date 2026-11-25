@@ -3,6 +3,8 @@ package planning
 import (
 	"testing"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -110,4 +112,29 @@ func TestAddNoCook_RatherNot(t *testing.T) {
 		assert.False(t, holds(h, nfApple))
 		assert.Empty(t, fillChoices(h))
 	})
+}
+
+// A side pick never doubles a food the plate already holds: sideFit does not
+// count the candidate's own twin as a clash, so pickSide must skip it (the
+// guard's re-pick put a second Steamed broccoli beside the chili).
+func TestPickSide_NeverDoublesAPlateFood(t *testing.T) {
+	h := sideAddPlanner()
+	c := plate.CellKey{Date: bfMon, SlotID: bfLunch}
+	first, ok := h.pickSide(c, bfCurry, nil, 0, "")
+	require.True(t, ok)
+	if second, ok := h.pickSide(c, bfCurry, []int64{first}, 0, ""); ok {
+		assert.NotEqual(t, first, second, "a second %d beside the first", first)
+	}
+	if got, ok := h.pickSide(c, bfCurry, []int64{bfCurry}, 0, ""); ok {
+		assert.NotEqual(t, bfCurry, got)
+	}
+}
+
+func TestBatchHolds(t *testing.T) {
+	p := Proposal{Plates: []ProposedPlate{{Components: []ProposedComponent{
+		{FoodID: 1, SessionKey: "a"}, {FoodID: 9, SessionKey: "b"},
+	}}, {Components: []ProposedComponent{{FoodID: 1, SessionKey: "a"}, {FoodID: 2, SessionKey: "s"}}}}}
+	assert.True(t, batchHolds(p, "a", 9), "plate 1 already eats food 9 from another session")
+	assert.True(t, batchHolds(p, "a", 2), "plate 2 eats food 2 from another session")
+	assert.False(t, batchHolds(p, "a", 3))
 }

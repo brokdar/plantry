@@ -876,7 +876,8 @@ func (h *planner) reachesForced(f FoodFacts, c plate.CellKey) bool {
 // pickMain. The swapped-out food, a side the household would rather not
 // get (State.RatherNot: the plate goes without a side instead; addSide may
 // still add one for nutrition) and, with plate fit on, the proposal's
-// excluded foods are no candidate.
+// excluded foods are no candidate, nor is the main or a food the plate
+// already holds (no plate carries the same food twice).
 func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude int64, role food.Role) (int64, bool) {
 	fit := h.s.plateFitOn(main)
 	need := 0.0               // with plate fit on: the kcal the plate lacks to its share
@@ -895,7 +896,7 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 	}
 	var cands []candidate
 	for _, f := range h.s.Foods {
-		if !f.Composed() || !sideRole(f.Role) || f.ID == exclude || (fit && h.exclude[f.ID]) || h.s.RatherNot[f.ID] || !h.fits(f) || !h.reachesForced(f, c) {
+		if !f.Composed() || !sideRole(f.Role) || f.ID == exclude || f.ID == main || slices.Contains(others, f.ID) || (fit && h.exclude[f.ID]) || h.s.RatherNot[f.ID] || !h.fits(f) || !h.reachesForced(f, c) {
 			continue
 		}
 		last := 0.0
