@@ -1,3 +1,4 @@
+import { TipMark } from "@/components/tips/Tips"
 import { useDraggable, useDroppable } from "@dnd-kit/core"
 import { Lock, Plus, RefreshCw, Shuffle, TriangleAlert } from "lucide-react"
 import { useTranslation } from "react-i18next"
@@ -184,6 +185,12 @@ export function PlateCell({
           )}
           strokeWidth={2}
           aria-hidden="true"
+        />
+      )}
+      {cell.plate && !readOnly && (
+        <TipMark
+          plateId={cell.plate.id}
+          className="absolute right-2 bottom-2 z-10"
         />
       )}
       {quick && (

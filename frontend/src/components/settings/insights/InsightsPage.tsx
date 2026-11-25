@@ -1,3 +1,4 @@
+import { ChefBlock } from "./ChefBlock"
 import { Link } from "@tanstack/react-router"
 import { ChevronLeft } from "lucide-react"
 import { useTranslation } from "react-i18next"
@@ -76,6 +77,8 @@ export function InsightsPage({
       {insights.data && insights.data.discovery.runs > 0 && (
         <DiscoveryBlock discovery={insights.data.discovery} />
       )}
+
+      <ChefBlock />
 
       <section aria-labelledby="insights-runs" className="flex flex-col gap-3">
         <h2 id="insights-runs" className="text-h2 font-semibold text-ink">

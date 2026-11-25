@@ -1,3 +1,4 @@
+import { TipsProvider } from "@/components/tips/Tips"
 import { useNavigate } from "@tanstack/react-router"
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -439,139 +440,146 @@ function PlanView({
   }
 
   return (
-    <div className="flex w-full">
-      <PageFrame className="min-w-0 flex-1">
-        <PlanToolbar
-          window={win}
-          stats={plan.stats}
-          summary={board.summary}
-          rangeLabel={rangeLabel}
-          readOnly={board.readOnly}
-          warningCount={board.warningCells.length}
-          onNextWarning={nextWarning}
-          assistantOpen={assistantShown}
-          assistantEnabled={assistantEnabled}
-          onToggleAssistant={() => setAssistant(!assistantShown)}
-          onCopyWeek={() => setCopyOpen(true)}
-          onClear={() => clearWindow.mutate({ from: win.start, to: win.end })}
-          onShortcuts={() => setShortcutsOpen(true)}
-          draft={toolbarDraft}
-          draftPlates={plan.draft?.plates ?? 0}
-          running={running}
-          accepting={accept.isPending}
-          onAcceptAndShop={acceptAndShop}
-          onRegenerateWeek={() => generate.mutate({ start: win.start })}
-          onDiscard={() => setDiscardOpen(true)}
-          // Re-plan from today: only the current window (D33).
-          onReplan={
-            win.is_current && !board.readOnly ? () => openReplan([]) : undefined
-          }
-          progress={
-            runId !== undefined && (
-              <GenerationProgress
-                key={runId}
-                run={runQuery.data}
-                failed={runQuery.isError}
-                attention={board.warningCells.length}
-                onFinished={runFinished}
+    <TipsProvider date={win.start}>
+      <div className="flex w-full">
+        <PageFrame className="min-w-0 flex-1">
+          <PlanToolbar
+            window={win}
+            stats={plan.stats}
+            summary={board.summary}
+            rangeLabel={rangeLabel}
+            readOnly={board.readOnly}
+            warningCount={board.warningCells.length}
+            onNextWarning={nextWarning}
+            assistantOpen={assistantShown}
+            assistantEnabled={assistantEnabled}
+            onToggleAssistant={() => setAssistant(!assistantShown)}
+            onCopyWeek={() => setCopyOpen(true)}
+            onClear={() => clearWindow.mutate({ from: win.start, to: win.end })}
+            onShortcuts={() => setShortcutsOpen(true)}
+            draft={toolbarDraft}
+            draftPlates={plan.draft?.plates ?? 0}
+            running={running}
+            accepting={accept.isPending}
+            onAcceptAndShop={acceptAndShop}
+            onRegenerateWeek={() => generate.mutate({ start: win.start })}
+            onDiscard={() => setDiscardOpen(true)}
+            // Re-plan from today: only the current window (D33).
+            onReplan={
+              win.is_current && !board.readOnly
+                ? () => openReplan([])
+                : undefined
+            }
+            progress={
+              runId !== undefined && (
+                <GenerationProgress
+                  key={runId}
+                  run={runQuery.data}
+                  failed={runQuery.isError}
+                  attention={board.warningCells.length}
+                  onFinished={runFinished}
+                />
+              )
+            }
+          />
+          {plan.week && <WeekLedger week={plan.week} soft={plan.soft} />}
+          <BatchHighlightProvider>
+            {board.empty && !board.readOnly && !running && (
+              <EmptyWindow
+                start={win.start}
+                onPlanByHand={() =>
+                  focusCell('[data-cell-mode="plan"][data-cell-empty]')
+                }
+                onCopyWeek={() => setCopyOpen(true)}
+                assistantEnabled={assistantEnabled}
               />
-            )
-          }
-        />
-        {plan.week && <WeekLedger week={plan.week} soft={plan.soft} />}
-        <BatchHighlightProvider>
-          {board.empty && !board.readOnly && !running && (
-            <EmptyWindow
-              start={win.start}
-              onPlanByHand={() =>
-                focusCell('[data-cell-mode="plan"][data-cell-empty]')
-              }
-              onCopyWeek={() => setCopyOpen(true)}
-              assistantEnabled={assistantEnabled}
+            )}
+            {/* Phones keep the strip; the grid draws the batch lines. */}
+            {phone && <CookStrip batches={board.cookStrip} />}
+            <div ref={boardRef}>
+              <Board
+                plan={plan}
+                slotName={slotName}
+                onDayAction={board.readOnly || running ? undefined : dayAction}
+                board={board}
+                targets={plan.targets}
+                label={t("plan.board.label", { range: rangeLabel })}
+                onOpenCell={openCell}
+                onMarkNoPlate={markCell}
+                // While a run goes, R/S and the quick actions wait for it.
+                onReplace={running ? undefined : replace}
+                onDifferentSide={running ? undefined : differentSide}
+              />
+            </div>
+          </BatchHighlightProvider>
+          {canReview && (
+            <DraftBar
+              summary={board.summary}
+              disabled={running || accept.isPending}
+              onAccept={acceptAndShop}
             />
           )}
-          {/* Phones keep the strip; the grid draws the batch lines. */}
-          {phone && <CookStrip batches={board.cookStrip} />}
-          <div ref={boardRef}>
-            <Board
-              plan={plan}
-              slotName={slotName}
-              onDayAction={board.readOnly || running ? undefined : dayAction}
-              board={board}
-              targets={plan.targets}
-              label={t("plan.board.label", { range: rangeLabel })}
-              onOpenCell={openCell}
-              onMarkNoPlate={markCell}
-              // While a run goes, R/S and the quick actions wait for it.
-              onReplace={running ? undefined : replace}
-              onDifferentSide={running ? undefined : differentSide}
-            />
-          </div>
-        </BatchHighlightProvider>
-        {canReview && (
-          <DraftBar
-            summary={board.summary}
-            disabled={running || accept.isPending}
-            onAccept={acceptAndShop}
+          <DiscardDialog
+            open={discardOpen}
+            onOpenChange={setDiscardOpen}
+            plates={plan.draft?.plates ?? 0}
+            pending={discard.isPending}
+            onDiscard={() =>
+              discard.mutate(
+                { from: win.start, to: win.end },
+                { onSuccess: () => setDiscardOpen(false) }
+              )
+            }
           />
-        )}
-        <DiscardDialog
-          open={discardOpen}
-          onOpenChange={setDiscardOpen}
-          plates={plan.draft?.plates ?? 0}
-          pending={discard.isPending}
-          onDiscard={() =>
-            discard.mutate(
-              { from: win.start, to: win.end },
-              { onSuccess: () => setDiscardOpen(false) }
-            )
-          }
-        />
-        <CopyFromWeekDialog
-          open={copyOpen}
-          onOpenChange={setCopyOpen}
-          targetStart={win.start}
-          defaultSourceStart={win.prev_start}
-        />
-        <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-        <PlanSheet
-          plan={plan}
-          board={board}
-          state={sheet}
-          running={running}
-          onChange={changeSheet}
-          onClosed={returnFocus}
-          onMarkNoPlate={markCell}
-          onRegenerateDay={regenerateDay}
-        />
-        {dialog}
-        {from !== null && (
-          <ReplanSheet
-            open={replan.open}
-            onOpenChange={(open) => {
-              replanOpen.current = open
-              setReplan((r) => ({ ...r, open }))
-            }}
+          <CopyFromWeekDialog
+            open={copyOpen}
+            onOpenChange={setCopyOpen}
+            targetStart={win.start}
+            defaultSourceStart={win.prev_start}
+          />
+          <ShortcutsDialog
+            open={shortcutsOpen}
+            onOpenChange={setShortcutsOpen}
+          />
+          <PlanSheet
             plan={plan}
-            from={from}
-            initialCells={replan.cells}
-            onCloseAutoFocus={(e) => {
-              if (!replan.origin) return
-              e.preventDefault()
-              focusCell(`[data-cell-key="${replan.origin}"]`)
-            }}
+            board={board}
+            state={sheet}
+            running={running}
+            onChange={changeSheet}
+            onClosed={returnFocus}
+            onMarkNoPlate={markCell}
+            onRegenerateDay={regenerateDay}
           />
-        )}
-      </PageFrame>
-      <AssistantPanel
-        open={assistantShown}
-        phone={phone}
-        docked={wide}
-        enabled={assistantEnabled && providerKnown}
-        loading={!providerKnown}
-        plan={plan}
-        onClose={() => setAssistant(false)}
-      />
-    </div>
+          {dialog}
+          {from !== null && (
+            <ReplanSheet
+              open={replan.open}
+              onOpenChange={(open) => {
+                replanOpen.current = open
+                setReplan((r) => ({ ...r, open }))
+              }}
+              plan={plan}
+              from={from}
+              initialCells={replan.cells}
+              onCloseAutoFocus={(e) => {
+                if (!replan.origin) return
+                e.preventDefault()
+                focusCell(`[data-cell-key="${replan.origin}"]`)
+              }}
+            />
+          )}
+        </PageFrame>
+        <AssistantPanel
+          open={assistantShown}
+          phone={phone}
+          docked={wide}
+          enabled={assistantEnabled && providerKnown}
+          loading={!providerKnown}
+          plan={plan}
+          onClose={() => setAssistant(false)}
+        />
+      </div>
+    </TipsProvider>
   )
 }

@@ -1,3 +1,4 @@
+import { FitPhrase } from "@/components/tips/Tips"
 import {
   ArrowLeftRight,
   CalendarSync,
@@ -163,6 +164,7 @@ export function PlateSheet({
         </div>
       )}
 
+      <FitPhrase plateId={plate.id} />
       <SessionWarnings plate={plate} sessions={plan.sessions} />
       <IssueList cell={cell} />
       {plate.reason && <WhyThis reason={plate.reason} />}
