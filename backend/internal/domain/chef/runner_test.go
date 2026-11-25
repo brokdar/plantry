@@ -315,6 +315,34 @@ func TestRunner_ShutdownCancelsAndBootRecovers(t *testing.T) {
 	assert.Empty(t, ran, "a failed job does not run")
 }
 
+// A shutdown that cancels while the guard is still deciding leaves the job
+// running for boot recovery, like a cancel inside the handler.
+func TestRunner_ShutdownDuringGuardLeavesJobRunning(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, true)
+	inGuard := make(chan struct{}, 1)
+	e.guard.Prices = func(ctx context.Context) (map[string]airun.Price, error) {
+		inGuard <- struct{}{}
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	handlerRan := false
+	r := e.runner(map[airun.Kind]chef.Handler{airun.KindChefFind: func(context.Context, chef.Job) error {
+		handlerRan = true
+		return nil
+	}}, 1)
+	require.NoError(t, r.Start(ctx))
+	id, err := r.Enqueue(ctx, airun.KindChefFind, "", false)
+	require.NoError(t, err)
+	<-inGuard
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	require.ErrorIs(t, r.Shutdown(cancelled), context.Canceled)
+	st, _, _ := e.status(t, id)
+	assert.Equal(t, "running", st, "an interrupted job is left for boot recovery")
+	assert.False(t, handlerRan)
+}
+
 // A recovered job under the limit runs at boot.
 func TestRunner_BootRunsRecoveredJob(t *testing.T) {
 	ctx := context.Background()

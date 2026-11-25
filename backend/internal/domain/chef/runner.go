@@ -196,6 +196,9 @@ func (r *Runner) run(ctx context.Context, job Job) (Status, string) {
 	}
 	d, err := r.cfg.Guard.Check(ctx, job.Kind, job.Requested)
 	if err != nil {
+		if r.base.Err() != nil {
+			return StatusRunning, ""
+		}
 		log.Error("chef.jobs.guard", "error", err)
 		return StatusFailed, err.Error()
 	}
