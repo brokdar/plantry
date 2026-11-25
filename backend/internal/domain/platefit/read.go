@@ -142,6 +142,37 @@ func (c Component) heat() int {
 	return c.Attrs.Taste.Heat
 }
 
+// Proven returns c with every unknown value that could close a gap set to
+// one that closes none (not fresh, no starch unless its role is one, soft,
+// beige, hot, a flat taste, neutral cuisine). A candidate read as Proven
+// settles only the gaps its known values settle: a blank side never wins by
+// leaving a gap unknown.
+func Proven(c Component) Component {
+	no := false
+	if c.Fresh == nil {
+		c.Fresh = &no
+	}
+	if c.Starch == nil && c.Role != food.RoleSideStarch {
+		c.Starch = &no
+	}
+	if c.Attrs.Texture == "" {
+		c.Attrs.Texture = "soft"
+	}
+	if c.Attrs.Colour == "" {
+		c.Attrs.Colour = "beige"
+	}
+	if c.Attrs.Temperature == "" && !c.Leaf {
+		c.Attrs.Temperature = "hot"
+	}
+	if c.Attrs.Taste == nil {
+		c.Attrs.Taste = &flavor.Taste{}
+	}
+	if c.Attrs.Cuisine == "" {
+		c.Attrs.Cuisine = Neutral
+	}
+	return c
+}
+
 // Read returns the plate fit of p. It is pure: the same plate gives the same
 // reading.
 func Read(p Plate) Reading {

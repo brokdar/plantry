@@ -104,3 +104,13 @@ func TestHeuristic_SideSwapAvoidsClash(t *testing.T) {
 	assert.NotEqual(t, sideRice, got.Sessions[0].FoodID)
 	assert.NotEqual(t, old, got.Sessions[0].FoodID)
 }
+
+// A side with no known plate values settles no gap: an unattributed
+// favourite never outranks the side that really closes the fresh gap.
+func TestHeuristic_BlankSideNeverOutranksAFit(t *testing.T) {
+	s := plateFitCooker(true)
+	blank := recipe(200, "Beilage", food.RoleSideVeg, "vegan", 150)
+	blank.Favorite = true
+	s.Foods[200] = blank
+	assert.Equal(t, sideSalad, firstSide(t, s))
+}

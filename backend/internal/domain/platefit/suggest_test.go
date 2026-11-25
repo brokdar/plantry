@@ -1,11 +1,13 @@
 package platefit_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/platefit"
 )
 
@@ -49,6 +51,15 @@ func TestSuggest(t *testing.T) {
 			reversed[len(library)-1-i] = c
 		}
 		assert.Equal(t, first, platefit.Suggest(main, reversed, 3))
+	})
+
+	t.Run("a blank side settles nothing and never outranks one that closes the gap", func(t *testing.T) {
+		main := foods(t, "Linsen-Dal")[0]
+		blank := platefit.Component{ID: 9999, Name: "Aaa blank side", Role: food.RoleSideVeg}
+		got := platefit.Suggest(main, append(slices.Clone(library), blank), 50)
+		require.NotEmpty(t, got)
+		assert.NotContains(t, names(got), blank.Name, "a side with no known values improves nothing")
+		assert.Equal(t, "Kachumber", got[0].Side.Name)
 	})
 
 	t.Run("a German roast prefers German sides on a tie", func(t *testing.T) {

@@ -87,7 +87,7 @@ func (s State) plateFitOn(mainID int64) bool {
 
 // sideFit reads the plate of main with the sides others plus cand: clash
 // when cand adds a clash the plate did not have, raised the count of the
-// plate's raised gaps with cand (lower is better).
+// plate's raised gaps with cand read by its known values (lower is better).
 func (s State) sideFit(mainID int64, others []int64, cand FoodFacts) (clash bool, raised int) {
 	pl := platefit.Plate{Main: plateComponent(s.Foods[mainID])}
 	for _, id := range others {
@@ -96,14 +96,17 @@ func (s State) sideFit(mainID int64, others []int64, cand FoodFacts) (clash bool
 		}
 	}
 	before := platefit.Read(pl)
-	pl.Sides = append(pl.Sides, plateComponent(cand))
-	with := platefit.Read(pl)
-	for _, d := range with.Clashes {
+	sides := pl.Sides
+	pl.Sides = append(slices.Clone(sides), plateComponent(cand))
+	for _, d := range platefit.Read(pl).Clashes {
 		if !slices.Contains(before.Clashes, d) {
 			clash = true
 		}
 	}
-	for _, g := range with.Gaps {
+	// A gap closes only by the candidate's known values (platefit.Proven):
+	// a blank candidate never outranks one that really closes it.
+	pl.Sides = append(slices.Clone(sides), platefit.Proven(plateComponent(cand)))
+	for _, g := range platefit.Read(pl).Gaps {
 		if !g.Minor {
 			raised++
 		}
