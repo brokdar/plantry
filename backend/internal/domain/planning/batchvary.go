@@ -17,7 +17,8 @@ const maxVaryKcal = 100
 // new issue or nutrition gap, no added cooking, the day held in its band),
 // never clashes with the main (plate fit) and never repeats a side the batch
 // already serves. A leftover plate never gets a side that needs a new cook
-// session. Among the variants: nutrition first (closest to the old side's
+// session, nor one the household would rather not get (State.RatherNot):
+// keeping the batch's side is the better alternative. Among the variants: nutrition first (closest to the old side's
 // kcal), then plate fit (fewer raised gaps), then rotation (the side the
 // week uses least), the food id. A plate
 // with no variant keeps its side. Off, the proposal is returned as it is.
@@ -110,7 +111,7 @@ func varyPlate(base State, t Target, in Proposal, i int, served, skip map[int64]
 	}
 	var vs []variant
 	for _, c := range merged.altCandidates(x, p, si, AltRequest{What: AltSide}) {
-		if served[c.food.ID] || skip[c.food.ID] || c.food.Macros.Kcal <= 0 || (c.session != nil && c.grow > 0) || c.cookAt != nil {
+		if served[c.food.ID] || skip[c.food.ID] || base.RatherNot[c.food.ID] || c.food.Macros.Kcal <= 0 || (c.session != nil && c.grow > 0) || c.cookAt != nil {
 			continue
 		}
 		d := math.Abs(c.food.Macros.Kcal*c.comp.Multiplier() - oldKcal)

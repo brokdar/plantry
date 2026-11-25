@@ -12,6 +12,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -212,6 +213,7 @@ func (b *Builder) build(ctx context.Context, w window.Window, today, from, to ti
 	}
 	referenced := map[int64]bool{}
 	timesEaten := map[int64]int{}
+	var rated []plate.Plate // the rated plates of the feedback span (RatherNotSides)
 	eatenSince := today.AddDate(0, 0, -timesEatenIn)
 	for _, p := range plates {
 		confirmed := p.State == plate.StateConfirmed
@@ -223,6 +225,9 @@ func (b *Builder) build(ctx context.Context, w window.Window, today, from, to ti
 				timesEaten[id]++
 			}
 		}
+		if p.Feedback != nil && p.Date.Before(today) && !p.Date.Before(eatenSince) {
+			rated = append(rated, p)
+		}
 		if p.Date.Before(lo) {
 			continue
 		}
@@ -231,6 +236,7 @@ func (b *Builder) build(ctx context.Context, w window.Window, today, from, to ti
 			referenced[c.FoodID] = true
 		}
 	}
+	s.RatherNot = RatherNotSides(rated)
 	if s.Corrections, err = b.d.Corrections.UserReplacements(ctx, w.Start.AddDate(0, 0, -historyDays), w.Start); err != nil {
 		return State{}, fmt.Errorf("read corrections: %w", err)
 	}
@@ -329,6 +335,45 @@ func (b *Builder) addFoods(ctx context.Context, s *State, foods map[int64]*food.
 		s.Foods[id] = ff
 	}
 	return nil
+}
+
+// ratherNotMin is how many disliked or not-eaten plates within the feedback
+// span make a side a "rather not" side.
+const ratherNotMin = 2
+
+// RatherNotSides returns the foods served as a side or add-on on at least
+// ratherNotMin plates rated disliked or not_eaten and on no loved plate
+// among the given rated plates (the builder passes those of the last
+// timesEatenIn days): a side the household refuses, which the heuristic's
+// side choice ranks after every acceptable alternative. Nil without one.
+func RatherNotSides(rated []plate.Plate) map[int64]bool {
+	refused, loved := map[int64]int{}, map[int64]bool{}
+	for _, p := range rated {
+		if p.Feedback == nil {
+			continue
+		}
+		for _, c := range p.Components {
+			if c.Position != plate.PositionSide && c.Position != plate.PositionExtra {
+				continue
+			}
+			switch feedback.Status(p.Feedback.Status) {
+			case feedback.StatusLoved:
+				loved[c.FoodID] = true
+			case feedback.StatusDisliked, feedback.StatusNotEaten:
+				refused[c.FoodID]++
+			}
+		}
+	}
+	var out map[int64]bool
+	for id, n := range refused {
+		if n >= ratherNotMin && !loved[id] {
+			if out == nil {
+				out = map[int64]bool{}
+			}
+			out[id] = true
+		}
+	}
+	return out
 }
 
 // ExploreTag is the tag discovery puts on a recipe the user has not tried.

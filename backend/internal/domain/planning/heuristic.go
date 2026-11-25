@@ -865,7 +865,8 @@ func (h *planner) reachesForced(f FoodFacts, c plate.CellKey) bool {
 
 // pickSide ranks the side recipes for main (beside the plate's others)
 // cooked on c: of role when given (a swap keeps veg veg and starch starch
-// unless none exists), within the meat limit, not replaced, used least in
+// unless none exists), within the meat limit, not replaced, not a side the
+// household would rather not get (State.RatherNot), used least in
 // the proposal (the week's side rotation), then with plate fit on: no clash
 // with the plate, the least plate fat above the week's range (excessFat),
 // the side whose kcal come closest to what the plate lacks to its share (in
@@ -897,7 +898,7 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 		if f.LastEaten != nil {
 			last = float64(f.LastEaten.Unix())
 		}
-		keys := []float64{b2f(role != "" && f.Role != role), b2f(h.overMeat(f, c)), b2f(h.avoid[f.ID]), float64(h.used[f.ID])}
+		keys := []float64{b2f(role != "" && f.Role != role), b2f(h.overMeat(f, c)), b2f(h.avoid[f.ID]), b2f(h.s.RatherNot[f.ID]), float64(h.used[f.ID])}
 		if fit {
 			clash, raised := h.s.sideFit(main, others, f)
 			if clash {
