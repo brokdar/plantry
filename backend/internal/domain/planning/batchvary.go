@@ -16,13 +16,14 @@ const maxVaryKcal = 100
 // main stays, the side changes. A variant is verified like an alternative (no
 // new issue or nutrition gap, no added cooking, the day held in its band),
 // never clashes with the main (plate fit) and never repeats a side the batch
-// already serves. A leftover plate never gets a side that needs a new cook
-// session, nor one the household would rather not get (State.RatherNot):
-// keeping the batch's side is the better alternative. Among the variants:
-// nutrition first (closest to the old side's kcal), then plate fit (fewer
-// raised gaps), then rotation (the side the week uses least), the food id.
-// A plate with no variant keeps its side. Off, the proposal is returned as
-// it is.
+// already serves, and a side must make sense on the plate (addFits: no fruit
+// or second protein beside the main). A leftover plate never gets a side that
+// needs a new cook session, nor one the household would rather not get
+// (State.RatherNot): keeping the batch's side is the better alternative.
+// Among the variants: nutrition first (closest to the old side's kcal), then
+// plate fit (fewer raised gaps), then rotation (the side the week uses least),
+// the food id. A plate with no variant keeps its side. Off, the proposal is
+// returned as it is.
 func varyBatches(base State, t Target, in Proposal, skip map[int64]bool) Proposal {
 	if !base.Settings.BatchVariation {
 		return in
@@ -119,7 +120,11 @@ func varyPlate(base State, t Target, in Proposal, i int, served, skip map[int64]
 		if d > maxVaryKcal {
 			continue
 		}
-		on, clash, raised := merged.plateFitOf(withoutComp(p, si), c.food)
+		rest := withoutComp(p, si)
+		if !merged.addFits(rest, c.food, slotName(merged, p.SlotID)) {
+			continue // no fruit, muesli or second protein as a dinner's side
+		}
+		on, clash, raised := merged.plateFitOf(rest, c.food)
 		if on && clash {
 			continue
 		}

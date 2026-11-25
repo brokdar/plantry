@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
@@ -344,13 +343,16 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		}
 	}
 	cands = spreadAdds(y, merged, date, cands, adds.used)
-	if h.s.Settings.PlateFit && !h.floorLift {
-		// No second starch: bread beside a pasta, rice or potato main or a
-		// starch side (PLATE-4 keeps the plate's proportions); the safety floor lift skips it.
-		cands = slices.DeleteFunc(cands, func(c optCand) bool {
-			f := merged.Foods[c.opt.FoodID]
-			return merged.secondStarch(merged.Plates[c.plate], f, diet.Fold(f.Name))
-		})
+	// A filler must make sense on its plate (fillerFits: no second starch, no
+	// muesli or fruit beside a dinner, no second protein). The safety floor
+	// lift may use any verified food, the fitting ones first. Plate fit off: no
+	// filter.
+	misfit := func(c optCand) bool {
+		p := merged.Plates[c.plate]
+		return !merged.fillerFits(p, merged.Foods[c.opt.FoodID], slotName(merged, p.SlotID))
+	}
+	if !h.floorLift {
+		cands = slices.DeleteFunc(cands, misfit)
 	}
 	if protein {
 		// Week band: the add must not push the running average above it.
@@ -373,13 +375,20 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 	// share is below range, the most carb kcal (bread, not cheese).
 	legume, carbs := func(optCand) float64 { return 0 }, func(optCand) float64 { return 0 }
 	fat := carbs
-	if w := ev.Week; h.s.Settings.PlateFit && !protein && w != nil {
-		mult := func(c optCand) float64 {
-			if f := h.s.Foods[c.opt.FoodID]; f.Macros.Kcal > 0 {
-				return c.kcal / f.Macros.Kcal
-			}
-			return 0
+	mult := func(c optCand) float64 {
+		if f := h.s.Foods[c.opt.FoodID]; f.Macros.Kcal > 0 {
+			return c.kcal / f.Macros.Kcal
 		}
+		return 0
+	}
+	if h.s.Settings.PlateFit && protein {
+		// The protein add that fits a plate is often a dairy (tofu and fish
+		// rarely fit): a lean one (skyr, quark) before a full-fat one.
+		fat = func(c optCand) float64 {
+			return excessFat(h.s.Foods[c.opt.FoodID].Macros, mult(c), y.pol.FatHigh)
+		}
+	}
+	if w := ev.Week; h.s.Settings.PlateFit && !protein && w != nil {
 		if w.LegumeMeals == 0 {
 			legume = func(c optCand) float64 {
 				return -b2f(h.s.Foods[c.opt.FoodID].Groups.LegumeG*mult(c) >= minMealG)
@@ -390,9 +399,16 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 				return excessFat(h.s.Foods[c.opt.FoodID].Macros, mult(c), y.pol.FatHigh)
 			}
 		}
-		if w.CarbsPct < y.pol.CarbsLow {
+		switch {
+		case w.CarbsPct < y.pol.CarbsLow:
 			carbs = func(c optCand) float64 {
 				return -math.Round(h.s.Foods[c.opt.FoodID].Macros.Carbs * 4 * mult(c) / 10)
+			}
+		case w.CarbsPct > y.pol.CarbsHigh:
+			// Above range (the fitting fillers are mostly bread and vegetables
+			// once fruit, muesli and a second protein are out): the fewest.
+			carbs = func(c optCand) float64 {
+				return math.Round(h.s.Foods[c.opt.FoodID].Macros.Carbs * 4 * mult(c) / 10)
 			}
 		}
 	}
@@ -406,7 +422,7 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 				}
 				return 0
 			}
-			return cmp.Or(cmp.Compare(over(a), over(b)), cmp.Compare(b.protein, a.protein), cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal)))
+			return cmp.Or(cmp.Compare(over(a), over(b)), cmp.Compare(fat(a), fat(b)), cmp.Compare(b.protein, a.protein), cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal)))
 		}
 		// Sweets are out and the protein pass has its own add, so a filler
 		// is the food that fits the kcal gap best. A model's plan gets, within 25 kcal
@@ -428,6 +444,9 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		}
 		return cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal))
 	})
+	if h.floorLift {
+		slices.SortStableFunc(cands, func(a, b optCand) int { return cmp.Compare(b2f(misfit(a)), b2f(misfit(b))) })
+	}
 	for _, c := range cands {
 		o, ok := y.verify(c, h.in.Target, base, d, band, protein)
 		if !ok || (h.balance && o.CookOccasions > len(y.occasions[dayOf(date)])) {

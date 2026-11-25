@@ -1,6 +1,7 @@
 package planning
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,6 +50,11 @@ func fillerPlanner(plateFit bool, carbsPct float64, legumeWeek bool) (*planner, 
 	big.ServingG = 300 // its smallest add, half a serving, is 375 kcal
 	h.s.Foods[pfBigBread] = big
 	h.s.NoCook = []int64{pfCheese, pfBread, pfChickpeas} // the old order: cheese first
+	// The bake reads as a stew: chickpeas fit it (fillerFits), so the week's
+	// keys decide.
+	bake := h.s.Foods[bfBake]
+	bake.Attrs.Kind = "stew"
+	h.s.Foods[bfBake] = bake
 	h.s.Settings.PlateFit = plateFit
 	h.in.State = h.s
 	h.topUpBase, h.adds = map[[2]int]float64{}, map[int]*dayAdds{} // as topUpFloors sets them
@@ -209,18 +215,38 @@ func TestAddNoCook_PlateFitNoSecondStarchFiller(t *testing.T) {
 	}
 }
 
-// The safety floor lift takes any verified food: with only bread reachable
-// beside a starch side, the floor lift still adds it.
+// The safety floor lift takes any verified food, the fitting plates first:
+// bread goes on a plate without a starch, and when only the dinner beside
+// its couscous is left it still goes on.
 func TestAddNoCook_FloorLiftIgnoresSecondStarch(t *testing.T) {
-	h, tgt := fillerPlanner(true, 30, true)
-	f := h.s.Foods[pfBread]
-	f.Kind, f.LeafRole = food.KindLeaf, food.RoleSideStarch
-	h.s.Foods[pfBread] = f
-	h.s.NoCook = []int64{pfBread}
-	h.in.State = h.s
-	h.floorLift = true
-	ev := evaluateLean(Merge(h.s, tgt, h.prop), tgt)
-	assert.Equal(t, int64(pfBread), added(t, h, ev.Days[0].Kcal+250))
+	for _, tc := range []struct {
+		name        string
+		starchLunch bool
+		onDinner    bool
+	}{{"a plate it fits first", false, false}, {"else the plate that is left", true, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, tgt := fillerPlanner(true, 30, true)
+			f := h.s.Foods[pfBread]
+			f.Kind, f.LeafRole = food.KindLeaf, food.RoleSideStarch
+			h.s.Foods[pfBread] = f
+			h.s.NoCook = []int64{pfBread}
+			h.in.State = h.s
+			if tc.starchLunch { // breakfast and lunch already took an add: only the dinner is left
+				h.addsOf(bfMon).used[bfBreakfast], h.addsOf(bfMon).used[bfLunch] = true, true
+			}
+			h.floorLift = true
+			ev := evaluateLean(Merge(h.s, tgt, h.prop), tgt)
+			got := added(t, h, ev.Days[0].Kcal+250)
+			if tc.onDinner {
+				assert.Equal(t, int64(pfBread), got)
+			} else {
+				assert.Zero(t, got, "not on the dinner beside the couscous")
+				assert.True(t, slices.ContainsFunc(h.prop.Plates[:2], func(p ProposedPlate) bool {
+					return slices.ContainsFunc(p.Components, func(c ProposedComponent) bool { return c.FoodID == pfBread })
+				}), "on a plate without a starch")
+			}
+		})
+	}
 }
 
 // While the week's fat is above range, the filler with the least fat above

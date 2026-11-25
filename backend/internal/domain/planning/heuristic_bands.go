@@ -152,7 +152,8 @@ func (h *planner) fitDay(y *index, dk DayKcal, room *float64) {
 			f := h.s.Foods[h.prop.Plates[m.pi].Components[ci].FoodID]
 			for j := range meals {
 				if j == i || slices.ContainsFunc(h.prop.Plates[meals[j].pi].Components, func(c ProposedComponent) bool { return c.FoodID == f.ID }) ||
-					!merged.addOnFits(platesOf[j], f, slotName(merged, platesOf[j].SlotID)) {
+					!merged.addOnFits(platesOf[j], f, slotName(merged, platesOf[j].SlotID)) ||
+					!merged.fillerFits(platesOf[j], f, slotName(merged, platesOf[j].SlotID)) {
 					continue
 				}
 				relocs = append(relocs, &bandReloc{from: i, to: j, ci: ci, kcal: k})

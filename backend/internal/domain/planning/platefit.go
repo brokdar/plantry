@@ -15,8 +15,8 @@ import (
 // a side (pickSide, addSide) that brings a clash to its plate is no
 // candidate, and the candidates rank by the plate's raised gaps after
 // nutrition and before the existing keys. No-cook add-ons (addNoCook) are
-// not filtered: they carry no cuisine or starch. Minor gaps never filter or
-// rank.
+// filtered by their own rules (fillerFits), not by a reading. Minor gaps
+// never filter or rank.
 
 // freshWords are ingredients that make a raw, green or citrus element.
 var freshWords = []string{
