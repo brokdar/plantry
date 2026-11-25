@@ -40,6 +40,7 @@ type Querier interface {
 	CreateCookSession(ctx context.Context, arg CreateCookSessionParams) (CookSession, error)
 	CreateFood(ctx context.Context, arg CreateFoodParams) (Food, error)
 	CreateFoodComponent(ctx context.Context, arg CreateFoodComponentParams) error
+	CreateFoodEvent(ctx context.Context, arg CreateFoodEventParams) error
 	CreateFoodInstruction(ctx context.Context, arg CreateFoodInstructionParams) error
 	CreateFoodTag(ctx context.Context, arg CreateFoodTagParams) error
 	CreatePlanLight(ctx context.Context, arg CreatePlanLightParams) error
@@ -122,6 +123,7 @@ type Querier interface {
 	GetShownSuggestion(ctx context.Context, shownOn sql.NullString) (RecipeSuggestion, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
+	LastFoodEventID(ctx context.Context) (int64, error)
 	LastPlateEventID(ctx context.Context) (int64, error)
 	// Which of the given leaves at least one composed food uses.
 	LeafIDsUsedInRecipes(ctx context.Context, ids []int64) ([]int64, error)
@@ -149,6 +151,7 @@ type Querier interface {
 	// Sessions cooking in [from_date, to_date] or linked to a plate dated in it.
 	ListCookSessionsInRange(ctx context.Context, arg ListCookSessionsInRangeParams) ([]CookSession, error)
 	ListFoodComponents(ctx context.Context, parentID int64) ([]ListFoodComponentsRow, error)
+	ListFoodEventsInRange(ctx context.Context, arg ListFoodEventsInRangeParams) ([]FoodEvent, error)
 	ListFoodInstructions(ctx context.Context, foodID int64) ([]FoodInstruction, error)
 	ListFoodPortions(ctx context.Context, foodID int64) ([]FoodPortion, error)
 	ListFoodTags(ctx context.Context, foodID int64) ([]FoodTag, error)

@@ -38,6 +38,7 @@ type Handlers struct {
 	Settings      *handlers.SettingsHandler
 	Shopping      *handlers.ShoppingHandler
 	Availability  *handlers.AvailabilityHandler
+	FoodEvents    *handlers.FoodEventHandler
 	Setup         *handlers.SetupHandler
 	Version       string               // build version shown by /api/health
 	DevMode       bool                 // gates dev-only debug endpoints
@@ -275,6 +276,10 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 
 		if h.Shopping != nil {
 			api.Get("/shopping-list", h.Shopping.List)
+		}
+
+		if h.FoodEvents != nil {
+			api.Post("/food-events/revert", h.FoodEvents.Revert)
 		}
 
 		if h.Availability != nil {
