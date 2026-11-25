@@ -255,6 +255,9 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			violations := violationsOf(Check(merged, in.Target))
 			rep := newRepairer(in, prop)
 			advice := rep.advisories()
+			// A plate-fit clash sends the plan back but is never a note or a
+			// violation of the result (PLATE-5).
+			clashes := rep.plateClashes()
 			logAttempt(ctx, in.Logger, attempt, violations, nil, fixes...)
 			RecordAttemptEvaluation(ctx, attempt, func() Evaluation { return Evaluate(merged, in.Target) })
 			for _, f := range fixes {
@@ -262,7 +265,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 					allFixes = append(allFixes, f)
 				}
 			}
-			needRepair := len(violations) > 0 || len(advice) > 0
+			needRepair := len(violations) > 0 || len(advice) > 0 || len(clashes) > 0
 			switch {
 			case !freeUsed && attempt == 0 && skeleton(violations, fillCells):
 				// An incomplete first plan is not a failed repair: the
@@ -276,7 +279,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			}
 			noted := withNotes(prop, allFixes, advice, "")
 			last = &noted
-			feedback = rep.feedback(findings{violations, advice, fixes, sig == lastSig}) + evaluationFeedback(in, prop)
+			feedback = rep.feedback(findings{violations, advice, clashes, fixes, sig == lastSig}) + evaluationFeedback(in, prop)
 			lastSig = sig
 		} else {
 			logAttempt(ctx, in.Logger, attempt, nil, perr)

@@ -111,18 +111,19 @@ func (r *repairer) missingMains() []string {
 }
 
 // findings is what one attempt's proposal left to repair: violations, the
-// advisories, the corrections already applied in Go, and whether the
-// proposal equals the previous attempt's.
+// advisories, the plate-fit clashes, the corrections already applied in Go,
+// and whether the proposal equals the previous attempt's.
 type findings struct {
 	violations []Issue
 	advice     []string
+	clashes    []string
 	fixes      []string
 	repeated   bool
 }
 
 // feedback is the repair message.
 func (r *repairer) feedback(f findings) string {
-	vs, adv, fixes, repeated := f.violations, f.advice, f.fixes, f.repeated
+	vs, adv, fixes, repeated := f.violations, append(slices.Clone(f.advice), f.clashes...), f.fixes, f.repeated
 	var b strings.Builder
 	if repeated {
 		b.WriteString("Your last reply is identical to the one before it, so nothing was repaired. Change the cells named below; resubmitting the same plan fails again.\n")
