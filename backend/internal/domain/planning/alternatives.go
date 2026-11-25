@@ -129,6 +129,9 @@ type Alternative struct {
 	// Also names the other steps of the same change (a side that no longer
 	// fits the new main is swapped), their ops are in Ops.
 	Also string `json:"also,omitempty"`
+	// Fit is the plate's plate fit after the change in a few words (PLATE-5;
+	// "" when plate fit does not judge the plate).
+	Fit string `json:"fit,omitempty"`
 	// WeekMeatG is the week's meat after the change, per eater (g).
 	WeekMeatG        float64 `json:"week_meat_g,omitempty"`
 	CookOccasionsDay int     `json:"cook_occasions_day"`
@@ -885,6 +888,7 @@ func (s State) tryAlt(t Target, pi, old int, drop []int, c altCand, base Evaluat
 		a.WeekPct = math.Round(ev.Week.Pct*10) / 10
 		a.WeekMeatG = ev.Week.MeatG
 	}
+	a.Fit = next.plateFitPhrase(np)
 	a.Ops = s.altOps(p, old, drop, c, a.CookAt)
 	a.next = next
 	y := newIndex(next, t)
