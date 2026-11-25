@@ -345,10 +345,9 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 	return y, nil
 }
 
-// componentOf is f as plate fit reads it. Fresh and starch are not derived
-// yet: plate fit treats them as unknown.
+// componentOf is f as plate fit reads it.
 func componentOf(f planning.FoodFacts) platefit.Component {
-	return platefit.Component{ID: f.ID, Name: f.Name, Role: f.Role, Leaf: !f.Composed(), Attrs: f.Attrs}
+	return platefit.Component{ID: f.ID, Name: f.Name, Role: f.Role, Leaf: !f.Composed(), Attrs: f.Attrs, Fresh: f.Fresh, Starch: f.Starch}
 }
 
 // plateFit reads p's main (its main position, else its first recipe) and

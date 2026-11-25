@@ -315,6 +315,10 @@ func TestDismiss_CoolsDownAndSilences(t *testing.T) {
 	}
 }
 
+// TestApply_UndoShowsTipAgain applies a tip on a confirmed plate (the fake's
+// plates are confirmed): Apply runs as the user's own edit, and the unlock
+// rules gate only the agent's writes (plate guard), so it goes through
+// (TIP-7).
 func TestApply_UndoShowsTipAgain(t *testing.T) {
 	t.Parallel()
 	f := newFixture()
