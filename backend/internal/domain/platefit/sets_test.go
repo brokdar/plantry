@@ -43,8 +43,9 @@ func plateOf(s chefsets.Set, p chefsets.Plate) platefit.Plate {
 }
 
 // checkSet is AC-3 over a split: the same plate reads the same in 100 runs;
-// classic and good plates raise nothing; every flawed plate shows each
-// dimension it is tagged with as a clash or gap of the tagged type.
+// classic and good plates raise nothing; every flawed plate raises something
+// and shows each dimension it is tagged with as a clash or gap of the tagged
+// type (a tagged gap may be minor where the cuisine relaxes it).
 func checkSet(t *testing.T, s chefsets.Set) {
 	t.Helper()
 	for _, p := range s.Plates {
@@ -64,6 +65,9 @@ func checkSet(t *testing.T, s chefsets.Set) {
 				t.Errorf("%s: a good plate has gaps %+v", p.ID, r.Gaps)
 			}
 		case chefsets.Flawed:
+			if len(r.Raised()) == 0 {
+				t.Errorf("%s: a flawed plate raises nothing, reading %+v", p.ID, r)
+			}
 			for _, fl := range p.Flaws {
 				d := platefit.Dimension(fl.Dimension)
 				found := slices.Contains(r.Clashes, d)

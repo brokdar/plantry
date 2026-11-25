@@ -215,15 +215,16 @@ func groups(cs []Component) int {
 }
 
 // pairingGap applies the main cuisine's pairing style. Contrast: nothing cool
-// and nothing sharp, sides or not. Bridge: there are sides and none shares the
-// main's food world (its coherence group or palette).
+// and nothing sharp, sides or not. Bridge: there are dish sides (a garnish is
+// not a side) and no side or garnish shares the main's food world (its
+// coherence group or palette).
 func pairingGap(cu Cuisine, p Plate, cold tri) bool {
 	switch cu.Style {
 	case Contrast:
 		return cold == no && anyOf(p.all(), hasTaste, acid(2)) == no
 	case Bridge:
-		if len(p.Sides) == 0 {
-			return false // a main alone has nothing to bridge with
+		if len(dishes(p.Sides)) == 0 {
+			return false // a main alone, or with garnish only, has nothing to bridge with
 		}
 		belongs := func(c Component) bool { return bridges(cu, c) }
 		known := func(c Component) bool { return c.Leaf || c.Attrs.Cuisine != "" || belongs(c) }

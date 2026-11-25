@@ -52,6 +52,7 @@ func TestRead_BridgePairing(t *testing.T) {
 		{"a German side bridges", []string{"Schweinebraten", "Basmatireis", "Rotkohl"}, false},
 		{"a neutral side from the palette bridges", []string{"Schweinebraten", "Salzkartoffeln", "Gedünsteter Brokkoli"}, false},
 		{"a palette leaf bridges", []string{"Schweinebraten", "Basmatireis", "Frischer Dill"}, false},
+		{"a garnish alone is not a side to bridge", []string{"Käsespätzle", "Röstzwiebeln"}, false},
 		{"Italian main, side of the same coherence group", []string{"Spaghetti Bolognese", "Ofengemüse"}, false},
 		{"Italian main, steamed broccoli only", []string{"Spaghetti Carbonara", "Gedünsteter Brokkoli"}, true},
 		{"French main, a side from another group", []string{"Coq au Vin", "Gedünsteter Brokkoli", "Chinesischer Gurkensalat"}, true},
