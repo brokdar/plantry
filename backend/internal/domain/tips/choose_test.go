@@ -318,3 +318,22 @@ func TestCandidates_NoSecondStarch(t *testing.T) {
 		}
 	}
 }
+
+// TestCandidates_NoFittingGarnishNoTip: a plate missing a fresh element gets
+// herbs when the library has them and no tip at all when its only fresh leaf
+// is cucumber (a cool element, not a herb).
+func TestCandidates_NoFittingGarnishNoTip(t *testing.T) {
+	lib, _, _ := devCandidates(t)
+	pl := platefit.Plate{Main: lib["Gemüselasagne"], Sides: []platefit.Component{lib["Ofengemüse"]}}
+	if top, _ := tips.Top(platefit.Read(pl)); top != platefit.Fresh {
+		t.Fatalf("top %s, want fresh", top)
+	}
+	cucumber := platefit.Component{ID: 500, Name: "Gurke", Leaf: true, Fresh: ptr(true), Attrs: flavor.Attributes{Texture: "crunchy", Colour: "green", Taste: &flavor.Taste{}}}
+	if c := tips.Candidates(pl, []platefit.Component{cucumber}, nil); len(c) != 0 {
+		t.Fatalf("cucumber offered: %s %s", c[0].Kind, c[0].Food().Name)
+	}
+	c := tips.Candidates(pl, []platefit.Component{cucumber, lib["Frische Petersilie"]}, nil)
+	if len(c) == 0 || c[0].Kind != tips.KindHerbs || c[0].Food().Name != "Frische Petersilie" {
+		t.Fatalf("want parsley as fresh herbs, got %+v", c)
+	}
+}
