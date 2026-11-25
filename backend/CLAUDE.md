@@ -87,6 +87,10 @@ Key-value rows in `app_settings`. The registry in `domain/settings/specs.go` lis
 | `ai.reasoning_effort.chat`, `ai.reasoning_effort.generate` | `low`, `low` | `low` / `medium` / `high`; the chat agent and the LLM plan chooser send it as `llm.Request.Effort` (see Model capabilities). Backend only: the Settings page lists no AI key generically, so there is no UI for them yet. `generate` defaults to `low`: in the paid matrix audit `high` cost 3x the time and 2x the money for no better plan, and `low` was as good as or better than `medium` |
 | `ai.programmatic_tools` | `true` | bool; **planner only** (the chat agent never gets the code tool, D4, see Programmatic tool calling); let the planner model script its read and dry-run tool calls (Anthropic programmatic tool calling, see Programmatic tool calling). Providers without it (OpenAI) ignore it; off sends no code execution tool and no `allowed_callers` |
 | `ai.price_overrides` | `{}` | JSON map model id → `{in, out, cache_read?, cache_write?}` USD per 1M tokens, validated by `airun.ParsePriceOverrides` (`Spec.Validate`); see AI run log |
+| `chef.enabled` | `false` | ON-1: gates autonomous Chef work and the Chef UI (the switch in Settings → Assistant, shown only with a usable provider) |
+| `chef.monthly_cap` | `5` | USD, finite and ≥ 0 (`ParseMonthlyCap`); the cap for capped work, see Chef jobs |
+| `chef.sites` | FIND-7 list | JSON array of `{domain, lang, enabled, ai_groups_exempt}` (`ParseChefSites`: unique lowercase domains, lang `en`/`de`) |
+| `plan.plate_fit` | `true` | Rule-based plate fit in planning; not shown in Settings |
 
 The profile (`domain/profile`) also carries `diet_type`, `meat_days_per_week_max` and `household_portions` (00023), and (00045) the nutrition goal `goal` (`maintain` default / `lose` / `gain`; absent in `PUT /api/profile` keeps the stored one) and optional body data `weight_kg`, `height_cm`, `birth_year` (a year, not an age: it does not go stale), `sex` (`female`/`male`/null) and `activity_level` (PAL 1.4 / 1.6 / 1.8). They are a full replace (null clears), validated in `profile.validate` (`error.profile.invalid_goal`, `invalid_body_data`); a `kcal_target` below `profile.MinDailyKcal(sex)` (1500 for male, else 1200, also with an unknown sex) is `error.profile.kcal_below_floor` on every save (reading a stored lower target still works; the user raises it to save). The kcal target stays the user's own number; the "suggest my target" estimate (Mifflin-St Jeor x PAL) is computed in the frontend (`lib/nutrition-estimate.ts`).
 
@@ -382,6 +386,12 @@ sqlite3 /data/plantry.db "SELECT seq, type, name, is_error, duration_ms, input_t
 # what call 1 of run 42 sent and got back
 sqlite3 /data/plantry.db "SELECT request_json, response_json FROM ai_run_steps WHERE run_id = 42 AND type = 'llm_call' ORDER BY seq LIMIT 1"
 ```
+
+## Chef jobs
+
+Capped work (COST-1): the run kinds in `chef.CappedKinds` (`chef_*`). Every capped run asks `chef.Guard.Check(kind, requested)` first: help (`chef_help`) always runs; otherwise no usable provider (`no_provider`) or the switch off (`off`) refuses; autonomous work also needs a priced model (`unpriced`, COST-3, `airun.Priced` with the overrides) and this month's capped spend (`airun.Spend` over `CappedKinds`, stored `cost_usd`) under `chef.monthly_cap` (`cap`); requested work at the cap runs with `Warn` (the caller shows the warning). `GET /api/chef/spend` returns `{month, spent_usd, cap_usd, at_cap}` (`Guard.Spent`).
+
+Queued capped work goes through `chef.Runner` over `chef_jobs` (00056): `Enqueue(kind, payload, requested)` needs a handler for the kind; at most `chefJobConcurrency` (2) jobs run at once; each claimed job counts an attempt and asks the guard (refused → `skipped`, the reason in `error`); handler error → `failed`. Shutdown waits `chefShutdownWait`, then cancels: a cancelled job stays `running`, and `Start` (boot) puts running jobs back to `queued`, or `failed` once they reach `chefJobMaxAttempts` (3). Tests drive simulated days with `ProcessOne` (export_test.go) and a stored clock, never sleeps.
 
 ## Coding Rules
 

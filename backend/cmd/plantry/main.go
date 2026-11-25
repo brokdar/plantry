@@ -33,6 +33,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/chef"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -382,6 +383,27 @@ func run() error {
 		}
 	}()
 
+	// Capped Chef work (COST-1..3): every capped run asks the guard; queued
+	// work runs in the background, at most chefJobConcurrency at a time.
+	// Boot recovery requeues jobs a crash or shutdown left running.
+	// Shutdown waits for running jobs (before the recorder and the
+	// database), cancelling them when the wait runs out.
+	chefGuard := &chef.Guard{Settings: settingsSvc, Spend: aiRunRepo, Prices: priceOverrides, Now: time.Now}
+	chefRunner := chef.NewRunner(chef.RunnerConfig{
+		Store: sqlite.NewChefJobRepo(conn), Guard: chefGuard,
+		Concurrency: chefJobConcurrency, MaxAttempts: chefJobMaxAttempts, Now: time.Now, Logger: logger,
+	})
+	if err := chefRunner.Start(context.Background()); err != nil {
+		return err
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), chefShutdownWait)
+		defer cancel()
+		if err := chefRunner.Shutdown(ctx); err != nil {
+			logger.Warn("chef.shutdown jobs cancelled", "error", err)
+		}
+	}()
+
 	// Rate limiter for /api/ai/chat. Initial limit comes from effective
 	// settings; the SettingsHandler reconfigures it when the user changes
 	// ai.rate_limit_per_min from the UI.
@@ -421,6 +443,7 @@ func run() error {
 		Feedback:      handlers.NewFeedbackHandler(feedbackSvc),
 		Import:        importHandler,
 		Discovery:     handlers.NewDiscoveryHandler(discoverySvc),
+		Chef:          handlers.NewChefHandler(chefGuard.Spent),
 		Settings:      settingsHandler,
 		Shopping:      handlers.NewShoppingHandler(shoppingSvc),
 		Availability:  handlers.NewAvailabilityHandler(availabilitySvc),
@@ -470,6 +493,15 @@ func run() error {
 // generations to record their end; a run still going after it is failed at
 // the next start (FailInterruptedRuns).
 const planningShutdownWait = 5 * time.Second
+
+// chefJobConcurrency is how many capped jobs run at once; an interrupted
+// job fails at boot after chefJobMaxAttempts tries; shutdown waits
+// chefShutdownWait for running jobs.
+const (
+	chefJobConcurrency = 2
+	chefJobMaxAttempts = 3
+	chefShutdownWait   = 10 * time.Second
+)
 
 // discoveryShutdownWait bounds how long shutdown waits for a running
 // discovery run before cancelling it.

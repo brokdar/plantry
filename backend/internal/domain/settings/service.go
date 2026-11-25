@@ -263,3 +263,21 @@ func (s *Service) DiscoveryCuisines(ctx context.Context) ([]string, error) {
 	}
 	return ParseCuisines(raw)
 }
+
+// ChefEnabled reports whether the Chef is on (ON-1).
+func (s *Service) ChefEnabled(ctx context.Context) (bool, error) {
+	raw, err := s.effectiveRaw(ctx, KeyChefEnabled)
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(raw)
+}
+
+// ChefMonthlyCap returns the monthly cap for capped work in USD (COST-1).
+func (s *Service) ChefMonthlyCap(ctx context.Context) (float64, error) {
+	raw, err := s.effectiveRaw(ctx, KeyChefMonthlyCap)
+	if err != nil {
+		return 0, err
+	}
+	return ParseMonthlyCap(raw)
+}

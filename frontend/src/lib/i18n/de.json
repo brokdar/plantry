@@ -371,7 +371,12 @@
       "cuisines_placeholder": "Zum Beispiel: persisch",
       "cuisines_add": "Hinzufügen",
       "cuisines_remove": "{{name}} entfernen",
-      "cuisines_full": "Höchstens {{count}} Küchen."
+      "cuisines_full": "Höchstens {{count}} Küchen.",
+      "chef_label": "Chef",
+      "chef_effect_on": "Der Assistent beschriftet deine Rezepte, prüft Importe und sucht neue Gerichte für deine Pläne, im Rahmen des Monatslimits.",
+      "chef_effect_off": "Schalte ihn ein, damit der Assistent von sich aus Rezepte beschriftet, Importe prüft und neue Gerichte sucht.",
+      "chef_spend": "Diesen Monat: {{spent}} von {{cap}}",
+      "chef_spend_at_cap": "Diesen Monat: {{spent}} von {{cap}}. Das Limit ist erreicht, der Assistent wartet bis zum nächsten Monat."
     },
     "system_section": {
       "appearance_group": "Sprache und Design",

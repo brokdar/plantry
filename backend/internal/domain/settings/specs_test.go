@@ -194,3 +194,52 @@ func TestSettingsSpec_DiscoveryDailyEnabled(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, on)
 }
+
+func TestSettingsSpec_Chef(t *testing.T) {
+	svc := newSpecTestService(t)
+	ctx := context.Background()
+
+	on, err := svc.ChefEnabled(ctx)
+	require.NoError(t, err)
+	assert.False(t, on, "the Chef is off by default (ON-1)")
+	capUSD, err := svc.ChefMonthlyCap(ctx)
+	require.NoError(t, err)
+	assert.InDelta(t, 5.0, capUSD, 1e-9, "default cap is USD 5 (COST-1)")
+	fit, err := svc.Get(ctx, settings.KeyPlanPlateFit)
+	require.NoError(t, err)
+	assert.Equal(t, "true", fit.Raw)
+
+	sites, err := svc.Get(ctx, settings.KeyChefSites)
+	require.NoError(t, err)
+	list, err := settings.ParseChefSites(sites.Raw)
+	require.NoError(t, err, "the default sites parse")
+	byDomain := map[string]settings.ChefSite{}
+	for _, s := range list {
+		byDomain[s.Domain] = s
+	}
+	assert.True(t, byDomain["bbcgoodfood.com"].Enabled)
+	assert.True(t, byDomain["chefkoch.de"].AIGroupsExempt, "Chefkoch is exempt (FIND-6)")
+	assert.Equal(t, "de", byDomain["chefkoch.de"].Lang)
+	assert.False(t, byDomain["seriouseats.com"].Enabled, "listed off by default")
+
+	require.NoError(t, svc.Set(ctx, settings.KeyChefMonthlyCap, "12.5"))
+	capUSD, err = svc.ChefMonthlyCap(ctx)
+	require.NoError(t, err)
+	assert.InDelta(t, 12.5, capUSD, 1e-9)
+	require.NoError(t, svc.Set(ctx, settings.KeyChefEnabled, "true"))
+	on, err = svc.ChefEnabled(ctx)
+	require.NoError(t, err)
+	assert.True(t, on)
+
+	for _, bad := range []string{"-1", "abc", "", "NaN", "Inf"} {
+		assert.ErrorIsf(t, svc.Set(ctx, settings.KeyChefMonthlyCap, bad), settings.ErrInvalidKind, "cap %q", bad)
+	}
+	for _, bad := range []string{
+		`{}`, `[{"domain":""}]`, `[{"domain":"Example.com","lang":"en"}]`,
+		`[{"domain":"a.com","lang":"fr"}]`,
+		`[{"domain":"a.com","lang":"en"},{"domain":"a.com","lang":"de"}]`,
+	} {
+		assert.ErrorIsf(t, svc.Set(ctx, settings.KeyChefSites, bad), settings.ErrInvalidKind, "sites %s", bad)
+	}
+	require.NoError(t, svc.Set(ctx, settings.KeyChefSites, `[{"domain":"example.com","lang":"en","enabled":true,"ai_groups_exempt":false}]`))
+}
