@@ -258,9 +258,10 @@ func (h *planner) addSide(date time.Time, limit float64) {
 		}
 	}
 	type opt struct {
-		pi int
-		c  altCand
-		a  Alternative
+		pi     int
+		c      altCand
+		a      Alternative
+		raised int
 	}
 	var opts []opt
 	for _, pi := range y.editablePlates(date) {
@@ -274,15 +275,27 @@ func (h *planner) addSide(date time.Time, limit float64) {
 				f.Macros.Kcal*c.comp.Multiplier() > dk.Adjusted*maxSideKcalShare {
 				continue
 			}
+			on, clash, raised := merged.plateFitOf(p, f)
+			if on && clash {
+				continue
+			}
 			a, why, _ := merged.tryAlt(h.in.Target, pi, -1, nil, c, base, hard, soft, len(y.occasions[dayOf(p.Date)]), cooked, false, false)
 			if why != "" || len(a.NewIssues) > 0 || a.rank.addsCook || a.DayKcal > dk.Adjusted*y.pol.DayHigh ||
 				math.Abs(dk.Adjusted-a.DayKcal) >= math.Abs(dk.Adjusted-dk.Kcal) {
 				continue
 			}
-			opts = append(opts, opt{pi, c, a})
+			opts = append(opts, opt{pi, c, a, raised})
 		}
 	}
 	slices.SortStableFunc(opts, func(a, b opt) int {
+		if h.s.Settings.PlateFit {
+			// Plate fit after nutrition: within kcalBucket of the need, the
+			// plate with fewer raised gaps first (PLATE-4).
+			ka, kb := math.Abs(need-a.c.food.Macros.Kcal*a.c.comp.Multiplier()), math.Abs(need-b.c.food.Macros.Kcal*b.c.comp.Multiplier())
+			if c := cmp.Or(boolCmp(a.a.rank.addsCook, b.a.rank.addsCook), cmp.Compare(math.Round(ka/kcalBucket), math.Round(kb/kcalBucket)), cmp.Compare(a.raised, b.raised)); c != 0 {
+				return c
+			}
+		}
 		return cmp.Or(boolCmp(a.a.rank.addsCook, b.a.rank.addsCook), cmp.Compare(math.Abs(need-a.c.food.Macros.Kcal*a.c.comp.Multiplier()), math.Abs(need-b.c.food.Macros.Kcal*b.c.comp.Multiplier())),
 			cmp.Compare(a.a.rank.source, b.a.rank.source), cmp.Compare(a.c.food.ID, b.c.food.ID))
 	})

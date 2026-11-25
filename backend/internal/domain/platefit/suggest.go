@@ -20,7 +20,9 @@ var sideRoles = []food.Role{food.RoleSideStarch, food.RoleSideVeg, food.RoleSide
 // (PLATE-8; nothing is stored). A side that brings a clash is left out; the
 // rest rank by how much they improve the main's gaps (a gap weighs 2, a minor
 // gap 1; a gap the side opens counts against it), then sides of the main's
-// food world (coherence group or palette) first, then by name. Sides that improve nothing are left out; at most n.
+// food world (coherence group or palette) first, then by name and id. A gap
+// counts as settled only when the side's known values settle it (Proven).
+// Sides that improve nothing are left out; at most n.
 func Suggest(main Component, library []Component, n int) []Suggestion {
 	cu := CuisineOf(main.Attrs.Cuisine)
 	alone := Read(Plate{Main: main})
@@ -34,10 +36,10 @@ func Suggest(main Component, library []Component, n int) []Suggestion {
 		if side.Leaf || !slices.Contains(sideRoles, side.Role) {
 			continue
 		}
-		with := Read(Plate{Main: main, Sides: []Component{side}})
-		if len(with.Clashes) > len(alone.Clashes) {
+		if len(Read(Plate{Main: main, Sides: []Component{side}}).Clashes) > len(alone.Clashes) {
 			continue
 		}
+		with := Read(Plate{Main: main, Sides: []Component{Proven(side)}})
 		s := scored{Suggestion: Suggestion{Side: side}, score: weight(alone) - weight(with), bridge: bridges(cu, side)}
 		for _, g := range alone.Gaps {
 			if !slices.ContainsFunc(with.Gaps, func(w Gap) bool { return w.Dimension == g.Dimension }) {
@@ -58,7 +60,7 @@ func Suggest(main Component, library []Component, n int) []Suggestion {
 			}
 			return 1
 		}
-		return cmp.Compare(a.Side.Name, b.Side.Name)
+		return cmp.Or(cmp.Compare(a.Side.Name, b.Side.Name), cmp.Compare(a.Side.ID, b.Side.ID))
 	})
 	res := make([]Suggestion, 0, min(n, len(out)))
 	for _, s := range out[:min(n, len(out))] {

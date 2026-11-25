@@ -43,7 +43,7 @@ func (Heuristic) Choose(ctx context.Context, in ChooseInput) (Proposal, error) {
 			// The week's meat budget and one fish meal, by verified swaps
 			// (the picks above only weigh them as tie-breaks).
 			var notes []string
-			prop, notes = guardWeek(in.State, in.Target, prop, idSet(in.Exclude), in.Instruction)
+			prop, notes = guardWeek(in.State, in.Target, prop, idSet(in.Exclude), in.Instruction, sidePickerFor(in, prop))
 			prop.Notes = joinNotes(append([]string{prop.Notes}, notes...)...)
 		}
 	}
@@ -538,7 +538,7 @@ func (h *planner) cook(c plate.CellKey) error {
 	if f.Role == food.RoleMain {
 		// A light meal takes a side only while the plate stays within its
 		// share.
-		if id, ok := h.pickSide(c, 0, ""); ok && !(h.s.lightMeal(c.Date, c.SlotID) && f.Macros.Kcal+h.s.Foods[id].Macros.Kcal > h.kcalShare(c)) {
+		if id, ok := h.pickSide(c, main, nil, 0, ""); ok && !(h.s.lightMeal(c.Date, c.SlotID) && f.Macros.Kcal+h.s.Foods[id].Macros.Kcal > h.kcalShare(c)) {
 			side = id
 			sf := h.s.Foods[side]
 			keep = min(keep, h.s.Settings.KeepDays(sf.KeepDays))
@@ -858,23 +858,49 @@ func (h *planner) reachesForced(f FoodFacts, c plate.CellKey) bool {
 	return !ok || reaches(f, c, target, h.s.Settings)
 }
 
-// pickSide ranks the side recipes for a main cooked on c: of role when given
-// (a swap keeps veg veg and starch starch unless none exists), not replaced, not
-// the excluded food, used least in the proposal, then as pickMain.
-func (h *planner) pickSide(c plate.CellKey, exclude int64, role food.Role) (int64, bool) {
+// pickSide ranks the side recipes for main (beside the plate's others)
+// cooked on c: of role when given (a swap keeps veg veg and starch starch
+// unless none exists), within the meat limit, not replaced, used least in
+// the proposal (the week's side rotation), then with plate fit on: no clash
+// with the plate, the side whose kcal come closest to what the plate lacks
+// to its share (in sideKcalBucket steps), the fewest raised gaps (PLATE-4,
+// PLATE-5), then as pickMain. The swapped-out food and, with plate fit on,
+// the proposal's excluded foods are no candidate.
+func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude int64, role food.Role) (int64, bool) {
+	fit := h.s.plateFitOn(main)
+	need := 0.0 // with plate fit on: the kcal the plate lacks to its share
+	if fit {
+		if share := h.kcalShare(c); share > 0 {
+			need = share
+			for _, id := range append([]int64{main}, others...) {
+				need -= h.s.Foods[id].Macros.Kcal
+			}
+		}
+	}
 	var cands []candidate
 	for _, f := range h.s.Foods {
-		if !f.Composed() || !sideRole(f.Role) || f.ID == exclude || !h.fits(f) || !h.reachesForced(f, c) {
+		if !f.Composed() || !sideRole(f.Role) || f.ID == exclude || (fit && h.exclude[f.ID]) || !h.fits(f) || !h.reachesForced(f, c) {
 			continue
 		}
 		last := 0.0
 		if f.LastEaten != nil {
 			last = float64(f.LastEaten.Unix())
 		}
-		cands = append(cands, candidate{id: f.ID, keys: []float64{
-			b2f(role != "" && f.Role != role), b2f(h.overMeat(f, c)), b2f(h.avoid[f.ID]), float64(h.used[f.ID]), b2f(!diet.Valid(f.DietClass)),
-			last, b2f(!f.Favorite), -f.LikeScore,
-		}})
+		keys := []float64{b2f(role != "" && f.Role != role), b2f(h.overMeat(f, c)), b2f(h.avoid[f.ID]), float64(h.used[f.ID])}
+		if fit {
+			clash, raised := h.s.sideFit(main, others, f)
+			if clash {
+				continue
+			}
+			nutrition := 0.0
+			if need > 0 {
+				nutrition = math.Round(math.Abs(need-f.Macros.Kcal) / sideKcalBucket)
+			}
+			keys = append(keys, nutrition, float64(raised))
+		}
+		cands = append(cands, candidate{id: f.ID, keys: append(keys,
+			b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore,
+		)})
 	}
 	return best(cands)
 }
@@ -992,7 +1018,8 @@ func (h *planner) kcalShare(c plate.CellKey) float64 {
 func (h *planner) side(sw SideSwap) (Proposal, error) {
 	c := plate.CellKey{Date: sw.CookDate, SlotID: sw.CookSlotID}
 	h.avoid[sw.FoodID] = true
-	id, ok := h.pickSide(c, sw.FoodID, sw.Role)
+	main, others := h.swapPlate(sw)
+	id, ok := h.pickSide(c, main, others, sw.FoodID, sw.Role)
 	if !ok {
 		return Proposal{}, fmt.Errorf("%w: no other side", domain.ErrNotEnoughRecipes)
 	}
@@ -1007,6 +1034,25 @@ func (h *planner) side(sw SideSwap) (Proposal, error) {
 		})
 	}
 	return p, nil
+}
+
+// swapPlate is the main and the other sides of the first plate that eats
+// the replaced side (main 0 when the state does not hold it).
+func (h *planner) swapPlate(sw SideSwap) (int64, []int64) {
+	for _, p := range h.s.Plates {
+		if len(sw.Plates) == 0 || p.ID != sw.Plates[0].PlateID {
+			continue
+		}
+		main := h.s.mainOf(p)
+		var others []int64
+		for _, c := range p.Components {
+			if c.FoodID != sw.FoodID && c.FoodID != main {
+				others = append(others, c.FoodID)
+			}
+		}
+		return main, others
+	}
+	return 0, nil
 }
 
 // Reasons ("Why this?", D10) the heuristic writes, in the profile's locale

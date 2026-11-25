@@ -196,9 +196,12 @@ type FoodFacts struct {
 	// stays recipe-only. Alternatives reads it for side and add candidates.
 	LeafRole food.Role
 	// Attrs are the food's recipe attributes (flavor.Resolve: user, then
-	// assistant, then derived values); set by the Builder only. No rule
-	// reads them yet.
+	// assistant, then derived values); set by the Builder only. Plate fit
+	// reads them (platefit.go).
 	Attrs flavor.Attributes
+	// Fresh and Starch are plate fit's inputs derived from the name and
+	// ingredients (freshStarch); nil is unknown.
+	Fresh, Starch *bool
 }
 
 // Explore reports whether the food is an explore candidate: tagged explore
@@ -218,6 +221,9 @@ type Settings struct {
 	// MaxDishMealsPerWeek is plan.max_dish_meals_per_week (S8); 0 reads
 	// as DefaultMaxDishMeals.
 	MaxDishMealsPerWeek int
+	// PlateFit is plan.plate_fit: plate fit judges sides and add-ons
+	// (PLATE-4, PLATE-5); false is the planner without it.
+	PlateFit bool
 }
 
 // Profile is the part of the user profile the rules read.

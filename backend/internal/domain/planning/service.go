@@ -27,7 +27,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h23"
+const HeuristicVersion = "h24"
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.
@@ -1104,7 +1104,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 					finishNotes = append(finishNotes, balNotes...)
 				}
 				var weekNotes []string
-				prop, weekNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction)
+				prop, weekNotes = guardWeek(base, j.target, prop, idSet(j.exclude), j.instruction, sidePickerFor(cin, prop))
 				finishNotes = append(finishNotes, weekNotes...)
 				// A wish's time limit outlives the week guard's swaps (V72).
 				var quickNotes []string
