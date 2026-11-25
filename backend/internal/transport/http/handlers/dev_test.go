@@ -65,7 +65,7 @@ func TestDevClock_MovesToday(t *testing.T) {
 
 func TestDevClock_BadBody(t *testing.T) {
 	r := devRouter(devclock.New(), true, &dateRecorder{})
-	for _, body := range []string{`{}`, `{"now":"x"}`, `{"now":"2031-03-01","advance_hours":1}`, `nope`} {
+	for _, body := range []string{`{}`, `{"now":"x"}`, `{"advance_hours":0}`, `{"advance_hours":-5}`, `{"now":"2031-03-01","advance_hours":1}`, `nope`} {
 		assert.Equal(t, http.StatusBadRequest, do(t, r, http.MethodPut, "/api/dev/clock", body).Code, body)
 	}
 }

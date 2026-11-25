@@ -452,7 +452,7 @@ func run() error {
 		AIRateLimiter: aiRateLimiter,
 		Feedback:      handlers.NewFeedbackHandler(feedbackSvc),
 		Import:        importHandler,
-		Discovery:     handlers.NewDiscoveryHandler(discoverySvc),
+		Discovery:     handlers.NewDiscoveryHandler(discoverySvc).WithClock(clock.Now),
 		Chef:          handlers.NewChefHandler(chefGuard.Spent),
 		Settings:      settingsHandler,
 		Shopping:      handlers.NewShoppingHandler(shoppingSvc).WithClock(clock.Now),

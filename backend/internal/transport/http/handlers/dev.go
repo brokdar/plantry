@@ -42,6 +42,10 @@ func (h *DevHandler) SetClock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.AdvanceHours != nil {
+		if *req.AdvanceHours < 1 {
+			writeError(w, http.StatusBadRequest, "error.invalid_body")
+			return
+		}
 		h.clock.Advance(time.Duration(*req.AdvanceHours) * time.Hour)
 	} else {
 		t, err := devclock.Parse(req.Now)
