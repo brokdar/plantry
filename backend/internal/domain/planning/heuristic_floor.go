@@ -428,8 +428,12 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		p := merged.Plates[c.plate]
 		return !merged.fillerFits(p, merged.Foods[c.opt.FoodID], slotName(merged, p.SlotID))
 	}
+	// A food the household would rather not get beside a meal
+	// (State.RatherNot) is no filler; only the floor lift may use it, after
+	// every other food.
+	ratherNot := func(c optCand) bool { return h.s.RatherNot[c.opt.FoodID] }
 	if !h.floorLift {
-		cands = slices.DeleteFunc(cands, misfit)
+		cands = slices.DeleteFunc(cands, func(c optCand) bool { return misfit(c) || ratherNot(c) })
 	}
 	if protein {
 		// Week band: the add must not push the running average above it.
@@ -543,6 +547,9 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		short := func(c optCand) bool { return misfit(c) || c.kcal < need-epsilon }
 		gap := math.Max(dk.Adjusted-dk.Kcal, need)
 		slices.SortStableFunc(cands, func(a, b optCand) int {
+			if c := cmp.Compare(b2f(ratherNot(a)), b2f(ratherNot(b))); c != 0 {
+				return c
+			}
 			if c := cmp.Compare(b2f(short(a)), b2f(short(b))); c != 0 || short(a) {
 				return c
 			}

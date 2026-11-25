@@ -271,7 +271,7 @@ func (h *planner) addSide(date time.Time, limit float64) {
 		}
 		for _, c := range merged.altCandidates(y, p, -1, AltRequest{What: AltAdd}) {
 			f := c.food
-			if !f.Composed() || !sideRole(f.Role) || f.Macros.Kcal <= 0 || held[f.ID] || h.exclude[f.ID] || (c.session != nil && c.grow > 0) || c.cookAt != nil ||
+			if !f.Composed() || !sideRole(f.Role) || f.Macros.Kcal <= 0 || held[f.ID] || h.exclude[f.ID] || (h.s.RatherNot[f.ID] && !h.floorLift) || (c.session != nil && c.grow > 0) || c.cookAt != nil ||
 				f.Macros.Kcal*c.comp.Multiplier() > dk.Adjusted*maxSideKcalShare {
 				continue
 			}
@@ -291,9 +291,10 @@ func (h *planner) addSide(date time.Time, limit float64) {
 		}
 	}
 	slices.SortStableFunc(opts, func(a, b opt) int {
-		// Every option holds the day's nutrition (verified above); a side
-		// the household would rather not get ranks after every other
-		// option, before plate fit.
+		// Every option holds the day's nutrition (verified above). A side
+		// the household would rather not get is only an option for the
+		// floor lift (filtered above), after every other option, before
+		// plate fit.
 		if c := boolCmp(h.s.RatherNot[a.c.food.ID], h.s.RatherNot[b.c.food.ID]); c != 0 {
 			return c
 		}

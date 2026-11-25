@@ -3,6 +3,7 @@ package planning_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -74,6 +75,13 @@ func TestHeuristic_RatherNotSideNeverPicked(t *testing.T) {
 	p := choose(t, planning.ChooseInput{State: only, Target: windowTarget(only)})
 	for _, ps := range p.Sessions {
 		assert.NotContains(t, []int64{sideSalad, sideRoast}, ps.FoodID)
+	}
+	require.NotEmpty(t, p.Plates, "the plates are still planned")
+	for _, pl := range p.Plates {
+		require.NotEmpty(t, pl.Components, "plate %s/%d", pl.Date.Format(time.DateOnly), pl.SlotID)
+		for _, c := range pl.Components {
+			assert.NotContains(t, []int64{sideSalad, sideRoast}, c.FoodID, "plate %s/%d", pl.Date.Format(time.DateOnly), pl.SlotID)
+		}
 	}
 }
 
