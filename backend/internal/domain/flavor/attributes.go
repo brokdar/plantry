@@ -238,15 +238,18 @@ type Resolved struct {
 
 // Resolve merges the rule values derived from in with the stored record:
 // a user value wins, then an auto value that passes Validate, then the rule
-// value. Fields the food's kind does not carry are left out.
+// value. User heroes that are no longer ingredients are dropped. Fields the
+// food's kind does not carry are left out.
 func Resolve(in Input, rec Record) Resolved {
 	derived := Derive(in)
 	auto := Validate(rec.Values, in)
+	user := rec.Values
+	user.Heroes = in.ingredientsOf(user.Heroes)
 	out := Resolved{Sources: map[Field]Source{}}
 	for _, f := range FieldsFor(in.Leaf) {
 		switch {
-		case rec.Sources[f] == SourceUser && rec.Values.Has(f):
-			copyField(&out.Values, rec.Values, f)
+		case rec.Sources[f] == SourceUser && user.Has(f):
+			copyField(&out.Values, user, f)
 			out.Sources[f] = SourceUser
 		case rec.Sources[f] == SourceAuto && auto.Has(f):
 			copyField(&out.Values, auto, f)
@@ -270,15 +273,7 @@ func Validate(a Attributes, in Input) Attributes {
 			copyField(&out, a, f)
 		}
 	}
-	if len(out.Heroes) > 0 {
-		var kept []string
-		for _, h := range out.Heroes {
-			if in.hasIngredient(h) {
-				kept = append(kept, h)
-			}
-		}
-		out.Heroes = kept
-	}
+	out.Heroes = in.ingredientsOf(out.Heroes)
 	if out.Taste != nil && out.Taste.Acid > 0 && !in.any(isAcid) {
 		t := *out.Taste
 		t.Acid = 0

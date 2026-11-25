@@ -40,6 +40,18 @@ func (in Input) hasIngredient(name string) bool {
 	return slices.ContainsFunc(in.Lines, func(l Line) bool { return strings.EqualFold(l.Name, name) })
 }
 
+// ingredientsOf returns the names in names that are ingredients of in (nil
+// when none is).
+func (in Input) ingredientsOf(names []string) []string {
+	var kept []string
+	for _, n := range names {
+		if in.hasIngredient(n) {
+			kept = append(kept, n)
+		}
+	}
+	return kept
+}
+
 func (in Input) any(match func(string) bool) bool {
 	return slices.ContainsFunc(in.Lines, func(l Line) bool { return match(l.Name) })
 }
