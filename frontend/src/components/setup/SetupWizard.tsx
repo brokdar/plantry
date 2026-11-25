@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { useAvailabilityDefaults } from "@/lib/queries/availability"
+import { useKitchen } from "@/lib/queries/kitchen"
 import { useProfile } from "@/lib/queries/profile"
 import { useSettingItems } from "@/lib/queries/settings"
 import { useCompleteSetup } from "@/lib/queries/setup"
@@ -43,8 +44,15 @@ export function SetupWizard() {
   const settings = useSettingItems()
   const slots = useTimeSlots(false)
   const defaults = useAvailabilityDefaults()
+  const kitchen = useKitchen()
 
-  if (!profile.data || !settings.data || !slots.data || !defaults.data) {
+  if (
+    !profile.data ||
+    !settings.data ||
+    !slots.data ||
+    !defaults.data ||
+    !kitchen.data
+  ) {
     return (
       <WizardColumn>
         <div className="flex flex-col gap-4" aria-hidden>
@@ -61,6 +69,7 @@ export function SetupWizard() {
       initial={buildDraft({
         language: i18n.language,
         profile: profile.data,
+        kitchen: kitchen.data,
         settings: settings.data,
         slots: slots.data.items,
         defaults: defaults.data.items,

@@ -27,6 +27,7 @@ type Handlers struct {
 	PlanGenerate  *handlers.PlanGenerateHandler
 	Today         *handlers.TodayHandler
 	Profile       *handlers.ProfileHandler
+	Kitchen       *handlers.KitchenHandler
 	Presets       *handlers.PresetHandler
 	AI            *handlers.AIHandler
 	AIRuns        *handlers.AIRunsHandler
@@ -192,6 +193,15 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			api.Route("/profile", func(r chi.Router) {
 				r.Get("/", h.Profile.Get)
 				r.Put("/", h.Profile.Update)
+			})
+		}
+
+		if h.Kitchen != nil {
+			api.Route("/kitchen", func(r chi.Router) {
+				r.Get("/", h.Kitchen.Get)
+				r.Put("/", h.Kitchen.Update)
+				r.Put("/basics/{id}", h.Kitchen.AddBasic)
+				r.Delete("/basics/{id}", h.Kitchen.RemoveBasic)
 			})
 		}
 

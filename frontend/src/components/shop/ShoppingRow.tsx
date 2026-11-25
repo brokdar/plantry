@@ -26,6 +26,7 @@ import type { BatchColour } from "@/lib/plan/batch-colours"
 import { formatDate, weekdayShort } from "@/lib/plan/format"
 import { useFood, useSetShopSection } from "@/lib/queries/foods"
 import { foodKeys } from "@/lib/queries/keys"
+import { useSetBasic } from "@/lib/queries/kitchen"
 import { useUndoToast } from "@/lib/queries/plan"
 import { cn } from "@/lib/utils"
 
@@ -53,6 +54,8 @@ interface ShoppingRowProps {
   usedIn: UsedInContext
   /** In-store mode: larger type and rows. */
   large?: boolean
+  /** The food is one of the basics at home (the "Probably at home" group). */
+  atHome?: boolean
 }
 
 /**
@@ -68,6 +71,7 @@ export function ShoppingRow({
   onToggle,
   usedIn,
   large = false,
+  atHome = false,
 }: ShoppingRowProps) {
   const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -147,7 +151,7 @@ export function ShoppingRow({
             />
           </Button>
         )}
-        <RowMenu item={item} section={section} />
+        <RowMenu item={item} section={section} atHome={atHome} />
       </div>
       {open && (
         <div id={usesId} className="flex flex-col gap-1 pb-3 pl-14">
@@ -207,14 +211,33 @@ export function ShoppingRow({
 function RowMenu({
   item,
   section,
+  atHome,
 }: {
   item: ShoppingListItem
   section: ShopSection
+  atHome: boolean
 }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const move = useSetShopSection()
   const offerUndo = useUndoToast()
+  const setBasic = useSetBasic()
+
+  function toggleAtHome() {
+    const id = item.food_id
+    setBasic.mutate(
+      { id, atHome: !atHome },
+      {
+        onSuccess: () =>
+          offerUndo(
+            t(atHome ? "shop.unmarked_at_home" : "shop.marked_at_home", {
+              name: item.name,
+            }),
+            () => setBasic.mutate({ id, atHome })
+          ),
+      }
+    )
+  }
 
   function moveTo(next: ShopSection) {
     const id = item.food_id
@@ -266,6 +289,10 @@ function RowMenu({
           foodId={item.food_id}
           onReset={() => move.mutate({ id: item.food_id, section: null })}
         />
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={toggleAtHome}>
+          {t(atHome ? "shop.not_always_at_home" : "shop.always_at_home")}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

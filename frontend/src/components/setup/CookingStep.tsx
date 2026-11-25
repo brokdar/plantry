@@ -2,6 +2,7 @@ import { TriangleAlert } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Stepper, Switch } from "@/components/settings/controls"
+import { MinutesPicker } from "@/components/settings/KitchenFields"
 
 import { SetupField } from "./SetupField"
 import type { CookingDraft } from "./wizard-draft"
@@ -23,6 +24,34 @@ export function CookingStep({
 
   return (
     <div className="flex flex-col">
+      <SetupField
+        label={t("settings_page.kitchen.weekday_label")}
+        description={t("settings_page.kitchen.weekday_effect", {
+          count: value.minutesWeekday,
+        })}
+        htmlFor="setup-minutes-weekday"
+      >
+        <MinutesPicker
+          id="setup-minutes-weekday"
+          value={value.minutesWeekday}
+          onChange={(minutesWeekday) => set({ minutesWeekday })}
+        />
+      </SetupField>
+
+      <SetupField
+        label={t("settings_page.kitchen.weekend_label")}
+        description={t("settings_page.kitchen.weekend_effect", {
+          count: value.minutesWeekend,
+        })}
+        htmlFor="setup-minutes-weekend"
+      >
+        <MinutesPicker
+          id="setup-minutes-weekend"
+          value={value.minutesWeekend}
+          onChange={(minutesWeekend) => set({ minutesWeekend })}
+        />
+      </SetupField>
+
       <SetupField
         label={occasionsLabel}
         description={t("settings_page.cooking.occasions_effect", {

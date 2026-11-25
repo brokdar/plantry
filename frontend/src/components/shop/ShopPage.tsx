@@ -1,15 +1,20 @@
 import { Link } from "@tanstack/react-router"
-import { ClipboardCopy, ShoppingCart } from "lucide-react"
+import { ChevronDown, ClipboardCopy, ShoppingCart } from "lucide-react"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Switch } from "@/components/settings/controls"
 import { Button } from "@/components/ui/button"
 import { ApiError } from "@/lib/api/client"
-import type { ShoppingList, ShoppingRange } from "@/lib/api/shopping"
+import type {
+  ShoppingList,
+  ShoppingRange,
+  ShoppingSection,
+} from "@/lib/api/shopping"
 import { useLocalStorageState } from "@/lib/hooks/useLocalStorageState"
 import { useWakeLock } from "@/lib/hooks/useWakeLock"
 import { colourBatches } from "@/lib/plan/batch-colours"
+import { useKitchen } from "@/lib/queries/kitchen"
 import { UNDO_MS, usePlan } from "@/lib/queries/plan"
 import { useShoppingList } from "@/lib/queries/shopping"
 import { slotLabel } from "@/lib/slot-label"
@@ -157,15 +162,26 @@ function ShopLoaded({
   const [inStore, setInStore] = useState(false)
   useWakeLock(inStore)
   const usedIn = useUsedIn(range.window_start)
+  const { data: kitchen } = useKitchen()
+  const { buy, home } = useMemo(
+    () =>
+      splitAtHome(
+        list.sections,
+        kitchen?.basics.map((b) => b.id)
+      ),
+    [list.sections, kitchen]
+  )
+  const buyCount = countItems(buy)
+  const homeCount = countItems(home)
 
-  const tickedCount = ticked.size
-  const allDone = list.count > 0 && tickedCount === list.count
+  const tickedCount = [...ticked].filter((id) =>
+    buy.some((s) => s.items.some((i) => i.food_id === id))
+  ).length
+  const allDone = buyCount > 0 && tickedCount === buyCount
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(
-        shoppingText(list.sections, ticked, i18n)
-      )
+      await navigator.clipboard.writeText(shoppingText(buy, ticked, i18n))
       toast.success(t("shop.copied"))
     } catch {
       toast.error(t("shop.copy_failed"))
@@ -201,12 +217,11 @@ function ShopLoaded({
               className="text-small text-ink-muted tabular-nums"
               data-testid="shop-count"
             >
-              {t("shop.items", { count: list.count })}
-              {list.count > 0 &&
-                ` · ${t("shop.ticked", { count: tickedCount })}`}
+              {t("shop.items", { count: buyCount })}
+              {buyCount > 0 && ` · ${t("shop.ticked", { count: tickedCount })}`}
             </p>
           </div>
-          {list.count > 0 && (
+          {buyCount > 0 && (
             <div className="flex items-center gap-2">
               <Button
                 variant={inStore ? "default" : "outline"}
@@ -278,16 +293,28 @@ function ShopLoaded({
                 className="font-heading text-h3 text-success"
                 data-testid="shop-all-done"
               >
-                {t("shop.all_done", { count: list.count })}
+                {t("shop.all_done", { count: buyCount })}
               </p>
             )}
-            <SectionList
-              sections={list.sections}
-              ticked={ticked}
-              onToggle={toggle}
-              usedIn={usedIn}
-              large={inStore}
-            />
+            {buyCount > 0 && (
+              <SectionList
+                sections={buy}
+                ticked={ticked}
+                onToggle={toggle}
+                usedIn={usedIn}
+                large={inStore}
+              />
+            )}
+            {homeCount > 0 && (
+              <AtHomeGroup
+                sections={home}
+                count={homeCount}
+                ticked={ticked}
+                onToggle={toggle}
+                usedIn={usedIn}
+                large={inStore}
+              />
+            )}
             <div
               className={cn(
                 "flex items-center gap-2",
@@ -317,6 +344,86 @@ function ShopLoaded({
         )}
       </div>
     </Frame>
+  )
+}
+
+/** Splits the sections into what to buy and the basics at home, keeping walk
+ *  order and dropping sections left empty. */
+function splitAtHome(
+  sections: readonly ShoppingSection[],
+  basics: readonly number[] = []
+): { buy: ShoppingSection[]; home: ShoppingSection[] } {
+  const atHome = new Set(basics)
+  const part = (wantHome: boolean) =>
+    sections
+      .map((s) => ({
+        ...s,
+        items: s.items.filter((i) => atHome.has(i.food_id) === wantHome),
+      }))
+      .filter((s) => s.items.length > 0)
+  return { buy: part(false), home: part(true) }
+}
+
+function countItems(sections: readonly ShoppingSection[]): number {
+  return sections.reduce((n, s) => n + s.items.length, 0)
+}
+
+/** "Probably at home": the basics on the list, collapsed until opened. */
+function AtHomeGroup({
+  sections,
+  count,
+  ticked,
+  onToggle,
+  usedIn,
+  large,
+}: {
+  sections: readonly ShoppingSection[]
+  count: number
+  ticked: ReadonlySet<number>
+  onToggle: (foodId: number) => void
+  usedIn: UsedInContext
+  large: boolean
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  return (
+    <section data-testid="shop-at-home" className="flex flex-col gap-3">
+      <Button
+        variant="ghost"
+        aria-expanded={open}
+        aria-controls="shop-at-home-list"
+        aria-label={t("shop.at_home_toggle", { count })}
+        onClick={() => setOpen((v) => !v)}
+        className="h-11 w-full justify-between px-0 text-h3 font-semibold text-ink"
+      >
+        <span aria-hidden="true">
+          {t("shop.at_home_group")}{" "}
+          <span className="text-small font-normal text-ink-muted tabular-nums">
+            {count}
+          </span>
+        </span>
+        <ChevronDown
+          strokeWidth={1.5}
+          aria-hidden="true"
+          className={cn(
+            "transition-transform duration-150 ease-out",
+            open && "rotate-180"
+          )}
+        />
+      </Button>
+      {open && (
+        <div id="shop-at-home-list">
+          <SectionList
+            sections={sections}
+            ticked={ticked}
+            onToggle={onToggle}
+            usedIn={usedIn}
+            large={large}
+            atHome
+          />
+        </div>
+      )}
+    </section>
   )
 }
 

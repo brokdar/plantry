@@ -41,6 +41,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/kitchen"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
@@ -456,6 +457,7 @@ func run() error {
 		PlanGenerate:  handlers.NewPlanGenerateHandler(planningSvc).WithClock(clock.Now),
 		Today:         handlers.NewTodayHandler(planViewSvc).WithClock(clock.Now),
 		Profile:       handlers.NewProfileHandler(profileSvc),
+		Kitchen:       handlers.NewKitchenHandler(profileSvc, kitchen.NewService(sqlite.NewKitchenRepo(conn))),
 		Presets:       handlers.NewPresetHandler(presetSvc),
 		AI:            aiHandler,
 		AIRuns:        aiRunsHandler,

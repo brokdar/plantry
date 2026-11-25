@@ -24,3 +24,15 @@ SET kcal_target           = ?,
     updated_at            = datetime('now')
 WHERE id = 1
 RETURNING *;
+
+-- name: UpdateKitchen :one
+UPDATE user_profile
+SET minutes_weekday = ?,
+    minutes_weekend = ?,
+    skill           = ?,
+    equipment       = ?,
+    heat            = ?,
+    leanings        = ?,
+    updated_at      = datetime('now')
+WHERE id = 1
+RETURNING *;

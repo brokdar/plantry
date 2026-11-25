@@ -12,6 +12,8 @@ interface SectionListProps {
   onToggle: (foodId: number) => void
   usedIn: UsedInContext
   large?: boolean
+  /** Every item is a basic at home. */
+  atHome?: boolean
 }
 
 /**
@@ -26,6 +28,7 @@ export function SectionList({
   onToggle,
   usedIn,
   large = false,
+  atHome = false,
 }: SectionListProps) {
   const { t } = useTranslation()
 
@@ -72,6 +75,7 @@ export function SectionList({
                       onToggle={onToggle}
                       usedIn={usedIn}
                       large={large}
+                      atHome={atHome}
                     />
                   ))}
                 </ul>

@@ -144,6 +144,11 @@ type AvailabilityOverride struct {
 	UpdatedAt string
 }
 
+type BasicsAtHome struct {
+	FoodID  int64
+	Removed int64
+}
+
 type ChefJob struct {
 	ID        int64
 	Kind      string
@@ -270,6 +275,10 @@ type FoodTag struct {
 
 type FoodsFt struct {
 	Name string
+}
+
+type NeverItem struct {
+	FoodID int64
 }
 
 type PlanLight struct {
@@ -415,6 +424,12 @@ type UserProfile struct {
 	Sex                 sql.NullString
 	ActivityLevel       sql.NullFloat64
 	ProteinGPerKg       sql.NullFloat64
+	MinutesWeekday      int64
+	MinutesWeekend      int64
+	Skill               sql.NullString
+	Equipment           string
+	Heat                sql.NullString
+	Leanings            string
 }
 
 type VariantGroup struct {

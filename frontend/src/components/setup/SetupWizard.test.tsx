@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { ApiError } from "@/lib/api/client"
 import type { TimeSlot, TimeSlotInput } from "@/lib/api/slots"
 import i18n from "@/lib/i18n"
-import { mockProfile, mockSettingsList } from "@/test/fixtures"
+import { mockKitchen, mockProfile, mockSettingsList } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
 
 const navigate = vi.fn()
@@ -25,6 +25,11 @@ vi.mock("@/lib/api/profile", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/profile")>()),
   getProfile: vi.fn(),
   updateProfile: vi.fn(),
+}))
+vi.mock("@/lib/api/kitchen", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/kitchen")>()),
+  getKitchen: vi.fn(),
+  updateKitchen: vi.fn(),
 }))
 vi.mock("@/lib/api/slots", () => ({
   listTimeSlots: vi.fn(),
@@ -49,6 +54,7 @@ vi.mock("@/lib/api/setup", () => ({
 }))
 
 import { setAvailabilityDefaults } from "@/lib/api/availability"
+import { getKitchen, updateKitchen, type Kitchen } from "@/lib/api/kitchen"
 import { getPresets } from "@/lib/api/presets"
 import { getProfile, updateProfile, type Profile } from "@/lib/api/profile"
 import { listSettings, setSetting } from "@/lib/api/settings"
@@ -61,9 +67,16 @@ import { SetupWizard } from "./SetupWizard"
 /** A tiny server: GETs return what the writes stored. */
 function serve(
   initialSettings: Record<string, string> = {},
-  initialProfile: Partial<Profile> = {}
+  initialProfile: Partial<Profile> = {},
+  initialKitchen: Partial<Kitchen> = {}
 ) {
   let profile: Profile = { ...mockProfile, ...initialProfile }
+  let kitchen: Kitchen = { ...mockKitchen, ...initialKitchen }
+  vi.mocked(getKitchen).mockImplementation(async () => kitchen)
+  vi.mocked(updateKitchen).mockImplementation(async (input) => {
+    kitchen = { ...kitchen, ...input }
+    return kitchen
+  })
   const settings = new Map<string, string>(Object.entries(initialSettings))
   const slots: TimeSlot[] = []
   vi.mocked(getProfile).mockImplementation(async () => profile)
@@ -99,7 +112,7 @@ function serve(
     recipe_count: 0,
     recipe_target: 10,
   })
-  return { settings, getProfile: () => profile }
+  return { settings, getProfile: () => profile, getKitchen: () => kitchen }
 }
 
 function renderWizard() {
@@ -186,7 +199,13 @@ describe("SetupWizard", () => {
     expect(grid).toHaveLength(21)
     expect(grid.every((c) => c.mode === "plan")).toBe(true)
 
-    // 5 Cooking style
+    // 5 Cooking style: the time allowances come first (KIT-6).
+    expect(screen.getByTestId("setup-minutes-weekday")).toHaveTextContent(
+      "30 min"
+    )
+    expect(screen.getByTestId("setup-minutes-weekend")).toHaveTextContent(
+      "60 min"
+    )
     expect(
       screen.getByRole("group", { name: "Cooking sessions per day" })
     ).toHaveTextContent("1")
@@ -219,6 +238,10 @@ describe("SetupWizard", () => {
       screen.getByText("You can add this later. Planning works without it.")
     ).toBeInTheDocument()
     expect(screen.getByLabelText("Daily suggestion")).toBeChecked()
+    // The heat row is unset until picked, and an untouched wizard writes no kitchen.
+    for (const heat of ["None", "Mild", "Medium", "Hot"]) {
+      expect(screen.getByRole("radio", { name: heat })).not.toBeChecked()
+    }
     expect(screen.getByLabelText("Notes to your assistant")).toHaveValue("")
     // Provider "Disabled": nothing reads the notes or runs the daily search.
     expect(screen.getByLabelText("Daily suggestion")).toBeDisabled()
@@ -232,7 +255,34 @@ describe("SetupWizard", () => {
     // Reaching the finish screen marks setup done (a reload lands on Today).
     expect(completeSetup).toHaveBeenCalledTimes(1)
     expect(server.settings.has("discovery.daily_enabled")).toBe(false)
+    expect(updateKitchen).not.toHaveBeenCalled()
     expect(screen.getByRole("heading", { name: "You're set up" })).toBeVisible()
+  })
+
+  it("a re-run shows the stored kitchen, and the heat pick is saved on Next", async () => {
+    const server = serve({}, {}, { minutes_weekday: 45, heat: "mild" })
+    const u = user()
+    renderWizard()
+    await screen.findByText("Step 1 of 7")
+    await next(u, 2)
+    await next(u, 3)
+    await next(u, 4)
+    await next(u, 5)
+    expect(screen.getByTestId("setup-minutes-weekday")).toHaveTextContent(
+      "45 min"
+    )
+    await next(u, 6)
+    // Nothing changed, so the kitchen was not written.
+    expect(updateKitchen).not.toHaveBeenCalled()
+    await next(u, 7)
+    expect(screen.getByRole("radio", { name: "Mild" })).toBeChecked()
+    await u.click(screen.getByRole("radio", { name: "Hot" }))
+    await u.click(screen.getByTestId("setup-next"))
+    await screen.findByTestId("setup-finish")
+    expect(updateKitchen).toHaveBeenCalledWith(
+      expect.objectContaining({ minutes_weekday: 45, heat: "hot" })
+    )
+    expect(server.getKitchen().heat).toBe("hot")
   })
 
   it("the household helper shows 2 adults + 1 child as 2.5 portions", async () => {

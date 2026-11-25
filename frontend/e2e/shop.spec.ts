@@ -349,6 +349,52 @@ test.describe("Shop", () => {
     }
   })
 
+  // KIT-4 (A2): "Always at home" moves an item into the collapsed group, out
+  // of the count, and "Not always at home" brings it back.
+  test("Always at home moves an item to the Probably at home group", async ({
+    page,
+  }) => {
+    const s = await setup()
+    try {
+      await openShop(page, s.start, s.end)
+      const count = page.getByTestId("shop-count")
+      await expect(count).toContainText("2 items")
+      await expect(page.getByTestId("shop-at-home")).toHaveCount(0)
+
+      await row(page, s.onion)
+        .getByRole("button", { name: `Options for ${s.onion}` })
+        .click()
+      await page.getByRole("menuitem", { name: "Always at home" }).click()
+
+      const group = page.getByTestId("shop-at-home")
+      await expect(group).toBeVisible()
+      await expect(count).toContainText("1 item")
+      // Collapsed: the onion is neither in Produce nor visible.
+      await expect(page.getByText(s.onion, { exact: true })).toHaveCount(0)
+      await group.getByRole("button", { name: /Probably at home/ }).click()
+      await expect(group.getByText(s.onion)).toBeVisible()
+
+      // It stays after a reload (stored on the server).
+      await openShop(page, s.start, s.end)
+      await expect(page.getByTestId("shop-at-home")).toBeVisible()
+      await expect(count).toContainText("1 item")
+
+      await page
+        .getByTestId("shop-at-home")
+        .getByRole("button", { name: /Probably at home/ })
+        .click()
+      await row(page, s.onion)
+        .getByRole("button", { name: `Options for ${s.onion}` })
+        .click()
+      await page.getByRole("menuitem", { name: "Not always at home" }).click()
+      await expect(page.getByTestId("shop-at-home")).toHaveCount(0)
+      await expect(section(page, "Produce").getByText(s.onion)).toBeVisible()
+      await expect(count).toContainText("2 items")
+    } finally {
+      await s.cleanup()
+    }
+  })
+
   test("a range over 366 days is named and the picker offers another", async ({
     page,
   }) => {

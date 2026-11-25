@@ -39,6 +39,13 @@ func (r *fakeRepo) Update(_ context.Context, p *profile.Profile) (*profile.Profi
 	return &cp, nil
 }
 
+func (r *fakeRepo) UpdateKitchen(_ context.Context, k profile.Kitchen) (*profile.Profile, error) {
+	cp := *r.stored
+	cp.Kitchen = k
+	r.stored = &cp
+	return &cp, nil
+}
+
 func ptr[T any](v T) *T { return &v }
 
 func TestService_Get_ReturnsDefault(t *testing.T) {

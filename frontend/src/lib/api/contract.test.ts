@@ -37,6 +37,7 @@ import {
 } from "./foods"
 import { generatePlan, getPlanRun, regeneratePlan } from "./generation"
 import { getInsights } from "./insights"
+import { addBasic, getKitchen, removeBasic, updateKitchen } from "./kitchen"
 import {
   acceptPlan,
   clearPlan,
@@ -230,6 +231,47 @@ const cases: Case[] = [
     call: () => getToday("2026-11-02", "2026-10-30"),
     method: "GET",
     path: "/today?date=2026-11-02&today=2026-10-30",
+  },
+  // Kitchen (KIT)
+  {
+    name: "getKitchen",
+    call: () => getKitchen(),
+    method: "GET",
+    path: "/kitchen",
+  },
+  {
+    name: "updateKitchen",
+    call: () =>
+      updateKitchen({
+        minutes_weekday: 30,
+        minutes_weekend: 60,
+        skill: null,
+        equipment: ["oven"],
+        heat: "mild",
+        leanings: ["lemon"],
+      }),
+    method: "PUT",
+    path: "/kitchen",
+    body: {
+      minutes_weekday: 30,
+      minutes_weekend: 60,
+      skill: null,
+      equipment: ["oven"],
+      heat: "mild",
+      leanings: ["lemon"],
+    },
+  },
+  {
+    name: "addBasic",
+    call: () => addBasic(5),
+    method: "PUT",
+    path: "/kitchen/basics/5",
+  },
+  {
+    name: "removeBasic",
+    call: () => removeBasic(5),
+    method: "DELETE",
+    path: "/kitchen/basics/5",
   },
   // Shopping and foods (§3.3)
   {
