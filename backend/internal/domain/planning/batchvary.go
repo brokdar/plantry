@@ -16,9 +16,10 @@ const maxVaryKcal = 100
 // main stays, the side changes. A variant is verified like an alternative (no
 // new issue or nutrition gap, no added cooking, the day held in its band),
 // never clashes with the main (plate fit) and never repeats a side the batch
-// already serves. Among the variants: nutrition first (closest to the old
-// side's kcal), then plate fit (fewer raised gaps), then rotation (the side
-// the week uses least), a side that needs no cooking, the food id. A plate
+// already serves. A leftover plate never gets a side that needs a new cook
+// session. Among the variants: nutrition first (closest to the old side's
+// kcal), then plate fit (fewer raised gaps), then rotation (the side the
+// week uses least), the food id. A plate
 // with no variant keeps its side. Off, the proposal is returned as it is.
 func varyBatches(base State, t Target, in Proposal, skip map[int64]bool) Proposal {
 	if !base.Settings.BatchVariation {
@@ -109,7 +110,7 @@ func varyPlate(base State, t Target, in Proposal, i int, served, skip map[int64]
 	}
 	var vs []variant
 	for _, c := range merged.altCandidates(x, p, si, AltRequest{What: AltSide}) {
-		if served[c.food.ID] || skip[c.food.ID] || c.food.Macros.Kcal <= 0 || (c.session != nil && c.grow > 0) {
+		if served[c.food.ID] || skip[c.food.ID] || c.food.Macros.Kcal <= 0 || (c.session != nil && c.grow > 0) || c.cookAt != nil {
 			continue
 		}
 		d := math.Abs(c.food.Macros.Kcal*c.comp.Multiplier() - oldKcal)
@@ -131,7 +132,6 @@ func varyPlate(base State, t Target, in Proposal, i int, served, skip map[int64]
 			cmp.Compare(math.Round(a.dKcal/kcalBucket), math.Round(b.dKcal/kcalBucket)),
 			cmp.Compare(a.raised, b.raised),
 			cmp.Compare(used[a.sw.c.food.ID], used[b.sw.c.food.ID]),
-			boolCmp(a.sw.c.cookAt != nil, b.sw.c.cookAt != nil),
 			cmp.Compare(a.sw.c.food.ID, b.sw.c.food.ID),
 		)
 	})

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
 
@@ -60,8 +61,21 @@ func cookCells(p planning.Proposal) map[string]bool {
 	return out
 }
 
+// varyLeaves are the no-cook leaf sides a varied plate may eat: a leftover
+// plate's varied side never adds a cook session, so only these (and an
+// existing batch) are variants.
+const varyLeaves = 3
+
 func varyCooker(on bool) planning.State {
 	s := batchCooker()
+	for i := range varyLeaves {
+		id := int64(300 + i)
+		s.Foods[id] = planning.FoodFacts{
+			ID: id, Name: fmt.Sprintf("Leaf side %d", i+1), Kind: food.KindLeaf, LeafRole: food.RoleSideVeg, DietClass: "vegan",
+			NoCook: true, NutritionComplete: true, Macros: nutrition.Macros{Kcal: 150}, ServingG: 100,
+		}
+		s.NoCook = append(s.NoCook, id)
+	}
 	s.Settings.BatchVariation = on
 	return s
 }
@@ -81,20 +95,30 @@ func TestHeuristic_BatchVariation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := varyCooker(tt.on)
 			p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
-			batches := 0
+			batches, varied := 0, 0
 			for key, sides := range batchSides(s, p) {
 				if len(sides) < 2 {
 					continue
 				}
 				batches++
 				if tt.on {
-					// The fixture has four sides: a fifth plate repeats one.
-					assert.Equal(t, min(len(sides), 4), distinct(sides), "batch %s: every plate a different side: %v", key, sides)
+					// The cook plate keeps the batch side, the leftovers vary
+					// over the leaves: a plate beyond them repeats one. A
+					// batch whose days are full has no variant (verified
+					// like an alternative) and keeps its side.
+					if distinct(sides) > 1 {
+						varied++
+						assert.Equal(t, min(len(sides), 1+varyLeaves), distinct(sides), "batch %s: every plate a different side: %v", key, sides)
+					}
 				} else {
 					assert.Equal(t, 1, distinct(sides), "batch %s: one side for the batch: %v", key, sides)
 				}
 			}
 			require.Positive(t, batches, "the fixture cooks batches")
+			if tt.on {
+				t.Logf("batch variation coverage: %d of %d batches", varied, batches)
+				assert.Greater(t, varied*2, batches, "most batches vary")
+			}
 		})
 	}
 }
@@ -117,7 +141,7 @@ func TestHeuristic_BatchVariationKeepsNutrition(t *testing.T) {
 	// Only one other side, 400 kcal heavier than the batch side: no variant.
 	s := varyCooker(true)
 	for id, f := range s.Foods {
-		if f.Role == food.RoleSideVeg && id != 201 {
+		if (f.Role == food.RoleSideVeg || f.Kind == food.KindLeaf) && id != 201 {
 			delete(s.Foods, id)
 		}
 	}
