@@ -167,6 +167,7 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 		next := platefit.Plate{Main: p.Main, Sides: append(slices.Clone(p.Sides), g)}
 		try(next, len(p.Sides), []Kind{k}, Change{Add: &g})
 	}
+	// Swaps always have KindSideSwap, which no add shares, so the two never compete for a Kind.
 	for i, old := range p.Sides {
 		if old.Leaf {
 			continue
