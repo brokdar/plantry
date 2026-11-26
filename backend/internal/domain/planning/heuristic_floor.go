@@ -584,10 +584,13 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		// The passes that may break a plate's fit (plate fit on) still take a
 		// second protein (tofu beside a lentil curry) only after every other
 		// verified food; the floor lift's refused food stays last of all.
-		on := h.nutritionPass || merged.Settings.PlateFit
-		second := func(c optCand) bool {
-			return on && merged.secondProteinAdd(merged.Plates[c.plate], merged.Foods[c.opt.FoodID])
+		secondOf := map[[2]int64]bool{} // per (plate, food), read once
+		if h.nutritionPass || merged.Settings.PlateFit {
+			for _, c := range cands {
+				secondOf[[2]int64{int64(c.plate), c.opt.FoodID}] = merged.secondProteinAdd(merged.Plates[c.plate], merged.Foods[c.opt.FoodID])
+			}
 		}
+		second := func(c optCand) bool { return secondOf[[2]int64{int64(c.plate), c.opt.FoodID}] }
 		refused := func(c optCand) bool { return h.floorLift && ratherNot(c) }
 		slices.SortStableFunc(cands, func(a, b optCand) int {
 			return cmp.Or(cmp.Compare(b2f(refused(a)), b2f(refused(b))), cmp.Compare(b2f(second(a)), b2f(second(b))))
