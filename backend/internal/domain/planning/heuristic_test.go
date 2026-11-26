@@ -464,3 +464,48 @@ func TestHeuristic_SideSwapKeepsRole(t *testing.T) {
 		assert.Equal(t, role, s.Foods[p.Sessions[0].FoodID].Role)
 	}
 }
+
+// CP1 "not fully planned" days: a main with incomplete nutrition (a leaf
+// without data) is cooked only when nothing complete qualifies, since no kcal
+// step lifts a day whose nutrition is unknown.
+func TestHeuristicPrefersCompleteNutrition(t *testing.T) {
+	const unknown int64 = 104
+	longAgo := day(sat).AddDate(0, 0, -60)
+	withUnknown := func() planning.State {
+		s := batchCooker()
+		f := s.Foods[unknown]
+		f.NutritionComplete = false
+		// Eaten longest ago: it would win every other key.
+		f.LastEaten = &longAgo
+		s.Foods[unknown] = f
+		return s
+	}
+	holds := func(p planning.Proposal) bool {
+		for _, ps := range p.Sessions {
+			if ps.FoodID == unknown {
+				return true
+			}
+		}
+		return false
+	}
+
+	t.Run("complete mains first", func(t *testing.T) {
+		s := withUnknown()
+		tgt := windowTarget(s)
+		p := choose(t, planning.ChooseInput{State: s, Target: tgt})
+		assert.False(t, holds(p), "the incomplete main is not cooked while complete ones fit")
+		for _, d := range planning.Evaluate(planning.Merge(s, tgt, p), tgt).Days {
+			assert.False(t, d.NutritionMissing, d.Date)
+		}
+	})
+	t.Run("still cooked when alone", func(t *testing.T) {
+		s := withUnknown()
+		for id, f := range s.Foods {
+			if f.Role == food.RoleMain && id != unknown {
+				delete(s.Foods, id)
+			}
+		}
+		p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+		assert.True(t, holds(p))
+	})
+}

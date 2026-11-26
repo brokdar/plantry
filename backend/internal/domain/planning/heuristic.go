@@ -696,7 +696,8 @@ type candidate struct {
 
 // pickMain ranks the recipes that may be cooked as a meal on c (spec §6.7
 // step 2, D17): not yet in the proposal, not eaten within variety weeks
-// (H8), not replaced, an explore recipe (newest first) while the explore
+// (H8), not replaced, complete nutrition (a day with unknown kcal is never
+// lifted), an explore recipe (newest first) while the explore
 // quota is open, then never-eaten ones to fill a shortfall; never-eaten
 // recipes last otherwise; known diet class, least recently eaten, favorite,
 // liked, closest to the meal's kcal share, food id. Diet-incompatible recipes never
@@ -742,7 +743,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		// else qualifies.
 		atCap := h.x.mealOf(c.SlotID) == mealFull && h.dishFull(f.ID)
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
-			b2f(h.s.tooSlow(f, c)), b2f(h.overAllowance(f, c)), b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
+			b2f(h.s.tooSlow(f, c)), b2f(h.overAllowance(f, c)), b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(!f.NutritionComplete), b2f(f.Role != food.RoleMain),
 			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
@@ -868,8 +869,9 @@ func (h *planner) reachesForced(f FoodFacts, c plate.CellKey) bool {
 
 // pickSide ranks the side recipes for main (beside the plate's others)
 // cooked on c: of role when given (a swap keeps veg veg and starch starch
-// unless none exists), within the meat limit, not replaced, used least in
-// the proposal (the week's side rotation), then with plate fit on: no clash
+// unless none exists), within the meat limit, not replaced, with plate fit on
+// not served on another plate of the day (sideToday), used least in the
+// proposal (the week's side rotation), then with plate fit on: no clash
 // with the plate, the least plate fat above the week's range (excessFat),
 // the side whose kcal come closest to what the plate lacks to its share (in
 // sideKcalBucket steps), the fewest raised gaps (PLATE-4, PLATE-5), then as
@@ -903,7 +905,13 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 		if f.LastEaten != nil {
 			last = float64(f.LastEaten.Unix())
 		}
-		keys := []float64{b2f(role != "" && f.Role != role), b2f(h.overMeat(f, c)), b2f(h.avoid[f.ID]), float64(h.used[f.ID])}
+		keys := []float64{b2f(role != "" && f.Role != role), b2f(h.overMeat(f, c)), b2f(h.avoid[f.ID])}
+		if fit {
+			// With plate fit on, a side the day already serves on another
+			// plate comes after every other (no side twice a day).
+			keys = append(keys, b2f(h.sideToday(f.ID, c)))
+		}
+		keys = append(keys, float64(h.used[f.ID]))
 		if fit {
 			clash, raised := h.s.sideFit(main, others, f)
 			if clash {
@@ -921,6 +929,29 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 		)})
 	}
 	return best(cands)
+}
+
+// sideToday reports whether food id is on another plate of c's day than c:
+// a confirmed plate of the state or a plate of the proposal so far.
+func (h *planner) sideToday(id int64, c plate.CellKey) bool {
+	holds := func(d time.Time, slot int64, has func(int64) bool) bool {
+		return dayOf(d) == dayOf(c.Date) && slot != c.SlotID && has(id)
+	}
+	for _, p := range h.prop.Plates {
+		if holds(p.Date, p.SlotID, func(id int64) bool {
+			return slices.ContainsFunc(p.Components, func(pc ProposedComponent) bool { return pc.FoodID == id })
+		}) {
+			return true
+		}
+	}
+	for _, p := range h.s.Plates {
+		if p.Confirmed && holds(p.Date, p.SlotID, func(id int64) bool {
+			return slices.ContainsFunc(p.Components, func(pc Component) bool { return pc.FoodID == id })
+		}) {
+			return true
+		}
+	}
+	return false
 }
 
 func best(cands []candidate) (int64, bool) {

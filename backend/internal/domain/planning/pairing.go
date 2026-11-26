@@ -23,6 +23,8 @@ import (
 //   - Tofu, tempeh and eggs never go on a plate that holds meat or fish (the
 //     DGE groups of its foods say so): a second protein of another kind next
 //     to a meat main is not a meal anyone cooks.
+//     With plate fit on, no tofu, egg, meat or fish leaf joins a main that
+//     carries its own protein (legumes count: a lentil curry).
 //   - Meat and fish leaves (smoked salmon, ham) never go on a plate that
 //     already holds meat or fish.
 //   - Nuts go with breakfast, with salads and with dairy; not on a curry or a
@@ -173,7 +175,7 @@ func (s State) addOnFits(p Plate, f FoodFacts, slot string) bool {
 
 // pairsWithPlate is the protein pairing of a food (leaf or recipe) next to a
 // plate: tofu, tempeh, egg, meat and fish never go on a plate that holds meat
-// or fish.
+// or fish, nor (plate fit, a leaf) beside a main that carries its own protein.
 func (s State) pairsWithPlate(p Plate, f FoodFacts, name, slot string) bool {
 	meatOrFish := false
 	for _, c := range p.Components {
@@ -181,14 +183,33 @@ func (s State) pairsWithPlate(p Plate, f FoodFacts, name, slot string) bool {
 			meatOrFish = true
 		}
 	}
+	if meatOrFish && proteinAdd(f, name) {
+		return false
+	}
+	return !s.proteinBesideProteinMain(p, f)
+}
+
+// proteinAdd reports whether food f (folded name) is a protein of its own as
+// an add: tofu, tempeh, egg, meat or fish.
+func proteinAdd(f FoodFacts, name string) bool {
 	words := strings.FieldsFunc(name, func(r rune) bool { return r == ' ' || r == ',' || r == '(' || r == ')' })
 	tofuOrEgg := slices.ContainsFunc(words, func(w string) bool {
 		return strings.HasPrefix(w, "tofu") || strings.HasPrefix(w, "tempeh") || w == "egg" || w == "eggs" || w == "ei" || w == "eier"
 	})
-	if meatOrFish && (tofuOrEgg || f.Groups.MeatG > 0 || f.Groups.FishG > 0) {
-		return false
-	}
-	return true
+	return tofuOrEgg || f.Groups.MeatG > 0 || f.Groups.FishG > 0
+}
+
+// proteinBesideProteinMain is secondProteinAdd with plate fit on.
+func (s State) proteinBesideProteinMain(p Plate, f FoodFacts) bool {
+	return s.Settings.PlateFit && s.secondProteinAdd(p, f)
+}
+
+// secondProteinAdd reports whether leaf f is a protein add (proteinAdd)
+// beside a main of p that carries its own protein (carriesProtein: a lentil
+// curry, a chickpea stew), as secondProtein rules for cooked sides.
+func (s State) secondProteinAdd(p Plate, f FoodFacts) bool {
+	m, ok := s.Foods[s.mainOf(p)]
+	return !f.Composed() && ok && m.ID != f.ID && proteinAdd(f, diet.Fold(f.Name)) && carriesProtein(m)
 }
 
 // sideRole is the role of a food as a side: a recipe's role, a leaf's role.

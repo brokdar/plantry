@@ -250,10 +250,16 @@ func (h *planner) addSide(date time.Time, limit float64) {
 		cooked[ev.foodID] = true
 	}
 	held := map[int64]bool{}
+	served := map[int64]int{} // plates of the window per food: the week's side rotation
 	for _, p := range merged.Plates {
 		if dayOf(p.Date) == dayOf(date) {
 			for _, c := range p.Components {
 				held[c.FoodID] = true
+			}
+		}
+		if merged.Window.Contains(p.Date) {
+			for _, c := range p.Components {
+				served[c.FoodID]++
 			}
 		}
 	}
@@ -262,6 +268,7 @@ func (h *planner) addSide(date time.Time, limit float64) {
 		c      altCand
 		a      Alternative
 		raised int
+		prot   bool // a second protein: only the floor lift's last resort
 	}
 	var opts []opt
 	for _, pi := range y.editablePlates(date) {
@@ -278,7 +285,7 @@ func (h *planner) addSide(date time.Time, limit float64) {
 			if h.s.Settings.PlateFit && !h.floorLift && merged.sidesBeside(p, f) >= maxPlateSides {
 				continue // no clutter: the main and at most two sides or add-ons
 			}
-			on, clash, raised := merged.plateFitOf(p, f)
+			on, clash, raised := merged.plateFitOf(p, f, h.floorLift)
 			if on && clash {
 				continue
 			}
@@ -287,7 +294,8 @@ func (h *planner) addSide(date time.Time, limit float64) {
 				math.Abs(dk.Adjusted-a.DayKcal) >= math.Abs(dk.Adjusted-dk.Kcal) {
 				continue
 			}
-			opts = append(opts, opt{pi, c, a, raised})
+			prot := on && h.floorLift && merged.secondProtein(merged.mainOf(p), plateFoods(p), f)
+			opts = append(opts, opt{pi, c, a, raised, prot})
 		}
 	}
 	slices.SortStableFunc(opts, func(a, b opt) int {
@@ -295,16 +303,21 @@ func (h *planner) addSide(date time.Time, limit float64) {
 		// the household would rather not get is only an option for the
 		// floor lift (filtered above), after every other option, before
 		// plate fit.
-		if c := boolCmp(h.s.RatherNot[a.c.food.ID], h.s.RatherNot[b.c.food.ID]); c != 0 {
+		// A second protein (the floor lift only) comes after every other
+		// side the household takes.
+		if c := cmp.Or(boolCmp(h.s.RatherNot[a.c.food.ID], h.s.RatherNot[b.c.food.ID]), boolCmp(a.prot, b.prot)); c != 0 {
 			return c
 		}
 		if h.s.Settings.PlateFit {
 			// Plate fit after nutrition: the least fat above the week's
-			// range (excessFat), then within kcalBucket of the need, the
-			// plate with fewer raised gaps first (PLATE-4).
+			// range (excessFat), then the side the week serves least and
+			// the one eaten longest ago (its rotation), then within
+			// kcalBucket of the need, the plate with fewer raised gaps first
+			// (PLATE-4).
 			ka, kb := math.Abs(need-a.c.food.Macros.Kcal*a.c.comp.Multiplier()), math.Abs(need-b.c.food.Macros.Kcal*b.c.comp.Multiplier())
 			fa, fb := excessFat(a.c.food.Macros, a.c.comp.Multiplier(), y.pol.FatHigh), excessFat(b.c.food.Macros, b.c.comp.Multiplier(), y.pol.FatHigh)
-			if c := cmp.Or(boolCmp(a.a.rank.addsCook, b.a.rank.addsCook), cmp.Compare(fa, fb), cmp.Compare(math.Round(ka/kcalBucket), math.Round(kb/kcalBucket)), cmp.Compare(a.raised, b.raised)); c != 0 {
+			if c := cmp.Or(boolCmp(a.a.rank.addsCook, b.a.rank.addsCook), cmp.Compare(fa, fb), cmp.Compare(served[a.c.food.ID], served[b.c.food.ID]),
+				cmp.Compare(lastEaten(a.c.food), lastEaten(b.c.food)), cmp.Compare(math.Round(ka/kcalBucket), math.Round(kb/kcalBucket)), cmp.Compare(a.raised, b.raised)); c != 0 {
 				return c
 			}
 		}
@@ -491,4 +504,12 @@ func findComp(p ProposedPlate, c ProposedComponent) (ProposedComponent, bool) {
 		}
 	}
 	return ProposedComponent{}, false
+}
+
+// lastEaten is when f was last eaten, in Unix seconds (0: never).
+func lastEaten(f FoodFacts) int64 {
+	if f.LastEaten == nil {
+		return 0
+	}
+	return f.LastEaten.Unix()
 }

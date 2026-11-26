@@ -169,7 +169,15 @@ func TestRead_Clashes(t *testing.T) {
 		{"rich main beside a rich gratin", []string{"Coq au Vin", "Gratin Dauphinois"}, []platefit.Dimension{platefit.Richness}},
 		{"pasta with a Japanese side", []string{"Spaghetti Bolognese", "Sunomono Gurkensalat"}, []platefit.Dimension{platefit.CuisineFit}},
 		{"West-Mediterranean cuisines mix", []string{"Spaghetti Bolognese", "Salade verte", "Ofengemüse"}, nil},
+		{"German cooking takes West-Mediterranean sides", []string{"Rindergulasch", "Salade verte", "Griechischer Salat"}, nil},
+		{"the Eastern Mediterranean mixes with the West", []string{"Zitronenhähnchen mit Ofenkartoffeln", "Tabouleh"}, nil},
+		{"a Middle-Eastern main takes an Indian yogurt side", []string{"Falafel", "Gurken-Raita"}, nil},
+		{"German with an Indian side clashes", []string{"Rindergulasch", "Kachumber"}, []platefit.Dimension{platefit.CuisineFit}},
+		{"German with a Middle-Eastern side clashes", []string{"Rindergulasch", "Tabouleh"}, []platefit.Dimension{platefit.CuisineFit}},
 		{"neutral mixes with everything", []string{"Grünes Thai-Curry", "Basmatireis", "Gedünsteter Brokkoli"}, nil},
+		{"potatoes beside a Thai curry clash", []string{"Grünes Thai-Curry", "Salzkartoffeln"}, []platefit.Dimension{platefit.CuisineFit}},
+		{"mash beside a Japanese main clashes", []string{"Teriyaki-Lachs", "Kartoffelpüree"}, []platefit.Dimension{platefit.CuisineFit}},
+		{"potatoes beside a German main stay", []string{"Rindergulasch", "Salzkartoffeln"}, nil},
 		{"leaves carry no cuisine or starch", []string{"Spaghetti Bolognese", "Geröstete Erdnüsse", "Sesam geröstet"}, nil},
 	}
 	for _, tt := range tests {

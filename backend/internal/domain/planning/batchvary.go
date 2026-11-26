@@ -21,8 +21,8 @@ const maxVaryKcal = 100
 // needs a new cook session, nor one the household would rather not get
 // (State.RatherNot): keeping the batch's side is the better alternative.
 // Among the variants: nutrition first (closest to the old side's kcal), then
-// plate fit (fewer raised gaps), then rotation (the side the week uses least),
-// the food id. A plate with no variant keeps its side. Off, the proposal is
+// rotation (the side the week uses least), then plate fit (fewer raised
+// gaps), the food id. A side another plate of the day serves is no variant. A plate with no variant keeps its side. Off, the proposal is
 // returned as it is.
 func varyBatches(base State, t Target, in Proposal, skip map[int64]bool) Proposal {
 	if !base.Settings.BatchVariation {
@@ -106,6 +106,10 @@ func varyPlate(base State, t Target, in Proposal, i int, served, skip map[int64]
 			used[c.FoodID]++
 		}
 	}
+	var today map[int64]bool // only with plate fit on
+	if base.Settings.PlateFit {
+		today = merged.dayFoods(p)
+	}
 	type variant struct {
 		sw     weekSwap
 		dKcal  float64
@@ -113,7 +117,7 @@ func varyPlate(base State, t Target, in Proposal, i int, served, skip map[int64]
 	}
 	var vs []variant
 	for _, c := range merged.altCandidates(x, p, si, AltRequest{What: AltSide}) {
-		if served[c.food.ID] || skip[c.food.ID] || base.RatherNot[c.food.ID] || c.food.Macros.Kcal <= 0 || (c.session != nil && c.grow > 0) || c.cookAt != nil {
+		if served[c.food.ID] || today[c.food.ID] || skip[c.food.ID] || base.RatherNot[c.food.ID] || c.food.Macros.Kcal <= 0 || (c.session != nil && c.grow > 0) || c.cookAt != nil {
 			continue
 		}
 		d := math.Abs(c.food.Macros.Kcal*c.comp.Multiplier() - oldKcal)
@@ -124,7 +128,7 @@ func varyPlate(base State, t Target, in Proposal, i int, served, skip map[int64]
 		if !merged.addFits(rest, c.food, slotName(merged, p.SlotID)) {
 			continue // no fruit, muesli or second protein as a dinner's side
 		}
-		on, clash, raised := merged.plateFitOf(rest, c.food)
+		on, clash, raised := merged.plateFitOf(rest, c.food, false)
 		if on && clash {
 			continue
 		}
@@ -137,8 +141,8 @@ func varyPlate(base State, t Target, in Proposal, i int, served, skip map[int64]
 	slices.SortStableFunc(vs, func(a, b variant) int {
 		return cmp.Or(
 			cmp.Compare(math.Round(a.dKcal/kcalBucket), math.Round(b.dKcal/kcalBucket)),
-			cmp.Compare(a.raised, b.raised),
 			cmp.Compare(used[a.sw.c.food.ID], used[b.sw.c.food.ID]),
+			cmp.Compare(a.raised, b.raised),
 			cmp.Compare(a.sw.c.food.ID, b.sw.c.food.ID),
 		)
 	})
@@ -165,4 +169,17 @@ func sharedSession(in Proposal, key string, i int) bool {
 func withoutComp(p Plate, i int) Plate {
 	p.Components = slices.Delete(slices.Clone(p.Components), i, i+1)
 	return p
+}
+
+// dayFoods are the foods of the other plates of p's day.
+func (s State) dayFoods(p Plate) map[int64]bool {
+	out := map[int64]bool{}
+	for _, pl := range s.Plates {
+		if dayOf(pl.Date) == dayOf(p.Date) && pl.ID != p.ID {
+			for _, c := range pl.Components {
+				out[c.FoodID] = true
+			}
+		}
+	}
+	return out
 }

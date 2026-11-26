@@ -7,8 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // Fillers of the plate-fit filler test, all 250 kcal per 100 g serving.
@@ -115,13 +117,14 @@ func TestAddNoCook_PlateFitFillerServesTheWeek(t *testing.T) {
 }
 
 // With plate fit on, the day's top-up rounds up to the quarter portion: a
-// day 100 kcal short raises its mains by a quarter, where it floors (and
-// raises nothing) with plate fit off.
+// day 100 kcal short raises a main, where it floors (and raises nothing) with
+// plate fit off. The dinner (bake and couscous) is past its share of the day,
+// so the lift goes to the light curry lunch (CP1-variety: a balanced day).
 func TestLiftDay_PlateFitRoundsTheTopUpUp(t *testing.T) {
 	for _, tc := range []struct {
-		plateFit bool
-		want     float64
-	}{{false, 1}, {true, 1.25}} {
+		plateFit    bool
+		curry, bake float64
+	}{{false, 1, 1}, {true, 1.5, 1}} {
 		h, tgt := bandsPlanner(nil, bfPlates(
 			[]ProposedComponent{{FoodID: bfCurry, Portions: 1, SessionKey: "a"}},
 			[]ProposedComponent{{FoodID: bfBake, Portions: 1, SessionKey: "b"}, {FoodID: bfCouscous, Portions: 1, SessionKey: "c"}},
@@ -134,8 +137,8 @@ func TestLiftDay_PlateFitRoundsTheTopUpUp(t *testing.T) {
 		h.liftDay(DayKcal{Date: bfMon, Kcal: kcal}, kcal+100, false, false)
 		for _, slot := range []int64{bfLunch, bfDinner} {
 			for _, c := range plateOf(h, slot).Components {
-				if c.FoodID == bfCurry || c.FoodID == bfBake {
-					assert.InDelta(t, tc.want, c.Portions, 1e-9, "plate fit %v, %s", tc.plateFit, h.s.Foods[c.FoodID].Name)
+				if want, ok := map[int64]float64{bfCurry: tc.curry, bfBake: tc.bake}[c.FoodID]; ok {
+					assert.InDelta(t, want, c.Portions, 1e-9, "plate fit %v, %s", tc.plateFit, h.s.Foods[c.FoodID].Name)
 				}
 			}
 		}
@@ -284,4 +287,25 @@ func TestAddNoCook_PlateFitFillerKeepsFatInRange(t *testing.T) {
 			assert.Equal(t, tc.want, added(t, h, ev.Days[0].Kcal+250))
 		})
 	}
+}
+
+// Within its kcal bucket and with the week's keys equal, a filler the week
+// serves less comes first (PLATE-4 rotation): bread and cheese are the same
+// food for the fit; the bread already feeds Tuesday's lunch, so the cheese
+// goes on Monday's dinner even though the pool lists the bread first.
+func TestAddNoCook_PlateFitFillerLeastServedFirst(t *testing.T) {
+	h, tgt := fillerPlanner(true, 55, true)
+	cheese := h.s.Foods[pfCheese]
+	cheese.ID, cheese.Name = pfBread, "Brot"
+	h.s.Foods[pfBread] = cheese
+	h.s.NoCook = []int64{pfBread, pfCheese}
+	tue := bfMon.AddDate(0, 0, 1)
+	h.s.Window.End = tue
+	h.s.Cells = append(h.s.Cells, Cell{Date: tue, SlotID: bfLunch, Mode: availability.ModePlan})
+	tgt.Cells = append(tgt.Cells, plate.CellKey{Date: tue, SlotID: bfLunch})
+	h.in.State, h.in.Target = h.s, tgt
+	h.prop.Plates = append(h.prop.Plates, ProposedPlate{Date: tue, SlotID: bfLunch, Eaters: 1, Components: []ProposedComponent{{FoodID: bfCurry, Portions: 1, SessionKey: "a"}, {FoodID: pfBread, Portions: 1}}})
+	ev := evaluateLean(Merge(h.s, tgt, h.prop), tgt)
+	require.NotEmpty(t, ev.Days)
+	assert.Equal(t, pfCheese, added(t, h, ev.Days[0].Kcal+250))
 }
