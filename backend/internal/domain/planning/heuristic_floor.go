@@ -585,6 +585,7 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		// second protein (tofu beside a lentil curry) only after every other
 		// verified food; the floor lift's refused food stays last of all.
 		secondOf := map[[2]int64]bool{} // per (plate, food), read once
+		// nutritionFill runs with plate fit on but clears the flag for its pass.
 		if h.nutritionPass || merged.Settings.PlateFit {
 			for _, c := range cands {
 				secondOf[[2]int64{int64(c.plate), c.opt.FoodID}] = merged.secondProteinAdd(merged.Plates[c.plate], merged.Foods[c.opt.FoodID])

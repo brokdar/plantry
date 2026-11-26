@@ -106,7 +106,10 @@ func varyPlate(base State, t Target, in Proposal, i int, served, skip map[int64]
 			used[c.FoodID]++
 		}
 	}
-	today := merged.dayFoods(p)
+	var today map[int64]bool // only with plate fit on
+	if base.Settings.PlateFit {
+		today = merged.dayFoods(p)
+	}
 	type variant struct {
 		sw     weekSwap
 		dKcal  float64
