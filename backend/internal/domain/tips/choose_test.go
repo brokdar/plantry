@@ -379,3 +379,56 @@ func TestCandidates_GarnishRules(t *testing.T) {
 		}
 	}
 }
+
+// TestCandidates_ClashSwapBelongsToCuisine: a cuisine clash is fixed only by a
+// side of the main's cuisine (by its cuisine or the palette), never by a
+// neutral generic salad; with no such side in the library there is no tip.
+func TestCandidates_ClashSwapBelongsToCuisine(t *testing.T) {
+	side := func(id int64, name, cuisine string, role food.Role, starch bool) platefit.Component {
+		return platefit.Component{
+			ID: id, Name: name, Role: role, Fresh: ptr(false), Starch: ptr(starch),
+			Attrs: flavor.Attributes{Cuisine: cuisine, Texture: "soft", Temperature: "hot", Colour: "beige", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 1}},
+		}
+	}
+	main := side(1, "Chicken Korma", "indian", food.RoleMain, false)
+	main.Attrs.Richness = ptr(2)
+	wrong := side(2, "Spaghetti", "italian", food.RoleSideStarch, true)
+	pl := platefit.Plate{Main: main, Sides: []platefit.Component{wrong}}
+	if !slices.Contains(platefit.Read(pl).Clashes, platefit.CuisineFit) {
+		t.Fatal("plate has no cuisine clash")
+	}
+	carrot := side(3, "Möhrensalat", "neutral", food.RoleSideVeg, false)
+	carrot.Attrs.Temperature = "cold"
+	naan := side(4, "Naan", "indian", food.RoleSideStarch, true)
+	for _, c := range tips.Candidates(pl, nil, []platefit.Component{carrot}) {
+		t.Errorf("library without an Indian side got a tip: %+v", c)
+	}
+	cands := tips.Candidates(pl, nil, []platefit.Component{carrot, naan})
+	if len(cands) == 0 || cands[0].Food().ID != naan.ID {
+		t.Errorf("want naan swapped in, got %+v", cands)
+	}
+	for _, c := range cands {
+		if c.Food().ID == carrot.ID {
+			t.Errorf("neutral salad swapped in for an Indian main")
+		}
+	}
+}
+
+// TestCandidates_NoSecondSaladSwap: a swap never brings a second side of a
+// kind the plate already has.
+func TestCandidates_NoSecondSaladSwap(t *testing.T) {
+	salad := func(id int64, name, cuisine string) platefit.Component {
+		return platefit.Component{
+			ID: id, Name: name, Role: food.RoleSideVeg, Fresh: ptr(true), Starch: ptr(false),
+			Attrs: flavor.Attributes{Cuisine: cuisine, Kind: "salad", Texture: "crisp", Temperature: "cold", Colour: "green", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{Acid: 1}},
+		}
+	}
+	main := platefit.Component{
+		ID: 1, Name: "Tuna pasta", Role: food.RoleMain, Fresh: ptr(false), Starch: ptr(true),
+		Attrs: flavor.Attributes{Cuisine: "italian", Kind: "pasta", Texture: "soft", Temperature: "hot", Colour: "red", Richness: ptr(1), Saucy: ptr(true), Taste: &flavor.Taste{Salt: 2, Acid: 2}},
+	}
+	pl := platefit.Plate{Main: main, Sides: []platefit.Component{salad(2, "Green salad", "mediterranean"), salad(3, "Yogurt salad", "middle_eastern")}}
+	for _, c := range tips.Candidates(pl, nil, []platefit.Component{salad(4, "Carrot salad", "mediterranean")}) {
+		t.Errorf("second salad swapped in: %+v", c)
+	}
+}

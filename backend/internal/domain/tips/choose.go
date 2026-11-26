@@ -175,7 +175,7 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 			if !swapReason(clash, top, cu, s) {
 				continue
 			}
-			if s.Leaf || !slices.Contains(sideRoles, s.Role) || onPlate(p, s.ID) || !known(p, i, s) || !fits(p, i, s, slices.Contains(raised, platefit.SauceStarch)) {
+			if s.Leaf || !slices.Contains(sideRoles, s.Role) || onPlate(p, s.ID) || !known(p, i, s) || repeatsKind(p, i, s) || !fits(p, i, s, slices.Contains(raised, platefit.SauceStarch)) {
 				continue
 			}
 			next := platefit.Plate{Main: p.Main, Sides: slices.Clone(p.Sides)}
@@ -212,6 +212,9 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 		if c := cmp.Compare(slices.Index(kindOrder, a.Kind), slices.Index(kindOrder, b.Kind)); c != 0 {
 			return c
 		}
+		if a.Add == nil {
+			return 0 // swaps keep input order: the caller lists the sides it prefers first
+		}
 		return cmp.Compare(a.Food().Name, b.Food().Name)
 	})
 	return out
@@ -226,14 +229,42 @@ func hasElement(p platefit.Plate, k Kind) bool {
 	return slices.ContainsFunc(p.Sides, func(c platefit.Component) bool { return c.Leaf && garnishKind(c) == k })
 }
 
-// swapReason is the only grounds for a side swap: a raised clash, or a
-// sauce-starch gap that the starch of the main's cuisine palette fills. A
-// colour, freshness, texture or pairing gap alone is a garnish's job.
+// swapReason is the only grounds for a side swap: a raised clash fixed by a
+// side that belongs to the main's cuisine (its coherence group or palette; a
+// main of no cuisine has no such side), or a sauce-starch gap that the starch
+// of the main's cuisine palette fills. A colour, freshness, texture or
+// pairing gap alone is a garnish's job.
 func swapReason(clash bool, top platefit.Dimension, cu platefit.Cuisine, s platefit.Component) bool {
 	if clash {
-		return true
+		return belongs(cu, s)
 	}
 	return top == platefit.SauceStarch && starch(s) && inPalette(cu, s)
+}
+
+// repeatsKind reports whether side s, replacing side i, is of a dish kind
+// (salad, say) another side already is: a second salad is no fix.
+func repeatsKind(p platefit.Plate, i int, s platefit.Component) bool {
+	if s.Attrs.Kind == "" {
+		return false
+	}
+	for j, o := range p.Sides {
+		if j != i && !o.Leaf && o.Attrs.Kind == s.Attrs.Kind {
+			return true
+		}
+	}
+	return false
+}
+
+// belongs reports whether side s is of cu's food world: its own cuisine is
+// cu's group, or its name or a hero is in cu's palette.
+func belongs(cu platefit.Cuisine, s platefit.Component) bool {
+	if cu.Group == "" {
+		return false
+	}
+	if g := platefit.CuisineOf(s.Attrs.Cuisine).Group; g != "" && g == cu.Group {
+		return true
+	}
+	return inPalette(cu, s)
 }
 
 // fits holds the culinary checks plate fit does not read for a side s

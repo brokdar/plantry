@@ -413,6 +413,16 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 			y.sides = append(y.sides, componentOf(f))
 		}
 	}
+	// Sides the household has eaten come first: a swap prefers one.
+	eaten := map[int64]bool{}
+	for _, h := range y.st.History {
+		for _, id := range h.FoodIDs {
+			eaten[id] = true
+		}
+	}
+	slices.SortStableFunc(y.sides, func(a, b platefit.Component) int {
+		return cmp.Compare(b2i(eaten[b.ID]), b2i(eaten[a.ID]))
+	})
 	y.plates = map[int64]planPlate{}
 	ps := slices.Clone(y.st.Plates)
 	slices.SortStableFunc(ps, func(a, b planning.Plate) int {
@@ -748,4 +758,11 @@ func UnmarshalOp(s string) (Op, error) {
 	var op Op
 	err := json.Unmarshal([]byte(s), &op)
 	return op, err
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

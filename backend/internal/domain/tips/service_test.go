@@ -748,3 +748,34 @@ func TestSync_RatherNotMeansNoSideSwap(t *testing.T) {
 		t.Fatalf("side swap tipped despite refusals: %+v", got)
 	}
 }
+
+// TestSync_SwapPrefersEatenSide: of two sides that fix a clash, the one the
+// household has eaten before is suggested.
+func TestSync_SwapPrefersEatenSide(t *testing.T) {
+	t.Parallel()
+	for _, eaten := range []int64{701, 702} {
+		f := newFixture()
+		side := func(id int64, name string, role food.Role, starch bool) planning.FoodFacts {
+			return planning.FoodFacts{
+				ID: id, Name: name, Kind: food.KindComposed, Role: role, DietClass: diet.Vegan, Starch: ptr(starch),
+				Macros: nutrition.Macros{Kcal: 150}, NutritionComplete: true, Minutes: 10, Fresh: ptr(false),
+				Attrs: flavor.Attributes{Cuisine: "italian", Texture: "soft", Temperature: "hot", Colour: "white", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{}},
+			}
+		}
+		f.st.Foods[700] = side(700, "Thai-Curryreis", food.RoleSideStarch, true)
+		f.st.Foods[700] = func() planning.FoodFacts { x := f.st.Foods[700]; x.Attrs.Cuisine = "thai"; return x }()
+		f.st.Foods[701] = side(701, "Gemüse A", food.RoleSideVeg, false)
+		f.st.Foods[702] = side(702, "Gemüse B", food.RoleSideVeg, false)
+		f.st.NoCook = nil
+		f.st.Plates = f.st.Plates[:1]
+		f.st.Plates[0].Components = append(f.st.Plates[0].Components, planning.Component{ID: 20, FoodID: 700, Position: plate.PositionSide})
+		f.st.History = []planning.HistoryPlate{{FoodIDs: []int64{eaten}}}
+		v, err := f.svc().Sync(context.Background(), start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(v.Tips) != 1 || v.Tips[0].Op.FoodID != eaten {
+			t.Errorf("eaten %d: got %+v", eaten, v.Tips)
+		}
+	}
+}
