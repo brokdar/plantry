@@ -56,9 +56,9 @@ var Settles = map[Kind][]platefit.Dimension{
 // the side at Swap (an index into Plate.Sides) with With.
 type Change struct {
 	Kind Kind
-	// Dimension is the plate's top raised dimension, which the change
-	// settles; Settles lists every raised dimension it settles, in dimension
-	// order.
+	// Dimension is the raised dimension the change targets and settles (the
+	// plate's top one for a swap); Settles lists every raised dimension it
+	// settles, in dimension order.
 	Dimension platefit.Dimension
 	Settles   []platefit.Dimension
 	Add       *platefit.Component
@@ -100,17 +100,18 @@ func Top(r platefit.Reading) (platefit.Dimension, bool) {
 	return "", false
 }
 
-// Candidates returns the changes that settle p's top raised dimension (Top)
-// with a kind whose list holds it (Settles) and raise nothing p does not,
-// best first: most dimensions settled, then a food of the main cuisine's
-// palette (coriander on a curry, not basil), then a garnish before a swap, then
-// kind order, then name. garnishes are leaves a plate can gain with no
-// cooking; sides are recipes that can replace one of p's dish sides. The
-// plate is read again with the candidate as it is and as Proven: the top
-// dimension must be settled by the candidate's known values, and neither
-// reading may raise anything new (a second starch or a cuisine clash
-// included). A candidate that would hide a gap behind an unknown attribute
-// is never offered (known).
+// Candidates returns the changes that settle a raised dimension of p with a
+// kind whose list holds it (Settles) and raise nothing p does not: a swap
+// settles p's top raised dimension (Top), a garnish the first raised one its
+// kind settles (garnishTarget). Best first: the top dimension settled, then
+// most dimensions settled, then a food of the main cuisine's palette
+// (coriander on a curry, not basil), then a garnish before a swap, then kind
+// order, then name. garnishes are leaves a plate can gain with no cooking;
+// sides are recipes that can replace one of p's dish sides. The plate is read
+// again with the candidate as it is and as Proven: the target dimension must
+// be settled by the candidate's known values, and neither reading may raise
+// anything new (a second starch or a cuisine clash included). A candidate
+// that would hide a gap behind an unknown attribute is never offered (known).
 func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Change {
 	before := platefit.Read(p)
 	top, ok := Top(before)
@@ -129,15 +130,15 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 		return 0
 	}
 	var out []Change
-	try := func(next platefit.Plate, at int, kinds []Kind, ch Change) {
-		ki := slices.IndexFunc(kinds, func(k Kind) bool { return slices.Contains(Settles[k], top) })
+	try := func(next platefit.Plate, at int, dim platefit.Dimension, kinds []Kind, ch Change) {
+		ki := slices.IndexFunc(kinds, func(k Kind) bool { return slices.Contains(Settles[k], dim) })
 		if ki < 0 {
 			return
 		}
 		proven := platefit.Plate{Main: next.Main, Sides: slices.Clone(next.Sides)}
 		proven.Sides[at] = platefit.Proven(proven.Sides[at])
 		after := platefit.Read(proven).Raised()
-		if slices.Contains(after, top) {
+		if slices.Contains(after, dim) {
 			return
 		}
 		for _, d := range slices.Concat(after, platefit.Read(next).Raised()) {
@@ -150,7 +151,7 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 				ch.Settles = append(ch.Settles, d)
 			}
 		}
-		ch.Kind, ch.Dimension = kinds[ki], top
+		ch.Kind, ch.Dimension = kinds[ki], dim
 		out = append(out, ch)
 	}
 	// A garnish is for a small plate without a clash or an odd plate (a clash needs a
@@ -161,11 +162,22 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 	}
 	for _, g := range garnishes {
 		k := garnishKind(g)
-		if !g.Leaf || k == "" || onPlate(p, g.ID) || hasElement(p, k) || !known(p, -1, g) {
+		if !g.Leaf || k == "" || onPlate(p, g.ID) || hasElement(p, k) {
+			continue
+		}
+		g := asGarnish(g, k)
+		if !known(p, -1, g) {
+			continue
+		}
+		// A garnish settles the first raised gap of its kind's list, not only
+		// the top one: herbs freshen a rich, flat plate that also misses an
+		// acid the library lacks.
+		d, ok := garnishTarget(raised, k)
+		if !ok {
 			continue
 		}
 		next := platefit.Plate{Main: p.Main, Sides: append(slices.Clone(p.Sides), g)}
-		try(next, len(p.Sides), []Kind{k}, Change{Add: &g})
+		try(next, len(p.Sides), d, []Kind{k}, Change{Add: &g})
 	}
 	// Swaps always have KindSideSwap, which no add shares, so the two never compete for a Kind.
 	for i, old := range p.Sides {
@@ -181,10 +193,16 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 			}
 			next := platefit.Plate{Main: p.Main, Sides: slices.Clone(p.Sides)}
 			next.Sides[i] = s
-			try(next, i, swapKinds(s), Change{Swap: i, With: s})
+			try(next, i, top, swapKinds(s), Change{Swap: i, With: s})
 		}
 	}
 	slices.SortStableFunc(out, func(a, b Change) int {
+		if at, bt := a.Dimension == top, b.Dimension == top; at != bt {
+			if at {
+				return -1
+			}
+			return 1
+		}
 		if c := cmp.Compare(len(b.Settles), len(a.Settles)); c != 0 {
 			return c
 		}
@@ -219,6 +237,40 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 		return cmp.Compare(a.Food().Name, b.Food().Name)
 	})
 	return out
+}
+
+// asGarnish is garnish g of kind k with every unknown value its kind does
+// not bring read as Proven (one that closes no gap): a herb's unknown taste
+// or texture can neither settle nor hide a taste or texture gap, so only
+// what the kind brings (a herb's freshness and colour, a nut's crunch, an
+// acid's or a cool dip's taste) must be known.
+func asGarnish(g platefit.Component, k Kind) platefit.Component {
+	p := platefit.Proven(g)
+	brings := Settles[k]
+	if slices.Contains(brings, platefit.Fresh) {
+		p.Fresh = g.Fresh
+	}
+	if slices.Contains(brings, platefit.Colour) {
+		p.Attrs.Colour = g.Attrs.Colour
+	}
+	if slices.Contains(brings, platefit.Texture) {
+		p.Attrs.Texture = g.Attrs.Texture
+	}
+	if k == KindAcid || k == KindPickle || k == KindCool {
+		p.Attrs.Taste = g.Attrs.Taste
+	}
+	return p
+}
+
+// garnishTarget is the first raised dimension, in priority order, that
+// garnish kind k settles.
+func garnishTarget(raised []platefit.Dimension, k Kind) (platefit.Dimension, bool) {
+	for _, d := range priority {
+		if slices.Contains(raised, d) && slices.Contains(Settles[k], d) {
+			return d, true
+		}
+	}
+	return "", false
 }
 
 // maxGarnishComponents is the largest plate (main and sides) a garnish tip

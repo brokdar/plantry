@@ -404,12 +404,14 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 		ids = append(ids, id)
 	}
 	slices.Sort(ids)
+	picky := y.picky()
 	for _, id := range ids {
 		f := y.st.Foods[id]
 		// A food the household would rather not get beside a meal
 		// (State.RatherNot) is never suggested.
-		// A household with refusals gets no side swap, garnish only.
-		if len(y.st.RatherNot) == 0 && f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] && !y.st.RatherNot[id] {
+		// A picky household (refusing several side dishes) gets no side
+		// swap, garnish only; a single refused side is only never suggested.
+		if !picky && f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] && !y.st.RatherNot[id] {
 			y.sides = append(y.sides, componentOf(f))
 		}
 	}
@@ -441,6 +443,21 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 		}
 	}
 	return y, nil
+}
+
+// pickyMin is how many side dishes a household must refuse (State.RatherNot)
+// to be picky: it gets no side swap then.
+const pickyMin = 2
+
+// picky reports whether the household refuses at least pickyMin side dishes.
+func (y *run) picky() bool {
+	n := 0
+	for id := range y.st.RatherNot {
+		if y.st.Foods[id].Composed() {
+			n++
+		}
+	}
+	return n >= pickyMin
 }
 
 // componentOf is f as plate fit reads it.
