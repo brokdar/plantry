@@ -488,3 +488,49 @@ func TestCandidates_NoSecondSaladSwap(t *testing.T) {
 		t.Errorf("second salad swapped in: %+v", c)
 	}
 }
+
+// TestCandidates_NoGarnishOnOddPlate: a herb on a plate that is mismatched
+// (second protein, a starch side the main does not take, breakfast or fruit
+// beside a savoury main) does nothing, so there is no garnish tip there.
+func TestCandidates_NoGarnishOnOddPlate(t *testing.T) {
+	side := func(name string, role food.Role, cuisine, kind string, starch *bool) platefit.Component {
+		return platefit.Component{
+			ID: 30, Name: name, Role: role, Fresh: ptr(false), Starch: starch,
+			Attrs: flavor.Attributes{Cuisine: cuisine, Kind: kind, Texture: "soft", Temperature: "hot", Colour: "beige", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 1}},
+		}
+	}
+	tests := map[string]struct {
+		main  func(*platefit.Component)
+		side  platefit.Component
+		isOdd bool
+	}{
+		"second protein":       {nil, side("Tofu", food.RoleSideProtein, "neutral", "", ptr(false)), true},
+		"starch on own starch": {func(m *platefit.Component) { m.Starch = ptr(true) }, side("Kartoffeln", food.RoleSideStarch, "neutral", "", ptr(true)), true},
+		"foreign starch":       {func(m *platefit.Component) { m.Attrs.Cuisine = "chinese" }, side("Rosmarinkartoffeln", food.RoleSideStarch, "", "", ptr(true)), true},
+		"clashing starch":      {func(m *platefit.Component) { m.Attrs.Cuisine = "mexican" }, side("Spätzle", food.RoleSideStarch, "german", "", ptr(true)), true},
+		"fruit beside main":    {nil, side("Apfelspalten", food.RoleSideVeg, "neutral", "", ptr(false)), true},
+		"breakfast beside":     {nil, side("Haferbrei", food.RoleSideVeg, "neutral", "breakfast", ptr(false)), true},
+		"apple sauce ok":       {nil, side("Apfelmus", food.RoleSideVeg, "neutral", "", ptr(false)), false},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			p, chives, _ := tipPlate()
+			if tc.main != nil {
+				tc.main(&p.Main)
+			}
+			p.Sides = []platefit.Component{tc.side}
+			got := false
+			for _, c := range tips.Candidates(p, []platefit.Component{chives}, nil) {
+				if c.Add != nil {
+					got = true
+				}
+			}
+			if tc.isOdd && got {
+				t.Error("garnish tip on an odd plate")
+			}
+			if !tc.isOdd && !got {
+				t.Error("no garnish tip on a fine plate")
+			}
+		})
+	}
+}

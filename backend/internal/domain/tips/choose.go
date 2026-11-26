@@ -153,10 +153,10 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 		ch.Kind, ch.Dimension = kinds[ki], top
 		out = append(out, ch)
 	}
-	// A garnish is for a small plate without a clash (a clash needs a
+	// A garnish is for a small plate without a clash or an odd plate (a clash needs a
 	// change to the plate, not a topping), and never repeats an element the
 	// plate already has.
-	if len(p.Sides)+1 > maxGarnishComponents || len(before.Clashes) > 0 {
+	if len(p.Sides)+1 > maxGarnishComponents || len(before.Clashes) > 0 || oddPlate(p) {
 		garnishes = nil
 	}
 	for _, g := range garnishes {
