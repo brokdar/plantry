@@ -247,6 +247,9 @@ func (s State) dayLevel(date time.Time, level string) bool {
 
 // dayRequest is the day request of level on date, if any.
 func (s State) dayRequest(date time.Time, level string) (LightIntent, bool) {
+	if len(s.Light) == 0 {
+		return LightIntent{}, false // most runs: no date to format
+	}
 	d := date.Format(time.DateOnly)
 	for _, l := range s.Light {
 		if l.Date == d && l.Scope == LightScopeDay && l.Level == level {
@@ -275,6 +278,9 @@ func (s State) heartyMeal(date time.Time, slot int64) bool {
 }
 
 func (s State) mealLevel(date time.Time, slot int64, level string) bool {
+	if len(s.Light) == 0 {
+		return false // most runs: no date to format
+	}
 	d := date.Format(time.DateOnly)
 	return slices.ContainsFunc(s.Light, func(l LightIntent) bool {
 		return l.Scope == LightScopeMeal && l.Date == d && l.Level == level && s.slotIs(slot, l.Slot)
@@ -401,6 +407,9 @@ func lightNote(light []LightIntent, locale string) string {
 // is light or hearty, else ""; level is LevelHearty for a hearty one (a day
 // intent wins over a meal intent).
 func (x *index) lightOf(date time.Time) (scope, level string) {
+	if len(x.s.Light) == 0 {
+		return "", ""
+	}
 	switch {
 	case x.s.lightDay(date):
 		return LightScopeDay, ""
@@ -418,6 +427,9 @@ func (x *index) lightOf(date time.Time) (scope, level string) {
 // lightMeals names the light and hearty meals of date with their slot
 // ("light dinner"), in cell order.
 func (x *index) lightMeals(date time.Time) []string {
+	if len(x.s.Light) == 0 {
+		return nil
+	}
 	var out []string
 	for _, c := range x.s.Cells {
 		if dayOf(c.Date) != dayOf(date) {

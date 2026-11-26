@@ -805,10 +805,16 @@ func (h *planner) fullMeals(date time.Time) map[int64]bool {
 	if !h.s.Settings.PlateFit || h.floorLift {
 		return nil
 	}
-	ev := evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target)
-	for _, d := range ev.Days {
-		if d.Date == date.Format(time.DateOnly) && d.ProteinTargetG > 0 && d.ProteinG < d.ProteinTargetG {
-			return nil // protein before balance: the protein-rich meal may grow
+	// The day's account and the plates' kcal as Evaluate reports them, read
+	// from the index alone: this runs per top-up, a full evaluation does not
+	// pay.
+	merged := Merge(h.s, h.in.Target, h.prop)
+	y := newIndex(merged, h.in.Target)
+	if slices.ContainsFunc(merged.Cells, func(c Cell) bool { return merged.Window.Contains(c.Date) && dayOf(c.Date) == dayOf(date) }) {
+		for _, dk := range y.dayAccounts([]time.Time{date}) {
+			if t := y.pol.ProteinTargetG(dk.Share()); t > 0 && dk.ProteinG < t {
+				return nil // protein before balance: the protein-rich meal may grow
+			}
 		}
 	}
 	full, under := map[int64]bool{}, false
@@ -818,11 +824,13 @@ func (h *planner) fullMeals(date time.Time) map[int64]bool {
 		}
 		c := plate.CellKey{Date: p.Date, SlotID: p.SlotID}
 		share := h.kcalShare(c)
-		i := slices.IndexFunc(ev.Plates, func(e PlateEval) bool { return e.Date == p.Date.Format(time.DateOnly) && e.SlotID == p.SlotID })
+		i := slices.IndexFunc(merged.Plates, func(m Plate) bool {
+			return merged.Window.Contains(m.Date) && dayOf(m.Date) == dayOf(p.Date) && m.SlotID == p.SlotID
+		})
 		if share <= 0 || i < 0 {
 			continue
 		}
-		if ev.Plates[i].Kcal >= share {
+		if plateKcal(y, merged.Plates[i]) >= share {
 			full[p.SlotID] = true
 		} else {
 			under = true
@@ -832,4 +840,16 @@ func (h *planner) fullMeals(date time.Time) map[int64]bool {
 		return nil
 	}
 	return full
+}
+
+// plateKcal is p's kcal per eater as Evaluate reports it (PlateEval.Kcal):
+// its components with known foods.
+func plateKcal(x *index, p Plate) float64 {
+	var k float64
+	for _, c := range p.Components {
+		if f, ok := x.food(c.FoodID); ok {
+			k += f.Macros.Kcal * c.Multiplier()
+		}
+	}
+	return k
 }

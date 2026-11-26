@@ -15,7 +15,20 @@ type cellID struct {
 	slot int64
 }
 
-func dayOf(t time.Time) int { return t.Year()*1000 + t.YearDay() }
+// dayOf is t's year*1000 + day of the year. One calendar conversion
+// (t.Date) instead of two (Year and YearDay): the planner calls it in its
+// innermost loops.
+func dayOf(t time.Time) int {
+	y, m, d := t.Date()
+	yd := daysBefore[m-1] + d
+	if m > time.February && y%4 == 0 && (y%100 != 0 || y%400 == 0) {
+		yd++
+	}
+	return y*1000 + yd
+}
+
+// daysBefore are the days of a non-leap year before each month.
+var daysBefore = [12]int{0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334}
 
 func idOf(c plate.CellKey) cellID { return cellID{day: dayOf(c.Date), slot: c.SlotID} }
 
