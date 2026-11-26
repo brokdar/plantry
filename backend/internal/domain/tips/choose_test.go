@@ -282,19 +282,19 @@ func TestCandidates_KindPerDimension(t *testing.T) {
 func TestCandidates_NoSecondStarch(t *testing.T) {
 	main := platefit.Component{
 		ID: 1, Name: "Schnitzel", Role: food.RoleMain, Fresh: ptr(false), Starch: ptr(false),
-		Attrs: flavor.Attributes{Cuisine: "neutral", Texture: "crisp", Temperature: "hot", Colour: "brown", Richness: ptr(2), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 2, Acid: 1}},
+		Attrs: flavor.Attributes{Cuisine: "indian", Texture: "crisp", Temperature: "hot", Colour: "brown", Richness: ptr(2), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 2, Acid: 1}},
 	}
 	salad := platefit.Component{
 		ID: 2, Name: "Kartoffelsalat", Role: food.RoleSideVeg, Fresh: ptr(false), Starch: ptr(true),
-		Attrs: flavor.Attributes{Cuisine: "neutral", Texture: "soft", Temperature: "cold", Colour: "beige", Richness: ptr(1), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 1, Acid: 2}},
+		Attrs: flavor.Attributes{Cuisine: "indian", Texture: "soft", Temperature: "cold", Colour: "beige", Richness: ptr(1), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 1, Acid: 2}},
 	}
 	beans := platefit.Component{
 		ID: 3, Name: "Bohnen", Role: food.RoleSideVeg, Fresh: ptr(false), Starch: ptr(false),
-		Attrs: flavor.Attributes{Cuisine: "neutral", Texture: "soft", Temperature: "hot", Colour: "beige", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 1}},
+		Attrs: flavor.Attributes{Cuisine: "italian", Texture: "soft", Temperature: "hot", Colour: "beige", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 1}},
 	}
 	rice := platefit.Component{
 		ID: 4, Name: "Basmatireis", Role: food.RoleSideStarch, Fresh: ptr(false), Starch: ptr(true),
-		Attrs: flavor.Attributes{Cuisine: "neutral", Texture: "soft", Temperature: "hot", Colour: "white", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{}},
+		Attrs: flavor.Attributes{Cuisine: "indian", Texture: "soft", Temperature: "hot", Colour: "white", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{}},
 	}
 	carrots := platefit.Component{
 		ID: 5, Name: "Möhren", Role: food.RoleSideVeg, Fresh: ptr(true), Starch: ptr(false),
@@ -304,18 +304,51 @@ func TestCandidates_NoSecondStarch(t *testing.T) {
 	unknown.Starch = nil
 	for _, s := range []platefit.Component{salad, unknown} {
 		pl := platefit.Plate{Main: main, Sides: []platefit.Component{s, beans}}
-		if raised := platefit.Read(pl).Raised(); len(raised) == 0 {
-			t.Fatal("plate raises nothing")
+		if !slices.Contains(platefit.Read(pl).Clashes, platefit.CuisineFit) {
+			t.Fatal("plate has no cuisine clash")
 		}
-		cands := tips.Candidates(pl, nil, []platefit.Component{rice, carrots})
-		if len(cands) == 0 || cands[0].Food().ID != carrots.ID {
-			t.Errorf("starch %v: want the carrots, got %+v", s.Starch, cands)
-		}
-		for _, c := range cands {
-			if c.Food().ID == rice.ID {
-				t.Errorf("starch %v: rice swapped in beside the potato salad", s.Starch)
+		for _, c := range tips.Candidates(pl, nil, []platefit.Component{rice, carrots}) {
+			if c.Swap == 1 && c.With.ID == rice.ID {
+				t.Errorf("starch %v: rice swapped in beside the potato salad: %+v", s.Starch, c)
 			}
 		}
+	}
+}
+
+// sauceStarchPlate is a sauced indian main with a plain bean side and a raita.
+func sauceStarchPlate() (platefit.Plate, platefit.Component, platefit.Component) {
+	side := func(id int64, name string, role food.Role, starch *bool) platefit.Component {
+		return platefit.Component{
+			ID: id, Name: name, Role: role, Fresh: ptr(false), Starch: starch,
+			Attrs: flavor.Attributes{Cuisine: "indian", Texture: "soft", Temperature: "hot", Colour: "beige", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 1}},
+		}
+	}
+	main := side(1, "Chicken Korma", food.RoleMain, ptr(false))
+	main.Attrs.Saucy, main.Attrs.Richness, main.Attrs.Taste = ptr(true), ptr(2), &flavor.Taste{Salt: 2, Acid: 1}
+	raita := side(6, "Raita", food.RoleSideVeg, ptr(false))
+	raita.Attrs.Temperature, raita.Fresh, raita.Attrs.Colour, raita.Attrs.Texture = "cold", ptr(true), "green", "crunchy"
+	sides := []platefit.Component{side(2, "Bohnen", food.RoleSideVeg, ptr(false)), raita}
+	return platefit.Plate{Main: main, Sides: sides}, side(4, "Reis", food.RoleSideStarch, ptr(true)), side(5, "Polenta", food.RoleSideStarch, ptr(true))
+}
+
+// TestCandidates_SauceStarchSwap: a sauce without a starch swaps a side for the
+// starch of the main's palette, not for any starch.
+func TestCandidates_SauceStarchSwap(t *testing.T) {
+	pl, rice, polenta := sauceStarchPlate()
+	if top, _ := tips.Top(platefit.Read(pl)); top != platefit.SauceStarch {
+		t.Fatalf("top %s, want sauce_starch", top)
+	}
+	cands := tips.Candidates(pl, nil, []platefit.Component{polenta, rice})
+	if len(cands) == 0 || cands[0].Kind != tips.KindSideSwap || cands[0].With.ID != rice.ID {
+		t.Fatalf("want the palette rice swapped in, got %+v", cands)
+	}
+	for _, c := range cands {
+		if c.With.ID == polenta.ID {
+			t.Errorf("a starch outside the palette swapped in: %+v", c)
+		}
+	}
+	if c := tips.Candidates(pl, nil, []platefit.Component{polenta}); len(c) != 0 {
+		t.Errorf("non-palette starch alone got a tip: %+v", c)
 	}
 }
 
@@ -335,5 +368,169 @@ func TestCandidates_NoFittingGarnishNoTip(t *testing.T) {
 	c := tips.Candidates(pl, []platefit.Component{cucumber, lib["Frische Petersilie"]}, nil)
 	if len(c) == 0 || c[0].Kind != tips.KindHerbs || c[0].Food().Name != "Frische Petersilie" {
 		t.Fatalf("want parsley as fresh herbs, got %+v", c)
+	}
+}
+
+func tipPlate() (platefit.Plate, platefit.Component, platefit.Component) {
+	main := platefit.Component{
+		ID: 1, Name: "Omelett", Role: food.RoleMain, Fresh: ptr(false), Starch: ptr(false),
+		Attrs: flavor.Attributes{Cuisine: "neutral", Texture: "crisp", Temperature: "hot", Colour: "beige", Richness: ptr(1), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 2, Acid: 1}},
+	}
+	chives := platefit.Component{
+		ID: 2, Name: "Schnittlauch", Role: food.RoleSideVeg, Leaf: true, Fresh: ptr(true),
+		Attrs: flavor.Attributes{Texture: "soft", Colour: "green", Taste: &flavor.Taste{}},
+	}
+	return platefit.Plate{Main: main}, chives, platefit.Component{}
+}
+
+// TestCandidates_GarnishRules: a garnish goes only on a plate of at most three
+// components and never when the plate already has that element.
+func TestCandidates_GarnishRules(t *testing.T) {
+	p, chives, _ := tipPlate()
+	if len(tips.Candidates(p, []platefit.Component{chives}, nil)) == 0 {
+		t.Fatal("a bare plate gets no garnish")
+	}
+	busy := p
+	for i := range 3 {
+		s := chives
+		s.ID, s.Name, s.Leaf = int64(10+i), "Beilage", false
+		busy.Sides = append(busy.Sides, s)
+	}
+	for _, c := range tips.Candidates(busy, []platefit.Component{chives}, nil) {
+		if c.Add != nil {
+			t.Errorf("garnish on a plate of %d components: %+v", len(busy.Sides)+1, c)
+		}
+	}
+	has := p
+	has.Sides = []platefit.Component{chives}
+	other := chives
+	other.ID, other.Name = 3, "Petersilie"
+	for _, c := range tips.Candidates(has, []platefit.Component{other}, nil) {
+		if c.Add != nil && c.Kind == tips.KindHerbs {
+			t.Errorf("herbs added to a plate with herbs: %+v", c)
+		}
+	}
+	clash := p
+	clash.Main.Attrs.Cuisine = "indian"
+	clash.Sides = []platefit.Component{{
+		ID: 20, Name: "Spaghetti", Role: food.RoleSideStarch, Fresh: ptr(false), Starch: ptr(true),
+		Attrs: flavor.Attributes{Cuisine: "italian", Texture: "soft", Temperature: "hot", Colour: "beige", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 1}},
+	}}
+	if !slices.Contains(platefit.Read(clash).Clashes, platefit.CuisineFit) {
+		t.Fatal("plate has no cuisine clash")
+	}
+	for _, c := range tips.Candidates(clash, []platefit.Component{chives}, nil) {
+		if c.Add != nil {
+			t.Errorf("garnish on a clash plate: %+v", c)
+		}
+	}
+}
+
+// TestCandidates_ClashSwapBelongsToCuisine: a cuisine clash is fixed only by a
+// side of the main's cuisine (by its cuisine or the palette), never by a
+// neutral generic salad; with no such side in the library there is no tip.
+func TestCandidates_ClashSwapBelongsToCuisine(t *testing.T) {
+	side := func(id int64, name, cuisine string, role food.Role, starch bool) platefit.Component {
+		return platefit.Component{
+			ID: id, Name: name, Role: role, Fresh: ptr(false), Starch: ptr(starch),
+			Attrs: flavor.Attributes{Cuisine: cuisine, Texture: "soft", Temperature: "hot", Colour: "beige", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 1}},
+		}
+	}
+	main := side(1, "Chicken Korma", "indian", food.RoleMain, false)
+	main.Attrs.Richness = ptr(2)
+	wrong := side(2, "Spaghetti", "italian", food.RoleSideStarch, true)
+	pl := platefit.Plate{Main: main, Sides: []platefit.Component{wrong}}
+	if !slices.Contains(platefit.Read(pl).Clashes, platefit.CuisineFit) {
+		t.Fatal("plate has no cuisine clash")
+	}
+	carrot := side(3, "Möhrensalat", "neutral", food.RoleSideVeg, false)
+	carrot.Attrs.Temperature = "cold"
+	naan := side(4, "Naan", "indian", food.RoleSideStarch, true)
+	for _, c := range tips.Candidates(pl, nil, []platefit.Component{carrot}) {
+		t.Errorf("library without an Indian side got a tip: %+v", c)
+	}
+	cands := tips.Candidates(pl, nil, []platefit.Component{carrot, naan})
+	if len(cands) == 0 || cands[0].Food().ID != naan.ID {
+		t.Errorf("want naan swapped in, got %+v", cands)
+	}
+	// A dish of unknown starch beside could be a second starch: no naan.
+	unk := side(7, "Gemüsepfanne", "indian", food.RoleSideVeg, false)
+	unk.Starch = nil
+	two := platefit.Plate{Main: main, Sides: []platefit.Component{wrong, unk}}
+	if !slices.Contains(platefit.Read(two).Clashes, platefit.CuisineFit) {
+		t.Fatal("plate has no cuisine clash")
+	}
+	for _, c := range tips.Candidates(two, nil, []platefit.Component{naan}) {
+		t.Errorf("starch swapped in beside a dish of unknown starch: %+v", c)
+	}
+	for _, c := range cands {
+		if c.Food().ID == carrot.ID {
+			t.Errorf("neutral salad swapped in for an Indian main")
+		}
+	}
+}
+
+// TestCandidates_NoSecondSaladSwap: a swap never brings a second side of a
+// kind the plate already has.
+func TestCandidates_NoSecondSaladSwap(t *testing.T) {
+	salad := func(id int64, name, cuisine string) platefit.Component {
+		return platefit.Component{
+			ID: id, Name: name, Role: food.RoleSideVeg, Fresh: ptr(true), Starch: ptr(false),
+			Attrs: flavor.Attributes{Cuisine: cuisine, Kind: "salad", Texture: "crisp", Temperature: "cold", Colour: "green", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{Acid: 1}},
+		}
+	}
+	main := platefit.Component{
+		ID: 1, Name: "Tuna pasta", Role: food.RoleMain, Fresh: ptr(false), Starch: ptr(true),
+		Attrs: flavor.Attributes{Cuisine: "italian", Kind: "pasta", Texture: "soft", Temperature: "hot", Colour: "red", Richness: ptr(1), Saucy: ptr(true), Taste: &flavor.Taste{Salt: 2, Acid: 2}},
+	}
+	pl := platefit.Plate{Main: main, Sides: []platefit.Component{salad(2, "Green salad", "mediterranean"), salad(3, "Yogurt salad", "middle_eastern")}}
+	for _, c := range tips.Candidates(pl, nil, []platefit.Component{salad(4, "Carrot salad", "mediterranean")}) {
+		t.Errorf("second salad swapped in: %+v", c)
+	}
+}
+
+// TestCandidates_NoGarnishOnOddPlate: a herb on a plate that is mismatched
+// (second protein, a starch side the main does not take, breakfast or fruit
+// beside a savoury main) does nothing, so there is no garnish tip there.
+func TestCandidates_NoGarnishOnOddPlate(t *testing.T) {
+	side := func(name string, role food.Role, cuisine, kind string, starch *bool) platefit.Component {
+		return platefit.Component{
+			ID: 30, Name: name, Role: role, Fresh: ptr(false), Starch: starch,
+			Attrs: flavor.Attributes{Cuisine: cuisine, Kind: kind, Texture: "soft", Temperature: "hot", Colour: "beige", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 1}},
+		}
+	}
+	tests := map[string]struct {
+		main  func(*platefit.Component)
+		side  platefit.Component
+		isOdd bool
+	}{
+		"second protein":       {nil, side("Tofu", food.RoleSideProtein, "neutral", "", ptr(false)), true},
+		"starch on own starch": {func(m *platefit.Component) { m.Starch = ptr(true) }, side("Kartoffeln", food.RoleSideStarch, "neutral", "", ptr(true)), true},
+		"foreign starch":       {func(m *platefit.Component) { m.Attrs.Cuisine = "chinese" }, side("Rosmarinkartoffeln", food.RoleSideStarch, "", "", ptr(true)), true},
+		"clashing starch":      {func(m *platefit.Component) { m.Attrs.Cuisine = "mexican" }, side("Spätzle", food.RoleSideStarch, "german", "", ptr(true)), true},
+		"fruit beside main":    {nil, side("Apfelspalten", food.RoleSideVeg, "neutral", "", ptr(false)), true},
+		"breakfast beside":     {nil, side("Haferbrei", food.RoleSideVeg, "neutral", "breakfast", ptr(false)), true},
+		"apple sauce ok":       {nil, side("Apfelmus", food.RoleSideVeg, "neutral", "", ptr(false)), false},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			p, chives, _ := tipPlate()
+			if tc.main != nil {
+				tc.main(&p.Main)
+			}
+			p.Sides = []platefit.Component{tc.side}
+			got := false
+			for _, c := range tips.Candidates(p, []platefit.Component{chives}, nil) {
+				if c.Add != nil {
+					got = true
+				}
+			}
+			if tc.isOdd && got {
+				t.Error("garnish tip on an odd plate")
+			}
+			if !tc.isOdd && !got {
+				t.Error("no garnish tip on a fine plate")
+			}
+		})
 	}
 }

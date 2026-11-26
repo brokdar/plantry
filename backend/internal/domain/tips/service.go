@@ -206,8 +206,10 @@ func (s *Service) Sync(ctx context.Context, date time.Time) (View, error) {
 	}
 	now := s.d.Now()
 	cooled := map[string]bool{} // recipe/kind dismissed in this window
+	used := map[string]int{}    // kind/food tipped in this window, in any state
 	var live, ended []Tip
 	for _, t := range stored {
+		used[foodKey(t.Kind, t.Op.FoodID)]++
 		pp, ok := y.plateOf(t.PlateID)
 		switch t.State {
 		case StateDismissed:
@@ -256,7 +258,9 @@ func (s *Service) Sync(ctx context.Context, date time.Time) (View, error) {
 		if tipped[id] || (pp.batch != 0 && batches[pp.batch]) {
 			continue
 		}
-		t, ok := y.pick(pp, func(k Kind) bool { return !y.silenced[k] && !cooled[cooldownKey(pp.mainID, k)] })
+		t, ok := y.pick(pp, func(c Change) bool {
+			return !y.silenced[c.Kind] && !cooled[cooldownKey(pp.mainID, c.Kind)] && used[foodKey(c.Kind, c.Food().ID)] < maxRepeat
+		})
 		if !ok {
 			continue
 		}
@@ -265,6 +269,7 @@ func (s *Service) Sync(ctx context.Context, date time.Time) (View, error) {
 			return View{}, err
 		}
 		live = append(live, t)
+		used[foodKey(t.Kind, t.Op.FoodID)]++
 		tipped[id] = true
 		if pp.batch != 0 {
 			batches[pp.batch] = true
@@ -350,6 +355,12 @@ func (y *run) slotName(pp planPlate) string {
 	return strings.TrimPrefix(y.st.SlotNames[pp.p.SlotID], "slot.")
 }
 
+// maxRepeat is how often one kind suggests the same food within a window: a
+// tip that says the same thing again is noise.
+const maxRepeat = 2
+
+func foodKey(k Kind, food int64) string { return fmt.Sprintf("%s/%d", k, food) }
+
 func cooldownKey(recipe int64, k Kind) string { return fmt.Sprintf("%d/%s", recipe, k) }
 
 func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
@@ -397,10 +408,21 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 		f := y.st.Foods[id]
 		// A food the household would rather not get beside a meal
 		// (State.RatherNot) is never suggested.
-		if f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] && !y.st.RatherNot[id] {
+		// A household with refusals gets no side swap, garnish only.
+		if len(y.st.RatherNot) == 0 && f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] && !y.st.RatherNot[id] {
 			y.sides = append(y.sides, componentOf(f))
 		}
 	}
+	// Sides the household has eaten come first: a swap prefers one.
+	eaten := map[int64]bool{}
+	for _, h := range y.st.History {
+		for _, id := range h.FoodIDs {
+			eaten[id] = true
+		}
+	}
+	slices.SortStableFunc(y.sides, func(a, b platefit.Component) int {
+		return cmp.Compare(b2i(eaten[b.ID]), b2i(eaten[a.ID]))
+	})
 	y.plates = map[int64]planPlate{}
 	ps := slices.Clone(y.st.Plates)
 	slices.SortStableFunc(ps, func(a, b planning.Plate) int {
@@ -464,11 +486,23 @@ func onState(p planning.Plate, foodID int64) bool {
 	return slices.ContainsFunc(p.Components, func(c planning.Component) bool { return c.FoodID == foodID })
 }
 
+// servedThatDay reports whether another plate of pp's day already serves the
+// food: a tip never repeats a food the day has (the same salad at lunch and
+// dinner).
+func (y *run) servedThatDay(pp planPlate, foodID int64) bool {
+	for id, o := range y.plates {
+		if id != pp.p.ID && o.p.Date.Equal(pp.p.Date) && onState(o.p, foodID) {
+			return true
+		}
+	}
+	return false
+}
+
 // pick is the plate's best candidate change that passes the checks, as an
 // unsaved tip.
-func (y *run) pick(pp planPlate, allowed func(Kind) bool) (Tip, bool) {
+func (y *run) pick(pp planPlate, allowed func(Change) bool) (Tip, bool) {
 	for _, ch := range Candidates(pp.fit, y.garnish, y.sides) {
-		if !allowed(ch.Kind) {
+		if !allowed(ch) || y.servedThatDay(pp, ch.Food().ID) {
 			continue
 		}
 		op := y.opOf(pp, ch)
@@ -497,7 +531,7 @@ func (y *run) holds(pp planPlate, t Tip) bool {
 	}
 	for _, ch := range Candidates(pp.fit, y.garnish, y.sides) {
 		if ch.Kind == t.Kind && y.opOf(pp, ch) == t.Op {
-			return y.passes(pp, ch, t.Op)
+			return !y.servedThatDay(pp, ch.Food().ID) && y.passes(pp, ch, t.Op)
 		}
 	}
 	return false
@@ -736,4 +770,11 @@ func UnmarshalOp(s string) (Op, error) {
 	var op Op
 	err := json.Unmarshal([]byte(s), &op)
 	return op, err
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

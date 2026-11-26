@@ -25,6 +25,14 @@ var freshWords = []string{
 	"dill", "minze", "mint", "zitrone", "lemon", "limette", "lime", "fruehlingszwiebel", "spring onion", "radieschen", "radish",
 }
 
+// rawVegWords are vegetables served raw as a leaf or a rohkost recipe (a
+// tomato inside a sauce does not make a recipe fresh, so they never count as
+// recipe ingredients): the fresh element of a plate.
+var rawVegWords = []string{
+	"paprika", "bell pepper", "tomat", "karotte", "moehre", "carrot", "rohkost", "kohlrabi", "sellerie", "celery",
+	"feldsalat", "sprout", "keim", "avocado", "fenchel", "fennel",
+}
+
 // starchLeafWords are ingredients that make a dish a starch (with
 // pastaWords and starchWords) once a portion holds starchMinG of them.
 var starchLeafWords = []string{"tortilla", "quinoa", "spaetzle", "mehl", "flour", "teig", "dough"}
@@ -65,7 +73,7 @@ func hasWord(name string, lists ...[]string) bool {
 // name; a recipe without ingredients is unknown (nil).
 func freshStarch(f FoodFacts, leaves []food.LeafGrams) (fresh, starch *bool) {
 	if f.Kind != food.KindComposed {
-		v := hasWord(f.Name, freshWords)
+		v := hasWord(f.Name, freshWords, rawVegWords)
 		return &v, nil
 	}
 	if len(leaves) == 0 {
