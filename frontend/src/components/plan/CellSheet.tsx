@@ -146,8 +146,12 @@ function Leftovers({
               data-testid="cell-leftover"
               disabled={createPlate.isPending}
               onClick={() =>
-                createPlate.mutate(
-                  {
+                // Not mutate()'s onSuccess: eating the last spare portion
+                // refetches the plan and unmounts this list, which drops
+                // that callback and leaves the sheet open. The hook toasts
+                // errors.
+                createPlate
+                  .mutateAsync({
                     date: cell.date,
                     slot_id: cell.slot_id,
                     components: [
@@ -157,9 +161,8 @@ function Leftovers({
                         cook_session_id: s.id,
                       },
                     ],
-                  },
-                  { onSuccess: onDone }
-                )
+                  })
+                  .then(onDone, () => undefined)
               }
               className="flex min-h-11 w-full items-center gap-3 rounded-cell px-2 text-left hover:bg-panel-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
