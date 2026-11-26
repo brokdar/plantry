@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
@@ -235,6 +236,22 @@ func TestPlan_Issues(t *testing.T) {
 		require.NoError(t, err)
 		assert.ElementsMatch(t, [][2]string{{"H5", planning.CodeDietIncompatible}, {"H8", planning.CodeVarietyRelaxed}}, rulesAndCodes(p.Issues),
 			"the unrepeated omelette is vegetarian, so it was no vegan pick")
+	})
+
+	t.Run("a repeat relaxes when the meat-day limit rules out every unrepeated main", func(t *testing.T) {
+		f := newFixture()
+		f.diets[omeletID] = diet.Omnivore
+		f.profile.p.MeatDaysPerWeekMax = ptr(0)
+		eaten := f.session(chiliID, "2026-10-25", dinner, 2)
+		f.composed("2026-10-25", dinner, chiliID, eaten)
+		sid := f.draftSession(chiliID, "2026-11-01", dinner, 2, 7)
+		f.draft(f.composed("2026-11-01", dinner, chiliID, sid), 7)
+		f.runs[7] = RunNote{}
+		f.fill()
+		p, err := f.service().Plan(ctx, &ac1Start, date("2026-10-30"))
+		require.NoError(t, err)
+		assert.ElementsMatch(t, [][2]string{{"H5", planning.CodeMeatDaysExceeded}, {"H8", planning.CodeVarietyRelaxed}}, rulesAndCodes(p.Issues),
+			"the unrepeated omelette has meat and the week allows no meat day, so it was no pick")
 	})
 
 	t.Run("a past draft does not count as eaten", func(t *testing.T) {

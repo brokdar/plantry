@@ -178,7 +178,7 @@ func (s *Service) checkState(ctx context.Context, in checkInput) (planning.State
 
 // addUneatenRecipes adds the recipes H8 counts as unrepeated that the rows
 // do not name. Only that count reads them: they carry kind, role and, when
-// the diet type can rule one out, the diet class; no history (none was
+// the count reads it (planning.VarietyNeedsDiet), the diet class; no history (none was
 // eaten since the variety bound).
 func (s *Service) addUneatenRecipes(ctx context.Context, st *planning.State) error {
 	since := planning.VarietySince(st.Window.Start, st.Settings.VarietyWeeks)
@@ -198,7 +198,7 @@ func (s *Service) addUneatenRecipes(ctx context.Context, st *planning.State) err
 		st.Foods[r.ID] = ff
 		ids = append(ids, r.ID)
 	}
-	if len(ids) == 0 || !planning.DietRestricts(st.Profile.DietType) {
+	if len(ids) == 0 || !planning.VarietyNeedsDiet(st.Profile) {
 		return nil
 	}
 	found, err := s.d.Foods.LookupByIDs(ctx, ids)

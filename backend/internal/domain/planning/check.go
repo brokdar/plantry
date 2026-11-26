@@ -630,14 +630,22 @@ func DietRestricts(t profile.DietType) bool {
 	return c != "" && c != diet.Omnivore
 }
 
+// VarietyNeedsDiet reports whether H8's eligible count reads diet classes
+// for profile p: the diet type can rule a recipe out, or a meat-day limit
+// caps the omnivore ones.
+func VarietyNeedsDiet(p Profile) bool {
+	return DietRestricts(p.DietType) || p.MeatDaysPerWeekMax != nil
+}
+
 // eligibleRecipes counts the recipes H8 could pick for the window: mains
 // that fit the diet and were neither eaten nor cooked (a draft of an earlier
 // week, which H8 counts as a repeat too) within the variety weeks before its
-// start.
+// start. Omnivore recipes count only up to what the meat-day limit lets the
+// window cook (meatCookCap).
 func (x *index) eligibleRecipes(weeks int) int {
 	since := VarietySince(x.s.Window.Start, weeks)
 	t := diet.Class(x.s.Profile.DietType)
-	n := 0
+	n, meat := 0, 0
 	routine := x.routineFoods()
 	cookedBefore := map[int64]bool{}
 	for _, ev := range x.cooks {
@@ -660,8 +668,28 @@ func (x *index) eligibleRecipes(weeks int) int {
 			continue
 		}
 		if (f.LastEaten == nil || f.LastEaten.Before(since)) && !cookedBefore[f.ID] {
-			n++
+			if f.DietClass == diet.Omnivore {
+				meat++
+			} else {
+				n++
+			}
 		}
 	}
-	return n
+	return n + min(meat, x.meatCookCap())
+}
+
+// meatCookCap is the most cooks of omnivore recipes the window can hold
+// within meat_days_per_week_max (H5): the meat days times the cooks a day
+// takes (max_cook_occasions_per_day, else one per slot). Without a limit it
+// is unbounded. A recipe H8 could pick but H5 forbids is no choice.
+func (x *index) meatCookCap() int {
+	limit := x.s.Profile.MeatDaysPerWeekMax
+	if limit == nil {
+		return math.MaxInt
+	}
+	perDay := x.s.Settings.MaxCookOccasionsPerDay
+	if perDay <= 0 {
+		perDay = len(x.s.SlotOrder)
+	}
+	return max(*limit, 0) * perDay
 }
