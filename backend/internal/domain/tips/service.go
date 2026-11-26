@@ -486,11 +486,23 @@ func onState(p planning.Plate, foodID int64) bool {
 	return slices.ContainsFunc(p.Components, func(c planning.Component) bool { return c.FoodID == foodID })
 }
 
+// servedThatDay reports whether another plate of pp's day already serves the
+// food: a tip never repeats a food the day has (the same salad at lunch and
+// dinner).
+func (y *run) servedThatDay(pp planPlate, foodID int64) bool {
+	for id, o := range y.plates {
+		if id != pp.p.ID && o.p.Date.Equal(pp.p.Date) && onState(o.p, foodID) {
+			return true
+		}
+	}
+	return false
+}
+
 // pick is the plate's best candidate change that passes the checks, as an
 // unsaved tip.
 func (y *run) pick(pp planPlate, allowed func(Change) bool) (Tip, bool) {
 	for _, ch := range Candidates(pp.fit, y.garnish, y.sides) {
-		if !allowed(ch) {
+		if !allowed(ch) || y.servedThatDay(pp, ch.Food().ID) {
 			continue
 		}
 		op := y.opOf(pp, ch)
@@ -519,7 +531,7 @@ func (y *run) holds(pp planPlate, t Tip) bool {
 	}
 	for _, ch := range Candidates(pp.fit, y.garnish, y.sides) {
 		if ch.Kind == t.Kind && y.opOf(pp, ch) == t.Op {
-			return y.passes(pp, ch, t.Op)
+			return !y.servedThatDay(pp, ch.Food().ID) && y.passes(pp, ch, t.Op)
 		}
 	}
 	return false

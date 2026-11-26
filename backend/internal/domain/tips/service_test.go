@@ -779,3 +779,40 @@ func TestSync_SwapPrefersEatenSide(t *testing.T) {
 		}
 	}
 }
+
+// TestSync_TipSkipsFoodServedElsewhereThatDay: the swap that would put a
+// side on one plate is not offered when another plate of the same day
+// already serves it; the other side is.
+func TestSync_TipSkipsFoodServedElsewhereThatDay(t *testing.T) {
+	t.Parallel()
+	f := newFixture()
+	side := func(id int64, name string) planning.FoodFacts {
+		return planning.FoodFacts{
+			ID: id, Name: name, Kind: food.KindComposed, Role: food.RoleSideVeg, DietClass: diet.Vegan, Starch: ptr(false),
+			Macros: nutrition.Macros{Kcal: 150}, NutritionComplete: true, Minutes: 10, Fresh: ptr(false),
+			Attrs: flavor.Attributes{Cuisine: "italian", Texture: "soft", Temperature: "hot", Colour: "white", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{}},
+		}
+	}
+	curry := side(700, "Thai-Curryreis")
+	curry.Role, curry.Starch = food.RoleSideStarch, ptr(true)
+	curry.Attrs.Cuisine = "thai"
+	f.st.Foods[700], f.st.Foods[701], f.st.Foods[702] = curry, side(701, "Gemüse A"), side(702, "Gemüse B")
+	f.st.NoCook = nil
+	f.st.Plates = f.st.Plates[:2]
+	f.st.Plates[0].Components = append(f.st.Plates[0].Components, planning.Component{ID: 20, FoodID: 700, Position: plate.PositionSide})
+	f.st.Plates[1].Date = start // same day
+	f.st.Plates[1].Components = append(f.st.Plates[1].Components, planning.Component{ID: 21, FoodID: 701, Position: plate.PositionSide})
+	f.st.History = []planning.HistoryPlate{{FoodIDs: []int64{701}}} // 701 is the preferred side
+	v, err := f.svc().Sync(context.Background(), start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tp := range v.Tips {
+		if *tp.PlateID == 1 && tp.Op.FoodID != 702 {
+			t.Errorf("plate 1 tip repeats the day's food: %+v", tp)
+		}
+	}
+	if !slices.ContainsFunc(v.Tips, func(tp tips.Tip) bool { return *tp.PlateID == 1 && tp.Op.FoodID == 702 }) {
+		t.Errorf("no swap to 702 on plate 1: %+v", v.Tips)
+	}
+}
