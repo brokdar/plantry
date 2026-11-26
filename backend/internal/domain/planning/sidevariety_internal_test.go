@@ -93,6 +93,12 @@ func TestTopUpDay_GrowsTheLightMealFirst(t *testing.T) {
 	assert.Equal(t, 1.5, portions(h, bfDinner))
 	assert.Greater(t, portions(h, bfLunch), 1.25, "what the dinner cannot carry goes to the lunch")
 
+	h = setup(true)
+	w := 150.0
+	h.s.Profile.WeightKg = &w
+	h.in.State = h.s
+	assert.Nil(t, h.fullMeals(bfMon), "a day under its protein target: the protein meal may grow")
+
 	h = setup(false)
 	assert.Nil(t, h.fullMeals(bfMon), "plate fit off: no change")
 }
