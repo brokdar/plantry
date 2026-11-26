@@ -137,8 +137,8 @@ func TestCandidates_SealedSet(t *testing.T) {
 
 func TestCandidates_UnattributedNeverTips(t *testing.T) {
 	rich := platefit.Component{
-		ID: 1, Name: "Carbonara", Role: food.RoleMain, Fresh: ptr(false), Starch: ptr(true),
-		Attrs: flavor.Attributes{Cuisine: "italian", Texture: "creamy", Temperature: "hot", Colour: "beige", Richness: ptr(3), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 2, Umami: 2}},
+		ID: 1, Name: "Rahmgeschnetzeltes", Role: food.RoleMain, Fresh: ptr(false), Starch: ptr(true),
+		Attrs: flavor.Attributes{Cuisine: "german", Kind: "pan", Texture: "creamy", Temperature: "hot", Colour: "beige", Richness: ptr(3), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 2, Umami: 2}},
 	}
 	lemon := platefit.Component{ID: 2, Name: "Zitrone", Leaf: true, Fresh: ptr(true), Attrs: flavor.Attributes{Texture: "soft", Colour: "beige", Taste: &flavor.Taste{Acid: 3}}}
 	blank := platefit.Component{ID: 3, Name: "Unbekannt", Leaf: true}
@@ -252,10 +252,11 @@ func TestCandidates_KindPerDimension(t *testing.T) {
 		noTips bool
 		first  string
 	}{
-		{"taste balance gets an acid", []string{"Spaghetti Carbonara", "Gedünsteter Brokkoli"}, platefit.TasteBalance, []tips.Kind{tips.KindAcid, tips.KindPickle}, nil, false, ""},
+		{"taste balance gets an acid", []string{"Schweinefilet mit Champignons", "Salzkartoffeln", "Gedünsteter Brokkoli"}, platefit.TasteBalance, []tips.Kind{tips.KindAcid, tips.KindPickle}, nil, false, ""},
 		{"texture gets crunch, never lemon or basil", []string{"Grünes Thai-Curry", "Basmatireis", "Limettenspalten"}, platefit.Texture, []tips.Kind{tips.KindCrunch, tips.KindPickle, tips.KindSideSwap}, []string{"Zitronenspalten", "Basilikumblätter", "Frische Minze"}, false, ""},
 		{"heat gets a cool or sharp element", []string{"Grünes Thai-Curry", "Basmatireis", "Gedünsteter Brokkoli"}, platefit.Temperature, []tips.Kind{tips.KindCool, tips.KindAcid, tips.KindPickle}, nil, false, ""},
-		{"fresh gets herbs", []string{"Gemüselasagne", "Ofengemüse"}, platefit.Fresh, []tips.Kind{tips.KindHerbs, tips.KindPickle}, nil, false, ""},
+		{"fresh gets herbs", []string{"Garnelen-Zucchini-Pfanne", "Ofengemüse"}, platefit.Fresh, []tips.Kind{tips.KindHerbs, tips.KindPickle}, nil, false, "Frischer Dill"},
+		{"baked lasagne gets no herb", []string{"Gemüselasagne", "Ofengemüse"}, platefit.Fresh, nil, nil, true, ""},
 		{"colour gets herbs of the cuisine", []string{"Hähnchen-Curry", "Basmatireis", "Gurken-Raita"}, platefit.Colour, []tips.Kind{tips.KindHerbs, tips.KindSideSwap}, nil, false, "Frischer Koriander"},
 		{"cuisine clash gets a cuisine fix", []string{"Hähnchen-Tikka-Masala", "Sushireis", "Kachumber"}, platefit.CuisineFit, []tips.Kind{tips.KindCuisineFix}, nil, false, ""},
 		{"sauce without starch gets a plain starch, never a gratin", []string{"Coq au Vin", "Salade verte"}, platefit.SauceStarch, []tips.Kind{tips.KindSideSwap}, []string{"Gratin Dauphinois"}, false, ""},
@@ -378,7 +379,7 @@ func TestCandidates_SauceStarchSwap(t *testing.T) {
 // is cucumber (a cool element, not a herb).
 func TestCandidates_NoFittingGarnishNoTip(t *testing.T) {
 	lib, _, _ := devCandidates(t)
-	pl := platefit.Plate{Main: lib["Gemüselasagne"], Sides: []platefit.Component{lib["Ofengemüse"]}}
+	pl := platefit.Plate{Main: lib["Garnelen-Zucchini-Pfanne"], Sides: []platefit.Component{lib["Ofengemüse"]}}
 	if top, _ := tips.Top(platefit.Read(pl)); top != platefit.Fresh {
 		t.Fatalf("top %s, want fresh", top)
 	}
@@ -395,7 +396,7 @@ func TestCandidates_NoFittingGarnishNoTip(t *testing.T) {
 func tipPlate() (platefit.Plate, platefit.Component, platefit.Component) {
 	main := platefit.Component{
 		ID: 1, Name: "Omelett", Role: food.RoleMain, Fresh: ptr(false), Starch: ptr(false),
-		Attrs: flavor.Attributes{Cuisine: "neutral", Texture: "crisp", Temperature: "hot", Colour: "beige", Richness: ptr(1), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 2, Acid: 1}},
+		Attrs: flavor.Attributes{Cuisine: "neutral", Kind: "egg", Texture: "crisp", Temperature: "hot", Colour: "beige", Richness: ptr(1), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 2, Acid: 1}},
 	}
 	chives := platefit.Component{
 		ID: 2, Name: "Schnittlauch", Role: food.RoleSideVeg, Leaf: true, Fresh: ptr(true),
@@ -409,13 +410,14 @@ func tipPlate() (platefit.Plate, platefit.Component, platefit.Component) {
 // colour gaps although the top gap is taste balance, and a herb leaf whose
 // taste and texture are unknown is still offered (a herb brings neither); one
 // whose colour is unknown is not (colour is what it brings), nor a cool dip
-// of unknown taste. A lemon, which settles the top gap, ranks first (blind
-// judges: chives on a cheese omelette was real lift; final3 trial: the leaf
-// had no taste, so no tip).
+// of unknown taste. A lemon, though it would settle the top gap, is no
+// classic omelette garnish and is not offered (blind judges: chives on a
+// cheese omelette was real lift; final3 trial: the leaf had no taste, so no
+// tip).
 func TestCandidates_HerbOnRichFlatPlate(t *testing.T) {
 	main := platefit.Component{
 		ID: 1, Name: "Käseomelett", Role: food.RoleMain, Fresh: ptr(false), Starch: ptr(false),
-		Attrs: flavor.Attributes{Cuisine: "neutral", Texture: "crisp", Temperature: "hot", Colour: "beige", Richness: ptr(3), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 2}},
+		Attrs: flavor.Attributes{Cuisine: "neutral", Kind: "egg", Texture: "crisp", Temperature: "hot", Colour: "beige", Richness: ptr(3), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 2}},
 	}
 	rice := platefit.Component{
 		ID: 2, Name: "Reis", Role: food.RoleSideStarch, Fresh: ptr(false), Starch: ptr(true),
@@ -436,8 +438,8 @@ func TestCandidates_HerbOnRichFlatPlate(t *testing.T) {
 	}
 	lemon := platefit.Component{ID: 6, Name: "Zitrone", Leaf: true, Fresh: ptr(true), Attrs: flavor.Attributes{Texture: "soft", Colour: "yellow", Taste: &flavor.Taste{Acid: 3}}}
 	cands = tips.Candidates(pl, []platefit.Component{chives, lemon}, nil)
-	if len(cands) != 2 || cands[0].Food().ID != 6 || cands[0].Dimension != platefit.TasteBalance {
-		t.Fatalf("want the lemon (top gap) first, then chives, got %+v", cands)
+	if len(cands) != 1 || cands[0].Food().ID != 3 {
+		t.Fatalf("want only chives (lemon is no classic omelette garnish), got %+v", cands)
 	}
 }
 

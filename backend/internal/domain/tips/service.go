@@ -460,6 +460,11 @@ func (y *run) picky() bool {
 	return n >= pickyMin
 }
 
+// refuses reports whether the household refuses food: it would rather not
+// get some food again (State.RatherNot, from its disliked and not-eaten
+// plates). It gets no bold garnish then (classicGarnish).
+func (y *run) refuses() bool { return len(y.st.RatherNot) > 0 }
+
 // componentOf is f as plate fit reads it.
 func componentOf(f planning.FoodFacts) platefit.Component {
 	return platefit.Component{ID: f.ID, Name: f.Name, Role: f.Role, Leaf: !f.Composed(), Attrs: f.Attrs, Fresh: f.Fresh, Starch: f.Starch}
@@ -518,7 +523,7 @@ func (y *run) servedThatDay(pp planPlate, foodID int64) bool {
 // pick is the plate's best candidate change that passes the checks, as an
 // unsaved tip.
 func (y *run) pick(pp planPlate, allowed func(Change) bool) (Tip, bool) {
-	for _, ch := range Candidates(pp.fit, y.garnish, y.sides) {
+	for _, ch := range candidates(pp.fit, y.garnish, y.sides, y.refuses()) {
 		if !allowed(ch) || y.servedThatDay(pp, ch.Food().ID) {
 			continue
 		}
@@ -546,7 +551,7 @@ func (y *run) holds(pp planPlate, t Tip) bool {
 	if !y.mainMeal(pp) {
 		return false
 	}
-	for _, ch := range Candidates(pp.fit, y.garnish, y.sides) {
+	for _, ch := range candidates(pp.fit, y.garnish, y.sides, y.refuses()) {
 		if ch.Kind == t.Kind && y.opOf(pp, ch) == t.Op {
 			return !y.servedThatDay(pp, ch.Food().ID) && y.passes(pp, ch, t.Op)
 		}

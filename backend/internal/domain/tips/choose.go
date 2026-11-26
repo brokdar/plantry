@@ -113,6 +113,13 @@ func Top(r platefit.Reading) (platefit.Dimension, bool) {
 // anything new (a second starch or a cuisine clash included). A candidate
 // that would hide a gap behind an unknown attribute is never offered (known).
 func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Change {
+	return candidates(p, garnishes, sides, false)
+}
+
+// candidates is Candidates for a household that refuses food or not: a
+// garnish must be one of the main's classic garnishes (classicGarnish), which
+// leaves the bold ones out for a household that refuses food.
+func candidates(p platefit.Plate, garnishes, sides []platefit.Component, refuses bool) []Change {
 	before := platefit.Read(p)
 	top, ok := Top(before)
 	if !ok {
@@ -121,11 +128,11 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 	raised := before.Raised()
 	clash := slices.Contains(before.Clashes, top)
 	cu := platefit.CuisineOf(p.Main.Attrs.Cuisine)
-	prefs := herbPrefs(p.Main)
-	// rank orders garnish herbs by fit to the plate; any other change is 0.
+	prefs := classicGarnish(p.Main, refuses)
+	// rank orders garnishes by their place in the main's table row; a swap is 0.
 	rank := func(c Change) int {
-		if c.Add != nil && c.Kind == KindHerbs {
-			return herbRank(prefs, *c.Add)
+		if c.Add != nil {
+			return garnishRank(prefs, *c.Add)
 		}
 		return 0
 	}
@@ -162,7 +169,7 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 	}
 	for _, g := range garnishes {
 		k := garnishKind(g)
-		if !g.Leaf || k == "" || onPlate(p, g.ID) || hasElement(p, k) {
+		if !g.Leaf || k == "" || garnishRank(prefs, g) < 0 || onPlate(p, g.ID) || hasElement(p, k) {
 			continue
 		}
 		g := asGarnish(g, k)
@@ -206,9 +213,9 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 		if c := cmp.Compare(len(b.Settles), len(a.Settles)); c != 0 {
 			return c
 		}
-		// A herb is of the palette when it is the plate's preferred one.
+		// A garnish is of the palette when it is the plate's preferred one.
 		pal := func(c Change) bool {
-			if c.Add != nil && c.Kind == KindHerbs {
+			if c.Add != nil {
 				return rank(c) == 0
 			}
 			return inPalette(cu, c.Food())

@@ -144,7 +144,8 @@ func newFixture() *fixture {
 			ID: id, Name: name, Kind: food.KindComposed, Role: food.RoleMain, DietClass: diet.Vegetarian,
 			Macros: nutrition.Macros{Kcal: 600}, NutritionComplete: true, Minutes: 20,
 			Attrs: flavor.Attributes{
-				Cuisine: "italian", Texture: "creamy", Temperature: "hot", Colour: "beige",
+				// fish: a main whose classic garnishes include lemon and parsley.
+				Cuisine: "italian", Kind: "fish", Texture: "creamy", Temperature: "hot", Colour: "beige",
 				Richness: ptr(3), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 2, Umami: 2},
 			},
 		}
@@ -822,5 +823,40 @@ func TestSync_TipSkipsFoodServedElsewhereThatDay(t *testing.T) {
 	}
 	if !slices.ContainsFunc(v.Tips, func(tp tips.Tip) bool { return *tp.PlateID == 1 && tp.Op.FoodID == 702 }) {
 		t.Errorf("no swap to 702 on plate 1: %+v", v.Tips)
+	}
+}
+
+// TestSync_NoBoldGarnishForRefusingHousehold: a curry gets coriander, but not
+// for a household that refuses food (State.RatherNot): blind judges found
+// coriander on a curry for a picky child noise.
+func TestSync_NoBoldGarnishForRefusingHousehold(t *testing.T) {
+	t.Parallel()
+	const corianderID = 902
+	for _, refuses := range []bool{false, true} {
+		f := newFixture()
+		f.st.NoCook = []int64{corianderID}
+		f.st.Foods[corianderID] = planning.FoodFacts{
+			ID: corianderID, Name: "Frischer Koriander", Kind: food.KindLeaf, DietClass: diet.Vegan,
+			Macros: nutrition.Macros{Kcal: 23}, NutritionComplete: true, NoCook: true,
+			Fresh: ptr(true), Attrs: flavor.Attributes{Texture: "soft", Colour: "green", Taste: &flavor.Taste{}},
+		}
+		for id, m := range f.st.Foods {
+			if id != corianderID {
+				m.Attrs.Cuisine, m.Attrs.Kind = "indian", "curry"
+				m.Fresh, m.Attrs.Colour, m.Attrs.Texture, m.Attrs.Taste = ptr(false), "orange", "crunchy", &flavor.Taste{Salt: 2, Umami: 2, Acid: 1}
+				f.st.Foods[id] = m
+			}
+		}
+		if refuses {
+			f.st.RatherNot = map[int64]bool{lemonID: true}
+		}
+		v, err := f.svc().Sync(context.Background(), start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := slices.ContainsFunc(v.Tips, func(tp tips.Tip) bool { return tp.Op.FoodID == corianderID })
+		if got == refuses {
+			t.Errorf("refuses=%v: coriander tip %v, tips %+v", refuses, got, v.Tips)
+		}
 	}
 }
