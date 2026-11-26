@@ -580,6 +580,19 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 			return cmp.Compare(math.Abs(gap-a.kcal), math.Abs(gap-b.kcal))
 		})
 	}
+	if h.floorLift || h.nutritionPass {
+		// The passes that may break a plate's fit (plate fit on) still take a
+		// second protein (tofu beside a lentil curry) only after every other
+		// verified food; the floor lift's refused food stays last of all.
+		on := h.nutritionPass || merged.Settings.PlateFit
+		second := func(c optCand) bool {
+			return on && merged.secondProteinAdd(merged.Plates[c.plate], merged.Foods[c.opt.FoodID])
+		}
+		refused := func(c optCand) bool { return h.floorLift && ratherNot(c) }
+		slices.SortStableFunc(cands, func(a, b optCand) int {
+			return cmp.Or(cmp.Compare(b2f(refused(a)), b2f(refused(b))), cmp.Compare(b2f(second(a)), b2f(second(b))))
+		})
+	}
 	for _, c := range cands {
 		o, ok := y.verify(c, h.in.Target, base, d, band, protein)
 		if !ok || (h.balance && o.CookOccasions > len(y.occasions[dayOf(date)])) {

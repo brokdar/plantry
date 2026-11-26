@@ -124,3 +124,38 @@ func TestFatPctAfter(t *testing.T) {
 	assert.InDelta(t, 30, fatPctAfter(w, 0, 0), 1e-9)
 	assert.InDelta(t, 4650.0/14500*100, fatPctAfter(w, 450, 500), 1e-9)
 }
+
+// CP1 family: the nutrition pass put plain tofu beside a lentil curry. A
+// second protein beside a main that carries its own comes after every other
+// verified food; when it is the only one, nutrition still wins (PLATE-4).
+func TestNutritionFill_SecondProteinLast(t *testing.T) {
+	const nfTofu = int64(43)
+	for _, tt := range []struct {
+		name   string
+		noCook []int64
+		want   int64
+	}{
+		{name: "another food: not the tofu", noCook: []int64{nfTofu, nfApple}, want: nfApple},
+		{name: "the tofu alone: nutrition first", noCook: []int64{nfTofu}, want: nfTofu},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := nutritionFillPlanner(nfApple, false, 2850)
+			h.s.Foods[nfTofu] = FoodFacts{
+				ID: nfTofu, Name: "Tofu (firm)", Kind: food.KindLeaf, NoCook: true, NutritionComplete: true,
+				DietClass: "vegan", ServingG: 170, Macros: nutrition.Macros{Kcal: 144, Protein: 16, Fat: 8, Carbs: 2},
+			}
+			for _, p := range h.prop.Plates {
+				if p.SlotID != bfBreakfast {
+					m := h.s.Foods[p.Components[0].FoodID]
+					m.Name, m.Groups.LegumeG = "Lentil curry", 150
+					h.s.Foods[m.ID] = m
+				}
+			}
+			h.s.NoCook = tt.noCook
+			h.in.State = h.s
+			h.nutritionFill()
+			require.NotEmpty(t, fillChoices(h))
+			assert.Equal(t, []int64{tt.want}, fillChoices(h)[0].Foods)
+		})
+	}
+}
