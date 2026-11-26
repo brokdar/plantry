@@ -123,7 +123,10 @@ func (f *fakePlates) SwapComponent(_ context.Context, componentID, newFoodID int
 
 var start = time.Date(2026, 11, 28, 0, 0, 0, 0, time.UTC) // a Saturday
 
-const lemonID = 900
+const (
+	lemonID = 900
+	zesteID = 901 // a second acid, for the plates the lemon's repeat cap leaves
+)
 
 // fixture is a window of four dinner plates, each a different rich main
 // (taste balance raised) with no side, and a lemon garnish that settles it.
@@ -156,8 +159,13 @@ func newFixture() *fixture {
 				Macros: nutrition.Macros{Kcal: 30}, NutritionComplete: true, NoCook: true,
 				Attrs: flavor.Attributes{Texture: "soft", Colour: "beige", Taste: &flavor.Taste{Acid: 3}},
 			},
+			zesteID: {
+				ID: zesteID, Name: "Zitronenzeste", Kind: food.KindLeaf, DietClass: diet.Vegan,
+				Macros: nutrition.Macros{Kcal: 30}, NutritionComplete: true, NoCook: true,
+				Attrs: flavor.Attributes{Texture: "soft", Colour: "beige", Taste: &flavor.Taste{Acid: 3}},
+			},
 		},
-		NoCook:  []int64{lemonID},
+		NoCook:  []int64{lemonID, zesteID},
 		Profile: planning.Profile{DietType: profile.DietVegetarian, HouseholdPortions: 1},
 	}
 	for i := range 4 {
@@ -254,7 +262,7 @@ func TestSync_ChecksBeforeShowing(t *testing.T) {
 	t.Run("never item", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture()
-		f.never[lemonID] = true
+		f.never[lemonID], f.never[zesteID] = true, true
 		v, _ := f.svc().Sync(context.Background(), start)
 		if len(v.Tips) != 0 {
 			t.Fatalf("never item tipped: %+v", v.Tips)
@@ -263,9 +271,11 @@ func TestSync_ChecksBeforeShowing(t *testing.T) {
 	t.Run("diet", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture()
-		l := f.st.Foods[lemonID]
-		l.DietClass = diet.Omnivore
-		f.st.Foods[lemonID] = l
+		for _, id := range []int64{lemonID, zesteID} {
+			l := f.st.Foods[id]
+			l.DietClass = diet.Omnivore
+			f.st.Foods[id] = l
+		}
 		v, _ := f.svc().Sync(context.Background(), start)
 		if len(v.Tips) != 0 {
 			t.Fatalf("diet violation tipped: %+v", v.Tips)
@@ -687,4 +697,54 @@ func TestSync_SideSwapKeepsBatchCookDay(t *testing.T) {
 			t.Fatalf("op %+v, want the ciabatta (component 31) swapped", op)
 		}
 	})
+}
+
+// TestSync_SameFoodAtMostTwicePerKind: with one lemon in the library, four
+// plates that all want it get two tips (rule 3).
+func TestSync_SameFoodAtMostTwicePerKind(t *testing.T) {
+	t.Parallel()
+	f := newFixture()
+	f.never[zesteID] = true
+	v, err := f.svc().Sync(context.Background(), start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Tips) != 2 {
+		t.Fatalf("%d tips, want 2: %+v", len(v.Tips), v.Tips)
+	}
+}
+
+// TestSync_RatherNotMeansNoSideSwap: a household with refused sides gets no
+// side-swap tip, garnish only (rule 1).
+func TestSync_RatherNotMeansNoSideSwap(t *testing.T) {
+	t.Parallel()
+	build := func(ratherNot bool) []tips.Tip {
+		f := newFixture()
+		side := func(id int64, name string, role food.Role, cuisine string, starch bool) planning.FoodFacts {
+			return planning.FoodFacts{
+				ID: id, Name: name, Kind: food.KindComposed, Role: role, DietClass: diet.Vegan, Starch: ptr(starch),
+				Macros: nutrition.Macros{Kcal: 150}, NutritionComplete: true, Minutes: 10, Fresh: ptr(false),
+				Attrs: flavor.Attributes{Cuisine: cuisine, Texture: "soft", Temperature: "hot", Colour: "white", Richness: ptr(0), Saucy: ptr(false), Taste: &flavor.Taste{}},
+			}
+		}
+		f.st.Foods[700] = side(700, "Thai-Curryreis", food.RoleSideStarch, "thai", true)
+		f.st.Foods[701] = side(701, "Gemüse", food.RoleSideVeg, "italian", false)
+		f.st.NoCook = nil
+		f.st.Plates = f.st.Plates[:1]
+		f.st.Plates[0].Components = append(f.st.Plates[0].Components, planning.Component{ID: 20, FoodID: 700, Position: plate.PositionSide})
+		if ratherNot {
+			f.st.RatherNot = map[int64]bool{999: true}
+		}
+		v, err := f.svc().Sync(context.Background(), start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v.Tips
+	}
+	if got := build(false); len(got) != 1 || got[0].Op.Action != "swap" {
+		t.Fatalf("fixture raises no swappable clash: %+v", got)
+	}
+	if got := build(true); len(got) != 0 {
+		t.Fatalf("side swap tipped despite refusals: %+v", got)
+	}
 }

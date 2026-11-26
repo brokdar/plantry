@@ -118,6 +118,7 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 		return nil
 	}
 	raised := before.Raised()
+	clash := slices.Contains(before.Clashes, top)
 	cu := platefit.CuisineOf(p.Main.Attrs.Cuisine)
 	prefs := herbPrefs(p.Main)
 	// rank orders garnish herbs by fit to the plate; any other change is 0.
@@ -152,9 +153,15 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 		ch.Kind, ch.Dimension = kinds[ki], top
 		out = append(out, ch)
 	}
+	// A garnish is for a small plate without a clash (a clash needs a
+	// change to the plate, not a topping), and never repeats an element the
+	// plate already has.
+	if len(p.Sides)+1 > maxGarnishComponents || len(before.Clashes) > 0 {
+		garnishes = nil
+	}
 	for _, g := range garnishes {
 		k := garnishKind(g)
-		if !g.Leaf || k == "" || onPlate(p, g.ID) || !known(p, -1, g) {
+		if !g.Leaf || k == "" || onPlate(p, g.ID) || hasElement(p, k) || !known(p, -1, g) {
 			continue
 		}
 		next := platefit.Plate{Main: p.Main, Sides: append(slices.Clone(p.Sides), g)}
@@ -165,6 +172,9 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 			continue
 		}
 		for _, s := range sides {
+			if !swapReason(clash, top, cu, s) {
+				continue
+			}
 			if s.Leaf || !slices.Contains(sideRoles, s.Role) || onPlate(p, s.ID) || !known(p, i, s) || !fits(p, i, s, slices.Contains(raised, platefit.SauceStarch)) {
 				continue
 			}
@@ -205,6 +215,25 @@ func Candidates(p platefit.Plate, garnishes, sides []platefit.Component) []Chang
 		return cmp.Compare(a.Food().Name, b.Food().Name)
 	})
 	return out
+}
+
+// maxGarnishComponents is the largest plate (main and sides) a garnish tip
+// goes on: a busy plate gets no more on it.
+const maxGarnishComponents = 3
+
+// hasElement reports whether a leaf of garnish kind k is already on the plate.
+func hasElement(p platefit.Plate, k Kind) bool {
+	return slices.ContainsFunc(p.Sides, func(c platefit.Component) bool { return c.Leaf && garnishKind(c) == k })
+}
+
+// swapReason is the only grounds for a side swap: a raised clash, or a
+// sauce-starch gap that the starch of the main's cuisine palette fills. A
+// colour, freshness, texture or pairing gap alone is a garnish's job.
+func swapReason(clash bool, top platefit.Dimension, cu platefit.Cuisine, s platefit.Component) bool {
+	if clash {
+		return true
+	}
+	return top == platefit.SauceStarch && starch(s) && inPalette(cu, s)
 }
 
 // fits holds the culinary checks plate fit does not read for a side s

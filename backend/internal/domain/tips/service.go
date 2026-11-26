@@ -206,8 +206,10 @@ func (s *Service) Sync(ctx context.Context, date time.Time) (View, error) {
 	}
 	now := s.d.Now()
 	cooled := map[string]bool{} // recipe/kind dismissed in this window
+	used := map[string]int{}    // kind/food tipped in this window, in any state
 	var live, ended []Tip
 	for _, t := range stored {
+		used[foodKey(t.Kind, t.Op.FoodID)]++
 		pp, ok := y.plateOf(t.PlateID)
 		switch t.State {
 		case StateDismissed:
@@ -256,7 +258,9 @@ func (s *Service) Sync(ctx context.Context, date time.Time) (View, error) {
 		if tipped[id] || (pp.batch != 0 && batches[pp.batch]) {
 			continue
 		}
-		t, ok := y.pick(pp, func(k Kind) bool { return !y.silenced[k] && !cooled[cooldownKey(pp.mainID, k)] })
+		t, ok := y.pick(pp, func(c Change) bool {
+			return !y.silenced[c.Kind] && !cooled[cooldownKey(pp.mainID, c.Kind)] && used[foodKey(c.Kind, c.Food().ID)] < maxRepeat
+		})
 		if !ok {
 			continue
 		}
@@ -265,6 +269,7 @@ func (s *Service) Sync(ctx context.Context, date time.Time) (View, error) {
 			return View{}, err
 		}
 		live = append(live, t)
+		used[foodKey(t.Kind, t.Op.FoodID)]++
 		tipped[id] = true
 		if pp.batch != 0 {
 			batches[pp.batch] = true
@@ -350,6 +355,12 @@ func (y *run) slotName(pp planPlate) string {
 	return strings.TrimPrefix(y.st.SlotNames[pp.p.SlotID], "slot.")
 }
 
+// maxRepeat is how often one kind suggests the same food within a window: a
+// tip that says the same thing again is noise.
+const maxRepeat = 2
+
+func foodKey(k Kind, food int64) string { return fmt.Sprintf("%s/%d", k, food) }
+
 func cooldownKey(recipe int64, k Kind) string { return fmt.Sprintf("%d/%s", recipe, k) }
 
 func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
@@ -397,7 +408,8 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 		f := y.st.Foods[id]
 		// A food the household would rather not get beside a meal
 		// (State.RatherNot) is never suggested.
-		if f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] && !y.st.RatherNot[id] {
+		// A household with refusals gets no side swap, garnish only.
+		if len(y.st.RatherNot) == 0 && f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] && !y.st.RatherNot[id] {
 			y.sides = append(y.sides, componentOf(f))
 		}
 	}
@@ -466,9 +478,9 @@ func onState(p planning.Plate, foodID int64) bool {
 
 // pick is the plate's best candidate change that passes the checks, as an
 // unsaved tip.
-func (y *run) pick(pp planPlate, allowed func(Kind) bool) (Tip, bool) {
+func (y *run) pick(pp planPlate, allowed func(Change) bool) (Tip, bool) {
 	for _, ch := range Candidates(pp.fit, y.garnish, y.sides) {
-		if !allowed(ch.Kind) {
+		if !allowed(ch) {
 			continue
 		}
 		op := y.opOf(pp, ch)

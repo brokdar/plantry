@@ -308,8 +308,9 @@ func TestCandidates_NoSecondStarch(t *testing.T) {
 			t.Fatal("plate raises nothing")
 		}
 		cands := tips.Candidates(pl, nil, []platefit.Component{rice, carrots})
-		if len(cands) == 0 || cands[0].Food().ID != carrots.ID {
-			t.Errorf("starch %v: want the carrots, got %+v", s.Starch, cands)
+		// Colour alone is a garnish's job, not a swap's (rule 1).
+		if len(cands) != 0 {
+			t.Errorf("starch %v: colour gap alone swapped: %+v", s.Starch, cands)
 		}
 		for _, c := range cands {
 			if c.Food().ID == rice.ID {
@@ -335,5 +336,46 @@ func TestCandidates_NoFittingGarnishNoTip(t *testing.T) {
 	c := tips.Candidates(pl, []platefit.Component{cucumber, lib["Frische Petersilie"]}, nil)
 	if len(c) == 0 || c[0].Kind != tips.KindHerbs || c[0].Food().Name != "Frische Petersilie" {
 		t.Fatalf("want parsley as fresh herbs, got %+v", c)
+	}
+}
+
+func tipPlate() (platefit.Plate, platefit.Component, platefit.Component) {
+	main := platefit.Component{
+		ID: 1, Name: "Omelett", Role: food.RoleMain, Fresh: ptr(false), Starch: ptr(false),
+		Attrs: flavor.Attributes{Cuisine: "neutral", Texture: "crisp", Temperature: "hot", Colour: "beige", Richness: ptr(1), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 2, Acid: 1}},
+	}
+	chives := platefit.Component{
+		ID: 2, Name: "Schnittlauch", Role: food.RoleSideVeg, Leaf: true, Fresh: ptr(true),
+		Attrs: flavor.Attributes{Texture: "soft", Colour: "green", Taste: &flavor.Taste{}},
+	}
+	return platefit.Plate{Main: main}, chives, platefit.Component{}
+}
+
+// TestCandidates_GarnishRules: a garnish goes only on a plate of at most three
+// components and never when the plate already has that element.
+func TestCandidates_GarnishRules(t *testing.T) {
+	p, chives, _ := tipPlate()
+	if len(tips.Candidates(p, []platefit.Component{chives}, nil)) == 0 {
+		t.Fatal("a bare plate gets no garnish")
+	}
+	busy := p
+	for i := range 3 {
+		s := chives
+		s.ID, s.Name, s.Leaf = int64(10+i), "Beilage", false
+		busy.Sides = append(busy.Sides, s)
+	}
+	for _, c := range tips.Candidates(busy, []platefit.Component{chives}, nil) {
+		if c.Add != nil {
+			t.Errorf("garnish on a plate of %d components: %+v", len(busy.Sides)+1, c)
+		}
+	}
+	has := p
+	has.Sides = []platefit.Component{chives}
+	other := chives
+	other.ID, other.Name = 3, "Petersilie"
+	for _, c := range tips.Candidates(has, []platefit.Component{other}, nil) {
+		if c.Add != nil && c.Kind == tips.KindHerbs {
+			t.Errorf("herbs added to a plate with herbs: %+v", c)
+		}
 	}
 }
