@@ -468,7 +468,7 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 			}
 		}
 		for _, c := range cands {
-			if _, _, r := merged.plateFitOf(merged.Plates[c.plate], merged.Foods[c.opt.FoodID]); r > 0 {
+			if _, _, r := merged.plateFitOf(merged.Plates[c.plate], merged.Foods[c.opt.FoodID], false); r > 0 {
 				raised[[2]int64{int64(c.plate), c.opt.FoodID}] = r
 			}
 		}

@@ -125,7 +125,7 @@ func varyPlate(base State, t Target, in Proposal, i int, served, skip map[int64]
 		if !merged.addFits(rest, c.food, slotName(merged, p.SlotID)) {
 			continue // no fruit, muesli or second protein as a dinner's side
 		}
-		on, clash, raised := merged.plateFitOf(rest, c.food)
+		on, clash, raised := merged.plateFitOf(rest, c.food, false)
 		if on && clash {
 			continue
 		}

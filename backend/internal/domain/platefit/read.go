@@ -2,6 +2,7 @@ package platefit
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -207,7 +208,7 @@ func Read(p Plate) Reading {
 	}) == no, false)
 	cold := anyOf(ds, hasTemperature, isCold)
 	gap(Temperature, maxHeat >= cu.Heat && cold == no, sharp)
-	clash(CuisineFit, !groupsMix(ds))
+	clash(CuisineFit, !groupsMix(ds) || slices.Contains(riceCuisines, cu.Name) && slices.ContainsFunc(dishes(p.Sides), potatoStarch))
 	gap(Pairing, pairingGap(cu, p, cold), false)
 	saucy := p.Main.Attrs.Saucy != nil && *p.Main.Attrs.Saucy
 	gap(SauceStarch, saucy && anyOf(ds, knowsStarch, isStarch) == no, false)
@@ -262,6 +263,24 @@ func groupsMix(cs []Component) bool {
 		}
 	}
 	return true
+}
+
+// riceCuisines eat their dishes with rice or noodles: a potato side
+// (hasselback, boiled potatoes) beside a stir-fry or curry of theirs is a
+// cuisine clash although potatoes have no cuisine of their own.
+var riceCuisines = []string{"chinese", "japanese", "thai"}
+
+// potatoStarch reports whether starch side c is potatoes (by name or hero).
+func potatoStarch(c Component) bool {
+	if !isStarch(c) {
+		return false
+	}
+	for _, n := range append([]string{c.Name}, c.Attrs.Heroes...) {
+		if n := strings.ToLower(n); strings.Contains(n, "potato") || strings.Contains(n, "kartoffel") {
+			return true
+		}
+	}
+	return false
 }
 
 // pairingGap applies the main cuisine's pairing style. Contrast: nothing cool

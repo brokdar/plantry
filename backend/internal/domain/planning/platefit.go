@@ -99,9 +99,36 @@ func (s State) plateFitOn(mainID int64) bool {
 }
 
 // sideFit reads the plate of main with the sides others plus cand: clash
-// when cand adds a clash the plate did not have, raised the count of the
-// plate's raised gaps with cand read by its known values (lower is better).
+// when cand adds a clash the plate did not have or is a second protein
+// (secondProtein), raised the count of the plate's raised gaps with cand
+// read by its known values (lower is better).
 func (s State) sideFit(mainID int64, others []int64, cand FoodFacts) (clash bool, raised int) {
+	clash, raised = s.sideRead(mainID, others, cand)
+	return clash || s.secondProtein(mainID, others, cand), raised
+}
+
+// secondProtein reports whether side cand is a protein of its own (a protein
+// side, meat, fish, tofu or an egg dish; a bean or lentil side is a
+// vegetable here) on a plate whose main or
+// other sides already carry one (carriesProtein): marinated tofu beside a
+// ragù or chicken legs is not a meal anyone cooks (the filler rule, for
+// cooked sides).
+func (s State) secondProtein(mainID int64, others []int64, cand FoodFacts) bool {
+	name := diet.Fold(cand.Name)
+	if !(cand.Role == food.RoleSideProtein || cand.Groups.MeatG+cand.Groups.FishG >= 30 ||
+		containsAny(name, proteinWords) || hasWholeWord(name, eggWords)) {
+		return false
+	}
+	for _, id := range append([]int64{mainID}, others...) {
+		if g, ok := s.Foods[id]; ok && id != cand.ID && carriesProtein(g) {
+			return true
+		}
+	}
+	return false
+}
+
+// sideRead is sideFit by the plate fit reading alone.
+func (s State) sideRead(mainID int64, others []int64, cand FoodFacts) (clash bool, raised int) {
 	pl := platefit.Plate{Main: plateComponent(s.Foods[mainID])}
 	for _, id := range others {
 		if f, ok := s.Foods[id]; ok && id != mainID && id != cand.ID {
@@ -127,16 +154,28 @@ func (s State) sideFit(mainID int64, others []int64, cand FoodFacts) (clash bool
 	return clash, raised
 }
 
-// plateFitOf is sideFit for cand added to the merged plate p.
-func (s State) plateFitOf(p Plate, cand FoodFacts) (on, clash bool, raised int) {
+// plateFitOf is sideFit for cand added to the merged plate p; with lift (the
+// H9 floor lift, when nothing else lifts the day) a second protein is no
+// clash.
+func (s State) plateFitOf(p Plate, cand FoodFacts, lift bool) (on, clash bool, raised int) {
 	mainID := s.mainOf(p)
 	if !s.plateFitOn(mainID) {
 		return false, false, 0
 	}
-	others := make([]int64, 0, len(p.Components))
-	for _, c := range p.Components {
-		others = append(others, c.FoodID)
+	others := plateFoods(p)
+	if lift {
+		clash, raised = s.sideRead(mainID, others, cand)
+	} else {
+		clash, raised = s.sideFit(mainID, others, cand)
 	}
-	clash, raised = s.sideFit(mainID, others, cand)
 	return true, clash, raised
+}
+
+// plateFoods are the food IDs of plate p's components.
+func plateFoods(p Plate) []int64 {
+	out := make([]int64, 0, len(p.Components))
+	for _, c := range p.Components {
+		out = append(out, c.FoodID)
+	}
+	return out
 }

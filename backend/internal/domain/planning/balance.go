@@ -268,6 +268,7 @@ func (h *planner) addSide(date time.Time, limit float64) {
 		c      altCand
 		a      Alternative
 		raised int
+		prot   bool // a second protein: only the floor lift's last resort
 	}
 	var opts []opt
 	for _, pi := range y.editablePlates(date) {
@@ -284,7 +285,7 @@ func (h *planner) addSide(date time.Time, limit float64) {
 			if h.s.Settings.PlateFit && !h.floorLift && merged.sidesBeside(p, f) >= maxPlateSides {
 				continue // no clutter: the main and at most two sides or add-ons
 			}
-			on, clash, raised := merged.plateFitOf(p, f)
+			on, clash, raised := merged.plateFitOf(p, f, h.floorLift)
 			if on && clash {
 				continue
 			}
@@ -293,7 +294,8 @@ func (h *planner) addSide(date time.Time, limit float64) {
 				math.Abs(dk.Adjusted-a.DayKcal) >= math.Abs(dk.Adjusted-dk.Kcal) {
 				continue
 			}
-			opts = append(opts, opt{pi, c, a, raised})
+			prot := on && h.floorLift && merged.secondProtein(merged.mainOf(p), plateFoods(p), f)
+			opts = append(opts, opt{pi, c, a, raised, prot})
 		}
 	}
 	slices.SortStableFunc(opts, func(a, b opt) int {
@@ -301,7 +303,9 @@ func (h *planner) addSide(date time.Time, limit float64) {
 		// the household would rather not get is only an option for the
 		// floor lift (filtered above), after every other option, before
 		// plate fit.
-		if c := boolCmp(h.s.RatherNot[a.c.food.ID], h.s.RatherNot[b.c.food.ID]); c != 0 {
+		// A second protein (the floor lift only) comes after every other
+		// side the household takes.
+		if c := cmp.Or(boolCmp(h.s.RatherNot[a.c.food.ID], h.s.RatherNot[b.c.food.ID]), boolCmp(a.prot, b.prot)); c != 0 {
 			return c
 		}
 		if h.s.Settings.PlateFit {
