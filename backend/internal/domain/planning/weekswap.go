@@ -547,7 +547,7 @@ func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instructi
 				if !ok {
 					continue
 				}
-				after := Evaluate(Merge(base, t, next), t)
+				after := evaluateLean(Merge(base, t, next), t)
 				if !guardKeeps(ev, after, hard, soft, mode) {
 					continue
 				}
@@ -659,7 +659,7 @@ func (x *index) swapBatch(base State, t Target, in Proposal, before Evaluation, 
 				clash, _ = x.s.sideFit(f.ID, others, x.s.Foods[in.Sessions[sk].FoodID])
 			}
 			if !clash {
-				kept = guardKeeps(before, Evaluate(Merge(base, t, next), t), hard, soft, mode)
+				kept = guardKeeps(before, evaluateLean(Merge(base, t, next), t), hard, soft, mode)
 			}
 			// PLATE-5: the batch's side is re-picked for the new main when it
 			// clashes or leaves the plates short.
@@ -674,7 +674,7 @@ func (x *index) swapBatch(base State, t Target, in Proposal, before Evaluation, 
 							}
 						}
 					}
-					kept = guardKeeps(before, Evaluate(Merge(base, t, next), t), hard, soft, mode)
+					kept = guardKeeps(before, evaluateLean(Merge(base, t, next), t), hard, soft, mode)
 				}
 			}
 			if !kept {
