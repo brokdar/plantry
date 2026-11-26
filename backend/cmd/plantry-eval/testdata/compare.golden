@@ -1,6 +1,6 @@
 Report 0123456789ab llm/p1-b/fake
 scenario           runs  ok  violations  coverage  macro_daily_pct  distinct  repeats  waste  tokens_in  cost_usd  latency_ms
-family_daily       1     1   0           1         34.417           9         0        0      4488       -         0
+family_daily       1     1   0           1         34.42            9         0        0      4488       -         0
 away_thu_fri       1     1   0           1         -                0         0        0      0          -         0
 unreachable_floor  1     0   0           -         -                -         -        -      13638      -         0
 FAIL unreachable_floor run 1: no_hard_violations status error error.plan.hard_rule_open, 0 violations
@@ -36,8 +36,8 @@ family_daily
   repair_attempts     0         0        0
   plates              16        16       0
   coverage            1         1        0
-  macro_daily_pct     34.417    34.417   0
-  macro_weekly_pct    28.462    28.462   0
+  macro_daily_pct     34.42     34.42    0
+  macro_weekly_pct    28.385    28.385   0
   cook_occasions      9         9        0
   days_with_prepared  0         0        0
   variety_distinct    9         9        0

@@ -36,6 +36,10 @@ func TestFreshStarch(t *testing.T) {
 		{"a salad is fresh", recipe("Gurkensalat", food.RoleSideVeg), lines("Gurken", 150.0, "Joghurt", 50.0), b(true), b(false)},
 		{"no ingredients: unknown", recipe("Mystery", food.RoleMain), nil, nil, nil},
 		{"a raw leaf by name", leaf("Gurken"), nil, b(true), nil},
+		{"a raw pepper leaf", leaf("Red Bell Pepper"), nil, b(true), nil},
+		{"raw carrot and tomato leaves", leaf("Karotten"), nil, b(true), nil},
+		{"tomato in a sauce is no fresh", recipe("Tomatensauce", food.RoleMain), lines("Tomaten", 200.0), b(false), b(false)},
+		{"steamed broccoli is not fresh", leaf("Steamed Broccoli"), nil, b(false), nil},
 		{"bread is not fresh", leaf("Brot"), nil, b(false), nil},
 	}
 	for _, tt := range tests {
