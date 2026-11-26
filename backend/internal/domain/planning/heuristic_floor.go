@@ -782,12 +782,18 @@ func (h *planner) topUpDaySkip(date time.Time, need float64, roundUp, leanOnly b
 // fullMeals are the slots of date's proposed full meals (lunch, dinner; not
 // light) whose kcal per eater reach their share of the day (kcalShare), when
 // another full meal of the day is under its share; nil with plate fit off,
-// during the safety floor lift, or when no meal of the day is under.
+// during the safety floor lift, on a day under its protein target, or when
+// no meal of the day is under.
 func (h *planner) fullMeals(date time.Time) map[int64]bool {
 	if !h.s.Settings.PlateFit || h.floorLift {
 		return nil
 	}
 	ev := evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target)
+	for _, d := range ev.Days {
+		if d.Date == date.Format(time.DateOnly) && d.ProteinTargetG > 0 && d.ProteinG < d.ProteinTargetG {
+			return nil // protein before balance: the protein-rich meal may grow
+		}
+	}
 	full, under := map[int64]bool{}, false
 	for _, p := range h.prop.Plates {
 		if dayOf(p.Date) != dayOf(date) || h.x.mealOf(p.SlotID) != mealFull || h.s.lightMeal(p.Date, p.SlotID) {
