@@ -190,16 +190,21 @@ func traitsOf(name string) traits {
 func isAcid(name string) bool { return traitsOf(name).acid }
 
 // colourOf is the colour family of the ingredients by weight: the dominant
-// colour; a red fifth with creamy liquid of at least a third of the red
-// (tomato and cream or coconut) reads orange; two distinct colours each over mixedShare
+// colour (a raw salad's creamy dressing does not count); a red fifth with
+// creamy liquid of at least a third of the red (tomato and cream or coconut)
+// reads orange; two distinct colours each over mixedShare
 // of the coloured weight read mixed.
 func colourOf(in Input) string {
 	weight := map[string]float64{}
 	var total, cream float64
+	salad := in.any(func(name string) bool { return traitsOf(name).raw })
 	for _, l := range in.Lines {
 		t := traitsOf(l.Name)
 		if t.cream {
 			cream += l.Grams
+			if salad {
+				continue // a raw salad's creamy dressing does not colour it
+			}
 		}
 		c := t.colour
 		if c == "" {

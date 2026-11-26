@@ -144,7 +144,8 @@ func newFixture() *fixture {
 			ID: id, Name: name, Kind: food.KindComposed, Role: food.RoleMain, DietClass: diet.Vegetarian,
 			Macros: nutrition.Macros{Kcal: 600}, NutritionComplete: true, Minutes: 20,
 			Attrs: flavor.Attributes{
-				Cuisine: "italian", Texture: "creamy", Temperature: "hot", Colour: "beige",
+				// fish: a main whose classic garnishes include lemon and parsley.
+				Cuisine: "italian", Kind: "fish", Texture: "creamy", Temperature: "hot", Colour: "beige",
 				Richness: ptr(3), Saucy: ptr(false), Taste: &flavor.Taste{Salt: 2, Umami: 2},
 			},
 		}
@@ -714,11 +715,13 @@ func TestSync_SameFoodAtMostTwicePerKind(t *testing.T) {
 	}
 }
 
-// TestSync_RatherNotMeansNoSideSwap: a household with refused sides gets no
-// side-swap tip, garnish only (rule 1).
+// TestSync_RatherNotMeansNoSideSwap: a household refusing several side
+// dishes (picky) gets no side swap; one refused side dish only keeps that
+// side out, so a swap is still offered (the explorer's one refused side
+// turned every swap off for the rest of the trial).
 func TestSync_RatherNotMeansNoSideSwap(t *testing.T) {
 	t.Parallel()
-	build := func(ratherNot bool) []tips.Tip {
+	build := func(refused ...int64) []tips.Tip {
 		f := newFixture()
 		side := func(id int64, name string, role food.Role, cuisine string, starch bool) planning.FoodFacts {
 			return planning.FoodFacts{
@@ -729,11 +732,14 @@ func TestSync_RatherNotMeansNoSideSwap(t *testing.T) {
 		}
 		f.st.Foods[700] = side(700, "Thai-Curryreis", food.RoleSideStarch, "thai", true)
 		f.st.Foods[701] = side(701, "Gemüse", food.RoleSideVeg, "italian", false)
+		f.st.Foods[702] = side(702, "Bohnensalat", food.RoleSideVeg, "neutral", false)
+		f.st.Foods[703] = side(703, "Rotkohl", food.RoleSideVeg, "german", false)
 		f.st.NoCook = nil
 		f.st.Plates = f.st.Plates[:1]
 		f.st.Plates[0].Components = append(f.st.Plates[0].Components, planning.Component{ID: 20, FoodID: 700, Position: plate.PositionSide})
-		if ratherNot {
-			f.st.RatherNot = map[int64]bool{999: true}
+		f.st.RatherNot = map[int64]bool{999: true} // a refused leaf does not count
+		for _, id := range refused {
+			f.st.RatherNot[id] = true
 		}
 		v, err := f.svc().Sync(context.Background(), start)
 		if err != nil {
@@ -741,11 +747,14 @@ func TestSync_RatherNotMeansNoSideSwap(t *testing.T) {
 		}
 		return v.Tips
 	}
-	if got := build(false); len(got) != 1 || got[0].Op.Action != "swap" {
+	if got := build(); len(got) != 1 || got[0].Op.Action != "swap" {
 		t.Fatalf("fixture raises no swappable clash: %+v", got)
 	}
-	if got := build(true); len(got) != 0 {
-		t.Fatalf("side swap tipped despite refusals: %+v", got)
+	if got := build(702); len(got) != 1 || got[0].Op.Action != "swap" || got[0].Op.FoodID != 701 {
+		t.Fatalf("one refused side dish: want the swap to Gemüse, got %+v", got)
+	}
+	if got := build(702, 703); len(got) != 0 {
+		t.Fatalf("side swap tipped to a picky household: %+v", got)
 	}
 }
 
@@ -814,5 +823,40 @@ func TestSync_TipSkipsFoodServedElsewhereThatDay(t *testing.T) {
 	}
 	if !slices.ContainsFunc(v.Tips, func(tp tips.Tip) bool { return *tp.PlateID == 1 && tp.Op.FoodID == 702 }) {
 		t.Errorf("no swap to 702 on plate 1: %+v", v.Tips)
+	}
+}
+
+// TestSync_NoBoldGarnishForRefusingHousehold: a curry gets coriander, but not
+// for a household that refuses food (State.RatherNot): blind judges found
+// coriander on a curry for a picky child noise.
+func TestSync_NoBoldGarnishForRefusingHousehold(t *testing.T) {
+	t.Parallel()
+	const corianderID = 902
+	for _, refuses := range []bool{false, true} {
+		f := newFixture()
+		f.st.NoCook = []int64{corianderID}
+		f.st.Foods[corianderID] = planning.FoodFacts{
+			ID: corianderID, Name: "Frischer Koriander", Kind: food.KindLeaf, DietClass: diet.Vegan,
+			Macros: nutrition.Macros{Kcal: 23}, NutritionComplete: true, NoCook: true,
+			Fresh: ptr(true), Attrs: flavor.Attributes{Texture: "soft", Colour: "green", Taste: &flavor.Taste{}},
+		}
+		for id, m := range f.st.Foods {
+			if id != corianderID {
+				m.Attrs.Cuisine, m.Attrs.Kind = "indian", "curry"
+				m.Fresh, m.Attrs.Colour, m.Attrs.Texture, m.Attrs.Taste = ptr(false), "orange", "crunchy", &flavor.Taste{Salt: 2, Umami: 2, Acid: 1}
+				f.st.Foods[id] = m
+			}
+		}
+		if refuses {
+			f.st.RatherNot = map[int64]bool{lemonID: true}
+		}
+		v, err := f.svc().Sync(context.Background(), start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := slices.ContainsFunc(v.Tips, func(tp tips.Tip) bool { return tp.Op.FoodID == corianderID })
+		if got == refuses {
+			t.Errorf("refuses=%v: coriander tip %v, tips %+v", refuses, got, v.Tips)
+		}
 	}
 }

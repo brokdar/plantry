@@ -541,6 +541,50 @@ func TestCheck_H8(t *testing.T) {
 	})
 }
 
+// H8 relaxes when the meat-day limit (H5) leaves fewer unrepeated mains than
+// cooks: an omnivore recipe counts only as often as the week's meat days can
+// cook it, so the planner is not held to repeats it cannot avoid
+// (cuisine-explorer week 7 failed with hard_rule_open).
+func TestCheck_H8RelaxesWhenTheMeatLimitRulesOutTheUnrepeatedMains(t *testing.T) {
+	state := func(limit *int) planning.State {
+		s := baseState()
+		last := day(sat).AddDate(0, 0, -7)
+		for id, f := range s.Foods {
+			f.LastEaten = &last
+			s.Foods[id] = f
+		}
+		for i := range int64(3) {
+			s.Foods[100+i] = recipe(100+i, "Meat main", food.RoleMain, "omnivore", 500)
+		}
+		s.Profile.MeatDaysPerWeekMax = limit
+		return s
+	}
+	prop := planning.Proposal{Sessions: []planning.ProposedSession{
+		session("s1", curry, sat, dinner, 1), session("s2", soup, sun, dinner, 1), session("s3", 100, mon, dinner, 1),
+	}}
+	for _, x := range prop.Sessions {
+		prop.Plates = append(prop.Plates, pplate(x.CookDate.Format(time.DateOnly), x.CookSlotID, onKey(x.FoodID, x.Key)))
+	}
+	for _, tc := range []struct {
+		name  string
+		limit *int
+		want  string
+	}{
+		{"no limit: the meat mains are picks", nil, planning.CodeVarietyRepeat},
+		{"one meat day cooks one of them", ptr(1), planning.CodeVarietyRelaxed},
+		{"three meat days cook all of them", ptr(3), planning.CodeVarietyRepeat},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := state(tc.limit)
+			got := only(check(s, windowTarget(s), prop), "H8")
+			require.Len(t, got, 2, "curry and soup repeat")
+			for _, is := range got {
+				assert.Equal(t, tc.want, is.Code)
+			}
+		})
+	}
+}
+
 func TestCheck_H8RelaxedIsAWarning(t *testing.T) {
 	s := baseState()
 	last := day(sat).AddDate(0, 0, -7)

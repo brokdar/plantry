@@ -404,12 +404,14 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 		ids = append(ids, id)
 	}
 	slices.Sort(ids)
+	picky := y.picky()
 	for _, id := range ids {
 		f := y.st.Foods[id]
 		// A food the household would rather not get beside a meal
 		// (State.RatherNot) is never suggested.
-		// A household with refusals gets no side swap, garnish only.
-		if len(y.st.RatherNot) == 0 && f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] && !y.st.RatherNot[id] {
+		// A picky household (refusing several side dishes) gets no side
+		// swap, garnish only; a single refused side is only never suggested.
+		if !picky && f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] && !y.st.RatherNot[id] {
 			y.sides = append(y.sides, componentOf(f))
 		}
 	}
@@ -442,6 +444,26 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 	}
 	return y, nil
 }
+
+// pickyMin is how many side dishes a household must refuse (State.RatherNot)
+// to be picky: it gets no side swap then.
+const pickyMin = 2
+
+// picky reports whether the household refuses at least pickyMin side dishes.
+func (y *run) picky() bool {
+	n := 0
+	for id := range y.st.RatherNot {
+		if y.st.Foods[id].Composed() {
+			n++
+		}
+	}
+	return n >= pickyMin
+}
+
+// refuses reports whether the household refuses food: it would rather not
+// get some food again (State.RatherNot, from its disliked and not-eaten
+// plates). It gets no bold garnish then (classicGarnish).
+func (y *run) refuses() bool { return len(y.st.RatherNot) > 0 }
 
 // componentOf is f as plate fit reads it.
 func componentOf(f planning.FoodFacts) platefit.Component {
@@ -501,7 +523,7 @@ func (y *run) servedThatDay(pp planPlate, foodID int64) bool {
 // pick is the plate's best candidate change that passes the checks, as an
 // unsaved tip.
 func (y *run) pick(pp planPlate, allowed func(Change) bool) (Tip, bool) {
-	for _, ch := range Candidates(pp.fit, y.garnish, y.sides) {
+	for _, ch := range candidates(pp.fit, y.garnish, y.sides, y.refuses()) {
 		if !allowed(ch) || y.servedThatDay(pp, ch.Food().ID) {
 			continue
 		}
@@ -529,7 +551,7 @@ func (y *run) holds(pp planPlate, t Tip) bool {
 	if !y.mainMeal(pp) {
 		return false
 	}
-	for _, ch := range Candidates(pp.fit, y.garnish, y.sides) {
+	for _, ch := range candidates(pp.fit, y.garnish, y.sides, y.refuses()) {
 		if ch.Kind == t.Kind && y.opOf(pp, ch) == t.Op {
 			return !y.servedThatDay(pp, ch.Food().ID) && y.passes(pp, ch, t.Op)
 		}

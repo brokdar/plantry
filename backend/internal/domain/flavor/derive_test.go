@@ -92,3 +92,11 @@ func TestDerive_MatchesDevLabels(t *testing.T) {
 		assert.GreaterOrEqual(t, share, min, "%s agreement %.2f under tolerance %.2f", field, share, min)
 	}
 }
+
+func TestDerive_RawSaladColourIgnoresDressing(t *testing.T) {
+	t.Parallel()
+	in := flavor.Input{Lines: []flavor.Line{{Name: "Cucumber", Grams: 80}, {Name: "Greek yogurt", Grams: 120}, {Name: "Dill", Grams: 2}}}
+	assert.Equal(t, "green", flavor.Derive(in).Colour)
+	in.Lines = in.Lines[1:2]
+	assert.Equal(t, "white", flavor.Derive(in).Colour, "yogurt without a raw vegetable stays white")
+}

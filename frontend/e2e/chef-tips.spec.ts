@@ -59,7 +59,7 @@ test("apply a garnish tip, see it in cook mode, undo", async ({ page }) => {
     fiber_100g: 2,
   })
   const main = await seedComposedFood({
-    name: `Pasta panna ${tag}`,
+    name: `Rahmnudeln ${tag}`,
     role: "main",
     reference_portions: 1,
     children: [
@@ -70,13 +70,14 @@ test("apply a garnish tip, see it in cook mode, undo", async ({ page }) => {
   })
   const ctx = await apiRequest.newContext({ baseURL: API })
   try {
-    // Attributes as the user set them: a rich, creamy Italian main with no
-    // acid, and a sharp lemon garnish.
+    // Attributes as the user set them: a rich, creamy German pan dish with
+    // no acid (lemon is one of its classic garnishes), and a sharp lemon.
     for (const [id, attrs] of [
       [
         main.id,
         {
-          cuisine: "italian",
+          cuisine: "german",
+          kind: "pan",
           texture: "creamy",
           temperature: "hot",
           colour: "beige",
