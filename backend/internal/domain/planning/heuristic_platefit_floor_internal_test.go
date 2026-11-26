@@ -7,8 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // Fillers of the plate-fit filler test, all 250 kcal per 100 g serving.
@@ -285,4 +287,25 @@ func TestAddNoCook_PlateFitFillerKeepsFatInRange(t *testing.T) {
 			assert.Equal(t, tc.want, added(t, h, ev.Days[0].Kcal+250))
 		})
 	}
+}
+
+// Within its kcal bucket and with the week's keys equal, a filler the week
+// serves less comes first (PLATE-4 rotation): bread and cheese are the same
+// food for the fit; the bread already feeds Tuesday's lunch, so the cheese
+// goes on Monday's dinner even though the pool lists the bread first.
+func TestAddNoCook_PlateFitFillerLeastServedFirst(t *testing.T) {
+	h, tgt := fillerPlanner(true, 55, true)
+	cheese := h.s.Foods[pfCheese]
+	cheese.ID, cheese.Name = pfBread, "Brot"
+	h.s.Foods[pfBread] = cheese
+	h.s.NoCook = []int64{pfBread, pfCheese}
+	tue := bfMon.AddDate(0, 0, 1)
+	h.s.Window.End = tue
+	h.s.Cells = append(h.s.Cells, Cell{Date: tue, SlotID: bfLunch, Mode: availability.ModePlan})
+	tgt.Cells = append(tgt.Cells, plate.CellKey{Date: tue, SlotID: bfLunch})
+	h.in.State, h.in.Target = h.s, tgt
+	h.prop.Plates = append(h.prop.Plates, ProposedPlate{Date: tue, SlotID: bfLunch, Eaters: 1, Components: []ProposedComponent{{FoodID: bfCurry, Portions: 1, SessionKey: "a"}, {FoodID: pfBread, Portions: 1}}})
+	ev := evaluateLean(Merge(h.s, tgt, h.prop), tgt)
+	require.NotEmpty(t, ev.Days)
+	assert.Equal(t, pfCheese, added(t, h, ev.Days[0].Kcal+250))
 }
