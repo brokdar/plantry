@@ -207,7 +207,7 @@ func Read(p Plate) Reading {
 	}) == no, false)
 	cold := anyOf(ds, hasTemperature, isCold)
 	gap(Temperature, maxHeat >= cu.Heat && cold == no, sharp)
-	clash(CuisineFit, groups(ds) > 1)
+	clash(CuisineFit, !groupsMix(ds))
 	gap(Pairing, pairingGap(cu, p, cold), false)
 	saucy := p.Main.Attrs.Saucy != nil && *p.Main.Attrs.Saucy
 	gap(SauceStarch, saucy && anyOf(ds, knowsStarch, isStarch) == no, false)
@@ -234,15 +234,34 @@ func Read(p Plate) Reading {
 // one rich element too many.
 const richSumMax = 5
 
-// groups counts the coherence groups of the known, non-neutral cuisines.
-func groups(cs []Component) int {
-	seen := map[string]bool{}
+// mixingGroups are the pairs of coherence groups whose sides share a plate
+// the way their home cooking does: German food takes the West-Mediterranean
+// salads and vegetables (green salad, carrot or tomato salad), the Eastern
+// and Western Mediterranean meet, and a cool yogurt-cucumber side belongs to
+// both the Middle-Eastern and the Indian table.
+var mixingGroups = map[[2]string]bool{
+	{"german", "west_med"}:         true,
+	{"middle_eastern", "west_med"}: true,
+	{"indian", "middle_eastern"}:   true,
+}
+
+// groupsMix reports whether the known, non-neutral cuisines of cs belong to
+// one coherence group or to groups that mix (mixingGroups).
+func groupsMix(cs []Component) bool {
+	var seen []string
 	for _, c := range cs {
-		if g := CuisineOf(c.Attrs.Cuisine).Group; g != "" {
-			seen[g] = true
+		if g := CuisineOf(c.Attrs.Cuisine).Group; g != "" && !slices.Contains(seen, g) {
+			seen = append(seen, g)
 		}
 	}
-	return len(seen)
+	for i, a := range seen {
+		for _, b := range seen[i+1:] {
+			if !mixingGroups[[2]string{min(a, b), max(a, b)}] {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // pairingGap applies the main cuisine's pairing style. Contrast: nothing cool

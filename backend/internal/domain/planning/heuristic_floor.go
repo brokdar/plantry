@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
@@ -195,6 +197,18 @@ func (h *planner) dayAccounts() (*index, []DayKcal) {
 // sides and fillers come first and the fatty dishes only lift what the week
 // still lacks after them (PLATE-4: nutrition before fit).
 func (h *planner) liftDay(dk DayKcal, limit float64, roundUp, leanOnly bool) {
+	if h.s.Settings.PlateFit && !h.floorLift {
+		// Plate fit on: a side recipe carries the day's energy before the
+		// portions grow (a varied plate, not a 1.5x main); the safety floor
+		// lift grows first.
+		if h.sided == nil {
+			h.sided = map[int]bool{}
+		}
+		h.addSide(dk.Date, limit)
+		if now := h.dayNow(dk.Date); now != nil {
+			dk = *now
+		}
+	}
 	h.topUpDay(dk.Date, limit-dk.Kcal, roundUp || h.s.Settings.PlateFit, leanOnly)
 	h.growLight(dk.Date, limit)
 	if h.balance || h.s.Settings.PlateFit {
@@ -444,7 +458,15 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		}
 	}
 	raised := map[[2]int64]int{} // plate fit per (plate, food), when on
+	served := map[int64]int{}    // plates of the window per food, when on
 	if h.s.Settings.PlateFit && !protein {
+		for _, p := range merged.Plates {
+			if merged.Window.Contains(p.Date) {
+				for _, c := range p.Components {
+					served[c.FoodID]++
+				}
+			}
+		}
 		for _, c := range cands {
 			if _, _, r := merged.plateFitOf(merged.Plates[c.plate], merged.Foods[c.opt.FoodID]); r > 0 {
 				raised[[2]int64{int64(c.plate), c.opt.FoodID}] = r
@@ -523,12 +545,14 @@ func (h *planner) addNoCook(date time.Time, protein bool, limit float64) bool {
 		// is the food that fits the kcal gap best. A model's plan gets, within 25 kcal
 		// of each other, a vegetable or salad before bread before the rest (sideFitRank).
 		// With plate fit on, within kcalBucket of each other the week's
-		// needs (legume, carbs), then the plate with fewer raised gaps
-		// come first (PLATE-4: nutrition before fit).
+		// needs (legume, carbs), then the food the week serves least (its
+		// rotation), then the plate with fewer raised gaps come first
+		// (PLATE-4: nutrition before fit).
 		if h.s.Settings.PlateFit {
 			ba, bb := math.Round(math.Abs(need-a.kcal)/kcalBucket), math.Round(math.Abs(need-b.kcal)/kcalBucket)
 			ra, rb := raised[[2]int64{int64(a.plate), a.opt.FoodID}], raised[[2]int64{int64(b.plate), b.opt.FoodID}]
-			if c := cmp.Or(cmp.Compare(ba, bb), cmp.Compare(legume(a), legume(b)), cmp.Compare(fat(a), fat(b)), cmp.Compare(carbs(a), carbs(b)), cmp.Compare(ra, rb)); c != 0 {
+			if c := cmp.Or(cmp.Compare(ba, bb), cmp.Compare(legume(a), legume(b)), cmp.Compare(fat(a), fat(b)), cmp.Compare(carbs(a), carbs(b)),
+				cmp.Compare(served[a.opt.FoodID], served[b.opt.FoodID]), cmp.Compare(ra, rb)); c != 0 {
 				return c
 			}
 		}
@@ -636,6 +660,25 @@ func spreadAdds(y *index, merged State, date time.Time, cands []optCand, used ma
 // rounded up to the quarter portion when roundUp, down otherwise. With
 // leanOnly, only the dishes whose fat share is within the week's range grow.
 func (h *planner) topUpDay(date time.Time, need float64, roundUp, leanOnly bool) {
+	full := h.fullMeals(date)
+	if len(full) == 0 {
+		h.topUpDaySkip(date, need, roundUp, leanOnly, nil)
+		return
+	}
+	// Plate fit on: a meal at its share of the day grows only for what the
+	// meals under their share cannot carry (a balanced day, not one heavy
+	// meal beside a light one; nutrition still first).
+	before := h.dayNow(date)
+	h.topUpDaySkip(date, need, roundUp, leanOnly, full)
+	if after := h.dayNow(date); before != nil && after != nil {
+		if rest := need - (after.Kcal - before.Kcal); rest > epsilon {
+			h.topUpDaySkip(date, rest, roundUp, leanOnly, nil)
+		}
+	}
+}
+
+// topUpDaySkip is topUpDay without growing the plates of the skip slots.
+func (h *planner) topUpDaySkip(date time.Time, need float64, roundUp, leanOnly bool, skip map[int64]bool) {
 	meatFull := h.balance && h.meatFull()
 	sessions := map[string]int{}
 	for i, ss := range h.prop.Sessions {
@@ -677,6 +720,15 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp, leanOnly bool)
 			i, ok := all(p, c)
 			m := h.s.Foods[c.FoodID].Macros
 			return i, ok && m.Fat*9 <= m.Kcal*h.x.pol.FatHigh/100
+		}
+	}
+	if len(skip) > 0 {
+		inner := growable
+		growable = func(p ProposedPlate, c ProposedComponent) (int, bool) {
+			if skip[p.SlotID] {
+				return 0, false
+			}
+			return inner(p, c)
 		}
 	}
 	var raisable float64
@@ -725,4 +777,36 @@ func (h *planner) topUpDay(date time.Time, need float64, roundUp, leanOnly bool)
 			c.Portions = raised
 		}
 	}
+}
+
+// fullMeals are the slots of date's proposed full meals (lunch, dinner; not
+// light) whose kcal per eater reach their share of the day (kcalShare), when
+// another full meal of the day is under its share; nil with plate fit off,
+// during the safety floor lift, or when no meal of the day is under.
+func (h *planner) fullMeals(date time.Time) map[int64]bool {
+	if !h.s.Settings.PlateFit || h.floorLift {
+		return nil
+	}
+	ev := evaluateLean(Merge(h.s, h.in.Target, h.prop), h.in.Target)
+	full, under := map[int64]bool{}, false
+	for _, p := range h.prop.Plates {
+		if dayOf(p.Date) != dayOf(date) || h.x.mealOf(p.SlotID) != mealFull || h.s.lightMeal(p.Date, p.SlotID) {
+			continue
+		}
+		c := plate.CellKey{Date: p.Date, SlotID: p.SlotID}
+		share := h.kcalShare(c)
+		i := slices.IndexFunc(ev.Plates, func(e PlateEval) bool { return e.Date == p.Date.Format(time.DateOnly) && e.SlotID == p.SlotID })
+		if share <= 0 || i < 0 {
+			continue
+		}
+		if ev.Plates[i].Kcal >= share {
+			full[p.SlotID] = true
+		} else {
+			under = true
+		}
+	}
+	if !under {
+		return nil
+	}
+	return full
 }

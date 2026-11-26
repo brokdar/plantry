@@ -62,9 +62,11 @@ func TestSuggest(t *testing.T) {
 		assert.Equal(t, "Kachumber", got[0].Side.Name)
 	})
 
-	t.Run("a German roast prefers German sides on a tie", func(t *testing.T) {
+	t.Run("a German roast: a mixing Greek salad, then German sides", func(t *testing.T) {
 		got := platefit.Suggest(foods(t, "Schweinebraten")[0], library, 50)
-		require.NotEmpty(t, got)
-		assert.Equal(t, "Gurkensalat", got[0].Side.Name)
+		require.GreaterOrEqual(t, len(got), 2)
+		// German and West-Mediterranean sides mix: the Greek salad, which
+		// opens fewer gaps, is the only side ranked before the German one.
+		assert.Equal(t, []string{"Griechischer Salat", "Gurkensalat"}, names(got[:2]))
 	})
 }
