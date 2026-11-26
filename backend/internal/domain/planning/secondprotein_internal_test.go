@@ -90,3 +90,29 @@ func TestAddSide_NoSecondProtein(t *testing.T) {
 		})
 	}
 }
+
+// CP1 family: a lentil curry got a tofu add. Legumes are the main's protein,
+// so with plate fit on no tofu leaf joins it; off, the pairing is unchanged,
+// and a main without its own protein still takes tofu.
+func TestAddOnFits_NoTofuBesideLegumeMain(t *testing.T) {
+	h := sideAddPlanner()
+	s := h.s
+	s.PairAddOns = true
+	curry := s.Foods[bfCurry]
+	curry.Name, curry.Groups.LegumeG = "Speedy lentil coconut curry", 150
+	s.Foods[bfCurry] = curry
+	const tofuID int64 = 9901
+	tofu := FoodFacts{ID: tofuID, Name: "Tofu (firm)", Kind: food.KindLeaf, DietClass: "vegan", NoCook: true, NutritionComplete: true}
+	s.Foods[tofuID] = tofu
+	p := Plate{Date: bfMon, SlotID: bfLunch, Components: []Component{{FoodID: bfCurry, Position: plate.PositionMain}}}
+
+	s.Settings.PlateFit = true
+	assert.False(t, s.addOnFits(p, tofu, "lunch"), "tofu beside a lentil curry")
+	s.Settings.PlateFit = false
+	assert.True(t, s.addOnFits(p, tofu, "lunch"), "plate fit off: unchanged")
+
+	s.Settings.PlateFit = true
+	curry.Name, curry.Groups.LegumeG, curry.Macros.Protein = "Vegetable curry", 0, 1
+	s.Foods[bfCurry] = curry
+	assert.True(t, s.addOnFits(p, tofu, "lunch"), "a main without its own protein takes tofu")
+}
