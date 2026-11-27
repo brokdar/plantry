@@ -128,7 +128,7 @@ func newRigWrapped(t *testing.T, wrap func(*fake.Client) llm.Client, web bool, m
 		Store: store, LLM: llm.StaticResolver(rec.Meter(provider, "fake"), "fake-model"), Runs: rec,
 		Fetcher: pageFetcher{t}, Extractor: importer.NewService(nil, jsonld.Extractor{}, nil, nil, nil), Matcher: m,
 		Household: func(context.Context) (finds.Household, error) {
-			return finds.Household{Lang: "en", Diet: "vegetarian", Portions: 2, Kitchen: kitchen, Cuisines: r.house.Cuisines, FirstWeek: r.house.FirstWeek, Recipes: r.house.Recipes}, nil
+			return finds.Household{Lang: "en", Diet: "vegetarian", Portions: 2, Kitchen: kitchen, Cuisines: r.house.Cuisines, RatherNot: r.house.RatherNot, FirstWeek: r.house.FirstWeek, Recipes: r.house.Recipes}, nil
 		},
 		Sites: func(context.Context) ([]settings.ChefSite, error) {
 			return []settings.ChefSite{

@@ -24,7 +24,7 @@ import (
 )
 
 // PromptVersion of the find run's model steps.
-const PromptVersion = "f4"
+const PromptVersion = "f5"
 
 const (
 	// fetchVersions is how many versions are fetched (FIND-11).
@@ -365,6 +365,7 @@ func (s *Service) attempt(ctx context.Context, client llm.Client, model string, 
 	for _, fl := range o.Gates.Flags {
 		o.Flags = append(o.Flags, Flag{Code: fl.Code, Reason: fl.Reason})
 	}
+	o.Flags = append(o.Flags, heatFlags(a.draft, h)...)
 	problems, questions := KitchenFit(a.requirements, h.Kitchen, h.KnownLeaves, asked)
 	o.Questions = questions
 	if len(o.Gates.Blocks) == 0 && len(problems) == 0 {

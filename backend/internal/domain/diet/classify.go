@@ -50,6 +50,21 @@ var phrases = []struct {
 	phrase string
 	class  Class
 }{
+	// Coconut products: USDA names the flesh "meat" ("liquid expressed from
+	// grated meat"). Before the dairy phrases so they cut these words first.
+	{"grated meat", Vegan},
+	{"coconut meat", Vegan},
+	{"coconut water", Vegan},
+	{"cream of coconut", Vegan},
+	{"sesame butter", Vegan},
+	{"apple butter", Vegan},
+	{"soymilk", Vegan},
+	{"oyster mushroom", Vegan},
+	{"mushrooms oyster", Vegan},
+	{"crabapple", Vegan},
+	{"crab apple", Vegan},
+	{"beefsteak tomato", Vegan},
+	{"meatless", Vegetarian},
 	// Plant drinks, creams and spreads named after dairy.
 	{"kokosmilch", Vegan},
 	{"mandelmilch", Vegan},
