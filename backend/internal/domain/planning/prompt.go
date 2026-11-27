@@ -698,6 +698,8 @@ func eligibleSplit(in ChooseInput) (kept []FoodFacts, dropped []excludedFood) {
 			dropped = append(dropped, excludedFood{f.ID, f.Name, excludeDiet})
 		case in.slotBlockedEverywhere(f):
 			dropped = append(dropped, excludedFood{f.ID, f.Name, excludeSlotTime})
+		case f.Trial && in.State.TrialCooked(f.ID):
+			dropped = append(dropped, excludedFood{f.ID, f.Name, excludeTrial})
 		default:
 			kept = append(kept, f)
 		}

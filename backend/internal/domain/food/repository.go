@@ -45,6 +45,10 @@ type Repository interface {
 	Siblings(ctx context.Context, variantGroupID int64, excludeID int64) ([]Food, error)
 
 	SetFavorite(ctx context.Context, id int64, favorite bool) (*Food, error)
+	// StartTrial puts a recipe on trial (NEW-1); SetTrialSeen clears its To
+	// try badge (NEW-3).
+	StartTrial(ctx context.Context, id int64) error
+	SetTrialSeen(ctx context.Context, id int64) error
 	// SetArchived hides a recipe from planning, or restores it; domain.ErrNotFound
 	// for a missing food or a leaf.
 	SetArchived(ctx context.Context, id int64, archived bool) (*Food, error)

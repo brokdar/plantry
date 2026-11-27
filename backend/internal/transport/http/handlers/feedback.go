@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
 )
 
 // FeedbackHandler exposes plate-feedback endpoints.
@@ -31,15 +32,28 @@ type feedbackResponse struct {
 	Status  string  `json:"status"`
 	Note    *string `json:"note,omitempty"`
 	RatedAt string  `json:"rated_at"`
+	// ArchivedTrials: trial recipes the disliked rating archived (NEW-4);
+	// the UI asks for the reason.
+	ArchivedTrials []archivedTrialJSON `json:"archived_trials,omitempty"`
+}
+
+type archivedTrialJSON struct {
+	FoodID int64          `json:"food_id"`
+	Name   string         `json:"name"`
+	Undo   foodevent.Undo `json:"undo"`
 }
 
 func toFeedbackResponse(f *feedback.PlateFeedback) feedbackResponse {
-	return feedbackResponse{
+	out := feedbackResponse{
 		PlateID: f.PlateID,
 		Status:  string(f.Status),
 		Note:    f.Note,
 		RatedAt: f.RatedAt.UTC().Format(time.RFC3339),
 	}
+	for _, t := range f.ArchivedTrials {
+		out.ArchivedTrials = append(out.ArchivedTrials, archivedTrialJSON{FoodID: t.FoodID, Name: t.Name, Undo: t.Undo})
+	}
+	return out
 }
 
 // Put handles PUT /api/plates/{id}/feedback — upserts feedback for the plate.

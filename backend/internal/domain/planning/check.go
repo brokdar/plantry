@@ -549,21 +549,29 @@ func (x *index) h8() []Issue {
 			continue
 		}
 		code, sev := code, sev
+		if x.merged && x.s.Foods[ev.foodID].Trial && x.s.Window.Contains(prev) && !x.s.Named[ev.foodID] {
+			// A trial recipe cooks in one session per window, relaxed or not (NEW-1).
+			is := issue("H8", CodeVarietyRepeat, SeverityViolation)
+			out = append(out, x.onCook(is, ev).with("food_id", ev.foodID).with("last_eaten", prev.Format(time.DateOnly)))
+			continue
+		}
 		if !x.merged && code == CodeVarietyRepeat && x.s.Window.Contains(prev) {
 			code, sev = CodeVarietyRepeatWeek, SeverityWarning
 		}
 		if !x.merged && code == CodeVarietyRepeat && x.s.Named[ev.foodID] {
 			code, sev = CodeVarietyRepeatNamed, SeverityWarning
 		}
-		is := issue("H8", code, sev)
-		if ev.session >= 0 {
-			is = is.onSession(x.s.Sessions[ev.session])
-		} else {
-			is = is.onPlate(x.s.Plates[ev.plate])
-		}
-		out = append(out, is.with("food_id", ev.foodID).with("last_eaten", prev.Format(time.DateOnly)))
+		out = append(out, x.onCook(issue("H8", code, sev), ev).with("food_id", ev.foodID).with("last_eaten", prev.Format(time.DateOnly)))
 	}
 	return out
+}
+
+// onCook places is on the cook's session, else its plate.
+func (x *index) onCook(is Issue, ev cookEvent) Issue {
+	if ev.session >= 0 {
+		return is.onSession(x.s.Sessions[ev.session])
+	}
+	return is.onPlate(x.s.Plates[ev.plate])
 }
 
 // h9: the safety floor. A complete day with plates in the target whose kcal

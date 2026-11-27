@@ -32,6 +32,8 @@ type Library interface {
 	Finalize(ctx context.Context, in importer.FinalizeInput) (*importer.FinalizedFood, error)
 	Create(ctx context.Context, f *food.Food) error
 	Delete(ctx context.Context, id int64) error
+	// StartTrial puts a recipe that entered the library on trial (NEW-1).
+	StartTrial(ctx context.Context, id int64) error
 	// Unplan removes the window's draft plates that eat foodID; a confirmed
 	// one refuses (domain.ErrInUse).
 	Unplan(ctx context.Context, foodID int64, windowStart time.Time) error
@@ -295,6 +297,9 @@ func (s *Service) place(ctx context.Context, f *Find, windowStart time.Time) (in
 		}
 		if err := s.d.Planning.Library.Create(ctx, r); err != nil {
 			return fmt.Errorf("create recipe: %w", err)
+		}
+		if err := s.d.Planning.Library.StartTrial(ctx, r.ID); err != nil {
+			return err
 		}
 		if _, err := s.d.Store.Place(ctx, f.ID, r.ID, windowStart); err != nil {
 			return err

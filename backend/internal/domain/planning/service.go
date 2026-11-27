@@ -27,7 +27,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h37" // h37: week themes lean 40-60 % of the cook sessions (Chef D3); h36: H8 counts GATE-2-blocked mains only for weekend cooks, the variety repair keeps GATE-2 (CP2); h35: Chef on blocks a recipe over the slot time allowance (GATE-2); h34: staples first, never items excluded (Chef D2); h33: taste score and monotony soft caps (Chef D1)
+const HeuristicVersion = "h38" // h38: a trial recipe cooks in one session per window (Chef C4); h37: week themes lean 40-60 % of the cook sessions (Chef D3); h36: H8 counts GATE-2-blocked mains only for weekend cooks, the variety repair keeps GATE-2 (CP2); h35: Chef on blocks a recipe over the slot time allowance (GATE-2); h34: staples first, never items excluded (Chef D2); h33: taste score and monotony soft caps (Chef D1)
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.

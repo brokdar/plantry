@@ -123,8 +123,10 @@ type Querier interface {
 	// (D26). last_eaten is the latest confirmed plate dated on or before today
 	// that holds the food and is not marked not_eaten (empty when none);
 	// times_cooked counts the food's confirmed sessions cooked on or before today
-	// with at least one linked plate not marked not_eaten. A hidden substitution
-	// variant's plates and sessions count for its base recipe.
+	// with at least one linked plate not marked not_eaten. trial_done: a trial
+	// recipe was eaten on a confirmed plate at least two days ago that is not
+	// rated disliked or not_eaten (NEW-2). A hidden substitution variant's plates
+	// and sessions count for its base recipe.
 	FoodHistory(ctx context.Context, arg FoodHistoryParams) ([]FoodHistoryRow, error)
 	GetAIChange(ctx context.Context, id int64) (AiChange, error)
 	GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailRow, error)
@@ -312,6 +314,8 @@ type Querier interface {
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
 	SetFoodNoCook(ctx context.Context, arg SetFoodNoCookParams) (Food, error)
 	SetFoodShopSection(ctx context.Context, arg SetFoodShopSectionParams) (Food, error)
+	// Opening a trial recipe clears its To try badge, not the trial (NEW-3).
+	SetFoodTrialSeen(ctx context.Context, id int64) error
 	SetPlatesState(ctx context.Context, arg SetPlatesStateParams) error
 	SetRecipeSuggestionImage(ctx context.Context, arg SetRecipeSuggestionImageParams) error
 	// D25: a run's outcome after its rows were accepted, discarded, un-accepted
@@ -334,6 +338,8 @@ type Querier interface {
 	// The summed cost_usd of the runs started in [from_ts, to_ts) whose kind is
 	// in kinds; all kinds when all_kinds is 1. Unpriced runs add nothing.
 	SpendAIRuns(ctx context.Context, arg SpendAIRunsParams) (float64, error)
+	// A recipe the assistant added enters the library on trial (NEW-1).
+	StartFoodTrial(ctx context.Context, id int64) error
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
 	TouchPlanningSession(ctx context.Context, until string) error
 	TouchPlate(ctx context.Context, id int64) error

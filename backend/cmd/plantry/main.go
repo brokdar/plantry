@@ -285,7 +285,7 @@ func run() error {
 	})
 	foodRestorers[foodevent.KindTasteItem] = tasteSvc
 	plateSvc.WithTaste(tasteSvc)
-	feedbackSvc.WithTaste(tasteSvc)
+	feedbackSvc.WithTaste(tasteSvc).WithTrials(foodSvc)
 	foodSvc.WithFavourites(tasteSvc)
 	// Kitchen: the foods the household never eats keep recipes holding them
 	// out of every auto-placed plate (planning) and out of tips.

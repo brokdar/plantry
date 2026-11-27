@@ -187,8 +187,12 @@ type foodResponse struct {
 	ImagePath   *string `json:"image_path,omitempty"`
 	Favorite    bool    `json:"favorite"`
 	Archived    bool    `json:"archived"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	// Trial: an assistant-added recipe on trial (NEW-1); ToTry shows its
+	// To try badge until the recipe is opened (NEW-3).
+	Trial     bool   `json:"trial"`
+	ToTry     bool   `json:"to_try"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 
 	// DietClass is the effective diet class (D28) and DietClassSource where
 	// it comes from: auto (leaf name), user (override) or derived (recipe).
@@ -368,6 +372,8 @@ func toFoodResponse(f *food.Food) foodResponse {
 		ImagePath:   f.ImagePath,
 		Favorite:    f.Favorite,
 		Archived:    f.Archived,
+		Trial:       f.OnTrial(),
+		ToTry:       f.ToTry(),
 		CreatedAt:   f.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:   f.UpdatedAt.Format(time.RFC3339),
 

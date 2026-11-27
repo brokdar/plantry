@@ -141,6 +141,10 @@ type Food struct {
 	// Archived hides a recipe from planning and lists (LIB-4); it stays
 	// readable by id.
 	Archived bool
+	// Trial: the assistant added the recipe and it has not been cooked
+	// without a dislike yet (NEW-1); see OnTrial. TrialSeen: the recipe was
+	// opened, so its To try badge is gone (NEW-3).
+	Trial, TrialSeen bool
 
 	// Derived, never stored: set only by Service.Derive.
 	// History is the composed food's eating history (D16), UsedInCount the
@@ -260,3 +264,11 @@ type ListResult struct {
 	Items []Food
 	Total int
 }
+
+// OnTrial reports whether the recipe's trial is running: started, not
+// archived and not ended by a good first cooking (History.TrialDone, NEW-2).
+// History must be derived.
+func (f *Food) OnTrial() bool { return f.Trial && !f.Archived && !f.History.TrialDone }
+
+// ToTry reports whether the recipe shows the To try badge (NEW-3).
+func (f *Food) ToTry() bool { return f.OnTrial() && !f.TrialSeen }

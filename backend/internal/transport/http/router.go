@@ -230,6 +230,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 
 		if h.NotForMe != nil {
 			api.Post("/foods/{id}/not-for-me", h.NotForMe.Post)
+			api.Post("/foods/{id}/trial-seen", h.NotForMe.TrialSeen)
 		}
 		if h.Finds != nil {
 			api.Get("/finds", h.Finds.List)

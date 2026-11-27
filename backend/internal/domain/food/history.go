@@ -20,6 +20,9 @@ type History struct {
 	// TimesCooked counts the food's cook sessions on or before the date that
 	// have at least one linked plate not marked not_eaten.
 	TimesCooked int
+	// TrialDone: the recipe is on trial and was eaten on a confirmed plate
+	// at least two days ago that is not rated disliked or not eaten (NEW-2).
+	TrialDone bool
 }
 
 // HistoryReader is the port for the derived per-food read data.
