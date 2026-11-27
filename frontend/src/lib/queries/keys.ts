@@ -4,6 +4,7 @@ import type { ShoppingRange } from "@/lib/api/shopping"
 export const foodKeys = {
   all: ["foods"] as const,
   lists: () => [...foodKeys.all, "list"] as const,
+  needsCheck: () => [...foodKeys.all, "needs-check"] as const,
   list: (params: object) => [...foodKeys.lists(), params] as const,
   details: () => [...foodKeys.all, "detail"] as const,
   detail: (id: number) => [...foodKeys.details(), id] as const,

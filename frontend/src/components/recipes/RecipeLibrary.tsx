@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils"
 import { AddRecipeMenu } from "./AddRecipeMenu"
 import { DietIcon } from "./DietIcon"
 import { ImportSheet } from "./ImportSheet"
+import { NeedsCheckEntry } from "./NeedsCheck"
 import { RecipeCard } from "./RecipeCard"
 import { RecipeOnboarding } from "./RecipeOnboarding"
 import { RecipesHeader } from "./RecipesHeader"
@@ -85,6 +86,8 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
         tab="recipes"
         action={<AddRecipeMenu discover={discover} />}
       />
+
+      <NeedsCheckEntry />
 
       {setup.data && (
         <RecipeOnboarding

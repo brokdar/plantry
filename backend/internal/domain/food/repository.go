@@ -33,6 +33,10 @@ type Repository interface {
 	// by the nutrition resolver to load food trees level by level.
 	ListChildrenByParents(ctx context.Context, parentIDs []int64) (map[int64][]FoodComponent, error)
 
+	// NeedsCheckLines returns every recipe line whose leaf lacks a core macro
+	// (to-taste lines excluded), ordered by recipe name.
+	NeedsCheckLines(ctx context.Context) ([]NeedsCheckLine, error)
+
 	ListPortions(ctx context.Context, foodID int64) ([]Portion, error)
 	UpsertPortion(ctx context.Context, p *Portion) error
 	DeletePortion(ctx context.Context, foodID int64, unit string) error

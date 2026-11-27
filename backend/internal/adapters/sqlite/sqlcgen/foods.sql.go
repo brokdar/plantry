@@ -803,6 +803,59 @@ func (q *Queries) ListLeafNamesByRecipeUse(ctx context.Context, limit int64) ([]
 	return items, nil
 }
 
+const listNeedsCheckLines = `-- name: ListNeedsCheckLines :many
+SELECT p.id AS recipe_id, p.name AS recipe_name,
+       l.id AS leaf_id, l.name AS leaf_name,
+       fc.amount, fc.unit
+FROM food_components fc
+JOIN foods p ON p.id = fc.parent_id AND p.kind = 'composed'
+JOIN foods l ON l.id = fc.child_id AND l.kind = 'leaf'
+WHERE fc.to_taste = 0
+  AND (l.kcal_100g IS NULL OR l.protein_100g IS NULL OR l.fat_100g IS NULL OR l.carbs_100g IS NULL)
+ORDER BY p.name COLLATE NOCASE, p.id, fc.sort_order, fc.id
+`
+
+type ListNeedsCheckLinesRow struct {
+	RecipeID   int64
+	RecipeName string
+	LeafID     int64
+	LeafName   string
+	Amount     float64
+	Unit       string
+}
+
+// Recipe lines whose leaf lacks a core macro (legacy data, B2b). A to-taste
+// line counts no nutrition, so it is not a problem.
+func (q *Queries) ListNeedsCheckLines(ctx context.Context) ([]ListNeedsCheckLinesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listNeedsCheckLines)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListNeedsCheckLinesRow{}
+	for rows.Next() {
+		var i ListNeedsCheckLinesRow
+		if err := rows.Scan(
+			&i.RecipeID,
+			&i.RecipeName,
+			&i.LeafID,
+			&i.LeafName,
+			&i.Amount,
+			&i.Unit,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecipeNames = `-- name: ListRecipeNames :many
 SELECT name FROM foods WHERE kind = 'composed' AND archived = 0 ORDER BY id DESC LIMIT ?
 `

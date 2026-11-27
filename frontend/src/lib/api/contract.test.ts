@@ -30,6 +30,7 @@ import {
   archiveFood,
   getFood,
   getFoodAttributes,
+  getNeedsCheck,
   getScaled,
   listFoods,
   restoreFood,
@@ -307,6 +308,12 @@ const cases: Case[] = [
     call: () => getFood(42),
     method: "GET",
     path: "/foods/42?today=2026-10-30",
+  },
+  {
+    name: "getNeedsCheck",
+    call: () => getNeedsCheck(),
+    method: "GET",
+    path: "/foods/needs-check",
   },
   {
     name: "getScaled",
