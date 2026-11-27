@@ -92,3 +92,49 @@ func (q *Queries) ListFoodEventsInRange(ctx context.Context, arg ListFoodEventsI
 	}
 	return items, nil
 }
+
+const listRecentFoodEvents = `-- name: ListRecentFoodEvents :many
+SELECT id, kind, subject_id, action, actor, before_json, after_json, at
+FROM food_events
+WHERE kind = ?1 AND at >= ?2
+ORDER BY id DESC
+LIMIT ?3
+`
+
+type ListRecentFoodEventsParams struct {
+	Kind    string
+	Since   string
+	MaxRows int64
+}
+
+func (q *Queries) ListRecentFoodEvents(ctx context.Context, arg ListRecentFoodEventsParams) ([]FoodEvent, error) {
+	rows, err := q.db.QueryContext(ctx, listRecentFoodEvents, arg.Kind, arg.Since, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FoodEvent{}
+	for rows.Next() {
+		var i FoodEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.SubjectID,
+			&i.Action,
+			&i.Actor,
+			&i.BeforeJson,
+			&i.AfterJson,
+			&i.At,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

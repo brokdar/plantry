@@ -54,6 +54,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/substitution"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/taste"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/tips"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
@@ -264,12 +265,32 @@ func run() error {
 	// else the heuristic (D11).
 	planLight := sqlite.NewPlanLightRepo(conn)
 	foodAttributeRepo := sqlite.NewFoodAttributeRepo(conn)
+	// Food change log (VAR-5): each producer registers its Restorer here.
+	foodRestorers := map[foodevent.Kind]foodevent.Restorer{}
+	foodEventRepo := sqlite.NewFoodEventRepo(conn)
+	foodEventSvc := foodevent.NewService(sqlite.NewTxRunner(conn), foodEventRepo, foodRestorers, clock.Now)
+	foodSvc.WithEvents(foodEventSvc)
+	foodRestorers[foodevent.KindRecipe] = foodSvc
+	// Recipe attributes (ATTR): derived on read, user edits logged as
+	// attribute food events.
+	flavorSvc := flavor.NewService(foodAttributeRepo, foodRepo, nutritionResolver, foodEventSvc)
+	foodRestorers[foodevent.KindAttribute] = flavorSvc
+	// Taste (TASTE): signals from ratings, hand edits, favourites and tips;
+	// the planner's soft taste key.
+	tasteSvc := taste.NewService(taste.Deps{
+		Store: sqlite.NewTasteRepo(conn), Attributes: flavorSvc, Foods: foodRepo,
+		Events: foodEventSvc, History: foodEventRepo, Now: clock.Now,
+	})
+	foodRestorers[foodevent.KindTasteItem] = tasteSvc
+	plateSvc.WithTaste(tasteSvc)
+	feedbackSvc.WithTaste(tasteSvc)
+	foodSvc.WithFavourites(tasteSvc)
 	planBuilder := planning.NewBuilder(planning.BuilderDeps{
 		Light: planLight, Attributes: foodAttributeRepo,
 		Foods: foodSvc, FoodRows: foodRepo, Nutrition: nutritionResolver, Cells: availabilitySvc,
 		Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
 		Settings: settingsSvc, Profile: profileSvc, Corrections: sqlite.NewPlateEventRepo(conn),
-		Version: sqlite.NewDataVersion(conn),
+		Version: sqlite.NewDataVersion(conn), Taste: tasteSvc,
 	})
 	planningSvc := planning.NewService(planning.Deps{
 		Builder: planBuilder,
@@ -334,15 +355,6 @@ func run() error {
 			return food.MatchPermit{Run: d.Run, Warn: d.Warn, Uncapped: d.Reason == chef.ReasonOff}, err
 		})
 
-	// Food change log (VAR-5): each producer registers its Restorer here.
-	foodRestorers := map[foodevent.Kind]foodevent.Restorer{}
-	foodEventSvc := foodevent.NewService(sqlite.NewTxRunner(conn), sqlite.NewFoodEventRepo(conn), foodRestorers, clock.Now)
-	foodSvc.WithEvents(foodEventSvc)
-	foodRestorers[foodevent.KindRecipe] = foodSvc
-	// Recipe attributes (ATTR): derived on read, user edits logged as
-	// attribute food events.
-	flavorSvc := flavor.NewService(foodAttributeRepo, foodRepo, nutritionResolver, foodEventSvc)
-	foodRestorers[foodevent.KindAttribute] = flavorSvc
 	// Assistant recipe changes (VAR-1, VAR-2, HELP-4): filled variants and
 	// in-place edits through matching and the gates, a chef_help run on the
 	// recipe page.
@@ -372,6 +384,7 @@ func run() error {
 		Tx:      txRunner,
 		Undo:    changes,
 		Recipes: agent.RecipeTools{Changes: recipeChangeSvc, Attributes: flavorSvc},
+		Taste:   tasteSvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
@@ -490,7 +503,7 @@ func run() error {
 	// normal plate change with the plate Undo token.
 	kitchenRepo := sqlite.NewKitchenRepo(conn)
 	tipSvc := tips.NewService(tips.Deps{
-		Store: sqlite.NewChefTipRepo(conn), Plates: plateSvc,
+		Store: sqlite.NewChefTipRepo(conn), Plates: plateSvc, Taste: tasteSvc,
 		State: func(ctx context.Context, w window.Window, today time.Time) (planning.State, error) {
 			return planBuilder.Build(ctx, w, today, w.Start, w.End)
 		},
@@ -563,6 +576,7 @@ func run() error {
 		Today:         handlers.NewTodayHandler(planViewSvc).WithClock(clock.Now),
 		Profile:       handlers.NewProfileHandler(profileSvc),
 		Kitchen:       handlers.NewKitchenHandler(profileSvc, kitchen.NewService(kitchenRepo)),
+		Taste:         handlers.NewTasteHandler(tasteSvc),
 		Presets:       handlers.NewPresetHandler(presetSvc),
 		AI:            aiHandler,
 		AIRuns:        aiRunsHandler,

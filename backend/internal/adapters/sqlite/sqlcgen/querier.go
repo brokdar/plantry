@@ -60,6 +60,8 @@ type Querier interface {
 	CreatePresetComponent(ctx context.Context, arg CreatePresetComponentParams) (PresetComponent, error)
 	CreatePresetPlate(ctx context.Context, arg CreatePresetPlateParams) (PresetPlate, error)
 	CreateRecipeSuggestion(ctx context.Context, arg CreateRecipeSuggestionParams) (RecipeSuggestion, error)
+	CreateTasteItem(ctx context.Context, arg CreateTasteItemParams) (int64, error)
+	CreateTasteSignal(ctx context.Context, arg CreateTasteSignalParams) error
 	CreateTimeSlot(ctx context.Context, arg CreateTimeSlotParams) (TimeSlot, error)
 	CreateVariantGroup(ctx context.Context, name string) (VariantGroup, error)
 	// D12: whether a daily discovery run for the day ended without storing a
@@ -92,6 +94,7 @@ type Querier interface {
 	DeletePresetTag(ctx context.Context, arg DeletePresetTagParams) error
 	DeletePresetTagsByPreset(ctx context.Context, presetID int64) error
 	DeleteSetting(ctx context.Context, key string) error
+	DeleteTasteItem(ctx context.Context, id int64) error
 	DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, error)
 	// B7: per discovery run with an id in [min_id, max_id], the suggestions it
 	// stored and how many of them the user accepted.
@@ -138,8 +141,11 @@ type Querier interface {
 	GetSetting(ctx context.Context, key string) (AppSetting, error)
 	// D12: the suggestion assigned to a day.
 	GetShownSuggestion(ctx context.Context, shownOn sql.NullString) (RecipeSuggestion, error)
+	GetTasteItem(ctx context.Context, id int64) (TasteItem, error)
+	GetTasteItemByRef(ctx context.Context, arg GetTasteItemByRefParams) (TasteItem, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
 	HasQueuedChefJob(ctx context.Context, arg HasQueuedChefJobParams) (bool, error)
+	HasTasteSignal(ctx context.Context, arg HasTasteSignalParams) (int64, error)
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
 	InsertFoodOrigin(ctx context.Context, arg InsertFoodOriginParams) error
 	LastFoodEventID(ctx context.Context) (int64, error)
@@ -210,6 +216,7 @@ type Querier interface {
 	ListPresetComponentsByPlate(ctx context.Context, presetPlateID int64) ([]PresetComponent, error)
 	ListPresetPlatesByPreset(ctx context.Context, presetID int64) ([]PresetPlate, error)
 	ListPresetTagsByPreset(ctx context.Context, presetID int64) ([]string, error)
+	ListRecentFoodEvents(ctx context.Context, arg ListRecentFoodEventsParams) ([]FoodEvent, error)
 	// The newest recipe names, for the discovery prompt (D8).
 	ListRecipeNames(ctx context.Context, limit int64) ([]string, error)
 	// Suggestions, optionally of one status and run, last decided (else newest)
@@ -220,6 +227,7 @@ type Querier interface {
 	// Every food's and suggestion's (any status) source_url, for the
 	// normalized duplicate check.
 	ListSourceURLs(ctx context.Context) ([]string, error)
+	ListTasteItems(ctx context.Context) ([]TasteItem, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	ListUndoneAIChangesAfter(ctx context.Context, firstEventID sql.NullInt64) ([]AiChange, error)
 	// Recipes no confirmed plate dated in [since, today] holds, plates marked
@@ -244,6 +252,7 @@ type Querier interface {
 	// so no single statement holds the write lock for long.
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
 	PutFoodChanges(ctx context.Context, arg PutFoodChangesParams) error
+	PutTasteItem(ctx context.Context, arg PutTasteItemParams) error
 	RecoverChefJobs(ctx context.Context, arg RecoverChefJobsParams) (int64, error)
 	ReinsertPlate(ctx context.Context, arg ReinsertPlateParams) error
 	RemoveBasicAtHome(ctx context.Context, foodID int64) error

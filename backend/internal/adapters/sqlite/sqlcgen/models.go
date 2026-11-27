@@ -434,6 +434,34 @@ type SubstitutionSwap struct {
 	Offered    int64
 }
 
+type TasteItem struct {
+	ID          int64
+	Level       string
+	Key         string
+	Scope       string
+	WindowStart string
+	Source      string
+	Polarity    sql.NullString
+	PosEvidence float64
+	PosN        float64
+	NegEvidence float64
+	NegN        float64
+	CreatedAt   string
+	UpdatedAt   string
+}
+
+type TasteSignal struct {
+	ID      int64
+	Kind    string
+	Level   string
+	Key     string
+	Weight  float64
+	Share   float64
+	At      string
+	FoodID  sql.NullInt64
+	PlateID sql.NullInt64
+}
+
 type TimeSlot struct {
 	ID         int64
 	NameKey    string

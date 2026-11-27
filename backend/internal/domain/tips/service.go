@@ -17,6 +17,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/platefit"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/taste"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -118,7 +119,15 @@ type Deps struct {
 	// present (profile kitchen).
 	Never     func(ctx context.Context) (map[int64]bool, error)
 	Equipment func(ctx context.Context) ([]string, error)
-	Now       func() time.Time
+	// Taste learns from applied and dismissed tips (taste.Service.Tip);
+	// nil learns nothing.
+	Taste TipLearner
+	Now   func() time.Time
+}
+
+// TipLearner learns from a tip's Apply or Dismiss on its dimension.
+type TipLearner interface {
+	Tip(ctx context.Context, dimension string, applied bool) error
 }
 
 // Service computes, stores, applies and dismisses tips.
@@ -718,7 +727,8 @@ func (s *Service) Apply(ctx context.Context, id int64) (plate.Undo, error) {
 	if err != nil {
 		return plate.Undo{}, err
 	}
-	return s.d.Plates.Recorded(ctx, func(ctx context.Context) error {
+	// The tip's plate change is a tip signal, not a hand edit.
+	return s.d.Plates.Recorded(taste.Quiet(ctx), func(ctx context.Context) error {
 		// Re-read inside the transaction: a second Apply (another tab) that
 		// waited for this one must find the tip applied and refuse.
 		if cur, err := s.d.Store.Get(ctx, id); err != nil {
@@ -742,8 +752,19 @@ func (s *Service) Apply(ctx context.Context, id int64) (plate.Undo, error) {
 		default:
 			return fmt.Errorf("%w: tip action %q", domain.ErrInvalidInput, t.Op.Action)
 		}
-		return s.d.Store.SetState(ctx, t.ID, StateApplied, s.d.Now())
+		if err := s.d.Store.SetState(ctx, t.ID, StateApplied, s.d.Now()); err != nil {
+			return err
+		}
+		return s.learn(ctx, t, true)
 	})
+}
+
+// learn passes an applied or dismissed tip to the taste learner.
+func (s *Service) learn(ctx context.Context, t Tip, applied bool) error {
+	if s.d.Taste == nil {
+		return nil
+	}
+	return s.d.Taste.Tip(ctx, string(t.Dimension), applied)
 }
 
 // Dismiss dismisses a shown tip: it cools down for its recipe in the window,
@@ -756,7 +777,10 @@ func (s *Service) Dismiss(ctx context.Context, id int64) error {
 	if t.State != StateShown {
 		return ErrStale
 	}
-	return s.d.Store.SetState(ctx, id, StateDismissed, s.d.Now())
+	if err := s.d.Store.SetState(ctx, id, StateDismissed, s.d.Now()); err != nil {
+		return err
+	}
+	return s.learn(ctx, t, false)
 }
 
 // On reports whether the Chef is on (chef.enabled).

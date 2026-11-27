@@ -759,7 +759,7 @@ func candidateRow(f FoodFacts, defaultKeep int) string {
 	return fmt.Sprintf("%d|%s|%s|%s|%s|%s|%.0f|%.0f|%.0f|%.0f|%.0f|%.0f|%s|%d|%s|%s|%s|%s|%d|%s|%s|%s",
 		f.ID, cell(f.Name), role, suits(f.Role), f.DietClass, yesNo(f.DietClass == diet.Omnivore), f.Groups.MeatG, f.Groups.FishG, f.Macros.Kcal, f.Macros.Protein, f.Macros.Fat, f.Macros.Carbs,
 		yesNo(f.NutritionComplete), f.Minutes, num(f.ReferencePortions), keep, yesNo(f.Freezable), last,
-		f.TimesEaten8Weeks, yesNo(f.Favorite), num(f.LikeScore), yesNo(f.Explore()))
+		f.TimesEaten8Weeks, yesNo(f.Favorite), num(f.LikeScore+tasteKey(f)), yesNo(f.Explore()))
 }
 
 // maxCorrectionLines bounds the corrections section.
