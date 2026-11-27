@@ -55,3 +55,28 @@ with everything. Richness counts main and starch components only (a dip or dress
 Pairing style is checked for the contrast cuisines (Indian, Chinese, Japanese, Thai, Mexican, Middle
 Eastern) only: no cold component and no acid of 2 or more. The set does not label
 bridge-cuisine pairing flaws; A4a's own tests cover them.
+
+## Matching sets (DATA-2)
+
+Test data of the Chef's ingredient matching (B1), in `matching/`, loaded by `LoadMatching`:
+
+- `de.json`: the 72 real ingredient lines of the repo's test pages (Chefkoch, Kitchen Stories, Eat This; three
+  Kitchen Stories lines are English). `TestGermanSetIsTheRepoTestPages` re-extracts them from the pages.
+- `en.json`: 90 real lines of 7 English recipes (BBC Good Food, Just One Cookbook, RecipeTin Eats); lines only,
+  with the source URL, no page HTML.
+- A line has `kind` (plain, alternatives, compound, to_taste, vague_count, container_range, branded), the
+  cleaned `name`, and `expect`: the foods it must resolve to (all for a compound line, any one for `any_of`,
+  none for a sub-recipe reference or water). An expected food is a leaf of the dev catalogue (`catalogue`), an FDC
+  record (`fdc_query` plus `fdc_id`) or an Open Food Facts product (`off_query`, `off_lang`, `off_match`);
+  `grams` is the expected weight of the whole line where one exists.
+- `catalogue.json`: the 136 leaves of the dev catalogue (2026-11-27); `seeded_2026_11_16` marks the 106 of the
+  seeded backup the research baseline used.
+- `fdc.json`, `off.json`: search responses by query, each with `origin`. FDC `live` responses were recorded with
+  DEMO_KEY (Foundation and SR Legacy, five results); `bulk` ones are built from FDC's public SR Legacy download
+  (2018-04) in the search-response shape with a plain word-prefix ranking, so their order is not FDC's. OFF
+  responses are live, from `cgi/search.pl` (see the PR notes: the v2 search endpoint ignores `search_terms`).
+  `serving_quantity` and the product quantity fields are dropped (OFF returns them as strings, which the OFF
+  client cannot decode).
+
+`TestBaselineLocalMatchRates` pins the no-key rate of today's resolver (line parser, then local catalogue) so B1
+can show it beats it.

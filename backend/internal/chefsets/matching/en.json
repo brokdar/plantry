@@ -1,0 +1,1413 @@
+{
+ "set": "en",
+ "recipes": [
+  {
+   "title": "BBC Good Food: Chicken tikka masala",
+   "source": "https://www.bbcgoodfood.com/recipes/chicken-tikka-masala",
+   "lines": [
+    {
+     "id": "en-001",
+     "raw": "4 tbsp vegetable oil",
+     "lang": "en",
+     "kind": "plain",
+     "name": "vegetable oil",
+     "expect": [
+      {
+       "identity": "vegetable oil",
+       "catalogue": "Vegetable oil",
+       "grams": 55
+      }
+     ]
+    },
+    {
+     "id": "en-002",
+     "raw": "25g butter",
+     "lang": "en",
+     "kind": "plain",
+     "name": "butter",
+     "expect": [
+      {
+       "identity": "butter",
+       "catalogue": "Butter",
+       "grams": 25
+      }
+     ]
+    },
+    {
+     "id": "en-003",
+     "raw": "4 onions roughly chopped",
+     "lang": "en",
+     "kind": "plain",
+     "name": "onions",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion",
+       "grams": 440
+      }
+     ]
+    },
+    {
+     "id": "en-004",
+     "raw": "6 tbsp chicken tikka masala paste (use shop-bought or make your own – see recipe, below)",
+     "lang": "en",
+     "kind": "branded",
+     "name": "chicken tikka masala paste",
+     "expect": [
+      {
+       "identity": "tikka masala paste",
+       "catalogue": "Tikka masala paste",
+       "grams": 100
+      }
+     ]
+    },
+    {
+     "id": "en-005",
+     "raw": "2 red peppers deseeded and cut into chunks",
+     "lang": "en",
+     "kind": "plain",
+     "name": "red peppers",
+     "expect": [
+      {
+       "identity": "red bell pepper, raw",
+       "catalogue": "Red bell pepper",
+       "grams": 320
+      }
+     ]
+    },
+    {
+     "id": "en-006",
+     "raw": "8 boneless, skinless chicken breasts cut into 2.5cm cubes",
+     "lang": "en",
+     "kind": "plain",
+     "name": "chicken breasts",
+     "expect": [
+      {
+       "identity": "chicken breast, raw",
+       "catalogue": "Chicken breast",
+       "grams": 1200
+      }
+     ]
+    },
+    {
+     "id": "en-007",
+     "raw": "2 x 400g cans  chopped tomatoes",
+     "lang": "en",
+     "kind": "plain",
+     "name": "chopped tomatoes",
+     "expect": [
+      {
+       "identity": "tomatoes, canned, chopped",
+       "catalogue": "Chopped tomatoes (canned)",
+       "grams": 800
+      }
+     ]
+    },
+    {
+     "id": "en-008",
+     "raw": "4 tbsp tomato purée",
+     "lang": "en",
+     "kind": "plain",
+     "name": "tomato purée",
+     "expect": [
+      {
+       "identity": "tomato paste",
+       "catalogue": "Tomato paste",
+       "grams": 64
+      }
+     ]
+    },
+    {
+     "id": "en-009",
+     "raw": "2-3 tbsp  mango chutney",
+     "lang": "en",
+     "kind": "container_range",
+     "name": "mango chutney",
+     "expect": [
+      {
+       "identity": "mango chutney",
+       "off_query": "mango chutney",
+       "off_lang": "en",
+       "off_match": "mango chutney",
+       "grams": 50
+      }
+     ],
+     "note": "midpoint 2.5 tbsp"
+    },
+    {
+     "id": "en-010",
+     "raw": "150ml double cream",
+     "lang": "en",
+     "kind": "plain",
+     "name": "double cream",
+     "expect": [
+      {
+       "identity": "cream, heavy whipping (closest to double cream)",
+       "fdc_query": "cream heavy whipping",
+       "fdc_id": 170859,
+       "grams": 150
+      }
+     ]
+    },
+    {
+     "id": "en-011",
+     "raw": "150ml natural  yogurt",
+     "lang": "en",
+     "kind": "plain",
+     "name": "natural yogurt",
+     "expect": [
+      {
+       "identity": "yogurt, plain",
+       "catalogue": "Natural yogurt",
+       "grams": 155
+      }
+     ]
+    },
+    {
+     "id": "en-012",
+     "raw": "chopped  coriander leaves, to serve",
+     "lang": "en",
+     "kind": "to_taste",
+     "name": "coriander leaves",
+     "expect": [
+      {
+       "identity": "coriander, fresh",
+       "catalogue": "Coriander (fresh)"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "BBC Good Food: Classic lasagne",
+   "source": "https://www.bbcgoodfood.com/recipes/classic-lasagne-0",
+   "lines": [
+    {
+     "id": "en-013",
+     "raw": "2 olive oil plus extra for the dish",
+     "lang": "en",
+     "kind": "plain",
+     "name": "olive oil",
+     "expect": [
+      {
+       "identity": "olive oil",
+       "catalogue": "Olive oil"
+      }
+     ],
+     "note": "unit missing in the source; grams unknown"
+    },
+    {
+     "id": "en-014",
+     "raw": "750g lean beef mince",
+     "lang": "en",
+     "kind": "plain",
+     "name": "lean beef mince",
+     "expect": [
+      {
+       "identity": "beef, ground, raw",
+       "catalogue": "Beef mince",
+       "grams": 750
+      }
+     ]
+    },
+    {
+     "id": "en-015",
+     "raw": "90g pack prosciutto",
+     "lang": "en",
+     "kind": "plain",
+     "name": "prosciutto",
+     "expect": [
+      {
+       "identity": "prosciutto",
+       "off_query": "prosciutto",
+       "off_lang": "en",
+       "off_match": "prosciutto",
+       "grams": 90
+      }
+     ]
+    },
+    {
+     "id": "en-016",
+     "raw": "800g passata or half our basic tomato sauce",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "passata",
+     "expect": [
+      {
+       "identity": "passata",
+       "catalogue": "Passata",
+       "grams": 800
+      }
+     ]
+    },
+    {
+     "id": "en-017",
+     "raw": "200ml hot beef stock",
+     "lang": "en",
+     "kind": "plain",
+     "name": "beef stock",
+     "expect": [
+      {
+       "identity": "beef broth",
+       "catalogue": "Beef broth",
+       "grams": 200
+      }
+     ]
+    },
+    {
+     "id": "en-018",
+     "raw": "nutmeg",
+     "lang": "en",
+     "kind": "to_taste",
+     "name": "nutmeg",
+     "expect": [
+      {
+       "identity": "nutmeg",
+       "catalogue": "Nutmeg"
+      }
+     ]
+    },
+    {
+     "id": "en-019",
+     "raw": "300g fresh lasagne sheets",
+     "lang": "en",
+     "kind": "plain",
+     "name": "fresh lasagne sheets",
+     "expect": [
+      {
+       "identity": "pasta, fresh-refrigerated, plain",
+       "fdc_query": "pasta fresh refrigerated plain",
+       "fdc_id": 169727,
+       "grams": 300
+      }
+     ],
+     "note": "fresh, not the catalogue's dry sheets"
+    },
+    {
+     "id": "en-020",
+     "raw": "white sauce (find a recipe in the method, or use shop-bought)",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "white sauce",
+     "expect": [],
+     "note": "a sub-recipe reference, not a food; the Chef parks or asks"
+    },
+    {
+     "id": "en-021",
+     "raw": "125g ball mozzarella torn into thin strips",
+     "lang": "en",
+     "kind": "plain",
+     "name": "mozzarella",
+     "expect": [
+      {
+       "identity": "mozzarella",
+       "catalogue": "Mozzarella",
+       "grams": 125
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "BBC Good Food: Easy pancakes",
+   "source": "https://www.bbcgoodfood.com/recipes/easy-pancakes",
+   "lines": [
+    {
+     "id": "en-022",
+     "raw": "100g plain flour",
+     "lang": "en",
+     "kind": "plain",
+     "name": "plain flour",
+     "expect": [
+      {
+       "identity": "wheat flour",
+       "catalogue": "Wheat flour",
+       "grams": 100
+      }
+     ]
+    },
+    {
+     "id": "en-023",
+     "raw": "2 large eggs",
+     "lang": "en",
+     "kind": "plain",
+     "name": "eggs",
+     "expect": [
+      {
+       "identity": "egg, whole",
+       "catalogue": "Egg",
+       "grams": 100
+      }
+     ]
+    },
+    {
+     "id": "en-024",
+     "raw": "300ml milk",
+     "lang": "en",
+     "kind": "plain",
+     "name": "milk",
+     "expect": [
+      {
+       "identity": "milk, whole",
+       "catalogue": "Milk (whole)",
+       "grams": 310
+      }
+     ]
+    },
+    {
+     "id": "en-025",
+     "raw": "1 tbsp sunflower or vegetable oil plus a little extra for frying",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "sunflower or vegetable oil",
+     "expect": [
+      {
+       "identity": "vegetable oil",
+       "catalogue": "Vegetable oil",
+       "grams": 14
+      },
+      {
+       "identity": "sunflower oil",
+       "fdc_query": "sunflower oil",
+       "fdc_id": 171025,
+       "grams": 14
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "en-026",
+     "raw": "lemon wedges to serve (optional)",
+     "lang": "en",
+     "kind": "to_taste",
+     "name": "lemon wedges",
+     "expect": [
+      {
+       "identity": "lemon, whole",
+       "catalogue": "Lemon"
+      }
+     ]
+    },
+    {
+     "id": "en-027",
+     "raw": "caster sugar to serve (optional)",
+     "lang": "en",
+     "kind": "to_taste",
+     "name": "caster sugar",
+     "expect": [
+      {
+       "identity": "sugar",
+       "catalogue": "Sugar"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Just One Cookbook: Chicken teriyaki",
+   "source": "https://www.justonecookbook.com/chicken-teriyaki/",
+   "lines": [
+    {
+     "id": "en-028",
+     "raw": "¾–1 lb boneless, skinless chicken thighs",
+     "lang": "en",
+     "kind": "container_range",
+     "name": "chicken thighs",
+     "expect": [
+      {
+       "identity": "chicken thigh, boneless, raw",
+       "catalogue": "Chicken thigh (boneless)",
+       "grams": 397
+      }
+     ],
+     "note": "midpoint 0.875 lb"
+    },
+    {
+     "id": "en-029",
+     "raw": "⅛ tsp Diamond Crystal kosher salt (use half the amount or the same weight for table salt)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "kosher salt",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt",
+       "grams": 0.3
+      }
+     ]
+    },
+    {
+     "id": "en-030",
+     "raw": "⅛ tsp freshly ground black pepper",
+     "lang": "en",
+     "kind": "plain",
+     "name": "black pepper",
+     "expect": [
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper",
+       "grams": 0.3
+      }
+     ]
+    },
+    {
+     "id": "en-031",
+     "raw": "1 Tbsp neutral oil ((for cooking the chicken))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "neutral oil",
+     "expect": [
+      {
+       "identity": "vegetable oil",
+       "catalogue": "Vegetable oil",
+       "grams": 14
+      }
+     ]
+    },
+    {
+     "id": "en-032",
+     "raw": "2 Tbsp soy sauce",
+     "lang": "en",
+     "kind": "plain",
+     "name": "soy sauce",
+     "expect": [
+      {
+       "identity": "soy sauce",
+       "catalogue": "Soy sauce",
+       "grams": 32
+      }
+     ]
+    },
+    {
+     "id": "en-033",
+     "raw": "2 Tbsp mirin",
+     "lang": "en",
+     "kind": "branded",
+     "name": "mirin",
+     "expect": [
+      {
+       "identity": "mirin",
+       "off_query": "mirin",
+       "off_lang": "en",
+       "off_match": "mirin",
+       "grams": 36
+      }
+     ]
+    },
+    {
+     "id": "en-034",
+     "raw": "2 Tbsp sake",
+     "lang": "en",
+     "kind": "plain",
+     "name": "sake",
+     "expect": [
+      {
+       "identity": "sake, rice wine",
+       "fdc_query": "sake",
+       "fdc_id": 167723,
+       "grams": 30
+      }
+     ]
+    },
+    {
+     "id": "en-035",
+     "raw": "1 Tbsp sugar",
+     "lang": "en",
+     "kind": "plain",
+     "name": "sugar",
+     "expect": [
+      {
+       "identity": "sugar",
+       "catalogue": "Sugar",
+       "grams": 13
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "RecipeTin Eats: Shakshuka",
+   "source": "https://www.recipetineats.com/shakshuka/",
+   "lines": [
+    {
+     "id": "en-036",
+     "raw": "2 tbsp olive oil",
+     "lang": "en",
+     "kind": "plain",
+     "name": "olive oil",
+     "expect": [
+      {
+       "identity": "olive oil",
+       "catalogue": "Olive oil",
+       "grams": 27
+      }
+     ]
+    },
+    {
+     "id": "en-037",
+     "raw": "1  small red onion (, peeled, halved and sliced)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "red onion",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion",
+       "grams": 70
+      }
+     ]
+    },
+    {
+     "id": "en-038",
+     "raw": "1  garlic clove (, minced)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "garlic",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic",
+       "grams": 3
+      }
+     ]
+    },
+    {
+     "id": "en-039",
+     "raw": "1  small red capsicum (bell pepper) (, halved lengthways and sliced into 0.5cm/1/4” strips)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "red capsicum",
+     "expect": [
+      {
+       "identity": "red bell pepper, raw",
+       "catalogue": "Red bell pepper",
+       "grams": 120
+      }
+     ]
+    },
+    {
+     "id": "en-040",
+     "raw": "1  tomato (, diced)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "tomato",
+     "expect": [
+      {
+       "identity": "tomato, raw",
+       "catalogue": "Tomato",
+       "grams": 120
+      }
+     ]
+    },
+    {
+     "id": "en-041",
+     "raw": "400 g / 14 oz   can crushed tomatoes",
+     "lang": "en",
+     "kind": "plain",
+     "name": "crushed tomatoes",
+     "expect": [
+      {
+       "identity": "tomatoes, canned, chopped",
+       "catalogue": "Chopped tomatoes (canned)",
+       "grams": 400
+      }
+     ]
+    },
+    {
+     "id": "en-042",
+     "raw": "1 tbsp tomato paste",
+     "lang": "en",
+     "kind": "plain",
+     "name": "tomato paste",
+     "expect": [
+      {
+       "identity": "tomato paste",
+       "catalogue": "Tomato paste",
+       "grams": 16
+      }
+     ]
+    },
+    {
+     "id": "en-043",
+     "raw": "1/2 cup / 125 ml  chicken or vegetable broth (or water)",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "chicken or vegetable broth",
+     "expect": [
+      {
+       "identity": "vegetable broth",
+       "catalogue": "Vegetable broth",
+       "grams": 125
+      },
+      {
+       "identity": "chicken broth",
+       "catalogue": "Chicken broth",
+       "grams": 125
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "en-044",
+     "raw": "1 tsp EACH paprika and cumin",
+     "lang": "en",
+     "kind": "compound",
+     "name": "paprika and cumin",
+     "expect": [
+      {
+       "identity": "paprika powder",
+       "catalogue": "Paprika powder",
+       "grams": 2.3
+      },
+      {
+       "identity": "cumin, ground",
+       "catalogue": "Cumin",
+       "grams": 2.1
+      }
+     ]
+    },
+    {
+     "id": "en-045",
+     "raw": "1/4 tsp EACH black pepper and cayenne pepper  ((or other hot spice, adjust to taste))",
+     "lang": "en",
+     "kind": "compound",
+     "name": "black pepper and cayenne pepper",
+     "expect": [
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper",
+       "grams": 0.6
+      },
+      {
+       "identity": "cayenne pepper, ground",
+       "fdc_query": "cayenne",
+       "fdc_id": 170932,
+       "grams": 0.5
+      }
+     ]
+    },
+    {
+     "id": "en-046",
+     "raw": "1/2 tsp salt",
+     "lang": "en",
+     "kind": "plain",
+     "name": "salt",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt",
+       "grams": 3
+      }
+     ]
+    },
+    {
+     "id": "en-047",
+     "raw": "4 eggs  eggs (up to 6 eggs ok)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "eggs",
+     "expect": [
+      {
+       "identity": "egg, whole",
+       "catalogue": "Egg",
+       "grams": 200
+      }
+     ]
+    },
+    {
+     "id": "en-048",
+     "raw": "2 tbsp fresh parsley or coriander / cilantro  (, roughly chopped)",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "parsley or coriander",
+     "expect": [
+      {
+       "identity": "parsley, fresh",
+       "catalogue": "Parsley",
+       "grams": 8
+      },
+      {
+       "identity": "coriander, fresh",
+       "catalogue": "Coriander (fresh)",
+       "grams": 8
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "en-049",
+     "raw": "Pita or crusty bread, to serve",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "pita or crusty bread",
+     "expect": [
+      {
+       "identity": "bread, pita, white",
+       "fdc_query": "bread pita white",
+       "fdc_id": 174915
+      },
+      {
+       "identity": "ciabatta",
+       "catalogue": "Ciabatta"
+      }
+     ],
+     "any_of": true,
+     "note": "no amount; served alongside"
+    }
+   ]
+  },
+  {
+   "title": "RecipeTin Eats: Thai green curry",
+   "source": "https://www.recipetineats.com/thai-green-curry/",
+   "lines": [
+    {
+     "id": "en-050",
+     "raw": "4 - 6 tbsp Thai Green Curry Paste (Maesri best) OR ((Note 1))",
+     "lang": "en",
+     "kind": "branded",
+     "name": "Thai green curry paste",
+     "expect": [
+      {
+       "identity": "thai green curry paste",
+       "off_query": "thai green curry paste",
+       "off_lang": "en",
+       "off_match": "green curry paste",
+       "grams": 85
+      }
+     ],
+     "note": "range, brand named, alternative on the next line"
+    },
+    {
+     "id": "en-051",
+     "raw": "1 quantity homemade green curry paste ((Note 1))",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "homemade green curry paste",
+     "expect": [],
+     "note": "a sub-recipe reference, not a food"
+    },
+    {
+     "id": "en-052",
+     "raw": "2  large garlic cloves (, minced)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "garlic",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic",
+       "grams": 8
+      }
+     ]
+    },
+    {
+     "id": "en-053",
+     "raw": "2 tsp fresh ginger (, finely grated)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "ginger",
+     "expect": [
+      {
+       "identity": "ginger, fresh",
+       "catalogue": "Ginger",
+       "grams": 4
+      }
+     ]
+    },
+    {
+     "id": "en-054",
+     "raw": "1 tbsp lemongrass paste ((Note 2))",
+     "lang": "en",
+     "kind": "branded",
+     "name": "lemongrass paste",
+     "expect": [
+      {
+       "identity": "lemongrass paste",
+       "off_query": "lemongrass paste",
+       "off_lang": "en",
+       "off_match": "lemongrass",
+       "grams": 15
+      }
+     ]
+    },
+    {
+     "id": "en-055",
+     "raw": "2 tbsp vegetable oil",
+     "lang": "en",
+     "kind": "plain",
+     "name": "vegetable oil",
+     "expect": [
+      {
+       "identity": "vegetable oil",
+       "catalogue": "Vegetable oil",
+       "grams": 27
+      }
+     ]
+    },
+    {
+     "id": "en-056",
+     "raw": "1 cup (250ml)   chicken or vegetable broth, low sodium",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "chicken or vegetable broth",
+     "expect": [
+      {
+       "identity": "vegetable broth",
+       "catalogue": "Vegetable broth",
+       "grams": 250
+      },
+      {
+       "identity": "chicken broth",
+       "catalogue": "Chicken broth",
+       "grams": 250
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "en-057",
+     "raw": "400 g/14oz   coconut milk (, full fat (Note 4))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "coconut milk",
+     "expect": [
+      {
+       "identity": "coconut milk, canned, full fat",
+       "fdc_query": "coconut milk canned",
+       "fdc_id": 170173,
+       "grams": 400
+      }
+     ]
+    },
+    {
+     "id": "en-058",
+     "raw": "1 - 3 tsp fish sauce *",
+     "lang": "en",
+     "kind": "container_range",
+     "name": "fish sauce",
+     "expect": [
+      {
+       "identity": "fish sauce",
+       "fdc_query": "fish sauce",
+       "fdc_id": 174531,
+       "grams": 12
+      }
+     ],
+     "note": "midpoint 2 tsp"
+    },
+    {
+     "id": "en-059",
+     "raw": "1 - 3 tsp white sugar *",
+     "lang": "en",
+     "kind": "container_range",
+     "name": "white sugar",
+     "expect": [
+      {
+       "identity": "sugar",
+       "catalogue": "Sugar",
+       "grams": 8
+      }
+     ],
+     "note": "midpoint 2 tsp"
+    },
+    {
+     "id": "en-060",
+     "raw": "1/8 tsp salt *",
+     "lang": "en",
+     "kind": "plain",
+     "name": "salt",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt",
+       "grams": 0.75
+      }
+     ]
+    },
+    {
+     "id": "en-061",
+     "raw": "6  kaffir lime leaves (, torn in half (Note 5))",
+     "lang": "en",
+     "kind": "vague_count",
+     "name": "kaffir lime leaves",
+     "expect": [
+      {
+       "identity": "kaffir lime leaves",
+       "off_query": "kaffir lime leaves",
+       "off_lang": "en",
+       "off_match": "kaffir lime leaves",
+       "grams": 3
+      }
+     ],
+     "note": "OFF only; under 5 g, so the materiality rule may take a closest match"
+    },
+    {
+     "id": "en-062",
+     "raw": "350 g/12 oz   chicken thigh (, skinless boneless, sliced (Note 6))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "chicken thigh",
+     "expect": [
+      {
+       "identity": "chicken thigh, boneless, raw",
+       "catalogue": "Chicken thigh (boneless)",
+       "grams": 350
+      }
+     ]
+    },
+    {
+     "id": "en-063",
+     "raw": "2  Japanese eggplants,  (, small, 1cm / 2/5\" slices (Note 7))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "Japanese eggplants",
+     "expect": [
+      {
+       "identity": "eggplant, raw",
+       "catalogue": "Eggplant",
+       "grams": 150
+      }
+     ]
+    },
+    {
+     "id": "en-064",
+     "raw": "1 1/2 cups snow peas (, small, trimmed)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "snow peas",
+     "expect": [
+      {
+       "identity": "peas, edible-podded, raw",
+       "fdc_query": "snow peas",
+       "fdc_id": 170010,
+       "grams": 100
+      }
+     ]
+    },
+    {
+     "id": "en-065",
+     "raw": "16  Thai basil leaves ((Note 8))",
+     "lang": "en",
+     "kind": "vague_count",
+     "name": "Thai basil leaves",
+     "expect": [
+      {
+       "identity": "basil, fresh",
+       "fdc_query": "basil fresh",
+       "fdc_id": 172232,
+       "grams": 8
+      }
+     ],
+     "note": "about 0.5 g per leaf"
+    },
+    {
+     "id": "en-066",
+     "raw": "Juice of 1/2 lime (, to taste)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "lime juice",
+     "expect": [
+      {
+       "identity": "lime juice",
+       "catalogue": "Lime juice",
+       "grams": 15
+      }
+     ]
+    },
+    {
+     "id": "en-067",
+     "raw": "Crispy fried Asian shallots (, high recommended (Note 9))",
+     "lang": "en",
+     "kind": "to_taste",
+     "name": "crispy fried shallots",
+     "expect": [],
+     "note": "no provider holds it (OFF search returns only a pork snack); garnish, parks or takes closest"
+    },
+    {
+     "id": "en-068",
+     "raw": "Thai basil or cilantro/coriander (, recommended)",
+     "lang": "en",
+     "kind": "to_taste",
+     "name": "Thai basil or coriander",
+     "expect": [
+      {
+       "identity": "basil, fresh",
+       "fdc_query": "basil fresh",
+       "fdc_id": 172232
+      },
+      {
+       "identity": "coriander, fresh",
+       "catalogue": "Coriander (fresh)"
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "en-069",
+     "raw": "Green or red chillies slices (, optional)",
+     "lang": "en",
+     "kind": "to_taste",
+     "name": "chillies",
+     "expect": [
+      {
+       "identity": "red chili pepper, raw",
+       "catalogue": "Red chili pepper"
+      },
+      {
+       "identity": "green chili pepper, raw",
+       "fdc_query": "green chili pepper",
+       "fdc_id": 170497
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "en-070",
+     "raw": "Steamed jasmine rice",
+     "lang": "en",
+     "kind": "to_taste",
+     "name": "jasmine rice, steamed",
+     "expect": [
+      {
+       "identity": "rice, white, long-grain, cooked",
+       "fdc_query": "rice white long-grain regular cooked",
+       "fdc_id": 168878
+      }
+     ],
+     "note": "no amount; served alongside; the catalogue has dry basmati and cooked brown rice only"
+    }
+   ]
+  },
+  {
+   "title": "RecipeTin Eats: Chicken enchiladas",
+   "source": "https://www.recipetineats.com/chicken-enchiladas/",
+   "lines": [
+    {
+     "id": "en-071",
+     "raw": "8  tortillas (, flour or corn (about 20cm/8\" wide, Note 1))",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "tortillas",
+     "expect": [
+      {
+       "identity": "tortillas, wheat",
+       "catalogue": "Wheat tortillas",
+       "grams": 360
+      },
+      {
+       "identity": "tortillas, corn",
+       "fdc_query": "tortillas corn",
+       "fdc_id": 175036,
+       "grams": 360
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "en-072",
+     "raw": "1 tsp EACH onion powder, garlic powder, salt",
+     "lang": "en",
+     "kind": "compound",
+     "name": "onion powder, garlic powder, salt",
+     "expect": [
+      {
+       "identity": "onion powder",
+       "fdc_query": "onion powder",
+       "fdc_id": 171327,
+       "grams": 2.4
+      },
+      {
+       "identity": "garlic powder",
+       "fdc_query": "garlic powder",
+       "fdc_id": 171325,
+       "grams": 3.1
+      },
+      {
+       "identity": "salt",
+       "catalogue": "Salt",
+       "grams": 6
+      }
+     ]
+    },
+    {
+     "id": "en-073",
+     "raw": "1 tbsp EACH dried cumin powder, paprika, dried oregano",
+     "lang": "en",
+     "kind": "compound",
+     "name": "cumin powder, paprika, dried oregano",
+     "expect": [
+      {
+       "identity": "cumin, ground",
+       "catalogue": "Cumin",
+       "grams": 6
+      },
+      {
+       "identity": "paprika powder",
+       "catalogue": "Paprika powder",
+       "grams": 7
+      },
+      {
+       "identity": "oregano, dried",
+       "catalogue": "Oregano (dried)",
+       "grams": 3
+      }
+     ]
+    },
+    {
+     "id": "en-074",
+     "raw": "1/4 tsp black pepper",
+     "lang": "en",
+     "kind": "plain",
+     "name": "black pepper",
+     "expect": [
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper",
+       "grams": 0.6
+      }
+     ]
+    },
+    {
+     "id": "en-075",
+     "raw": "3/4 tsp cayenne pepper ((optional, adjust to taste))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "cayenne pepper",
+     "expect": [
+      {
+       "identity": "cayenne pepper, ground",
+       "fdc_query": "cayenne",
+       "fdc_id": 170932,
+       "grams": 1.5
+      }
+     ]
+    },
+    {
+     "id": "en-076",
+     "raw": "2 tbsp olive oil",
+     "lang": "en",
+     "kind": "plain",
+     "name": "olive oil",
+     "expect": [
+      {
+       "identity": "olive oil",
+       "catalogue": "Olive oil",
+       "grams": 27
+      }
+     ]
+    },
+    {
+     "id": "en-077",
+     "raw": "3 tbsp flour (, plain/all purpose)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "flour",
+     "expect": [
+      {
+       "identity": "wheat flour",
+       "catalogue": "Wheat flour",
+       "grams": 25
+      }
+     ]
+    },
+    {
+     "id": "en-078",
+     "raw": "2 cups (500ml)  chicken stock/broth (, low sodium)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "chicken stock",
+     "expect": [
+      {
+       "identity": "chicken broth",
+       "catalogue": "Chicken broth",
+       "grams": 500
+      }
+     ]
+    },
+    {
+     "id": "en-079",
+     "raw": "1.5 cups (375ml)  tomato passata or US puree ((Note 4 sub))",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "tomato passata",
+     "expect": [
+      {
+       "identity": "passata",
+       "catalogue": "Passata",
+       "grams": 385
+      }
+     ]
+    },
+    {
+     "id": "en-080",
+     "raw": "600g / 1.2lb  chicken breast (, sliced in half horizontally (or boneless thigh) (Note 2))",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "chicken breast",
+     "expect": [
+      {
+       "identity": "chicken breast, raw",
+       "catalogue": "Chicken breast",
+       "grams": 600
+      },
+      {
+       "identity": "chicken thigh, boneless, raw",
+       "catalogue": "Chicken thigh (boneless)",
+       "grams": 600
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "en-081",
+     "raw": "2 tbsp olive oil (, separated)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "olive oil",
+     "expect": [
+      {
+       "identity": "olive oil",
+       "catalogue": "Olive oil",
+       "grams": 27
+      }
+     ]
+    },
+    {
+     "id": "en-082",
+     "raw": "1/2  onion (, chopped)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "onion",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion",
+       "grams": 55
+      }
+     ]
+    },
+    {
+     "id": "en-083",
+     "raw": "2  garlic cloves (, finely minced)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "garlic",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic",
+       "grams": 6
+      }
+     ]
+    },
+    {
+     "id": "en-084",
+     "raw": "1  red capsicum/bell pepper (, diced)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "red capsicum",
+     "expect": [
+      {
+       "identity": "red bell pepper, raw",
+       "catalogue": "Red bell pepper",
+       "grams": 160
+      }
+     ]
+    },
+    {
+     "id": "en-085",
+     "raw": "400g / 14oz  refried beans ((Note 3))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "refried beans",
+     "expect": [
+      {
+       "identity": "refried beans, canned",
+       "fdc_query": "refried beans",
+       "fdc_id": 2758984,
+       "grams": 400
+      }
+     ]
+    },
+    {
+     "id": "en-086",
+     "raw": "400g/14oz  canned corn (, drained (sub frozen 1 3/4 cups))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "canned corn",
+     "expect": [
+      {
+       "identity": "sweet corn, canned",
+       "catalogue": "Sweet corn (canned)",
+       "grams": 400
+      }
+     ]
+    },
+    {
+     "id": "en-087",
+     "raw": "1/4 cup (65ml)  water",
+     "lang": "en",
+     "kind": "plain",
+     "name": "water",
+     "expect": [],
+     "note": "water has no nutrition and needs no match"
+    },
+    {
+     "id": "en-088",
+     "raw": "1 cup (100g)  cheese (shredded (Mexican cheese blend, Monterey Jack, cheddar))",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "cheese",
+     "expect": [
+      {
+       "identity": "cheddar",
+       "catalogue": "Cheddar",
+       "grams": 100
+      },
+      {
+       "identity": "cheese, monterey",
+       "fdc_query": "cheese monterey",
+       "fdc_id": 170844,
+       "grams": 100
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "en-089",
+     "raw": "1.5 cups (150g)  cheese (, shredded)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "cheese",
+     "expect": [
+      {
+       "identity": "cheddar",
+       "catalogue": "Cheddar",
+       "grams": 150
+      },
+      {
+       "identity": "mozzarella",
+       "catalogue": "Mozzarella",
+       "grams": 150
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "en-090",
+     "raw": "2 tbsp coriander/cilantro (, roughly chopped)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "coriander",
+     "expect": [
+      {
+       "identity": "coriander, fresh",
+       "catalogue": "Coriander (fresh)",
+       "grams": 8
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

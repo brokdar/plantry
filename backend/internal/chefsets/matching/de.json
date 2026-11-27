@@ -1,0 +1,1124 @@
+{
+ "set": "de",
+ "recipes": [
+  {
+   "title": "Chefkoch: Bombay curry",
+   "source": "repo:backend/internal/adapters/jsonld/testdata/chefkoch_bombay_real.html",
+   "lines": [
+    {
+     "id": "de-001",
+     "raw": "1 EL Ghee (oder Butterschmalz)",
+     "lang": "de",
+     "kind": "alternatives",
+     "name": "Ghee",
+     "expect": [
+      {
+       "identity": "ghee",
+       "catalogue": "Ghee",
+       "grams": 14
+      },
+      {
+       "identity": "butterschmalz, clarified butter",
+       "fdc_query": "butter oil anhydrous",
+       "fdc_id": 173412,
+       "grams": 14
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "de-002",
+     "raw": "2 m.-große Zwiebel(n) (gehackt)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Zwiebel",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion",
+       "grams": 220
+      }
+     ]
+    },
+    {
+     "id": "de-003",
+     "raw": "2  Knoblauchzehe(n) (zerdrückt)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Knoblauch",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic",
+       "grams": 6
+      }
+     ]
+    },
+    {
+     "id": "de-004",
+     "raw": "2  Chilischote(n) (grüne, entkernt, gehackt)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Chilischote, grün",
+     "expect": [
+      {
+       "identity": "green chili pepper, raw",
+       "fdc_query": "green chili pepper",
+       "fdc_id": 170497,
+       "grams": 30
+      }
+     ],
+     "note": "catalogue has only the red chili"
+    },
+    {
+     "id": "de-005",
+     "raw": "1 EL Ingwerwurzel (frisch, geraspelt)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Ingwer",
+     "expect": [
+      {
+       "identity": "ginger, fresh",
+       "catalogue": "Ginger",
+       "grams": 6
+      }
+     ]
+    },
+    {
+     "id": "de-006",
+     "raw": "1.5 TL Kurkumapulver",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Kurkumapulver",
+     "expect": [
+      {
+       "identity": "turmeric, ground",
+       "fdc_query": "turmeric ground",
+       "fdc_id": 172231,
+       "grams": 4.5
+      }
+     ]
+    },
+    {
+     "id": "de-007",
+     "raw": "1 TL Kreuzkümmelpulver",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Kreuzkümmelpulver",
+     "expect": [
+      {
+       "identity": "cumin, ground",
+       "catalogue": "Cumin",
+       "grams": 2
+      }
+     ]
+    },
+    {
+     "id": "de-008",
+     "raw": "1 EL Korianderpulver",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Korianderpulver",
+     "expect": [
+      {
+       "identity": "coriander seed, ground",
+       "fdc_query": "coriander seed",
+       "fdc_id": 170922,
+       "grams": 6
+      }
+     ]
+    },
+    {
+     "id": "de-009",
+     "raw": "1.5 TL Chilipulver",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Chilipulver",
+     "expect": [
+      {
+       "identity": "chili powder",
+       "catalogue": "Chili powder",
+       "grams": 4
+      }
+     ]
+    },
+    {
+     "id": "de-010",
+     "raw": "1 kg Rindfleisch (oder Lamm, in mundgerechte Stücke geschnitten)",
+     "lang": "de",
+     "kind": "alternatives",
+     "name": "Rindfleisch",
+     "expect": [
+      {
+       "identity": "beef, stewing cut, raw",
+       "catalogue": "Beef shoulder",
+       "grams": 1000
+      },
+      {
+       "identity": "lamb shoulder, raw",
+       "fdc_query": "lamb shoulder",
+       "fdc_id": 174330,
+       "grams": 1000
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "de-011",
+     "raw": "1 TL Salz",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Salz",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt",
+       "grams": 6
+      }
+     ]
+    },
+    {
+     "id": "de-012",
+     "raw": "1 Dose Tomaten, geschälte (in Stücke geschnitten)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Tomaten, geschält",
+     "expect": [
+      {
+       "identity": "tomatoes, canned, chopped",
+       "catalogue": "Chopped tomatoes (canned)",
+       "grams": 400
+      }
+     ]
+    },
+    {
+     "id": "de-013",
+     "raw": "210 ml Kokosmilch (ungesüßt)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Kokosmilch",
+     "expect": [
+      {
+       "identity": "coconut milk, canned, full fat",
+       "fdc_query": "coconut milk canned",
+       "fdc_id": 170173,
+       "grams": 205
+      }
+     ],
+     "note": "catalogue has only the light version, a different fat level"
+    },
+    {
+     "id": "de-014",
+     "raw": "etwas Koriandergrün (zum Garnieren)",
+     "lang": "de",
+     "kind": "to_taste",
+     "name": "Koriandergrün",
+     "expect": [
+      {
+       "identity": "coriander, fresh",
+       "catalogue": "Coriander (fresh)"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Chefkoch: Hackauflauf",
+   "source": "repo:backend/internal/adapters/jsonld/testdata/chefkoch_hackauflauf_real.html",
+   "lines": [
+    {
+     "id": "de-015",
+     "raw": "1 Glas Schafskäse (Würfel in Öl, ca. 150 - 200 g)",
+     "lang": "de",
+     "kind": "container_range",
+     "name": "Schafskäse",
+     "expect": [
+      {
+       "identity": "feta, sheep's milk cheese",
+       "catalogue": "Feta",
+       "grams": 175
+      }
+     ],
+     "note": "midpoint of 150-200 g"
+    },
+    {
+     "id": "de-016",
+     "raw": "600 g Rinderhackfleisch (oder Lammhackfleisch)",
+     "lang": "de",
+     "kind": "alternatives",
+     "name": "Rinderhackfleisch",
+     "expect": [
+      {
+       "identity": "beef, ground, raw",
+       "catalogue": "Beef mince",
+       "grams": 600
+      },
+      {
+       "identity": "lamb, ground, raw",
+       "fdc_query": "lamb ground",
+       "fdc_id": 174370,
+       "grams": 600
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "de-017",
+     "raw": "500 g Champignons (frische)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Champignons",
+     "expect": [
+      {
+       "identity": "mushrooms, raw",
+       "catalogue": "Mushrooms",
+       "grams": 500
+      }
+     ]
+    },
+    {
+     "id": "de-018",
+     "raw": "2  Paprikaschote(n), rote (und grüne)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Paprikaschote, rot",
+     "expect": [
+      {
+       "identity": "red bell pepper, raw",
+       "catalogue": "Red bell pepper",
+       "grams": 320
+      }
+     ]
+    },
+    {
+     "id": "de-019",
+     "raw": "2  Knoblauchzehe(n)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Knoblauch",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic",
+       "grams": 6
+      }
+     ]
+    },
+    {
+     "id": "de-020",
+     "raw": "300 g Crème fraîche",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Crème fraîche",
+     "expect": [
+      {
+       "identity": "crème fraîche",
+       "off_query": "creme fraiche",
+       "off_lang": "de",
+       "off_match": "fraîche",
+       "grams": 300
+      }
+     ]
+    },
+    {
+     "id": "de-021",
+     "raw": "1 TL Oregano (getrockneter)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Oregano, getrocknet",
+     "expect": [
+      {
+       "identity": "oregano, dried",
+       "catalogue": "Oregano (dried)",
+       "grams": 1
+      }
+     ]
+    },
+    {
+     "id": "de-022",
+     "raw": "100 g Schafskäse (am Stück)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Schafskäse",
+     "expect": [
+      {
+       "identity": "feta, sheep's milk cheese",
+       "catalogue": "Feta",
+       "grams": 100
+      }
+     ]
+    },
+    {
+     "id": "de-023",
+     "raw": "Salz und Pfeffer (frisch gemahlener)",
+     "lang": "de",
+     "kind": "compound",
+     "name": "Salz und Pfeffer",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt"
+      },
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Chefkoch: Knoblauchbrot",
+   "source": "repo:backend/internal/adapters/jsonld/testdata/chefkoch_knoblauchbrot.html",
+   "lines": [
+    {
+     "id": "de-024",
+     "raw": "1 Baguette",
+     "lang": "de",
+     "kind": "vague_count",
+     "name": "Baguette",
+     "expect": [
+      {
+       "identity": "bread, french or vienna",
+       "fdc_query": "bread french",
+       "fdc_id": 172675,
+       "grams": 250
+      }
+     ],
+     "note": "one baguette about 250 g"
+    },
+    {
+     "id": "de-025",
+     "raw": "3 Zehen Knoblauch",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Knoblauch",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic",
+       "grams": 9
+      }
+     ]
+    },
+    {
+     "id": "de-026",
+     "raw": "100 g Butter, weich",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Butter",
+     "expect": [
+      {
+       "identity": "butter",
+       "catalogue": "Butter",
+       "grams": 100
+      }
+     ]
+    },
+    {
+     "id": "de-027",
+     "raw": "½ Bund Petersilie",
+     "lang": "de",
+     "kind": "vague_count",
+     "name": "Petersilie",
+     "expect": [
+      {
+       "identity": "parsley, fresh",
+       "catalogue": "Parsley",
+       "grams": 25
+      }
+     ],
+     "note": "half a bunch about 25 g"
+    },
+    {
+     "id": "de-028",
+     "raw": "1 Prise Salz",
+     "lang": "de",
+     "kind": "to_taste",
+     "name": "Salz",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt",
+       "grams": 0.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Chefkoch: Lasagne",
+   "source": "repo:backend/internal/adapters/jsonld/testdata/chefkoch_lasagna_real.html",
+   "lines": [
+    {
+     "id": "de-029",
+     "raw": "8  Lasagneplatte(n) (vorgegarte, n. B. auch mehr je nach Formengröße)",
+     "lang": "de",
+     "kind": "vague_count",
+     "name": "Lasagneplatten",
+     "expect": [
+      {
+       "identity": "lasagne sheets, dry",
+       "catalogue": "Lasagne sheets (dry)",
+       "grams": 200
+      }
+     ],
+     "note": "about 25 g per sheet"
+    },
+    {
+     "id": "de-030",
+     "raw": "Fett für die Form",
+     "lang": "de",
+     "kind": "to_taste",
+     "name": "Fett für die Form",
+     "expect": [
+      {
+       "identity": "butter",
+       "catalogue": "Butter"
+      },
+      {
+       "identity": "vegetable oil",
+       "catalogue": "Vegetable oil"
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "de-031",
+     "raw": "600 g Hackfleisch, gemischtes",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Hackfleisch, gemischt",
+     "expect": [
+      {
+       "identity": "pork, ground, raw (half beef, half pork)",
+       "fdc_query": "pork ground",
+       "fdc_id": 167902,
+       "grams": 600
+      },
+      {
+       "identity": "beef, ground, raw (closest leaf)",
+       "catalogue": "Beef mince",
+       "grams": 600
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "de-032",
+     "raw": "3 EL Olivenöl",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Olivenöl",
+     "expect": [
+      {
+       "identity": "olive oil",
+       "catalogue": "Olive oil",
+       "grams": 40
+      }
+     ]
+    },
+    {
+     "id": "de-033",
+     "raw": "1 große Möhre(n)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Möhre",
+     "expect": [
+      {
+       "identity": "carrot, raw",
+       "catalogue": "Carrot",
+       "grams": 100
+      }
+     ]
+    },
+    {
+     "id": "de-034",
+     "raw": "1 Stück(e) Knollensellerie (etwa gleich viel wie die Möhre)",
+     "lang": "de",
+     "kind": "vague_count",
+     "name": "Knollensellerie",
+     "expect": [
+      {
+       "identity": "celeriac, raw",
+       "fdc_query": "celeriac raw",
+       "fdc_id": 170400,
+       "grams": 100
+      }
+     ],
+     "note": "weight from the text: as much as the carrot; the catalogue Celery is stalk celery"
+    },
+    {
+     "id": "de-035",
+     "raw": "1 große Zwiebel(n)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Zwiebel",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion",
+       "grams": 150
+      }
+     ]
+    },
+    {
+     "id": "de-036",
+     "raw": "2  Knoblauchzehe(n)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Knoblauch",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic",
+       "grams": 6
+      }
+     ]
+    },
+    {
+     "id": "de-037",
+     "raw": "200 ml Weißwein",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Weißwein",
+     "expect": [
+      {
+       "identity": "white wine, table",
+       "fdc_query": "white wine",
+       "fdc_id": 174837,
+       "grams": 198
+      }
+     ]
+    },
+    {
+     "id": "de-038",
+     "raw": "500 ml Gemüsebrühe",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Gemüsebrühe",
+     "expect": [
+      {
+       "identity": "vegetable broth",
+       "catalogue": "Vegetable broth",
+       "grams": 500
+      }
+     ]
+    },
+    {
+     "id": "de-039",
+     "raw": "2 EL Tomatenmark",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Tomatenmark",
+     "expect": [
+      {
+       "identity": "tomato paste",
+       "catalogue": "Tomato paste",
+       "grams": 32
+      }
+     ]
+    },
+    {
+     "id": "de-040",
+     "raw": "Salz und Pfeffer",
+     "lang": "de",
+     "kind": "compound",
+     "name": "Salz und Pfeffer",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt"
+      },
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper"
+      }
+     ]
+    },
+    {
+     "id": "de-041",
+     "raw": "Zucker",
+     "lang": "de",
+     "kind": "to_taste",
+     "name": "Zucker",
+     "expect": [
+      {
+       "identity": "sugar",
+       "catalogue": "Sugar"
+      }
+     ]
+    },
+    {
+     "id": "de-042",
+     "raw": "2 EL Butter",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Butter",
+     "expect": [
+      {
+       "identity": "butter",
+       "catalogue": "Butter",
+       "grams": 28
+      }
+     ]
+    },
+    {
+     "id": "de-043",
+     "raw": "3 EL, gestr. Mehl",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Mehl",
+     "expect": [
+      {
+       "identity": "wheat flour",
+       "catalogue": "Wheat flour",
+       "grams": 25
+      }
+     ]
+    },
+    {
+     "id": "de-044",
+     "raw": "500 ml Milch",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Milch",
+     "expect": [
+      {
+       "identity": "milk, whole",
+       "catalogue": "Milk (whole)",
+       "grams": 515
+      }
+     ]
+    },
+    {
+     "id": "de-045",
+     "raw": "Muskat",
+     "lang": "de",
+     "kind": "to_taste",
+     "name": "Muskat",
+     "expect": [
+      {
+       "identity": "nutmeg",
+       "catalogue": "Nutmeg"
+      }
+     ]
+    },
+    {
+     "id": "de-046",
+     "raw": "100 g Parmesan, frisch geriebener",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Parmesan",
+     "expect": [
+      {
+       "identity": "parmesan",
+       "catalogue": "Parmesan",
+       "grams": 100
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Chefkoch: Risotto",
+   "source": "repo:backend/internal/adapters/jsonld/testdata/chefkoch_risotto.html",
+   "lines": [
+    {
+     "id": "de-047",
+     "raw": "300 g Risottoreis (Arborio)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Risottoreis",
+     "expect": [
+      {
+       "identity": "rice, white, short-grain, raw",
+       "fdc_query": "rice short-grain raw",
+       "fdc_id": 168931,
+       "grams": 300
+      }
+     ]
+    },
+    {
+     "id": "de-048",
+     "raw": "1 l Gemüsebrühe",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Gemüsebrühe",
+     "expect": [
+      {
+       "identity": "vegetable broth",
+       "catalogue": "Vegetable broth",
+       "grams": 1000
+      }
+     ]
+    },
+    {
+     "id": "de-049",
+     "raw": "1 Zwiebel",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Zwiebel",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion",
+       "grams": 110
+      }
+     ]
+    },
+    {
+     "id": "de-050",
+     "raw": "2 EL Olivenöl",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Olivenöl",
+     "expect": [
+      {
+       "identity": "olive oil",
+       "catalogue": "Olive oil",
+       "grams": 27
+      }
+     ]
+    },
+    {
+     "id": "de-051",
+     "raw": "100 ml Weißwein",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Weißwein",
+     "expect": [
+      {
+       "identity": "white wine, table",
+       "fdc_query": "white wine",
+       "fdc_id": 174837,
+       "grams": 99
+      }
+     ]
+    },
+    {
+     "id": "de-052",
+     "raw": "50 mg Safranfäden",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Safran",
+     "expect": [
+      {
+       "identity": "saffron",
+       "fdc_query": "saffron",
+       "fdc_id": 170934,
+       "grams": 0.05
+      }
+     ],
+     "note": "unit mg as in the source"
+    },
+    {
+     "id": "de-053",
+     "raw": "80 g Parmesan, gerieben",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Parmesan",
+     "expect": [
+      {
+       "identity": "parmesan",
+       "catalogue": "Parmesan",
+       "grams": 80
+      }
+     ]
+    },
+    {
+     "id": "de-054",
+     "raw": "30 g Butter",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Butter",
+     "expect": [
+      {
+       "identity": "butter",
+       "catalogue": "Butter",
+       "grams": 30
+      }
+     ]
+    },
+    {
+     "id": "de-055",
+     "raw": "1 Prise Salz",
+     "lang": "de",
+     "kind": "to_taste",
+     "name": "Salz",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt",
+       "grams": 0.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Chefkoch: Spaghetti Carbonara",
+   "source": "repo:backend/internal/adapters/jsonld/testdata/chefkoch_spaghetti_carbonara.html",
+   "lines": [
+    {
+     "id": "de-056",
+     "raw": "400 g Spaghetti",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Spaghetti",
+     "expect": [
+      {
+       "identity": "pasta, dry",
+       "catalogue": "Pasta (dry)",
+       "grams": 400
+      }
+     ]
+    },
+    {
+     "id": "de-057",
+     "raw": "200 g Pancetta oder durchwachsener Speck",
+     "lang": "de",
+     "kind": "alternatives",
+     "name": "Pancetta",
+     "expect": [
+      {
+       "identity": "bacon or pancetta, cured pork belly",
+       "catalogue": "Bacon (smoked)",
+       "grams": 200
+      }
+     ]
+    },
+    {
+     "id": "de-058",
+     "raw": "4 Eier",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Eier",
+     "expect": [
+      {
+       "identity": "egg, whole",
+       "catalogue": "Egg",
+       "grams": 200
+      }
+     ]
+    },
+    {
+     "id": "de-059",
+     "raw": "100 g Parmesan, gerieben",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Parmesan",
+     "expect": [
+      {
+       "identity": "parmesan",
+       "catalogue": "Parmesan",
+       "grams": 100
+      }
+     ]
+    },
+    {
+     "id": "de-060",
+     "raw": "2 Zehen Knoblauch, fein gehackt",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Knoblauch",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic",
+       "grams": 6
+      }
+     ]
+    },
+    {
+     "id": "de-061",
+     "raw": "1 Prise Salz",
+     "lang": "de",
+     "kind": "to_taste",
+     "name": "Salz",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt",
+       "grams": 0.5
+      }
+     ]
+    },
+    {
+     "id": "de-062",
+     "raw": "nach Geschmack Pfeffer",
+     "lang": "de",
+     "kind": "to_taste",
+     "name": "Pfeffer",
+     "expect": [
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Eat This: vegetables",
+   "source": "repo:backend/internal/adapters/jsonld/testdata/eat_this_recipe.html",
+   "lines": [
+    {
+     "id": "de-063",
+     "raw": "200 g Paprika",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Paprika",
+     "expect": [
+      {
+       "identity": "red bell pepper, raw",
+       "catalogue": "Red bell pepper",
+       "grams": 200
+      }
+     ],
+     "note": "colour not stated; the catalogue's bell pepper is red"
+    },
+    {
+     "id": "de-064",
+     "raw": "200 g Zucchini",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Zucchini",
+     "expect": [
+      {
+       "identity": "zucchini, raw",
+       "catalogue": "Zucchini",
+       "grams": 200
+      }
+     ]
+    },
+    {
+     "id": "de-065",
+     "raw": "1 Zwiebel",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Zwiebel",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion",
+       "grams": 110
+      }
+     ]
+    },
+    {
+     "id": "de-066",
+     "raw": "2 EL Olivenöl",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Olivenöl",
+     "expect": [
+      {
+       "identity": "olive oil",
+       "catalogue": "Olive oil",
+       "grams": 27
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Kitchen Stories: cake",
+   "source": "repo:backend/internal/adapters/jsonld/testdata/kitchenstories_generic.html",
+   "lines": [
+    {
+     "id": "de-067",
+     "raw": "2 cups flour",
+     "lang": "en",
+     "kind": "plain",
+     "name": "flour",
+     "expect": [
+      {
+       "identity": "wheat flour",
+       "catalogue": "Wheat flour",
+       "grams": 250
+      }
+     ]
+    },
+    {
+     "id": "de-068",
+     "raw": "1 cup sugar",
+     "lang": "en",
+     "kind": "plain",
+     "name": "sugar",
+     "expect": [
+      {
+       "identity": "sugar",
+       "catalogue": "Sugar",
+       "grams": 200
+      }
+     ]
+    },
+    {
+     "id": "de-069",
+     "raw": "100 g dark chocolate",
+     "lang": "en",
+     "kind": "plain",
+     "name": "dark chocolate",
+     "expect": [
+      {
+       "identity": "chocolate, dark",
+       "fdc_query": "candies chocolate dark",
+       "fdc_id": 170274,
+       "grams": 100
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Chefkoch: Chili",
+   "source": "repo:backend/internal/domain/importer/testdata/chefkoch_chili.html",
+   "lines": [
+    {
+     "id": "de-070",
+     "raw": "400 g Kidneybohnen",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Kidneybohnen",
+     "expect": [
+      {
+       "identity": "kidney beans, canned, drained",
+       "catalogue": "Kidney beans (canned, drained)",
+       "grams": 400
+      }
+     ],
+     "note": "a chili recipe; the can is the unit"
+    },
+    {
+     "id": "de-071",
+     "raw": "1 Zwiebel(n)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Zwiebel",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion",
+       "grams": 110
+      }
+     ]
+    },
+    {
+     "id": "de-072",
+     "raw": "2 Zehen Knoblauch",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Knoblauch",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic",
+       "grams": 6
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
