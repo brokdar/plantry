@@ -14,7 +14,7 @@ import {
 } from "./helpers"
 
 // F4 / AC-4.1: a heuristic generation includes the explore recipe
-// exactly once when `plan.explore_per_week = 1`. The recipe is seeded with
+// exactly once when `chef.new_dishes_per_week = 1`. The recipe is seeded with
 // the `explore` tag a saved suggestion gets (discovery.spec.ts walks the
 // accepting); this spec is about what the generator does with it. It writes
 // a global plan setting and fills every slot of a window, so it runs alone
@@ -75,7 +75,7 @@ test("F4-AC4: with one explore recipe a week and quota 1, the generated window h
   }
   const ctx = await apiRequest.newContext({ baseURL: API })
   try {
-    await setSetting("plan.explore_per_week", "1")
+    await setSetting("chef.new_dishes_per_week", "1")
     await ctx.delete(`/api/plan?from=${start}&to=${days[6]}`)
     const res = await ctx.post("/api/plan/generate", {
       data: { start, chooser: "heuristic" },
@@ -112,7 +112,7 @@ test("F4-AC4: with one explore recipe a week and quota 1, the generated window h
     ).json()) as RunDetail
     expect(run.score?.variety.explore).toEqual({ target: 1, placed: 1 })
   } finally {
-    await ctx.delete("/api/settings/plan.explore_per_week")
+    await ctx.delete("/api/settings/chef.new_dishes_per_week")
     await ctx.delete(`/api/plan?from=${start}&to=${days[6]}`)
     await ctx.dispose()
     await cleanupSlot(slot.id)

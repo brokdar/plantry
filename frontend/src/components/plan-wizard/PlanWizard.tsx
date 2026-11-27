@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { AvailabilityDefault } from "@/lib/api/availability"
+import { newDishesPerWeek } from "@/lib/chef-settings"
 import type { GenerateInput } from "@/lib/api/generation"
 import type { Plan } from "@/lib/api/plan"
 import {
@@ -115,9 +116,7 @@ export function PlanWizard({ start }: { start?: string }) {
       key={plan.data.window.start}
       phone={phone}
       plan={plan.data}
-      includeNewDefault={
-        Number(settings.data["plan.explore_per_week"]?.value) > 0
-      }
+      includeNewDefault={newDishesPerWeek(settings.data) > 0}
       household={profile.data.household_portions}
       // No provider configured: the heuristic plans (spec §13 "Without
       // AI"); with one, the server's default chooser (D11).

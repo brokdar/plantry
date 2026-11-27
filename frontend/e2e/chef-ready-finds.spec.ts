@@ -22,7 +22,7 @@ import { SITE } from "./discovery-fixture"
  * C3: with the Chef on, generating a window places a ready find (FIND-3);
  * the plan page lists it under "What the assistant did" and Undo takes it
  * out again (PRO-5). The find comes from a requested run with the fake
- * provider and the fixture site. chef.*, plan.explore_per_week and
+ * provider and the fixture site. chef.*, chef.new_dishes_per_week and
  * ai.fake_script are process-global, so this runs in global-settings.
  */
 
@@ -40,7 +40,7 @@ async function clearGlobals() {
     "chef.enabled",
     "chef.sites",
     "ai.fake_script",
-    "plan.explore_per_week",
+    "chef.new_dishes_per_week",
   ]) {
     await ctx.delete(`/api/settings/${key}`)
   }
@@ -144,7 +144,7 @@ test("generating places a ready find; the list shows it and Undo removes it", as
       )
       .toBe("ready")
 
-    await setSetting("plan.explore_per_week", "1")
+    await setSetting("chef.new_dishes_per_week", "1")
     await ctx.delete(`/api/plan?from=${start}&to=${days[6]}`)
     const res = await ctx.post("/api/plan/generate", {
       data: { start, chooser: "heuristic" },

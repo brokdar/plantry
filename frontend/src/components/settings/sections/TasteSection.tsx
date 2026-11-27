@@ -5,7 +5,11 @@ import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { TasteFood, TasteItem } from "@/lib/api/taste"
+import { chefPlanning } from "@/lib/chef-settings"
+import { usePlan } from "@/lib/queries/plan"
+import { useSettingItems } from "@/lib/queries/settings"
 import { useTaste, useTasteEdits } from "@/lib/queries/taste"
+import { themeLabel, useWindowThemes } from "@/lib/queries/themes"
 
 import { SettingsGroup } from "../controls"
 
@@ -41,6 +45,7 @@ export function TasteSection() {
       <StaplesGroup staples={taste.staples} />
       <ItemGroup id="cuisines" items={cuisines} />
       <KitchenLink />
+      <ThemeGroup />
       <RecentGroup />
     </div>
   )
@@ -216,6 +221,31 @@ function StaplesGroup({ staples }: { staples: TasteFood[] }) {
           </li>
         ))}
       </ul>
+    </SettingsGroup>
+  )
+}
+
+/** This week's theme (THEME-2): it ends with the window; the plan page
+ *  sets it. Only with the Chef on and a provider, like the picker. */
+function ThemeGroup() {
+  const { t } = useTranslation()
+  const on = chefPlanning(useSettingItems().data)
+  const plan = usePlan()
+  const start = plan.data?.window.start ?? ""
+  const themes = useWindowThemes(start, on && start !== "").data?.themes
+  if (!on || !themes) return null
+  return (
+    <SettingsGroup title={t("settings_page.taste.theme.title")}>
+      <p className="py-3 text-body text-ink">
+        {themes.length > 0
+          ? t("settings_page.taste.theme.line", {
+              names: themes.map((th) => themeLabel(th.value)).join(", "),
+            })
+          : t("settings_page.taste.theme.empty")}{" "}
+        <Link to="/plan" className="text-accent underline">
+          {t("settings_page.taste.theme.link")}
+        </Link>
+      </p>
     </SettingsGroup>
   )
 }

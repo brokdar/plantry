@@ -396,7 +396,7 @@ describe("PlanWizard", () => {
 
     await user.click(screen.getByRole("button", { name: "Next" }))
     await screen.findByRole("heading", { name: "Anything special this week?" })
-    // plan.explore_per_week = 0: the toggle starts off.
+    // chef.new_dishes_per_week unset with the Chef off: the toggle starts off.
     const toggle = screen.getByRole("switch", { name: "Include a new recipe" })
     expect(toggle).not.toBeChecked()
     await user.click(toggle)
@@ -416,9 +416,11 @@ describe("PlanWizard", () => {
     })
   })
 
-  it("Generate without a note leaves the note out; the toggle follows plan.explore_per_week", async () => {
+  it("Generate without a note leaves the note out; the toggle follows chef.new_dishes_per_week", async () => {
     vi.mocked(listSettings).mockResolvedValue(
-      mockSettingsList([{ key: "plan.explore_per_week", value: "1" }])
+      mockSettingsList([
+        { key: "chef.new_dishes_per_week", value: "1", source: "db" },
+      ])
     )
     const user = await openWizard()
     await user.click(screen.getByRole("button", { name: "Next" }))
