@@ -158,7 +158,7 @@ func TestCapture_PlateEventsByActor(t *testing.T) {
 	assert.InDelta(t, taste.WeightPlateRemoved*taste.HeroShare, salmon.Evidence.Neg, 1e-9, "a confirmed plate removed teaches nothing")
 
 	before := r.signals(taste.SignalPlateAdded)
-	r.plate(taste.Quiet(r.ctx), 6, r.curry)
+	r.plate(plate.WithoutTaste(r.ctx), 6, r.curry)
 	assert.Equal(t, before, r.signals(taste.SignalPlateAdded), "a quiet change teaches nothing")
 
 	var never int

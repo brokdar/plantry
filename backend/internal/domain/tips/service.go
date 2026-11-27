@@ -17,7 +17,6 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/platefit"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/taste"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -728,7 +727,7 @@ func (s *Service) Apply(ctx context.Context, id int64) (plate.Undo, error) {
 		return plate.Undo{}, err
 	}
 	// The tip's plate change is a tip signal, not a hand edit.
-	return s.d.Plates.Recorded(taste.Quiet(ctx), func(ctx context.Context) error {
+	return s.d.Plates.Recorded(plate.WithoutTaste(ctx), func(ctx context.Context) error {
 		// Re-read inside the transaction: a second Apply (another tab) that
 		// waited for this one must find the tip applied and refuse.
 		if cur, err := s.d.Store.Get(ctx, id); err != nil {

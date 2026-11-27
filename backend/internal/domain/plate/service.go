@@ -163,6 +163,17 @@ func (s *Service) WithTaste(t TasteSink) *Service {
 	return s
 }
 
+type noTasteKey struct{}
+
+// WithoutTaste marks ctx so the mutations made in it are not passed to the
+// taste sink: a tip's Apply, a re-plan's or an away cell's removals are not
+// hand edits of a meal.
+func WithoutTaste(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noTasteKey{}, true)
+}
+
+func tasteOff(ctx context.Context) bool { v, _ := ctx.Value(noTasteKey{}).(bool); return v }
+
 // NewService creates a plate service.
 func NewService(d Deps) *Service {
 	now := d.Now

@@ -90,14 +90,6 @@ func NewService(d Deps) *Service {
 
 var _ foodevent.Restorer = (*Service)(nil)
 
-type quietKey struct{}
-
-// Quiet marks ctx so plate changes made in it teach nothing: a tip's Apply
-// is a tip signal, not a hand edit.
-func Quiet(ctx context.Context) context.Context { return context.WithValue(ctx, quietKey{}, true) }
-
-func quiet(ctx context.Context) bool { v, _ := ctx.Value(quietKey{}).(bool); return v }
-
 // ── Capture (TASTE-2) ───────────────────────────────────────────────────
 
 // Rating records a plate rating that changed from old to status: loved and
@@ -118,11 +110,12 @@ func (s *Service) Rating(ctx context.Context, p *plate.Plate, old, status string
 
 // PlateChanged is the plate service's hook for each plate event it writes.
 // Only the user's own create, update and delete teach (never an assistant's
-// or the generator's, never an undo or a restore): a plate added by hand is
+// or the generator's, never an undo or a restore; the plate service skips
+// changes made under plate.WithoutTaste): a plate added by hand is
 // evidence for its recipes, a recipe removed from a draft plate (the plate
 // deleted, or the recipe replaced) against them.
 func (s *Service) PlateChanged(ctx context.Context, action plate.Action, before, after *plate.Plate) error {
-	if quiet(ctx) || actor.From(ctx).Kind != actor.User {
+	if actor.From(ctx).Kind != actor.User {
 		return nil
 	}
 	switch action {

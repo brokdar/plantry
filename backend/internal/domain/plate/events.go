@@ -189,7 +189,7 @@ func (s *Service) commit(ctx context.Context, j *journal) error {
 		if err := s.events.Append(ctx, e); err != nil {
 			return err
 		}
-		if s.taste != nil {
+		if s.taste != nil && !tasteOff(ctx) {
 			if err := s.taste.PlateChanged(ctx, e.Action, before, after); err != nil {
 				return err
 			}
