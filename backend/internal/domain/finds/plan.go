@@ -35,6 +35,8 @@ type Library interface {
 	// Unplan removes the window's draft plates that eat foodID; a confirmed
 	// one refuses (domain.ErrInUse).
 	Unplan(ctx context.Context, foodID int64, windowStart time.Time) error
+	// OnDraft reports whether a draft plate of the window eats foodID.
+	OnDraft(ctx context.Context, foodID int64, windowStart time.Time) (bool, error)
 }
 
 // Planning is what the planning side of finds reads (C3).
@@ -214,10 +216,20 @@ func (s *Service) Activities(ctx context.Context, windowStart time.Time, budget 
 	}
 	list = []Activity{}
 	for _, f := range fs {
-		a := Activity{Kind: ActivityKindFindPlaced, FindID: f.ID, Name: f.Dish}
-		if f.FoodID != nil {
-			a.FoodID = *f.FoodID
+		// A regenerate may have dropped the recipe, and an accepted plate
+		// makes the Undo fail: neither is something the assistant did now.
+		if f.FoodID == nil {
+			continue
 		}
+		on, err := s.d.Planning.Library.OnDraft(ctx, *f.FoodID, windowStart)
+		if err != nil {
+			return nil, 0, err
+		}
+		if !on {
+			continue
+		}
+		a := Activity{Kind: ActivityKindFindPlaced, FindID: f.ID, Name: f.Dish}
+		a.FoodID = *f.FoodID
 		if f.Draft != nil && f.Draft.Name != "" {
 			a.Name = f.Draft.Name
 		}

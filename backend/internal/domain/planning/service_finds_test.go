@@ -12,6 +12,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
@@ -139,4 +140,47 @@ func TestGenerate_ChefOffPlacesNoFind(t *testing.T) {
 	id := e.readyFind("Dal")
 	e.generate(e.req())
 	assert.Equal(t, finds.StateReady, e.find(id).State)
+}
+
+type countingSink struct{ calls int }
+
+func (c *countingSink) PlateChanged(context.Context, plate.Action, *plate.Plate, *plate.Plate) error {
+	c.calls++
+	return nil
+}
+
+// C3 review: Undo of a placed find is no taste (no plate_removed dislike),
+// and the activity list shows only finds whose recipe still sits on a draft
+// plate of the window.
+func TestGenerate_UndoTeachesNothingAndActivitiesFollowThePlates(t *testing.T) {
+	e := newFindsEnv(t, true)
+	first := e.readyFind("Dal")
+	e.generate(e.req())
+	placed := e.find(first)
+	require.NotNil(t, placed.FoodID)
+
+	sink := &countingSink{}
+	e.plates.WithTaste(sink)
+	require.NoError(t, e.finds.UndoPlaced(e.ctx, first))
+	assert.Zero(t, sink.calls, "an Undo is not a hand edit of a meal")
+
+	// A placed find whose plates are gone is no longer listed.
+	e.generate(e.req()) // the undone find is ready again and placed again
+	again := e.find(first)
+	require.Equal(t, finds.StateInLibrary, again.State)
+	list, _, err := e.finds.Activities(e.ctx, e.start, 5)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	for _, p := range e.window() {
+		for _, c := range p.Components {
+			if c.FoodID == *again.FoodID {
+				_, err := e.plates.RemoveMeals(plate.WithoutTaste(e.ctx), []int64{p.ID})
+				require.NoError(t, err)
+			}
+		}
+	}
+	list, more, err := e.finds.Activities(e.ctx, e.start, 5)
+	require.NoError(t, err)
+	assert.Empty(t, list)
+	assert.Zero(t, more)
 }

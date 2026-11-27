@@ -958,9 +958,8 @@ func (s *Service) execute(ctx context.Context, run Run, j job) {
 			}
 		}()
 		staged := s.stage(tctx, j)
-		end = s.generate(tctx, run.ID(), j)
-		s.settle(ctx, j, staged)
-		return end
+		defer s.settle(ctx, j, staged) // also after a panic in generate
+		return s.generate(tctx, run.ID(), j)
 	}()
 	if end.Status == airun.StatusError && s.base.Err() != nil {
 		end.ErrorKey = "error.server" // interrupted by Shutdown
