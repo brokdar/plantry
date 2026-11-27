@@ -108,9 +108,15 @@ function useAbout() {
       case "cuisine":
         return t(`attributes.cuisine.${i.key}`, { defaultValue: plain })
       case "technique":
+        return t(`settings_page.taste.technique.${i.key}`, {
+          defaultValue: plain,
+        })
       case "format":
+        return t(`settings_page.taste.format.${i.key}`, {
+          defaultValue: plain,
+        })
       case "flavour":
-        return t(`settings_page.taste.${i.level}.${i.key}`, {
+        return t(`settings_page.taste.flavour.${i.key}`, {
           defaultValue: plain,
         })
       default:
