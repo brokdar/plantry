@@ -2286,6 +2286,10 @@
         "checks_failed": "Needs a look: {{codes}}",
         "nothing_found": "Found no usable recipe",
         "no_search": "This provider can't search the web on its own",
+        "no_provider": "No AI provider is set up",
+        "off": "The assistant is switched off",
+        "unpriced": "The model has no known price, so it cannot run",
+        "cap": "This month's AI spend cap is reached",
         "error": "Something went wrong while looking"
       },
       "origin": {

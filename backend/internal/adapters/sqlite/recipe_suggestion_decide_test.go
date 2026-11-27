@@ -12,6 +12,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
@@ -205,4 +206,36 @@ func seedRecipeRow(t *testing.T, db *sql.DB, name string) int64 {
 	id, err := res.LastInsertId()
 	require.NoError(t, err)
 	return id
+}
+
+// A find shares the table but is not a Discover suggestion: the daily prune
+// keeps it, ShowNext never puts it in the daily slot and Decide leaves it.
+func TestRecipeSuggestionRepo_IgnoresFinds(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewRecipeSuggestionRepo(db)
+	findRepo := sqlite.NewFindRepo(db)
+	f, err := findRepo.Create(ctx, "pho", finds.TriggerChat)
+	require.NoError(t, err)
+	_, err = findRepo.Finish(ctx, f.ID, finds.Outcome{State: finds.StateReady})
+	require.NoError(t, err)
+	_, err = db.Exec(`UPDATE recipe_suggestions SET created_at = '2000-01-01 00:00:00' WHERE id = ?`, f.ID)
+	require.NoError(t, err)
+
+	next, err := repo.ShowNext(ctx, "2026-11-27", 0)
+	require.NoError(t, err)
+	assert.Nil(t, next, "a ready find is not a daily suggestion")
+
+	deleted, err := repo.DeletePendingBefore(ctx, time.Now())
+	require.NoError(t, err)
+	assert.Empty(t, deleted)
+	got, err := findRepo.Get(ctx, f.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "ready", string(got.State))
+
+	_, err = repo.Decide(ctx, f.ID, discovery.Decision{Status: discovery.StatusRejected})
+	require.Error(t, err)
+	got, err = findRepo.Get(ctx, f.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "ready", string(got.State))
 }

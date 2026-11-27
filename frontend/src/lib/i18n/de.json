@@ -2286,6 +2286,10 @@
         "checks_failed": "Braucht einen Blick: {{codes}}",
         "nothing_found": "Kein brauchbares Rezept gefunden",
         "no_search": "Dieser Anbieter kann nicht selbst im Web suchen",
+        "no_provider": "Kein KI-Anbieter eingerichtet",
+        "off": "Der Assistent ist ausgeschaltet",
+        "unpriced": "Das Modell hat keinen bekannten Preis und kann nicht laufen",
+        "cap": "Das KI-Monatslimit ist erreicht",
         "error": "Bei der Suche ist etwas schiefgegangen"
       },
       "origin": {

@@ -86,8 +86,8 @@ type Querier interface {
 	DeleteFoodPortion(ctx context.Context, arg DeleteFoodPortionParams) (sql.Result, error)
 	DeleteFoodTags(ctx context.Context, foodID int64) error
 	DeleteHiddenVariant(ctx context.Context, foodID int64) error
-	// D12: pending suggestions created before the cutoff go; their ids let the
-	// caller delete the images.
+	// D12: pending suggestions (not finds, which have a state) created before
+	// the cutoff go; their ids let the caller delete the images.
 	DeletePendingSuggestionsBefore(ctx context.Context, before string) ([]int64, error)
 	DeletePlanLightBefore(ctx context.Context, date string) error
 	DeletePlanLightDate(ctx context.Context, date string) error
@@ -245,6 +245,9 @@ type Querier interface {
 	// when a linked plate was not marked not_eaten), a positive signal, and no
 	// dislike signal since @dislike_since.
 	ListStapleFoods(ctx context.Context, arg ListStapleFoodsParams) ([]int64, error)
+	// Searching finds no chef_find job is queued or running for (the job failed
+	// at boot recovery or was lost).
+	ListStrandedFindIDs(ctx context.Context) ([]int64, error)
 	ListTasteItems(ctx context.Context) ([]TasteItem, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	ListUndoneAIChangesAfter(ctx context.Context, firstEventID sql.NullInt64) ([]AiChange, error)

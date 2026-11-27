@@ -12,6 +12,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
@@ -67,4 +68,19 @@ func TestFindsHandler(t *testing.T) {
 	require.Contains(t, w.Body.String(), `"state":"discarded"`)
 	require.Equal(t, http.StatusConflict, do(http.MethodPost, "/api/finds/1/keep", `{"food_id":3}`).Code)
 	require.Equal(t, http.StatusBadRequest, do(http.MethodPost, "/api/finds/1/keep", `{}`).Code)
+}
+
+// Without an AI provider a find is refused up front, not left searching.
+func TestFindsHandler_NoProvider(t *testing.T) {
+	t.Parallel()
+	svc := finds.NewService(finds.Deps{
+		Store:   sqlite.NewFindRepo(testhelper.NewTestDB(t)),
+		LLM:     llm.StaticResolver(nil, ""),
+		Enqueue: func(context.Context, int64, bool) error { return nil },
+	})
+	h := handlers.NewFindsHandler(svc, func(context.Context) (bool, error) { return true, nil })
+	w := httptest.NewRecorder()
+	h.Create(w, httptest.NewRequest(http.MethodPost, "/api/finds", strings.NewReader(`{"dish":"pho"}`)))
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
+	require.Contains(t, w.Body.String(), "error.ai.provider_missing")
 }

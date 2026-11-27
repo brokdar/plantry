@@ -3,9 +3,11 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
 
 // FindsHandler serves the finds API (spec §8): list, read, request,
@@ -71,6 +73,10 @@ func (h *FindsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f, err := h.svc.Request(r.Context(), req.Dish, finds.TriggerDiscover)
+	if errors.Is(err, llm.ErrProviderMissing) {
+		writeError(w, http.StatusServiceUnavailable, "error.ai.provider_missing")
+		return
+	}
 	if err != nil {
 		status, key := toHTTPWithResource(err, "find")
 		writeError(w, status, key)

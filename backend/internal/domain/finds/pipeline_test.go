@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -311,4 +312,106 @@ func TestPipeline_PausedSearchContinues(t *testing.T) {
 	require.Equal(t, finds.StateReady, f.State, f.Steps)
 	reqs := r.client.Requests()
 	require.Len(t, reqs[1].Messages, 2, "the paused reply went back")
+}
+
+// A find never waits on a job that will not run: no provider refuses the
+// request, a failed queueing, a skipped job and a lost job end it failed.
+func TestPipeline_NeverStrandedSearching(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	stepKey := func(f *finds.Find) string {
+		require.Equal(t, finds.StateFailed, f.State)
+		require.Len(t, f.Steps, 1)
+		return f.Steps[0].Key
+	}
+	t.Run("no provider refuses the request", func(t *testing.T) {
+		t.Parallel()
+		r := newRig(t, true, lineMatcher{}, kitchen)
+		svc := finds.NewService(finds.Deps{Store: r.store, LLM: noProvider{}, Enqueue: func(context.Context, int64, bool) error { return nil }})
+		_, err := svc.Request(ctx, "pho", finds.TriggerChat)
+		require.ErrorIs(t, err, llm.ErrProviderMissing)
+		all, err := r.store.List(ctx, nil, 10)
+		require.NoError(t, err)
+		require.Empty(t, all)
+	})
+	t.Run("enqueue error fails the find", func(t *testing.T) {
+		t.Parallel()
+		r := newRig(t, true, lineMatcher{}, kitchen)
+		svc := finds.NewService(finds.Deps{Store: r.store, Enqueue: func(context.Context, int64, bool) error { return errors.New("db full") }})
+		_, err := svc.Request(ctx, "pho", finds.TriggerChat)
+		require.Error(t, err)
+		all, err := r.store.List(ctx, nil, 10)
+		require.NoError(t, err)
+		require.Len(t, all, 1)
+		require.Equal(t, "error", stepKey(&all[0]))
+	})
+	t.Run("a skipped job fails the find with the guard's reason", func(t *testing.T) {
+		t.Parallel()
+		r := newRig(t, true, lineMatcher{}, kitchen)
+		f, err := r.svc.Request(ctx, "pho", finds.TriggerChat)
+		require.NoError(t, err)
+		r.svc.Unfinished(ctx, strconv.FormatInt(f.ID, 10), true, "no_provider")
+		got, err := r.svc.Get(ctx, f.ID)
+		require.NoError(t, err)
+		require.Equal(t, "no_provider", stepKey(got))
+	})
+	t.Run("a finished find stays when its job is reported", func(t *testing.T) {
+		t.Parallel()
+		r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...), adaptTurn(false, fitsKitchen))
+		f := r.run(t, finds.TriggerChat)
+		require.Equal(t, finds.StateReady, f.State)
+		r.svc.Unfinished(ctx, strconv.FormatInt(f.ID, 10), false, "boom")
+		got, err := r.svc.Get(ctx, f.ID)
+		require.NoError(t, err)
+		require.Equal(t, finds.StateReady, got.State)
+	})
+	t.Run("a find without a job fails at boot", func(t *testing.T) {
+		t.Parallel()
+		r := newRig(t, true, lineMatcher{}, kitchen)
+		f, err := r.svc.Request(ctx, "pho", finds.TriggerChat)
+		require.NoError(t, err)
+		require.NoError(t, r.svc.FailStranded(ctx))
+		got, err := r.svc.Get(ctx, f.ID)
+		require.NoError(t, err)
+		require.Equal(t, "error", stepKey(got))
+	})
+	t.Run("a find with a queued job keeps searching", func(t *testing.T) {
+		t.Parallel()
+		r := newRig(t, true, lineMatcher{}, kitchen)
+		f, err := r.svc.Request(ctx, "pho", finds.TriggerChat)
+		require.NoError(t, err)
+		_, err = sqlite.NewChefJobRepo(r.db).Enqueue(ctx, airun.KindChefFind, strconv.FormatInt(f.ID, 10), true, time.Now())
+		require.NoError(t, err)
+		require.NoError(t, r.svc.FailStranded(ctx))
+		got, err := r.svc.Get(ctx, f.ID)
+		require.NoError(t, err)
+		require.Equal(t, finds.StateSearching, got.State)
+	})
+}
+
+type noProvider struct{}
+
+func (noProvider) Current(context.Context) (llm.Client, string, error) {
+	return nil, "", llm.ErrProviderMissing
+}
+
+type failingTaste struct{}
+
+func (failingTaste) NotForMeIngredients(context.Context, []string) error {
+	return errors.New("taste down")
+}
+
+// A discard whose learning fails leaves the find undecided.
+func TestDiscard_LearnFailureKeepsFindOpen(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...), adaptTurn(false, fitsKitchen))
+	f := r.run(t, finds.TriggerChat)
+	require.Equal(t, finds.StateReady, f.State)
+	svc := finds.NewService(finds.Deps{Store: r.store, Taste: failingTaste{}, Tx: sqlite.NewTxRunner(r.db)})
+	_, err := svc.Discard(ctx, f.ID, finds.ReasonIngredients, []string{"cilantro"})
+	require.Error(t, err)
+	got, err := r.svc.Get(ctx, f.ID)
+	require.NoError(t, err)
+	require.Equal(t, finds.StateReady, got.State)
 }

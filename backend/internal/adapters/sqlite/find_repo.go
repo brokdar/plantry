@@ -119,6 +119,15 @@ func (r *FindRepo) Decide(ctx context.Context, id int64, state finds.State, reas
 	return mapFind(row)
 }
 
+// Stranded returns the ids of searching finds without a queued or running job.
+func (r *FindRepo) Stranded(ctx context.Context) ([]int64, error) {
+	ids, err := r.queriesFor(ctx).ListStrandedFindIDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list stranded finds: %w", err)
+	}
+	return ids, nil
+}
+
 // SourceURLs lists every food's and suggestion's source URL.
 func (r *FindRepo) SourceURLs(ctx context.Context) ([]string, error) {
 	return r.queriesFor(ctx).ListSourceURLs(ctx)

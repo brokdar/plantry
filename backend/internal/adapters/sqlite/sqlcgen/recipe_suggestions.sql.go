@@ -101,7 +101,7 @@ const decideRecipeSuggestion = `-- name: DecideRecipeSuggestion :one
 UPDATE recipe_suggestions SET
     status = ?1, reason = ?2, food_id = ?3,
     decided_at = datetime('now')
-WHERE id = ?4 AND status = 'pending'
+WHERE id = ?4 AND status = 'pending' AND state IS NULL
 RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at
 `
 
@@ -153,12 +153,12 @@ func (q *Queries) DecideRecipeSuggestion(ctx context.Context, arg DecideRecipeSu
 
 const deletePendingSuggestionsBefore = `-- name: DeletePendingSuggestionsBefore :many
 DELETE FROM recipe_suggestions
-WHERE status = 'pending' AND created_at < ?1
+WHERE status = 'pending' AND state IS NULL AND created_at < ?1
 RETURNING id
 `
 
-// D12: pending suggestions created before the cutoff go; their ids let the
-// caller delete the images.
+// D12: pending suggestions (not finds, which have a state) created before
+// the cutoff go; their ids let the caller delete the images.
 func (q *Queries) DeletePendingSuggestionsBefore(ctx context.Context, before string) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, deletePendingSuggestionsBefore, before)
 	if err != nil {
@@ -462,7 +462,7 @@ const showNextPending = `-- name: ShowNextPending :one
 UPDATE recipe_suggestions SET shown_on = ?1
 WHERE id = (
     SELECT s.id FROM recipe_suggestions s
-    WHERE s.status = 'pending' AND s.shown_on IS NULL AND s.id > ?2
+    WHERE s.status = 'pending' AND s.state IS NULL AND s.shown_on IS NULL AND s.id > ?2
     ORDER BY s.id LIMIT 1
 )
 RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at

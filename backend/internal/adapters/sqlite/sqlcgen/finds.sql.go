@@ -309,6 +309,40 @@ func (q *Queries) ListSourcePenalties(ctx context.Context) ([]ListSourcePenaltie
 	return items, nil
 }
 
+const listStrandedFindIDs = `-- name: ListStrandedFindIDs :many
+SELECT s.id FROM recipe_suggestions s
+WHERE s.state = 'searching'
+  AND NOT EXISTS (
+    SELECT 1 FROM chef_jobs j
+    WHERE j.kind = 'chef_find' AND j.payload = CAST(s.id AS TEXT) AND j.status IN ('queued', 'running')
+  )
+`
+
+// Searching finds no chef_find job is queued or running for (the job failed
+// at boot recovery or was lost).
+func (q *Queries) ListStrandedFindIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listStrandedFindIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markKitchenQuestionAsked = `-- name: MarkKitchenQuestionAsked :exec
 INSERT INTO kitchen_questions_asked (question) VALUES (?) ON CONFLICT (question) DO NOTHING
 `

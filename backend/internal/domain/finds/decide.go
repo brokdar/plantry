@@ -50,25 +50,41 @@ func (s *Service) Discard(ctx context.Context, id int64, reason string, ingredie
 	default:
 		return nil, fmt.Errorf("%w: unknown reason %q", domain.ErrInvalidInput, reason)
 	}
-	f, err := s.d.Store.Decide(ctx, id, StateDiscarded, r, nil)
+	var f *Find
+	decide := func(ctx context.Context) error {
+		var err error
+		if f, err = s.d.Store.Decide(ctx, id, StateDiscarded, r, nil); err != nil {
+			return err
+		}
+		return s.learn(ctx, f, reason, ingredients)
+	}
+	// Decide and learn together: a failed learn leaves the find undecided.
+	var err error
+	if s.d.Tx != nil {
+		err = s.d.Tx.InTx(ctx, decide)
+	} else {
+		err = decide(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
+	return f, nil
+}
+
+func (s *Service) learn(ctx context.Context, f *Find, reason string, ingredients []string) error {
 	switch reason {
 	case ReasonLooksWrong:
 		for _, src := range f.Sources {
 			if src.Base {
 				if err := s.d.Store.PenaliseSource(ctx, src.Site); err != nil {
-					return nil, err
+					return err
 				}
 			}
 		}
 	case ReasonIngredients:
 		if s.d.Taste != nil {
-			if err := s.d.Taste.NotForMeIngredients(ctx, ingredients); err != nil {
-				return nil, err
-			}
+			return s.d.Taste.NotForMeIngredients(ctx, ingredients)
 		}
 	}
-	return f, nil
+	return nil
 }

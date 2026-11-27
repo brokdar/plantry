@@ -486,6 +486,11 @@ func run() error {
 			airun.KindChefFind:       func(ctx context.Context, job chef.Job) error { return findSvc.Handle(ctx, job.Payload) },
 		},
 		Concurrency: chefJobConcurrency, MaxAttempts: chefJobMaxAttempts, Now: time.Now, Logger: logger,
+		OnUnfinished: func(ctx context.Context, job chef.Job, status chef.Status, errText string) {
+			if job.Kind == airun.KindChefFind {
+				findSvc.Unfinished(ctx, job.Payload, status == chef.StatusSkipped, errText)
+			}
+		},
 	})
 	labelling = flavor.NewLabelling(
 		flavor.NewLabeler(foodAttributeRepo, foodRepo, nutritionResolver, txRunner, llmResolver, runRecorder),
@@ -516,7 +521,7 @@ func run() error {
 			_, err := chefRunner.Enqueue(ctx, airun.KindChefFind, strconv.FormatInt(id, 10), requested)
 			return err
 		},
-		Taste: tasteSvc, Logger: logger,
+		Taste: tasteSvc, Tx: txRunner, Logger: logger,
 	})
 	findRequester.svc = findSvc
 	foodSvc.WithSaved(func(ctx context.Context, id int64) {
@@ -526,6 +531,9 @@ func run() error {
 	})
 	if err := chefRunner.Start(context.Background()); err != nil {
 		return err
+	}
+	if err := findSvc.FailStranded(context.Background()); err != nil {
+		logger.Warn("finds.stranded sweep failed", "error", err)
 	}
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), chefShutdownWait)

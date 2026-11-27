@@ -71,7 +71,9 @@ type Deps struct {
 	// Enqueue queues the find's chef_find job.
 	Enqueue func(ctx context.Context, id int64, requested bool) error
 	Taste   Taste
-	Logger  *slog.Logger
+	// Tx, when set, makes a discard and what it teaches one unit.
+	Tx     domain.Transactor
+	Logger *slog.Logger
 }
 
 // Service runs finds.
@@ -91,14 +93,58 @@ func (s *Service) Request(ctx context.Context, dish string, trigger Trigger) (*F
 	if dish == "" {
 		return nil, fmt.Errorf("%w: a find needs a dish", domain.ErrInvalidInput)
 	}
+	if s.d.LLM != nil {
+		if _, _, err := s.d.LLM.Current(ctx); err != nil {
+			return nil, err
+		}
+	}
 	f, err := s.d.Store.Create(ctx, dish, trigger)
 	if err != nil {
 		return nil, err
 	}
 	if err := s.d.Enqueue(ctx, f.ID, trigger.Requested()); err != nil {
+		s.Abandon(ctx, f.ID, "error")
 		return nil, fmt.Errorf("queue find %d: %w", f.ID, err)
 	}
 	return f, nil
+}
+
+// Abandon ends a searching find whose job will not run (skipped by the
+// guard, failed before the handler, or never queued) as failed, with the
+// step key as its reason. A find that already left searching stays.
+func (s *Service) Abandon(ctx context.Context, id int64, key string) {
+	_, err := s.d.Store.Finish(ctx, id, Outcome{State: StateFailed, Steps: []Step{{Key: key}}})
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		s.d.Logger.WarnContext(ctx, "finds.abandon failed", "find", id, "error", err)
+	}
+}
+
+// FailStranded fails the searching finds whose job is gone (it failed at
+// boot recovery); call it after the runner started.
+func (s *Service) FailStranded(ctx context.Context) error {
+	ids, err := s.d.Store.Stranded(ctx)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		s.Abandon(ctx, id, "error")
+	}
+	return nil
+}
+
+// Unfinished is the runner's hook for a chef_find job that ended skipped
+// or failed: the find fails with the guard's reason (no_provider, off,
+// unpriced, cap) or a generic error.
+func (s *Service) Unfinished(ctx context.Context, payload string, skipped bool, reason string) {
+	id, err := strconv.ParseInt(payload, 10, 64)
+	if err != nil {
+		return
+	}
+	key := "error"
+	if skipped {
+		key = reason
+	}
+	s.Abandon(ctx, id, key)
 }
 
 // Handle runs the find named by a chef_find job payload (its id).

@@ -141,6 +141,8 @@ type Store interface {
 	// Decide keeps (in_library, with food) or discards a ready or
 	// needs_check find; domain.ErrDiscoveryDecided when it is decided already.
 	Decide(ctx context.Context, id int64, state State, reason *string, foodID *int64) (*Find, error)
+	// Stranded are the searching finds no job is queued or running for.
+	Stranded(ctx context.Context) ([]int64, error)
 	// SourceURLs are the URLs of every food and suggestion (duplicates).
 	SourceURLs(ctx context.Context) ([]string, error)
 	PenaliseSource(ctx context.Context, site string) error

@@ -50,3 +50,13 @@ INSERT INTO kitchen_questions_asked (question) VALUES (?) ON CONFLICT (question)
 
 -- name: ListKitchenQuestionsAsked :many
 SELECT question FROM kitchen_questions_asked ORDER BY question;
+
+-- name: ListStrandedFindIDs :many
+-- Searching finds no chef_find job is queued or running for (the job failed
+-- at boot recovery or was lost).
+SELECT s.id FROM recipe_suggestions s
+WHERE s.state = 'searching'
+  AND NOT EXISTS (
+    SELECT 1 FROM chef_jobs j
+    WHERE j.kind = 'chef_find' AND j.payload = CAST(s.id AS TEXT) AND j.status IN ('queued', 'running')
+  );

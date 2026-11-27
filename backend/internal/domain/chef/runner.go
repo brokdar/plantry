@@ -65,6 +65,9 @@ type RunnerConfig struct {
 	MaxAttempts int
 	Now         func() time.Time
 	Logger      *slog.Logger
+	// OnUnfinished, when set, hears of a job that ended skipped or failed,
+	// so what the job was for does not wait on it forever.
+	OnUnfinished func(ctx context.Context, job Job, status Status, errText string)
 }
 
 // Runner runs queued capped jobs in the background: at most Concurrency at
@@ -189,6 +192,9 @@ func (r *Runner) processOne(ctx context.Context) (bool, error) {
 	}
 	if err := r.cfg.Store.Finish(context.WithoutCancel(ctx), job.ID, status, errText, r.cfg.Now()); err != nil {
 		r.cfg.Logger.Error("chef.jobs.finish", "job", job.ID, "error", err)
+	}
+	if r.cfg.OnUnfinished != nil && (status == StatusSkipped || status == StatusFailed) {
+		r.cfg.OnUnfinished(context.WithoutCancel(ctx), job, status, errText)
 	}
 	return true, nil
 }
