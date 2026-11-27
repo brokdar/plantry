@@ -62,7 +62,7 @@ func fesenjan(t *testing.T) (*annotateEnv, *importer.Draft) {
 	e := newAnnotateEnv(t)
 	used := []string{"Walnüsse", "Granatapfelsirup", "Zwiebel", "Hähnchenbrust", "Olivenöl", "Salz"}
 	// Plausible kcal for the foods the synonym table knows (MATCH-2 bands).
-	kcals := []float64{100, 150, 40, 250, 884, 350}
+	kcals := []float64{650, 150, 40, 250, 884, 350}
 	for i, n := range used {
 		e.leaf(t, n, ptr(kcals[i]), ptr(float64(5+i)), ptr(float64(3+i)), ptr(float64(10+i)))
 	}
