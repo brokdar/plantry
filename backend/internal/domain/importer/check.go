@@ -280,6 +280,23 @@ func keepsNumbers(old, next string) bool {
 	return true
 }
 
+// urlLikeRE matches a scheme, "www." or a domain-like word ("x.example",
+// "foo.com/bar"); the check never adds a link to a step.
+var urlLikeRE = regexp.MustCompile(`(?i)(https?://|www\.|\b[a-z0-9-]+\.(?:com|net|org|io|de|example|co|info|app|ru|xyz)\b)`)
+
+// boundedRewrite: NFR-4, a step edit stays near the author's text. A clarity
+// rewrite is at most max(2x, +200 chars); a cue or lead time adds at most 200
+// chars. No edit carries a link.
+func boundedRewrite(kind, old, next string) bool {
+	if urlLikeRE.MatchString(next) && !urlLikeRE.MatchString(old) {
+		return false
+	}
+	if kind == ChangeClarity {
+		return len(next) <= max(2*len(old), len(old)+200)
+	}
+	return len(next) <= len(old)+200
+}
+
 var stepKinds = map[string]string{"safety_cue": ChangeSafetyCue, "clarity": ChangeClarity, "lead_time": ChangeLeadTime}
 
 // apply validates r against d and applies what is valid, in place. It
@@ -358,6 +375,8 @@ func apply(d *Draft, r checkReply, lang string) (*Check, []string) {
 			reject("step %d text", e.Step)
 		case !keepsNumbers(d.Instructions[e.Step], text):
 			reject("step %d loses a number", e.Step)
+		case !boundedRewrite(kind, d.Instructions[e.Step], text):
+			reject("step %d: edit too long or carries a link", e.Step)
 		case kind != ChangeClarity && !strings.Contains(diet.Fold(text), diet.Fold(strings.TrimRight(d.Instructions[e.Step], ".!? "))):
 			reject("step %d: a %s only adds", e.Step, e.Kind)
 		default:

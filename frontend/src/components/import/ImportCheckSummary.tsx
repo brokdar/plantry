@@ -6,7 +6,7 @@ import type { ImportCheck } from "@/lib/api/import"
 /**
  * The import check's one line ("Checked: 4 changes, 1 to look at"), each
  * applied change with Undo, the flags and the finishing-touch suggestion
- * (IMP-5). A check that ran and found nothing, or none, shows nothing; a
+ * (IMP-5). A check that ran and found nothing, or none, shows nothing (but the cap warning); a
  * finding never blocks Save.
  */
 export function ImportCheckSummary({
@@ -26,7 +26,8 @@ export function ImportCheckSummary({
   if (!check?.ran) return null
   const touch = check.finishing_touch
   const look = check.flags.length + (touch ? 1 : 0)
-  if (check.changes.length === 0 && look === 0) return null
+  if (check.changes.length === 0 && look === 0 && !check.cap_warning)
+    return null
 
   const parts = [
     check.changes.length > 0
@@ -41,9 +42,11 @@ export function ImportCheckSummary({
       data-testid="import-check"
       aria-label={t("import.check.title")}
     >
-      <p className="text-sm font-medium text-ink">
-        {t("import.check.prefix", { parts: parts.join(", ") })}
-      </p>
+      {parts.length > 0 && (
+        <p className="text-sm font-medium text-ink">
+          {t("import.check.prefix", { parts: parts.join(", ") })}
+        </p>
+      )}
       {check.cap_warning && (
         <p className="text-small text-ink-muted">
           {t("import.check.cap_warning")}

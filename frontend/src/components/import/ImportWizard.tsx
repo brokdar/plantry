@@ -151,6 +151,7 @@ export function ImportWizard({
 
   /** Puts one change's edits back (IMP-5: Undo before Save). */
   function undoChange(change: ImportChange) {
+    let stale = false
     for (const e of change.edits) {
       switch (e.field) {
         case "prep_minutes":
@@ -174,11 +175,23 @@ export function ImportWizard({
         case "description":
           setDescription(e.before as string)
           break
-        case "step":
+        case "step": {
+          // Steps can be edited, moved or deleted after the check: put
+          // `before` back only over a step that still reads `after`.
+          const after = (e.after as string).trim()
+          const at =
+            steps[e.index]?.trim() === after
+              ? e.index
+              : steps.findIndex((s) => s.trim() === after)
+          if (at < 0) {
+            stale = true
+            break
+          }
           setSteps((prev) =>
-            prev.map((s, i) => (i === e.index ? (e.before as string) : s))
+            prev.map((s, i) => (i === at ? (e.before as string) : s))
           )
           break
+        }
         case "ingredient": {
           const b = e.before as IngredientEditValue
           setRows((prev) =>
@@ -196,6 +209,10 @@ export function ImportWizard({
           break
         }
       }
+    }
+    if (stale) {
+      toast.warning(t("import.check.step_changed"))
+      return
     }
     setUndone((prev) => new Set(prev).add(change.id))
   }

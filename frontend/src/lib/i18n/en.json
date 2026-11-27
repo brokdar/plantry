@@ -84,6 +84,7 @@
       "look_other": "{{count}} to look at",
       "undone": "Undone",
       "cap_warning": "This month's assistant budget is used up; this check ran because you asked for the import.",
+      "step_changed": "That step was changed since the check, so Undo left it as it is.",
       "touch": "A finishing touch you could add",
       "touch_add": "Add as last step",
       "kind": {
@@ -2161,6 +2162,7 @@
       "failed": "The search didn't work. Try again."
     },
     "review": {
+      "checking": "Checking the recipe...",
       "gone": "This idea is no longer available.",
       "failed": "Couldn't open this idea. Try again.",
       "accept_failed": "Recipe saved, but the idea couldn't be marked as added."

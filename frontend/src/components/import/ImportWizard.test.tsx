@@ -310,6 +310,53 @@ describe("ImportWizard", () => {
     ])
   })
 
+  function stepCheck(instructions: string[]) {
+    vi.mocked(extractRecipe).mockResolvedValue({
+      draft: { ...draft, instructions },
+      check: {
+        ran: true,
+        changes: [
+          {
+            id: "c1",
+            kind: "safety_cue",
+            reason: "core temperature",
+            edits: [
+              {
+                field: "step",
+                index: 2,
+                before: "Backen.",
+                after: "Backen bis 74 °C im Kern.",
+              },
+            ],
+          },
+        ],
+        flags: [],
+      },
+    })
+  }
+
+  it("undoes a step cue on the step that still has it after a delete", async () => {
+    stepCheck(["Teig kneten.", "Ruhen.", "Backen bis 74 °C im Kern."])
+    const user = await openReview()
+    await user.click(screen.getByRole("button", { name: "Delete step 1" }))
+    await user.click(screen.getByRole("button", { name: "Undo" }))
+    expect(screen.getByDisplayValue("Backen.")).toBeVisible()
+    expect(screen.getByDisplayValue("Ruhen.")).toBeVisible()
+    expect(screen.queryByDisplayValue("Teig kneten.")).toBeNull()
+  })
+
+  it("does not overwrite a step the user edited since the check", async () => {
+    stepCheck(["Teig kneten.", "Ruhen.", "Backen bis 74 °C im Kern."])
+    const user = await openReview()
+    const box = screen.getByDisplayValue("Backen bis 74 °C im Kern.")
+    await user.type(box, " Danach ruhen.")
+    await user.click(screen.getByRole("button", { name: "Undo" }))
+    expect(
+      screen.getByDisplayValue("Backen bis 74 °C im Kern. Danach ruhen.")
+    ).toBeVisible()
+    expect(screen.queryByText("Undone")).toBeNull()
+  })
+
   it("shows nothing for a clean recipe (IMP-5)", async () => {
     vi.mocked(extractRecipe).mockResolvedValue({
       draft,

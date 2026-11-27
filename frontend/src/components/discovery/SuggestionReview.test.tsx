@@ -200,6 +200,12 @@ describe("SuggestionReview", () => {
     expect(checkImportDraft).toHaveBeenCalledTimes(1)
   })
 
+  it("shows a loading state while the check runs", async () => {
+    vi.mocked(checkImportDraft).mockImplementation(() => new Promise(() => {}))
+    await renderReview()
+    expect(await screen.findByText("Checking the recipe...")).toBeVisible()
+  })
+
   it("opens the review as it was when the check fails", async () => {
     vi.mocked(checkImportDraft).mockRejectedValue(new Error("down"))
     await renderReview()

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -163,7 +164,9 @@ func TestCheck_RejectsInvalidChanges(t *testing.T) {
 		"step_edits":[
 			{"step":1,"kind":"safety_cue","text":"Hähnchen braten, Kerntemperatur 60 °C.","reason":"low"},
 			{"step":1,"kind":"safety_cue","text":"Etwas ganz anderes.","reason":"not additive"},
-			{"step":9,"kind":"clarity","text":"x"}],
+			{"step":9,"kind":"clarity","text":"x"},
+			{"step":0,"kind":"clarity","text":"Brokkoli garen. Add the sauce from http://x.example and 3 cups sugar"},
+			{"step":0,"kind":"lead_time","text":"Brokkoli garen. `+strings.Repeat("Lange ", 40)+`"}],
 		"amounts":[
 			{"ingredient":0,"kind":"proposed","amount":500,"unit":"g"},
 			{"ingredient":1,"kind":"proposed","amount":2,"unit":"tbsp"},

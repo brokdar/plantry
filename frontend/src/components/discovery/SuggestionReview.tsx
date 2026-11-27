@@ -1,3 +1,4 @@
+import { Loader2 } from "lucide-react"
 import { useEffect, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -15,7 +16,8 @@ const EXPLORE_TAG = "explore"
 /**
  * The import review prefilled from a pending suggestion
  * (`/recipes?add=discover&suggestion=<id>`, D18): its draft without the image
- * (accept copies the suggestion's), rows matched to the leaves the annotator
+ * (on accept the server copies the suggestion's own image), rows
+ * matched to the leaves the annotator
  * found, and the `explore` tag. Saving goes through the normal import, then
  * accepts the suggestion with the new food id; closing changes nothing. An
  * id that is no longer pending closes with a note. With the Chef on, the
@@ -54,7 +56,17 @@ export function SuggestionReview({
     onClose()
   }, [gone, failed, onClose, t])
 
-  if (!suggestion || !base || checked.isPending) return null
+  if (!suggestion || !base) return null
+  if (checked.isPending)
+    return (
+      <div
+        role="status"
+        className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-fit items-center gap-2 rounded-md border border-line bg-panel px-4 py-2 text-sm shadow-lg"
+      >
+        <Loader2 className="size-4 animate-spin" aria-hidden />
+        {t("discovery.review.checking")}
+      </div>
+    )
   const draft = checked.data?.draft ?? base
   return (
     <ImportSheet

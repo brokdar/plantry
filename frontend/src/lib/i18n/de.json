@@ -84,6 +84,7 @@
       "look_other": "{{count}} zum Anschauen",
       "undone": "Rückgängig gemacht",
       "cap_warning": "Das Assistenten-Budget dieses Monats ist aufgebraucht; die Prüfung lief, weil du den Import angefordert hast.",
+      "step_changed": "Dieser Schritt wurde seit der Prüfung geändert, deshalb bleibt er beim Rückgängigmachen unverändert.",
       "touch": "Ein letzter Schliff, den du ergänzen kannst",
       "touch_add": "Als letzten Schritt hinzufügen",
       "kind": {
@@ -2161,6 +2162,7 @@
       "failed": "Die Suche hat nicht geklappt. Versuch es noch einmal."
     },
     "review": {
+      "checking": "Rezept wird geprüft ...",
       "gone": "Diese Idee ist nicht mehr verfügbar.",
       "failed": "Diese Idee konnte nicht geöffnet werden. Versuch es noch einmal.",
       "accept_failed": "Rezept gespeichert, aber die Idee konnte nicht als hinzugefügt markiert werden."
