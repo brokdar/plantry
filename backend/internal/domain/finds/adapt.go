@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
@@ -32,6 +33,22 @@ type adaptReply struct {
 	Requirements Requirements `json:"requirements"`
 }
 
+// reasoningRE is the model thinking aloud inside a swap line: "X is replaced
+// by Y omitted; add Z? no.".
+var reasoningRE = regexp.MustCompile(`(?i)\?|\bis replaced\b|\bomitted\b|\bno\.|\bwait\b|\bactually\b`)
+
+func (s swap) reasoning() bool { return reasoningRE.MatchString(s.To) }
+
+// hasReasoning: some swap's line is not a clean ingredient line.
+func (r adaptReply) hasReasoning() bool {
+	for _, s := range r.Swaps {
+		if s.reasoning() {
+			return true
+		}
+	}
+	return false
+}
+
 type swap struct {
 	Line    int    `json:"line"`
 	To      string `json:"to"`
@@ -44,6 +61,7 @@ const adaptSystem = "You adapt a fetched recipe for one household by calling " +
 	"Never rescale: keep the recipe's servings and every amount as written (the planner scales later); a swap replaces one ingredient with another food, never changes only an amount or unit; no prices. " +
 	"Swap an ingredient only to follow the household's diet, never items, heat, taste or kitchen; use known substitution ratios; " +
 	"a protein swap must adjust the cooking time and name the safe core temperature in the step. Keep the technique and any baking chemistry. " +
+	"Every swap's \"to\" is one plain ingredient line (amount, unit, food), never a sentence or a thought. " +
 	"Report what the recipe needs: equipment (only from: oven, stovetop, microwave, air_fryer, pressure_cooker, slow_cooker, blender, food_processor, stand_mixer, wok, grill), " +
 	"active minutes, whether a technique is advanced, and specialty ingredients (not found in an ordinary supermarket)."
 
@@ -136,6 +154,9 @@ func applyAdapt(base *importer.Draft, r adaptReply, lang string) (adaptation, er
 	byLine := map[int]swap{}
 	for _, s := range r.Swaps {
 		s.To, s.Reason = importer.StripPrice(s.To), importer.StripPrice(s.Reason)
+		if s.reasoning() {
+			continue
+		}
 		if s.Line >= 0 && s.Line < len(base.Ingredients) && s.To != "" && !sameFood(base.Ingredients[s.Line], s.To, lang) {
 			byLine[s.Line] = s
 		}

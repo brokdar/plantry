@@ -24,7 +24,7 @@ import (
 )
 
 // PromptVersion of the find run's model steps.
-const PromptVersion = "f3"
+const PromptVersion = "f4"
 
 const (
 	// fetchVersions is how many versions are fetched (FIND-11).
@@ -607,8 +607,16 @@ func allowedSite(raw string, domains []string) string {
 
 func (s *Service) adapt(ctx context.Context, client llm.Client, model string, d *importer.Draft, h Household, flags []Flag) (adaptation, error) {
 	var reply adaptReply
-	if err := callTool(ctx, client, adaptRequest(model, d, h, flags), AdaptTool, &reply); err != nil {
-		return adaptation{}, err
+	// A reply that holds the model's reasoning in a swap is asked for once
+	// more; if it still does, applyAdapt drops those swaps.
+	for try := 0; try < 2; try++ {
+		reply = adaptReply{}
+		if err := callTool(ctx, client, adaptRequest(model, d, h, flags), AdaptTool, &reply); err != nil {
+			return adaptation{}, err
+		}
+		if !reply.hasReasoning() {
+			break
+		}
 	}
 	a, err := applyAdapt(d, reply, h.Lang)
 	if err != nil {

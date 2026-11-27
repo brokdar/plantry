@@ -80,3 +80,21 @@ func TestAdapt_DraftJSONHasInstructionsAndSearchIsNotCached(t *testing.T) {
 	assert.True(t, reqs[0].NoCache, "search")
 	assert.NotContains(t, reqs[1].Messages[0].Content[0].Text, "Household portions")
 }
+
+const reasoningSwap = `[{"line":0,"to":"15oz. can diced tomatoes is replaced by 1 15oz. can diced tomatoes omitted; add 1 cup of additional vegetable broth? no.","reason":"x"}]`
+
+// CP3 round 3: a swap line holding the model's reasoning makes the adapt
+// step ask once more (search + two adapt calls; the fake replays its first
+// turn for the repeated request); a swap that still holds reasoning is
+// dropped and the source line stays.
+func TestAdapt_ReasoningSwapIsRetriedOnceThenDropped(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...),
+		toolTurn(finds.AdaptTool, adaptJSON(reasoningSwap)))
+	f := r.run(t, finds.TriggerPlanning)
+	require.Equal(t, finds.StateReady, f.State, f.Steps)
+	assert.Len(t, r.client.Requests(), 3)
+	assert.Empty(t, f.Changes)
+	assert.Contains(t, f.Draft.Ingredients[0].RawText, "chicken")
+	assert.NotContains(t, f.Draft.Ingredients[0].Name, "replaced")
+}
