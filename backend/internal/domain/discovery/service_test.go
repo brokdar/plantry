@@ -142,7 +142,7 @@ func newHarnessRepo(t *testing.T, client llm.Client, site *httptest.Server, wrap
 		resolver = llm.StaticResolver(rec.Meter(client, "fake"), "fake-model")
 	}
 	prefs := &fakePrefs{}
-	annotator := &discovery.Annotator{Matcher: food.NewResolver(foods, nil, nil, nil), Used: foods, Nutrition: food.NewNutritionResolver(foods)}
+	annotator := &discovery.Annotator{Matcher: food.NewMatcher(foods, nil, nil), Used: foods, Nutrition: food.NewNutritionResolver(foods)}
 	svc := discovery.NewService(discovery.Deps{
 		LLM:       resolver,
 		Prefs:     prefs,

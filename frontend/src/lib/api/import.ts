@@ -20,6 +20,31 @@ export interface DraftIngredient {
   warning: string
   /** The line's diet class from its name, read-only on review (D30). */
   diet_class: EffectiveDietClass
+  /** Other foods the line offers ("oder Butterschmalz"). */
+  alternatives?: string[] | null
+  /** The line has no amount ("Salz", "nach Geschmack"). */
+  to_taste?: boolean
+  /** The matching path's result (MATCH-2); null when not matched. */
+  match?: LineMatch | null
+}
+
+/** One line's match: matched, closest (an immaterial seasoning) or
+ *  unmatched with the reason and what was tried. */
+export interface LineMatch {
+  status: "matched" | "closest" | "unmatched"
+  reason?:
+    | "no_candidate"
+    | "state_mismatch"
+    | "implausible_kcal"
+    | "no_grams"
+    | "no_nutrition"
+  tried: string[]
+  candidates: LookupCandidate[]
+  /** Index into candidates; -1 when unmatched. */
+  pick: number
+  grams: number | null
+  portion_grams?: number
+  name: string
 }
 
 export interface Draft {

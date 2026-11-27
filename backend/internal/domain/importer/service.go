@@ -9,7 +9,6 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
@@ -46,6 +45,7 @@ type Service struct {
 	jsonld      JSONLDExtractor
 	llmResolver llm.Resolver // may be nil — LLM fallback then returns ErrAIProviderMissing.
 	resolver    Resolver
+	matcher     Matcher // may be nil: drafts are then not matched
 	portions    PortionStore
 	recorder    *airun.Recorder // may be nil: the LLM fallback is then not recorded
 }
@@ -55,6 +55,12 @@ type Service struct {
 // restart.
 func NewService(f Fetcher, j JSONLDExtractor, llmResolver llm.Resolver, r Resolver, portions PortionStore) *Service {
 	return &Service{fetcher: f, jsonld: j, llmResolver: llmResolver, resolver: r, portions: portions}
+}
+
+// WithMatcher sets the matching path for drafts and ResolveLine.
+func (s *Service) WithMatcher(m Matcher) *Service {
+	s.matcher = m
+	return s
 }
 
 // WithRecorder records each LLM fallback extraction as an import_fallback AI run.
@@ -77,6 +83,9 @@ type Options struct {
 	// call then fails with domain.ErrImportNoRecipe at no AI cost (discovery
 	// verification, D9).
 	NoLLMFallback bool
+	// Match runs the matcher over the lines (the import review); discovery
+	// verification leaves it off and annotates locally.
+	Match bool
 }
 
 // Extract loads a page (or uses the supplied HTML), extracts the recipe, and
@@ -114,7 +123,7 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 	rec, err := s.jsonld.ExtractRecipe(htmlBody)
 	if err == nil && len(rec.RecipeIngredient) > 0 {
 		logStage(ctx, StageParse, "host", host, "outcome", "found", "ingredients", len(rec.RecipeIngredient))
-		return s.draftOf(ctx, rec, sourceURL, "jsonld", warnings, host), nil
+		return s.draftOf(ctx, rec, sourceURL, "jsonld", warnings, host, in.Match), nil
 	}
 	outcome := "no_recipe"
 	switch {
@@ -141,12 +150,15 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 	case rec == nil || len(rec.RecipeIngredient) == 0:
 		return nil, &ExtractError{Stage: StageFallback, Host: host, Err: domain.ErrImportNoRecipe}
 	}
-	return s.draftOf(ctx, rec, sourceURL, "llm", warnings, host), nil
+	return s.draftOf(ctx, rec, sourceURL, "llm", warnings, host, in.Match), nil
 }
 
 // draftOf is recipeToDraft plus the `resolve` stage line.
-func (s *Service) draftOf(ctx context.Context, rec *RawRecipe, sourceURL, method string, warnings []string, host string) *Draft {
+func (s *Service) draftOf(ctx context.Context, rec *RawRecipe, sourceURL, method string, warnings []string, host string, match bool) *Draft {
 	d := s.recipeToDraft(ctx, rec, sourceURL, method, warnings)
+	if match {
+		s.matchDraft(ctx, d)
+	}
 	logStage(ctx, StageResolve, "host", host, "method", method, "ingredients", len(d.Ingredients),
 		"instructions", len(d.Instructions), "warnings", len(d.Warnings))
 	return d
@@ -190,14 +202,27 @@ func (e *ExtractError) Error() string {
 }
 func (e *ExtractError) Unwrap() error { return e.Err }
 
-// ResolveLine wraps the food resolver used from the per-row lookup endpoint
-// in the review step. The recommended-index return value is not exposed.
+// ResolveLine runs one review row's search through the matching path, so a
+// re-search finds what the draft would (MATCH-4); without a matcher it is
+// the food resolver's lookup. The pick, if any, comes first.
 func (s *Service) ResolveLine(ctx context.Context, query, lang string) ([]food.Candidate, error) {
-	if clean, _ := CleanName(query); clean != "" {
-		query = clean
+	if s.matcher == nil {
+		if clean, _ := CleanName(query); clean != "" {
+			query = clean
+		}
+		results, _, err := s.resolver.Lookup(ctx, "", query, lang, 5)
+		return results, err
 	}
-	results, _, err := s.resolver.Lookup(ctx, "", query, lang, 5)
-	return results, err
+	rows := ParseLine(query, lang)
+	res, err := s.matcher.Match(ctx, food.MatchRequest{Lang: lang, Lines: []food.MatchLine{MatchLineOf(rows[0])}, Requested: true})
+	if err != nil {
+		return nil, err
+	}
+	m := res.Lines[0]
+	if m.Pick > 0 {
+		m.Candidates[0], m.Candidates[m.Pick] = m.Candidates[m.Pick], m.Candidates[0]
+	}
+	return m.Candidates, nil
 }
 
 // FinalizeInput is what the review step submits after the user has resolved
@@ -426,20 +451,12 @@ func (s *Service) recipeToDraft(ctx context.Context, rec *RawRecipe, sourceURL, 
 	}
 
 	d.Language = DetectLanguage(rec.RecipeIngredient)
-	d.Ingredients = make([]DraftIngredient, 0, len(rec.RecipeIngredient))
-	for _, line := range rec.RecipeIngredient {
-		var parsed DraftIngredient
-		if d.Language == "en" {
-			parsed = ParseLineEN(line)
-		} else {
-			parsed = ParseLineDE(line)
-		}
-		parsed.DietClass = diet.Classify(parsed.Name)
+	d.Ingredients = ParseLines(rec.RecipeIngredient, d.Language)
+	for _, parsed := range d.Ingredients {
 		if parsed.Confidence == ConfidenceUnparsed || parsed.NeedsWeight || parsed.Warning != "" {
-			slog.DebugContext(ctx, "import: line needs review", "raw", line, "confidence", parsed.Confidence,
+			slog.DebugContext(ctx, "import: line needs review", "raw", parsed.RawText, "confidence", parsed.Confidence,
 				"needs_weight", parsed.NeedsWeight, "warning", parsed.Warning)
 		}
-		d.Ingredients = append(d.Ingredients, parsed)
 	}
 	return d
 }

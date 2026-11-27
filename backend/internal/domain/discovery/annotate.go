@@ -42,10 +42,10 @@ type Annotations struct {
 	Cuisine string `json:"cuisine,omitempty"`
 }
 
-// LeafMatcher is food.Resolver's local step: LocalMatcher lists the
-// catalogue once and matches names against that snapshot.
+// LeafMatcher is food.Matcher, the one matching path (MATCH-4); Annotate
+// runs it catalogue-only.
 type LeafMatcher interface {
-	LocalMatcher(ctx context.Context) (func(name string) *food.Candidate, error)
+	Match(ctx context.Context, req food.MatchRequest) (*food.MatchResult, error)
 }
 
 // UsedLeaves says which leaves a composed food uses (FoodRepo).
@@ -59,7 +59,8 @@ type DraftNutrition interface {
 }
 
 // Annotator marks a draft's lines known or new against the local catalogue
-// and computes its macros. It works locally only: no FDC, no OFF, no LLM.
+// and computes its macros. It works locally only: no FDC, no OFF, no LLM
+// (the matcher's LocalOnly mode).
 type Annotator struct {
 	Matcher   LeafMatcher
 	Used      UsedLeaves
@@ -71,18 +72,23 @@ func (a *Annotator) Annotate(ctx context.Context, d *importer.Draft) (*Annotatio
 	out := &Annotations{Lines: make([]Line, len(d.Ingredients)), Missing: []string{}}
 	lines := make([]food.DraftLine, len(d.Ingredients))
 	var matched []int64
-	match, err := a.Matcher.LocalMatcher(ctx)
+	req := food.MatchRequest{Lang: d.Language, LocalOnly: true}
+	for _, ing := range d.Ingredients {
+		req.Lines = append(req.Lines, importer.MatchLineOf(ing))
+	}
+	res, err := a.Matcher.Match(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("local leaves: %w", err)
 	}
 	for i, ing := range d.Ingredients {
 		name := lineName(ing)
 		lines[i] = food.DraftLine{Name: name, Amount: ing.Amount, Unit: ing.Unit, PortionGrams: ing.PortionGrams}
-		if ing.Name == "" {
+		m := res.Lines[i]
+		if ing.Name == "" || m.Pick < 0 {
 			continue
 		}
-		c := match(ing.Name)
-		if c == nil || c.ExistingID == nil {
+		c := m.Candidates[m.Pick]
+		if c.ExistingID == nil {
 			continue
 		}
 		id := *c.ExistingID

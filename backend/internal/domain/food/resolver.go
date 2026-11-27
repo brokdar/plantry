@@ -335,9 +335,13 @@ type catalogueLeaf struct {
 // assumes a small single-user catalogue; if it grows large, switch to
 // List{Search} and re-rank the hits with normalizeName instead.
 func (r *Resolver) listLeaves(ctx context.Context) ([]catalogueLeaf, error) {
+	return listLeavesOf(ctx, r.repo)
+}
+
+func listLeavesOf(ctx context.Context, repo Repository) ([]catalogueLeaf, error) {
 	var out []catalogueLeaf
 	for offset := 0; ; offset += leafPageSize {
-		page, err := r.repo.List(ctx, ListQuery{Kind: KindLeaf, Limit: leafPageSize, Offset: offset})
+		page, err := repo.List(ctx, ListQuery{Kind: KindLeaf, Limit: leafPageSize, Offset: offset})
 		if err != nil {
 			return nil, fmt.Errorf("list local leaves (offset %d): %w", offset, err)
 		}

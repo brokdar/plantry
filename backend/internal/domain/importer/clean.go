@@ -79,7 +79,7 @@ var prepWords = setOf(
 	"roughly", "finely", "coarsely", "thinly", "freshly", "chopped", "sliced", "diced",
 	"peeled", "grated", "minced", "crushed", "deseeded", "seeded", "drained", "rinsed",
 	"halved", "quartered", "shredded", "torn", "trimmed", "cubed", "melted", "softened",
-	"beaten", "toasted", "to", "for", "plus", "fein", "grob", "gehackt", "gewürfelt",
+	"beaten", "toasted", "to", "for", "plus", "cut", "into", "separated", "fein", "grob", "gehackt", "gewürfelt",
 	"geschält", "gerieben", "gehobelt", "geschnitten", "gewaschen", "zerdrückt",
 	"geraspelt", "gehäutet", "entkernt", "abgetropft", "zum",
 )
@@ -121,7 +121,7 @@ func CleanName(name string) (clean, prep string) {
 }
 
 // connectorWords introduce free note text ("oil for frying").
-var connectorWords = setOf("to", "for", "plus", "zum")
+var connectorWords = setOf("to", "for", "plus", "zum", "into")
 
 // prepStartsAt reports whether words[i:] is preparation text rather than
 // part of the name: the word is a prep word that follows a comma or

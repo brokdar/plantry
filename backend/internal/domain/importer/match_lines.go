@@ -1,0 +1,234 @@
+package importer
+
+import (
+	"context"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+)
+
+// WarningChefCap: the month's Chef cap is reached; the import's chef_match
+// call ran anyway because the user asked for it (COST-2).
+const WarningChefCap = "chef_cap_reached"
+
+// Matcher is food.Matcher, the one matching path (MATCH-4).
+type Matcher interface {
+	Match(ctx context.Context, req food.MatchRequest) (*food.MatchResult, error)
+}
+
+var (
+	doubleOpenRE  = regexp.MustCompile(`\(\s*\(`)
+	doubleCloseRE = regexp.MustCompile(`\)\s*\)`)
+	noteRefRE     = regexp.MustCompile(`(?i)[(,;]?\s*\bnote\s+\d+\b(\s*sub)?\s*\)?`)
+	boneSkinRE    = regexp.MustCompile(`(?i)\b(boneless|skinless)\b,?\s*`)
+	rangeRE       = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*[-–]\s*(\d+(?:[.,]\d+)?)`)
+	juiceOfRE     = regexp.MustCompile(`(?i)^juice of (\S+) (lime|lemon)s?\b`)
+	cupMetricRE   = regexp.MustCompile(`(?i)\b(cups?|tbsp|tsp)\s*/\s*(\d+(?:[.,]\d+)?)\s*(ml|g)\b`)
+	noteMetricRE  = regexp.MustCompile(`(?i)(?:^|[\s(;,])(\d+(?:[.,]\d+)?)\s*(g|ml)\b`)
+	orSplitRE     = regexp.MustCompile(`(?i)\s+(?:or|oder)\s+`)
+	andSplitRE    = regexp.MustCompile(`(?i)\s*(?:,|\s&\s|\sand\s|\sund\s)\s*`)
+	residueRE     = regexp.MustCompile(`^[\s)(*\-–,;]+|[\s)(*\-–,;]+$`)
+)
+
+// spoonCupUnits are volume units whose line may also state metric weight
+// ("1 cup (100g) cheese"): the metric amount wins.
+var spoonCupUnits = setOf("cup", "cups", "tbsp", "tsp", "el", "tl")
+
+// headNouns complete a one-word alternative: "sunflower or vegetable oil"
+// is sunflower oil or vegetable oil.
+var headNouns = setOf("oil", "broth", "stock", "bread", "chillies", "chilies", "peppers", "pepper",
+	"cheese", "vinegar", "sugar", "flour", "rice", "tortillas", "öl", "brühe")
+
+// prepareLine rewrites what the line parser cannot read (MATCH-1):
+// doubled parentheses and note references, a range as its midpoint,
+// "juice of 1/2 lime", "1/2 cup / 125 ml" (metric wins), cut words.
+func prepareLine(raw string) string {
+	s := doubleOpenRE.ReplaceAllString(raw, "(")
+	s = doubleCloseRE.ReplaceAllString(s, ")")
+	s = noteRefRE.ReplaceAllString(s, "")
+	s = strings.ReplaceAll(s, "*", "")
+	s = boneSkinRE.ReplaceAllString(s, "")
+	s = rangeRE.ReplaceAllStringFunc(s, func(m string) string {
+		p := rangeRE.FindStringSubmatch(m)
+		a, errA := strconv.ParseFloat(strings.ReplaceAll(p[1], ",", "."), 64)
+		b, errB := strconv.ParseFloat(strings.ReplaceAll(p[2], ",", "."), 64)
+		if errA != nil || errB != nil || b <= a {
+			return m
+		}
+		return strconv.FormatFloat((a+b)/2, 'f', -1, 64)
+	})
+	s = juiceOfRE.ReplaceAllString(strings.TrimSpace(s), "$1 $2 juice")
+	s = cupMetricRE.ReplaceAllString(s, "$2 $3")
+	return s
+}
+
+// ParseLines parses and cleans a recipe's ingredient lines (MATCH-1): one
+// draft row per food, so "Salz und Pfeffer" and "1 tsp EACH paprika and
+// cumin" become two rows; alternatives ("Ghee (oder Butterschmalz)") keep
+// the first as the name; a line without an amount is to taste.
+func ParseLines(raw []string, lang string) []DraftIngredient {
+	out := make([]DraftIngredient, 0, len(raw))
+	for _, line := range raw {
+		out = append(out, ParseLine(line, lang)...)
+	}
+	return out
+}
+
+// ParseLine parses and cleans one ingredient line into one row per food.
+func ParseLine(raw, lang string) []DraftIngredient {
+	prepared := prepareLine(raw)
+	var p DraftIngredient
+	if lang == "en" {
+		p = ParseLineEN(prepared)
+	} else {
+		p = ParseLineDE(prepared)
+	}
+	p.RawText = raw
+	p.Name = cleanResidue(p.Name)
+	p.Note = cleanResidue(p.Note)
+	metricFromNote(&p)
+
+	var rows []DraftIngredient
+	switch name, isEach := strings.CutPrefix(p.Name, "EACH "); {
+	case isEach || strings.HasPrefix(p.Name, "each "):
+		if !isEach {
+			name = strings.TrimPrefix(p.Name, "each ")
+		}
+		full := name
+		if p.Note != "" && !strings.Contains(p.Note, "(") {
+			full += ", " + p.Note
+			p.Note = ""
+		}
+		rows = splitCompound(p, full)
+	case p.Amount == 0 && andSplitRE.MatchString(p.Name) && !orSplitRE.MatchString(p.Name):
+		rows = splitCompound(p, p.Name)
+	default:
+		rows = []DraftIngredient{p}
+	}
+	for i := range rows {
+		splitAlternatives(&rows[i])
+		rows[i].ToTaste = rows[i].Amount == 0
+		rows[i].DietClass = diet.Classify(rows[i].Name)
+	}
+	return rows
+}
+
+func splitCompound(p DraftIngredient, names string) []DraftIngredient {
+	var rows []DraftIngredient
+	for _, n := range andSplitRE.Split(names, -1) {
+		if n = cleanResidue(n); n != "" {
+			r := p
+			r.Name = n
+			rows = append(rows, r)
+		}
+	}
+	if len(rows) == 0 {
+		return []DraftIngredient{p}
+	}
+	return rows
+}
+
+// splitAlternatives keeps the first of "X or Y" as the name and the rest as
+// alternatives, also from a note that starts with "oder"/"or".
+func splitAlternatives(p *DraftIngredient) {
+	parts := orSplitRE.Split(p.Name, -1)
+	if len(parts) > 1 {
+		last := strings.Fields(parts[len(parts)-1])
+		if len(last) >= 2 {
+			head := strings.ToLower(last[len(last)-1])
+			if _, ok := headNouns[head]; ok {
+				for i := range parts[:len(parts)-1] {
+					if len(strings.Fields(parts[i])) == 1 {
+						parts[i] += " " + last[len(last)-1]
+					}
+				}
+			}
+		}
+		p.Name = cleanResidue(parts[0])
+		for _, a := range parts[1:] {
+			if a = cleanResidue(a); a != "" {
+				p.Alternatives = append(p.Alternatives, a)
+			}
+		}
+	}
+	low := strings.ToLower(p.Note)
+	for _, lead := range []string{"oder ", "or "} {
+		if strings.HasPrefix(low, lead) {
+			alt := p.Note[len(lead):]
+			if i := strings.IndexAny(alt, ",;("); i >= 0 {
+				alt = alt[:i]
+			}
+			if alt = cleanResidue(alt); alt != "" {
+				p.Alternatives = append(p.Alternatives, alt)
+			}
+		}
+	}
+}
+
+// metricFromNote takes a metric amount the line states next to a spoon or
+// cup measure ("1 cup (100g) cheese", "2 cups (500ml) stock").
+func metricFromNote(p *DraftIngredient) {
+	if _, ok := spoonCupUnits[strings.ToLower(p.OriginalUnit)]; !ok {
+		return
+	}
+	m := noteMetricRE.FindStringSubmatch(p.Note)
+	if m == nil {
+		return
+	}
+	v, err := strconv.ParseFloat(strings.ReplaceAll(m[1], ",", "."), 64)
+	if err != nil || v <= 0 {
+		return
+	}
+	p.Amount, p.Unit, p.OriginalUnit, p.Confidence = v, strings.ToLower(m[2]), strings.ToLower(m[2]), ConfidenceParsed
+}
+
+// cleanResidue trims leftover brackets, stars and dashes and a doubled word
+// ("eggs eggs").
+func cleanResidue(s string) string {
+	s = strings.TrimSpace(residueRE.ReplaceAllString(s, ""))
+	w := strings.Fields(s)
+	if len(w) == 2 && strings.EqualFold(w[0], w[1]) {
+		return w[0]
+	}
+	return strings.Join(w, " ")
+}
+
+// MatchLineOf is a draft row as the matcher reads it.
+func MatchLineOf(ing DraftIngredient) food.MatchLine {
+	return food.MatchLine{
+		Name: ing.Name, Alternatives: ing.Alternatives, Note: ing.Note,
+		Amount: ing.Amount, Unit: ing.Unit, PortionGrams: ing.PortionGrams, ToTaste: ing.ToTaste,
+	}
+}
+
+// matchDraft matches every row of d in one pass (one chef_match call with a
+// provider) and fills each row's match. A count row nobody could weigh
+// takes the matched food's weight per piece.
+func (s *Service) matchDraft(ctx context.Context, d *Draft) {
+	if s.matcher == nil || len(d.Ingredients) == 0 {
+		return
+	}
+	req := food.MatchRequest{Lang: d.Language, Requested: true, Ref: d.SourceURL}
+	for _, ing := range d.Ingredients {
+		req.Lines = append(req.Lines, MatchLineOf(ing))
+	}
+	res, err := s.matcher.Match(ctx, req)
+	if err != nil {
+		logStage(ctx, StageResolve, "match_error", err.Error())
+		return
+	}
+	for i := range d.Ingredients {
+		m := res.Lines[i]
+		ing := &d.Ingredients[i]
+		ing.Match = &m
+		if ing.NeedsWeight && m.PortionGrams != nil {
+			ing.PortionGrams, ing.NeedsWeight = m.PortionGrams, false
+		}
+	}
+	if res.CapWarning {
+		d.Warnings = append(d.Warnings, WarningChefCap)
+	}
+}

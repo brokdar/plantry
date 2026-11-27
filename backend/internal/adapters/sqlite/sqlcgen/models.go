@@ -276,6 +276,14 @@ type FoodInstruction struct {
 	Text       string
 }
 
+type FoodOrigin struct {
+	FoodID    int64
+	Kind      string
+	Ref       string
+	Source    string
+	CreatedAt string
+}
+
 type FoodPortion struct {
 	FoodID int64
 	Unit   string

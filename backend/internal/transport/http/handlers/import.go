@@ -89,7 +89,7 @@ func (h *ImportHandler) Extract(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	draft, err := h.svc.Extract(r.Context(), importer.ExtractInput{URL: req.URL, HTML: req.HTML})
+	draft, err := h.svc.Extract(r.Context(), importer.ExtractInput{URL: req.URL, HTML: req.HTML, Options: importer.Options{Match: true}})
 	reqID := middleware.GetReqID(r.Context())
 	if err != nil {
 		status, key := toHTTP(err)

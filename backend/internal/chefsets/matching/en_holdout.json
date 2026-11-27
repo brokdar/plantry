@@ -1,0 +1,789 @@
+{
+ "set": "en_holdout",
+ "holdout": true,
+ "recipes": [
+  {
+   "title": "RecipeTin Eats: Beef stew",
+   "source": "https://www.recipetineats.com/beef-stew/",
+   "lines": [
+    {
+     "id": "eh-001",
+     "raw": "1.2 kg / 2.4lb chuck beef (, cut into 3.5 cm / 1.5\" cubes (Note 1))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "chuck beef",
+     "expect": [
+      {
+       "identity": "beef chuck, raw",
+       "catalogue": "Beef shoulder"
+      }
+     ]
+    },
+    {
+     "id": "eh-002",
+     "raw": "1 tsp cooking salt / kosher salt ((halve for table salt, +50% for flakes))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "cooking salt",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt"
+      }
+     ]
+    },
+    {
+     "id": "eh-003",
+     "raw": "1/2 tsp black pepper",
+     "lang": "en",
+     "kind": "plain",
+     "name": "black pepper",
+     "expect": [
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper"
+      }
+     ]
+    },
+    {
+     "id": "eh-004",
+     "raw": "3 tbsp olive oil (, divided)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "olive oil",
+     "expect": [
+      {
+       "identity": "olive oil",
+       "catalogue": "Olive oil"
+      }
+     ]
+    },
+    {
+     "id": "eh-005",
+     "raw": "1 large onion (, halved then cut into 1 cm / 2/5\" slices)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "onion",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion"
+      }
+     ]
+    },
+    {
+     "id": "eh-006",
+     "raw": "4 garlic cloves (, minced)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "garlic",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic"
+      }
+     ]
+    },
+    {
+     "id": "eh-007",
+     "raw": "3 carrots (, cut into 2.5cm / 1\" pieces on the diagonal)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "carrots",
+     "expect": [
+      {
+       "identity": "carrot, raw",
+       "catalogue": "Carrot"
+      }
+     ]
+    },
+    {
+     "id": "eh-008",
+     "raw": "2 celery stalks (, cut into 2.5 cm / 1\" pieces)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "celery",
+     "expect": [
+      {
+       "identity": "celery, raw",
+       "catalogue": "Celery"
+      }
+     ]
+    },
+    {
+     "id": "eh-009",
+     "raw": "1/3 cup plain flour / all-purpose flour",
+     "lang": "en",
+     "kind": "plain",
+     "name": "plain flour",
+     "expect": [
+      {
+       "identity": "wheat flour",
+       "catalogue": "Wheat flour"
+      }
+     ]
+    },
+    {
+     "id": "eh-010",
+     "raw": "3 cups beef broth / stock (, salt reduced)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "beef broth",
+     "expect": [
+      {
+       "identity": "beef broth",
+       "catalogue": "Beef broth"
+      }
+     ]
+    },
+    {
+     "id": "eh-011",
+     "raw": "2 cups red wine (, bold and dry)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "red wine",
+     "expect": [
+      {
+       "identity": "red wine"
+      }
+     ]
+    },
+    {
+     "id": "eh-012",
+     "raw": "2 tsp Worcestershire Sauce",
+     "lang": "en",
+     "kind": "plain",
+     "name": "Worcestershire sauce",
+     "expect": [
+      {
+       "identity": "worcestershire sauce"
+      }
+     ]
+    },
+    {
+     "id": "eh-013",
+     "raw": "2 tbsp tomato paste",
+     "lang": "en",
+     "kind": "plain",
+     "name": "tomato paste",
+     "expect": [
+      {
+       "identity": "tomato paste",
+       "catalogue": "Tomato paste"
+      }
+     ]
+    },
+    {
+     "id": "eh-014",
+     "raw": "2 bay leaves (, fresh or dried)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "bay leaves",
+     "expect": [
+      {
+       "identity": "bay leaf",
+       "catalogue": "Bay leaf"
+      }
+     ]
+    },
+    {
+     "id": "eh-015",
+     "raw": "4 sprigs thyme",
+     "lang": "en",
+     "kind": "plain",
+     "name": "thyme",
+     "expect": [
+      {
+       "identity": "thyme, fresh",
+       "catalogue": "Thyme (fresh)"
+      }
+     ]
+    },
+    {
+     "id": "eh-016",
+     "raw": "400 g / 14 oz baby potatoes (, halved)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "baby potatoes",
+     "expect": [
+      {
+       "identity": "potato, raw",
+       "catalogue": "Potatoes"
+      }
+     ]
+    },
+    {
+     "id": "eh-017",
+     "raw": "More salt and pepper (, if required)",
+     "lang": "en",
+     "kind": "compound",
+     "name": "salt and pepper",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt"
+      },
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "RecipeTin Eats: Lentil soup",
+   "source": "https://www.recipetineats.com/lentil-soup/",
+   "lines": [
+    {
+     "id": "eh-018",
+     "raw": "2 tbsp olive oil",
+     "lang": "en",
+     "kind": "plain",
+     "name": "olive oil",
+     "expect": [
+      {
+       "identity": "olive oil",
+       "catalogue": "Olive oil"
+      }
+     ]
+    },
+    {
+     "id": "eh-019",
+     "raw": "1 onion, chopped ((white, brown, yellow))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "onion",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion"
+      }
+     ]
+    },
+    {
+     "id": "eh-020",
+     "raw": "2 garlic cloves, minced",
+     "lang": "en",
+     "kind": "plain",
+     "name": "garlic",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic"
+      }
+     ]
+    },
+    {
+     "id": "eh-021",
+     "raw": "1 large carrot (, chopped (about 1 1/4 cups))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "carrot",
+     "expect": [
+      {
+       "identity": "carrot, raw",
+       "catalogue": "Carrot"
+      }
+     ]
+    },
+    {
+     "id": "eh-022",
+     "raw": "2 celery ribs (, chopped (about 1 1/4 cups))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "celery",
+     "expect": [
+      {
+       "identity": "celery, raw",
+       "catalogue": "Celery"
+      }
+     ]
+    },
+    {
+     "id": "eh-023",
+     "raw": "2 cups / 400g dried lentils (, green or brown, rinsed (Note 1))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "dried lentils",
+     "expect": [
+      {
+       "identity": "lentils, dry, green or brown"
+      }
+     ]
+    },
+    {
+     "id": "eh-024",
+     "raw": "400g / 14 oz crushed tomato",
+     "lang": "en",
+     "kind": "plain",
+     "name": "crushed tomato",
+     "expect": [
+      {
+       "identity": "tomatoes, crushed, canned",
+       "catalogue": "Chopped tomatoes (canned)"
+      },
+      {
+       "identity": "passata",
+       "catalogue": "Passata"
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "eh-025",
+     "raw": "1.5 litres / 1.5 quarts (6 cups) vegetable or chicken (stock / broth, low sodium)",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "stock",
+     "expect": [
+      {
+       "identity": "vegetable broth",
+       "catalogue": "Vegetable broth"
+      },
+      {
+       "identity": "chicken broth",
+       "catalogue": "Chicken broth"
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "eh-026",
+     "raw": "1/2 tsp each cumin and coriander powder",
+     "lang": "en",
+     "kind": "compound",
+     "name": "cumin and coriander powder",
+     "expect": [
+      {
+       "identity": "cumin, ground",
+       "catalogue": "Cumin"
+      },
+      {
+       "identity": "coriander, ground"
+      }
+     ]
+    },
+    {
+     "id": "eh-027",
+     "raw": "1 1/2 tsp paprika powder",
+     "lang": "en",
+     "kind": "plain",
+     "name": "paprika powder",
+     "expect": [
+      {
+       "identity": "paprika, ground",
+       "catalogue": "Paprika powder"
+      }
+     ]
+    },
+    {
+     "id": "eh-028",
+     "raw": "2 dried bay leaves",
+     "lang": "en",
+     "kind": "plain",
+     "name": "bay leaves",
+     "expect": [
+      {
+       "identity": "bay leaf",
+       "catalogue": "Bay leaf"
+      }
+     ]
+    },
+    {
+     "id": "eh-029",
+     "raw": "1 lemon (zest + juice)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "lemon",
+     "expect": [
+      {
+       "identity": "lemon",
+       "catalogue": "Lemon"
+      }
+     ]
+    },
+    {
+     "id": "eh-030",
+     "raw": "1/4 tsp salt and pepper, (each)",
+     "lang": "en",
+     "kind": "compound",
+     "name": "salt and pepper",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt"
+      },
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper"
+      }
+     ]
+    },
+    {
+     "id": "eh-031",
+     "raw": "Chopped fresh parsley, for garnish",
+     "lang": "en",
+     "kind": "to_taste",
+     "name": "parsley",
+     "expect": [
+      {
+       "identity": "parsley, fresh",
+       "catalogue": "Parsley"
+      }
+     ]
+    },
+    {
+     "id": "eh-032",
+     "raw": "Warm bread, to serve",
+     "lang": "en",
+     "kind": "to_taste",
+     "name": "bread",
+     "expect": [
+      {
+       "identity": "bread"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "RecipeTin Eats: Chicken fried rice",
+   "source": "https://www.recipetineats.com/chicken-fried-rice/",
+   "lines": [
+    {
+     "id": "eh-033",
+     "raw": "2 tbsp oil (, peanut, vegetable or canola)",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "oil",
+     "expect": [
+      {
+       "identity": "vegetable oil",
+       "catalogue": "Vegetable oil"
+      },
+      {
+       "identity": "peanut oil",
+       "catalogue": "Peanut oil"
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "eh-034",
+     "raw": "2 eggs (, lightly whisked)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "eggs",
+     "expect": [
+      {
+       "identity": "egg, whole",
+       "catalogue": "Egg"
+      }
+     ]
+    },
+    {
+     "id": "eh-035",
+     "raw": "150g (5oz) chicken breast (, finely sliced into small pieces)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "chicken breast",
+     "expect": [
+      {
+       "identity": "chicken breast, raw",
+       "catalogue": "Chicken breast"
+      }
+     ]
+    },
+    {
+     "id": "eh-036",
+     "raw": "2 garlic cloves (, minced)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "garlic",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic"
+      }
+     ]
+    },
+    {
+     "id": "eh-037",
+     "raw": "1/2 onion (, finely chopped)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "onion",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion"
+      }
+     ]
+    },
+    {
+     "id": "eh-038",
+     "raw": "120g (4oz) bacon (, excess fat trimmed, chopped (Note 1))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "bacon",
+     "expect": [
+      {
+       "identity": "bacon",
+       "catalogue": "Bacon (smoked)"
+      }
+     ]
+    },
+    {
+     "id": "eh-039",
+     "raw": "1 small carrot* (, peeled and diced 0.75cm / 1/3\")",
+     "lang": "en",
+     "kind": "plain",
+     "name": "carrot",
+     "expect": [
+      {
+       "identity": "carrot, raw",
+       "catalogue": "Carrot"
+      }
+     ]
+    },
+    {
+     "id": "eh-040",
+     "raw": "1/2 cup frozen corn* ((or can or fresh))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "frozen corn",
+     "expect": [
+      {
+       "identity": "sweet corn",
+       "catalogue": "Sweet corn (canned)"
+      }
+     ]
+    },
+    {
+     "id": "eh-041",
+     "raw": "1/2 cup frozen peas*",
+     "lang": "en",
+     "kind": "plain",
+     "name": "frozen peas",
+     "expect": [
+      {
+       "identity": "peas, frozen",
+       "catalogue": "Frozen peas"
+      }
+     ]
+    },
+    {
+     "id": "eh-042",
+     "raw": "2 cups (packed) cooked white rice (, day old (Note 2))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "cooked white rice",
+     "expect": [
+      {
+       "identity": "white rice, cooked"
+      }
+     ]
+    },
+    {
+     "id": "eh-043",
+     "raw": "3/4 cup green onions (, finely sliced)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "green onions",
+     "expect": [
+      {
+       "identity": "spring onion, raw",
+       "catalogue": "Spring onions"
+      }
+     ]
+    },
+    {
+     "id": "eh-044",
+     "raw": "2.5 tbsp Chinese cooking wine or Mirin ((Note 3))",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "Chinese cooking wine",
+     "expect": [
+      {
+       "identity": "shaoxing wine"
+      },
+      {
+       "identity": "mirin"
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "eh-045",
+     "raw": "1 tbsp oyster sauce ((Note 4))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "oyster sauce",
+     "expect": [
+      {
+       "identity": "oyster sauce"
+      }
+     ]
+    },
+    {
+     "id": "eh-046",
+     "raw": "3 tbsp light soy sauce ((Note 5))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "light soy sauce",
+     "expect": [
+      {
+       "identity": "soy sauce",
+       "catalogue": "Soy sauce"
+      }
+     ]
+    },
+    {
+     "id": "eh-047",
+     "raw": "1/2 tsp sesame oil (, optional)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "sesame oil",
+     "expect": [
+      {
+       "identity": "sesame oil",
+       "catalogue": "Sesame oil"
+      }
+     ]
+    },
+    {
+     "id": "eh-048",
+     "raw": "1/4 tsp white pepper (, optional)",
+     "lang": "en",
+     "kind": "plain",
+     "name": "white pepper",
+     "expect": [
+      {
+       "identity": "white pepper",
+       "catalogue": "Black pepper"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Just One Cookbook: Miso soup",
+   "source": "https://www.justonecookbook.com/miso-soup/",
+   "lines": [
+    {
+     "id": "eh-049",
+     "raw": "2 cups water",
+     "lang": "en",
+     "kind": "plain",
+     "name": "water",
+     "expect": []
+    },
+    {
+     "id": "eh-050",
+     "raw": "1 dashi packet ((or dashi powder))",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "dashi",
+     "expect": [
+      {
+       "identity": "dashi"
+      }
+     ]
+    },
+    {
+     "id": "eh-051",
+     "raw": "1 Tokyo negi (long green onion) ((or scallions))",
+     "lang": "en",
+     "kind": "alternatives",
+     "name": "Tokyo negi",
+     "expect": [
+      {
+       "identity": "negi"
+      },
+      {
+       "identity": "spring onion, raw",
+       "catalogue": "Spring onions"
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "eh-052",
+     "raw": "¼ package enoki mushrooms ((1.8 oz, 50 g))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "enoki mushrooms",
+     "expect": [
+      {
+       "identity": "enoki mushroom"
+      }
+     ]
+    },
+    {
+     "id": "eh-053",
+     "raw": "1 inch fresh ginger",
+     "lang": "en",
+     "kind": "plain",
+     "name": "ginger",
+     "expect": [
+      {
+       "identity": "ginger, raw",
+       "catalogue": "Ginger"
+      }
+     ]
+    },
+    {
+     "id": "eh-054",
+     "raw": "1 Tbsp toasted white sesame seeds",
+     "lang": "en",
+     "kind": "plain",
+     "name": "sesame seeds",
+     "expect": [
+      {
+       "identity": "sesame seeds"
+      }
+     ]
+    },
+    {
+     "id": "eh-055",
+     "raw": "½ Tbsp toasted sesame oil",
+     "lang": "en",
+     "kind": "plain",
+     "name": "sesame oil",
+     "expect": [
+      {
+       "identity": "sesame oil",
+       "catalogue": "Sesame oil"
+      }
+     ]
+    },
+    {
+     "id": "eh-056",
+     "raw": "3 Tbsp miso ((any type works))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "miso",
+     "expect": [
+      {
+       "identity": "miso paste"
+      }
+     ]
+    },
+    {
+     "id": "eh-057",
+     "raw": "7 oz medium-firm tofu (momen dofu) ((½ block))",
+     "lang": "en",
+     "kind": "plain",
+     "name": "tofu",
+     "expect": [
+      {
+       "identity": "tofu, firm",
+       "catalogue": "Tofu (firm)"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

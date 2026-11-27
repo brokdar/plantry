@@ -89,7 +89,16 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
     if (state.resolution !== "existing") return
     if (state.foodId) return
     if (!lookup.data) return
-    const hit = results.find((r) => r.source === "local" && r.exact)
+    // The draft's confident catalogue match (MATCH-2) wins; else an exact
+    // catalogue hit of the row's search.
+    const m = ing.match
+    const picked =
+      m && m.status !== "unmatched" && m.pick >= 0
+        ? m.candidates[m.pick]
+        : undefined
+    const hit = picked?.existing_id
+      ? picked
+      : results.find((r) => r.source === "local" && r.exact)
     if (hit && hit.existing_id) {
       onChange(relink(hit.existing_id, hit.name))
     }

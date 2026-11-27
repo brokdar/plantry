@@ -34,6 +34,16 @@ func (p *Provider) SearchByName(ctx context.Context, query string, limit int) ([
 	return toDomainCandidates(results), nil
 }
 
+// SearchByNameLang searches by name with product names in lang, for the
+// matching ladder (food.LangSearcher).
+func (p *Provider) SearchByNameLang(ctx context.Context, query, lang string, limit int) ([]food.Candidate, error) {
+	results, err := p.client.SearchByName(ctx, query, lang, limit)
+	if err != nil {
+		return nil, err
+	}
+	return toDomainCandidates(results), nil
+}
+
 func toDomainCandidates(candidates []Candidate) []food.Candidate {
 	out := make([]food.Candidate, len(candidates))
 	for i, c := range candidates {

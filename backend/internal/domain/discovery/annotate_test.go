@@ -32,7 +32,7 @@ func newAnnotateEnv(t *testing.T) *annotateEnv {
 		repo:      repo,
 		nutrition: nutrition,
 		leaves:    map[string]int64{},
-		annotator: &discovery.Annotator{Matcher: food.NewResolver(repo, nil, nil, nil), Used: repo, Nutrition: nutrition},
+		annotator: &discovery.Annotator{Matcher: food.NewMatcher(repo, nil, nil), Used: repo, Nutrition: nutrition},
 	}
 }
 
@@ -61,8 +61,10 @@ func ing(name string, amount float64, unit string) importer.DraftIngredient {
 func fesenjan(t *testing.T) (*annotateEnv, *importer.Draft) {
 	e := newAnnotateEnv(t)
 	used := []string{"Walnüsse", "Granatapfelsirup", "Zwiebel", "Hähnchenbrust", "Olivenöl", "Salz"}
+	// Plausible kcal for the foods the synonym table knows (MATCH-2 bands).
+	kcals := []float64{650, 150, 40, 250, 884, 350}
 	for i, n := range used {
-		e.leaf(t, n, ptr(float64(100+i*50)), ptr(float64(5+i)), ptr(float64(3+i)), ptr(float64(10+i)))
+		e.leaf(t, n, ptr(kcals[i]), ptr(float64(5+i)), ptr(float64(3+i)), ptr(float64(10+i)))
 	}
 	e.leaf(t, "Kurkuma", ptr(300.0), ptr(8.0), ptr(3.0), ptr(60.0))
 	e.leaf(t, "Zimt", ptr(250.0), ptr(4.0), ptr(1.0), ptr(80.0))
@@ -178,7 +180,7 @@ func (c *countingLeaves) List(ctx context.Context, q food.ListQuery) (*food.List
 func TestAnnotate_ListsCatalogueOnce(t *testing.T) {
 	e, draft := fesenjan(t)
 	counting := &countingLeaves{Repository: e.repo}
-	e.annotator.Matcher = food.NewResolver(counting, nil, nil, nil)
+	e.annotator.Matcher = food.NewMatcher(counting, nil, nil)
 
 	_, err := e.annotator.Annotate(context.Background(), draft)
 	require.NoError(t, err)

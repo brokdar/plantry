@@ -1,6 +1,9 @@
 package importer
 
-import "github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+import (
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+)
 
 // Confidence levels for a parsed ingredient line.
 const (
@@ -31,6 +34,13 @@ type DraftIngredient struct {
 	// DietClass is the line's diet class from its name (diet.Classify), shown
 	// read-only on review (D30).
 	DietClass diet.Class `json:"diet_class"`
+	// Alternatives are the other foods the line offers ("oder Butterschmalz").
+	Alternatives []string `json:"alternatives"`
+	// ToTaste marks a line without an amount ("Salz", "nach Geschmack").
+	ToTaste bool `json:"to_taste"`
+	// Match is the line's match (MATCH-2): status, reason, what was tried,
+	// candidates and the pick. nil when the draft was not matched.
+	Match *food.LineMatch `json:"match"`
 }
 
 // Draft is the whole recipe as extracted from a page, before the user resolves it.
