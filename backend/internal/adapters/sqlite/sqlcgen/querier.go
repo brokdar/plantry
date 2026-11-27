@@ -35,6 +35,8 @@ type Querier interface {
 	CountChefTipsCreatedBetween(ctx context.Context, arg CountChefTipsCreatedBetweenParams) ([]CountChefTipsCreatedBetweenRow, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
+	// Autonomous finds that are ready or still searching (prefetch counts them).
+	CountOpenPlanningFinds(ctx context.Context) (int64, error)
 	// What a generation run wrote that still exists (B6).
 	CountPlanRunRows(ctx context.Context, id sql.NullInt64) (CountPlanRunRowsRow, error)
 	CountPlateEventsAfter(ctx context.Context, arg CountPlateEventsAfterParams) (int64, error)
@@ -137,6 +139,7 @@ type Querier interface {
 	GetLeafFoodIDByName(ctx context.Context, name string) (int64, error)
 	// A generation run as GET /api/plan/runs/{id} shows it (B6).
 	GetPlanRun(ctx context.Context, id int64) (GetPlanRunRow, error)
+	GetPlanningSession(ctx context.Context) (string, error)
 	GetPlate(ctx context.Context, id int64) (Plate, error)
 	GetPlateComponent(ctx context.Context, id int64) (PlateComponent, error)
 	GetPlateFeedback(ctx context.Context, plateID int64) (PlateFeedback, error)
@@ -211,6 +214,8 @@ type Querier interface {
 	// line counts no nutrition, so it is not a problem.
 	ListNeedsCheckLines(ctx context.Context) ([]ListNeedsCheckLinesRow, error)
 	ListNeverItems(ctx context.Context) ([]ListNeverItemsRow, error)
+	// The finds the planner placed in the window starting on placed_on.
+	ListPlacedFinds(ctx context.Context, placedOn sql.NullString) ([]RecipeSuggestion, error)
 	ListPlanLight(ctx context.Context, arg ListPlanLightParams) ([]PlanLight, error)
 	ListPlateComponentsByDateRange(ctx context.Context, arg ListPlateComponentsByDateRangeParams) ([]ListPlateComponentsByDateRangeRow, error)
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error)
@@ -272,6 +277,9 @@ type Querier interface {
 	MatchBasicAtHome(ctx context.Context, foodID int64) error
 	// "Looks wrong" lowers the site's rank (NEW-4).
 	PenaliseSource(ctx context.Context, site string) error
+	// The planner placed a ready find (FIND-4 ready -> in_library) in the
+	// window starting on placed_on; no row when it is not ready.
+	PlaceFind(ctx context.Context, arg PlaceFindParams) (RecipeSuggestion, error)
 	// Deletes up to 500 steps of runs started before the cutoff; the runs,
 	// prompts and tool schemas stay. The repo repeats it until nothing is left,
 	// so no single statement holds the write lock for long.
@@ -309,14 +317,20 @@ type Querier interface {
 	// D12: assigns the day to the oldest pending, never-shown suggestion after
 	// the given id.
 	ShowNextPending(ctx context.Context, arg ShowNextPendingParams) (RecipeSuggestion, error)
+	// FIND-2: with the Chef on the daily idea is a ready find, never shown
+	// before, after the given id.
+	ShowNextReadyFind(ctx context.Context, arg ShowNextReadyFindParams) (RecipeSuggestion, error)
 	// The summed cost_usd of the runs started in [from_ts, to_ts) whose kind is
 	// in kinds; all kinds when all_kinds is 1. Unpriced runs add nothing.
 	SpendAIRuns(ctx context.Context, arg SpendAIRunsParams) (float64, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
+	TouchPlanningSession(ctx context.Context, until string) error
 	TouchPlate(ctx context.Context, id int64) error
 	TouchPlatesOfSession(ctx context.Context, cookSessionID sql.NullInt64) error
 	TouchPresetLastUsedAt(ctx context.Context, id int64) error
 	TouchPresetUpdatedAt(ctx context.Context, id int64) error
+	// A placed find goes back to ready (the run did not use it, or Undo).
+	UnplaceFind(ctx context.Context, id int64) (RecipeSuggestion, error)
 	UpdateAIRunStepResult(ctx context.Context, arg UpdateAIRunStepResultParams) error
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (AiConversation, error)
 	UpdateCookSession(ctx context.Context, arg UpdateCookSessionParams) (CookSession, error)

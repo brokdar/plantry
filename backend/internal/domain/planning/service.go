@@ -111,8 +111,10 @@ type Deps struct {
 	Runs      Runs
 	Overrides Overrides
 	// Light stores the light requests a successful run was given.
-	Light    LightStore
-	Tx       domain.Transactor
+	Light LightStore
+	Tx    domain.Transactor
+	// Finds places ready finds on a window generation; nil places none.
+	Finds    ReadyFinds
 	Progress *Progress
 	Choosers map[airun.Chooser]Chooser
 	// Extractor reads a run's free-text wish into constraints (PL2). With it,
@@ -289,6 +291,11 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held 
 	quota, err := s.exploreQuota(ctx, req.ExploreQuota)
 	if err != nil {
 		return 0, err
+	}
+	if s.d.Finds != nil {
+		if err := s.d.Finds.Touch(ctx); err != nil {
+			s.d.Logger.WarnContext(ctx, "plan.session touch failed", "error", err)
+		}
 	}
 
 	if !held {
@@ -950,12 +957,48 @@ func (s *Service) execute(ctx context.Context, run Run, j job) {
 				end = RunEnd{Status: airun.StatusError, ErrorKey: "error.server"}
 			}
 		}()
-		return s.generate(tctx, run.ID(), j)
+		staged := s.stage(tctx, j)
+		end = s.generate(tctx, run.ID(), j)
+		s.settle(ctx, j, staged)
+		return end
 	}()
 	if end.Status == airun.StatusError && s.base.Err() != nil {
 		end.ErrorKey = "error.server" // interrupted by Shutdown
 	}
 	run.Finish(ctx, end)
+}
+
+// stage adds ready finds for a window generation's new dishes (FIND-3).
+// A failure plans without them.
+func (s *Service) stage(ctx context.Context, j job) []int64 {
+	if s.d.Finds == nil || j.kind != airun.KindGenerate || j.exploreQuota <= 0 {
+		return nil
+	}
+	ids, err := s.d.Finds.Stage(ctx, j.exploreQuota, j.w.Start)
+	if err != nil {
+		s.d.Logger.WarnContext(ctx, "plan.finds stage failed", "error", err)
+	}
+	return ids
+}
+
+// settle returns the staged finds the window's plates do not eat.
+func (s *Service) settle(ctx context.Context, j job, staged []int64) {
+	if len(staged) == 0 {
+		return
+	}
+	eaten := map[int64]bool{}
+	plates, err := s.d.PlateRows.ListByDateRange(ctx, j.w.Start, j.w.End)
+	if err != nil {
+		s.d.Logger.WarnContext(ctx, "plan.finds settle read failed", "error", err)
+	}
+	for _, p := range plates {
+		for _, c := range p.Components {
+			eaten[c.FoodID] = true
+		}
+	}
+	if err := s.d.Finds.Settle(ctx, j.w.Start, staged, func(id int64) bool { return eaten[id] }); err != nil {
+		s.d.Logger.WarnContext(ctx, "plan.finds settle failed", "error", err)
+	}
 }
 
 // generate is the pipeline of spec §6.1 after the run started: resolve

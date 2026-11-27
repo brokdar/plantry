@@ -78,8 +78,11 @@ type Foods interface {
 
 // Deps wires a Service.
 type Deps struct {
-	LLM       llm.Resolver
-	Prefs     Preferences
+	LLM   llm.Resolver
+	Prefs Preferences
+	// ChefOn (chef.enabled): with the Chef on the daily idea shows ready
+	// finds only and never starts a run (FIND-2). nil is off.
+	ChefOn    func(ctx context.Context) (bool, error)
 	Foods     Foods
 	Recorder  *airun.Recorder
 	Profile   ProfileReader

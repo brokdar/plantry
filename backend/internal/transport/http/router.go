@@ -30,6 +30,7 @@ type Handlers struct {
 	Kitchen       *handlers.KitchenHandler
 	Taste         *handlers.TasteHandler
 	Finds         *handlers.FindsHandler
+	ChefPlan      *handlers.ChefPlanHandler
 	NotForMe      *handlers.NotForMeHandler
 	Presets       *handlers.PresetHandler
 	AI            *handlers.AIHandler
@@ -201,6 +202,11 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Get("/replan/preview", h.PlanGenerate.ReplanPreview)
 					r.Post("/replan", h.PlanGenerate.Replan)
 					r.Post("/alternatives", h.PlanGenerate.Alternatives)
+				}
+				if h.ChefPlan != nil {
+					r.Post("/opened", h.ChefPlan.Opened)
+					r.Get("/assistant", h.ChefPlan.Assistant)
+					r.Post("/assistant/finds/{id}/undo", h.ChefPlan.UndoPlaced)
 				}
 			})
 		}

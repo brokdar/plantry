@@ -67,6 +67,11 @@ func (s *Service) Another(ctx context.Context, day time.Time) (Daily, error) {
 // to a run.
 func (s *Service) next(ctx context.Context, day time.Time, after int64) (Daily, error) {
 	key := dayKey(day)
+	if on, err := s.chefOn(ctx); on || err != nil {
+		// FIND-2: a ready find or nothing; the daily idea never searches.
+		sug, err := s.d.Store.Repo.ShowNextFind(ctx, key, after)
+		return Daily{Suggestion: sug}, err
+	}
 	sug, err := s.d.Store.Repo.ShowNext(ctx, key, after)
 	if err != nil || sug != nil {
 		return Daily{Suggestion: sug}, err
@@ -98,6 +103,18 @@ func (s *Service) next(ctx context.Context, day time.Time, after int64) (Daily, 
 		return Daily{}, err
 	}
 	return Daily{RunID: id}, nil
+}
+
+// chefOn reports chef.enabled; without the dependency the Chef is off.
+func (s *Service) chefOn(ctx context.Context) (bool, error) {
+	if s.d.ChefOn == nil {
+		return false, nil
+	}
+	on, err := s.d.ChefOn(ctx)
+	if err != nil {
+		return false, fmt.Errorf("chef setting: %w", err)
+	}
+	return on, nil
 }
 
 // dailyAvailable reports whether the daily suggestion is on and a provider

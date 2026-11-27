@@ -74,6 +74,9 @@ type Deps struct {
 	// Tx, when set, makes a discard and what it teaches one unit.
 	Tx     domain.Transactor
 	Logger *slog.Logger
+	// Planning is the planning side (C3): ready finds placed at generate
+	// time, sessions and prefetch.
+	Planning Planning
 }
 
 // Service runs finds.

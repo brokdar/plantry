@@ -10,10 +10,23 @@ import (
 	"database/sql"
 )
 
+const countOpenPlanningFinds = `-- name: CountOpenPlanningFinds :one
+SELECT COUNT(*) FROM recipe_suggestions
+WHERE state = 'ready' OR (state = 'searching' AND find_trigger = 'planning')
+`
+
+// Autonomous finds that are ready or still searching (prefetch counts them).
+func (q *Queries) CountOpenPlanningFinds(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countOpenPlanningFinds)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createFind = `-- name: CreateFind :one
 INSERT INTO recipe_suggestions (mode, query, source_url, draft_json, annotations_json, grounded, status, state, find_trigger)
 VALUES ('find', ?1, '', '{}', '{}', 0, 'hidden', 'searching', ?2)
-RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
 `
 
 type CreateFindParams struct {
@@ -51,6 +64,7 @@ func (q *Queries) CreateFind(ctx context.Context, arg CreateFindParams) (RecipeS
 		&i.StepsJson,
 		&i.QuestionsJson,
 		&i.UpdatedAt,
+		&i.PlacedOn,
 	)
 	return i, err
 }
@@ -61,7 +75,7 @@ UPDATE recipe_suggestions SET
     status = CASE WHEN ?1 = 'in_library' THEN 'accepted' ELSE 'rejected' END,
     decided_at = datetime('now'), updated_at = datetime('now')
 WHERE id = ?4 AND state IN ('ready', 'needs_check')
-RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
 `
 
 type DecideFindParams struct {
@@ -107,6 +121,7 @@ func (q *Queries) DecideFind(ctx context.Context, arg DecideFindParams) (RecipeS
 		&i.StepsJson,
 		&i.QuestionsJson,
 		&i.UpdatedAt,
+		&i.PlacedOn,
 	)
 	return i, err
 }
@@ -121,7 +136,7 @@ UPDATE recipe_suggestions SET
     status = CASE WHEN ?1 = 'failed' THEN 'hidden' ELSE 'pending' END,
     updated_at = datetime('now')
 WHERE id = ?12 AND state = 'searching'
-RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
 `
 
 type FinishFindParams struct {
@@ -183,12 +198,24 @@ func (q *Queries) FinishFind(ctx context.Context, arg FinishFindParams) (RecipeS
 		&i.StepsJson,
 		&i.QuestionsJson,
 		&i.UpdatedAt,
+		&i.PlacedOn,
 	)
 	return i, err
 }
 
+const getPlanningSession = `-- name: GetPlanningSession :one
+SELECT until FROM chef_planning_session WHERE id = 1
+`
+
+func (q *Queries) GetPlanningSession(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, getPlanningSession)
+	var until string
+	err := row.Scan(&until)
+	return until, err
+}
+
 const listFinds = `-- name: ListFinds :many
-SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at FROM recipe_suggestions
+SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on FROM recipe_suggestions
 WHERE state IS NOT NULL
   AND (CAST(?1 AS TEXT) IS NULL OR state = CAST(?1 AS TEXT))
 ORDER BY updated_at DESC, id DESC
@@ -236,6 +263,7 @@ func (q *Queries) ListFinds(ctx context.Context, arg ListFindsParams) ([]RecipeS
 			&i.StepsJson,
 			&i.QuestionsJson,
 			&i.UpdatedAt,
+			&i.PlacedOn,
 		); err != nil {
 			return nil, err
 		}
@@ -267,6 +295,63 @@ func (q *Queries) ListKitchenQuestionsAsked(ctx context.Context) ([]string, erro
 			return nil, err
 		}
 		items = append(items, question)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPlacedFinds = `-- name: ListPlacedFinds :many
+SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on FROM recipe_suggestions
+WHERE placed_on = ?1 AND state = 'in_library'
+ORDER BY id
+`
+
+// The finds the planner placed in the window starting on placed_on.
+func (q *Queries) ListPlacedFinds(ctx context.Context, placedOn sql.NullString) ([]RecipeSuggestion, error) {
+	rows, err := q.db.QueryContext(ctx, listPlacedFinds, placedOn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RecipeSuggestion{}
+	for rows.Next() {
+		var i RecipeSuggestion
+		if err := rows.Scan(
+			&i.ID,
+			&i.Mode,
+			&i.Query,
+			&i.SourceUrl,
+			&i.DraftJson,
+			&i.AnnotationsJson,
+			&i.ImagePath,
+			&i.Grounded,
+			&i.Status,
+			&i.Reason,
+			&i.AiRunID,
+			&i.FoodID,
+			&i.ShownOn,
+			&i.CreatedAt,
+			&i.DecidedAt,
+			&i.State,
+			&i.FindTrigger,
+			&i.SourcesJson,
+			&i.FlagsJson,
+			&i.Origin,
+			&i.ChangesJson,
+			&i.GatesJson,
+			&i.StepsJson,
+			&i.QuestionsJson,
+			&i.UpdatedAt,
+			&i.PlacedOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -362,4 +447,158 @@ ON CONFLICT (site) DO UPDATE SET count = count + 1, updated_at = datetime('now')
 func (q *Queries) PenaliseSource(ctx context.Context, site string) error {
 	_, err := q.db.ExecContext(ctx, penaliseSource, site)
 	return err
+}
+
+const placeFind = `-- name: PlaceFind :one
+UPDATE recipe_suggestions SET
+    state = 'in_library', status = 'accepted', food_id = ?1, placed_on = ?2,
+    decided_at = datetime('now'), updated_at = datetime('now')
+WHERE id = ?3 AND state = 'ready'
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
+`
+
+type PlaceFindParams struct {
+	FoodID   sql.NullInt64
+	PlacedOn sql.NullString
+	ID       int64
+}
+
+// The planner placed a ready find (FIND-4 ready -> in_library) in the
+// window starting on placed_on; no row when it is not ready.
+func (q *Queries) PlaceFind(ctx context.Context, arg PlaceFindParams) (RecipeSuggestion, error) {
+	row := q.db.QueryRowContext(ctx, placeFind, arg.FoodID, arg.PlacedOn, arg.ID)
+	var i RecipeSuggestion
+	err := row.Scan(
+		&i.ID,
+		&i.Mode,
+		&i.Query,
+		&i.SourceUrl,
+		&i.DraftJson,
+		&i.AnnotationsJson,
+		&i.ImagePath,
+		&i.Grounded,
+		&i.Status,
+		&i.Reason,
+		&i.AiRunID,
+		&i.FoodID,
+		&i.ShownOn,
+		&i.CreatedAt,
+		&i.DecidedAt,
+		&i.State,
+		&i.FindTrigger,
+		&i.SourcesJson,
+		&i.FlagsJson,
+		&i.Origin,
+		&i.ChangesJson,
+		&i.GatesJson,
+		&i.StepsJson,
+		&i.QuestionsJson,
+		&i.UpdatedAt,
+		&i.PlacedOn,
+	)
+	return i, err
+}
+
+const showNextReadyFind = `-- name: ShowNextReadyFind :one
+UPDATE recipe_suggestions SET shown_on = ?1
+WHERE id = (
+    SELECT s.id FROM recipe_suggestions s
+    WHERE s.state = 'ready' AND s.shown_on IS NULL AND s.id > ?2
+    ORDER BY s.id LIMIT 1
+)
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
+`
+
+type ShowNextReadyFindParams struct {
+	Day   sql.NullString
+	After int64
+}
+
+// FIND-2: with the Chef on the daily idea is a ready find, never shown
+// before, after the given id.
+func (q *Queries) ShowNextReadyFind(ctx context.Context, arg ShowNextReadyFindParams) (RecipeSuggestion, error) {
+	row := q.db.QueryRowContext(ctx, showNextReadyFind, arg.Day, arg.After)
+	var i RecipeSuggestion
+	err := row.Scan(
+		&i.ID,
+		&i.Mode,
+		&i.Query,
+		&i.SourceUrl,
+		&i.DraftJson,
+		&i.AnnotationsJson,
+		&i.ImagePath,
+		&i.Grounded,
+		&i.Status,
+		&i.Reason,
+		&i.AiRunID,
+		&i.FoodID,
+		&i.ShownOn,
+		&i.CreatedAt,
+		&i.DecidedAt,
+		&i.State,
+		&i.FindTrigger,
+		&i.SourcesJson,
+		&i.FlagsJson,
+		&i.Origin,
+		&i.ChangesJson,
+		&i.GatesJson,
+		&i.StepsJson,
+		&i.QuestionsJson,
+		&i.UpdatedAt,
+		&i.PlacedOn,
+	)
+	return i, err
+}
+
+const touchPlanningSession = `-- name: TouchPlanningSession :exec
+INSERT INTO chef_planning_session (id, until) VALUES (1, ?1)
+ON CONFLICT (id) DO UPDATE SET until = MAX(until, excluded.until)
+`
+
+func (q *Queries) TouchPlanningSession(ctx context.Context, until string) error {
+	_, err := q.db.ExecContext(ctx, touchPlanningSession, until)
+	return err
+}
+
+const unplaceFind = `-- name: UnplaceFind :one
+UPDATE recipe_suggestions SET
+    state = 'ready', status = 'pending', food_id = NULL, placed_on = NULL,
+    decided_at = NULL, updated_at = datetime('now')
+WHERE id = ?1 AND state = 'in_library' AND placed_on IS NOT NULL
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
+`
+
+// A placed find goes back to ready (the run did not use it, or Undo).
+func (q *Queries) UnplaceFind(ctx context.Context, id int64) (RecipeSuggestion, error) {
+	row := q.db.QueryRowContext(ctx, unplaceFind, id)
+	var i RecipeSuggestion
+	err := row.Scan(
+		&i.ID,
+		&i.Mode,
+		&i.Query,
+		&i.SourceUrl,
+		&i.DraftJson,
+		&i.AnnotationsJson,
+		&i.ImagePath,
+		&i.Grounded,
+		&i.Status,
+		&i.Reason,
+		&i.AiRunID,
+		&i.FoodID,
+		&i.ShownOn,
+		&i.CreatedAt,
+		&i.DecidedAt,
+		&i.State,
+		&i.FindTrigger,
+		&i.SourcesJson,
+		&i.FlagsJson,
+		&i.Origin,
+		&i.ChangesJson,
+		&i.GatesJson,
+		&i.StepsJson,
+		&i.QuestionsJson,
+		&i.UpdatedAt,
+		&i.PlacedOn,
+	)
+	return i, err
 }

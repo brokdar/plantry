@@ -106,10 +106,13 @@ type Find struct {
 	Gates     gates.Result    `json:"gates"`
 	Steps     []Step          `json:"steps"`
 	// Questions are the KIT-2/3 questions this find raised, asked once.
-	Questions []string   `json:"questions"`
-	Reason    *string    `json:"reason"`
-	FoodID    *int64     `json:"food_id"`
-	RunID     *int64     `json:"run_id"`
+	Questions []string `json:"questions"`
+	Reason    *string  `json:"reason"`
+	FoodID    *int64   `json:"food_id"`
+	RunID     *int64   `json:"run_id"`
+	// PlacedOn is the start (YYYY-MM-DD) of the window the planner placed
+	// the find in (C3); nil otherwise.
+	PlacedOn  *string    `json:"placed_on"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	DecidedAt *time.Time `json:"decided_at"`
@@ -149,4 +152,16 @@ type Store interface {
 	SourcePenalties(ctx context.Context) (map[string]int, error)
 	MarkAsked(ctx context.Context, question string) error
 	Asked(ctx context.Context) ([]string, error)
+	// Place marks a ready find in_library as foodID, placed in the window
+	// starting on windowStart; Unplace puts a placed find back to ready.
+	Place(ctx context.Context, id, foodID int64, windowStart time.Time) (*Find, error)
+	Unplace(ctx context.Context, id int64) (*Find, error)
+	// Placed lists the finds placed in the window starting on windowStart.
+	Placed(ctx context.Context, windowStart time.Time) ([]Find, error)
+	// OpenAutonomous counts ready finds and searching planning finds.
+	OpenAutonomous(ctx context.Context) (int, error)
+	// TouchSession keeps the planning session open until at least until;
+	// SessionUntil is when it closes (zero: never opened).
+	TouchSession(ctx context.Context, until time.Time) error
+	SessionUntil(ctx context.Context) (time.Time, error)
 }

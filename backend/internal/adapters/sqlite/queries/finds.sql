@@ -60,3 +60,49 @@ WHERE s.state = 'searching'
     SELECT 1 FROM chef_jobs j
     WHERE j.kind = 'chef_find' AND j.payload = CAST(s.id AS TEXT) AND j.status IN ('queued', 'running')
   );
+
+-- name: PlaceFind :one
+-- The planner placed a ready find (FIND-4 ready -> in_library) in the
+-- window starting on placed_on; no row when it is not ready.
+UPDATE recipe_suggestions SET
+    state = 'in_library', status = 'accepted', food_id = sqlc.arg(food_id), placed_on = sqlc.arg(placed_on),
+    decided_at = datetime('now'), updated_at = datetime('now')
+WHERE id = sqlc.arg(id) AND state = 'ready'
+RETURNING *;
+
+-- name: UnplaceFind :one
+-- A placed find goes back to ready (the run did not use it, or Undo).
+UPDATE recipe_suggestions SET
+    state = 'ready', status = 'pending', food_id = NULL, placed_on = NULL,
+    decided_at = NULL, updated_at = datetime('now')
+WHERE id = sqlc.arg(id) AND state = 'in_library' AND placed_on IS NOT NULL
+RETURNING *;
+
+-- name: ListPlacedFinds :many
+-- The finds the planner placed in the window starting on placed_on.
+SELECT * FROM recipe_suggestions
+WHERE placed_on = sqlc.arg(placed_on) AND state = 'in_library'
+ORDER BY id;
+
+-- name: CountOpenPlanningFinds :one
+-- Autonomous finds that are ready or still searching (prefetch counts them).
+SELECT COUNT(*) FROM recipe_suggestions
+WHERE state = 'ready' OR (state = 'searching' AND find_trigger = 'planning');
+
+-- name: ShowNextReadyFind :one
+-- FIND-2: with the Chef on the daily idea is a ready find, never shown
+-- before, after the given id.
+UPDATE recipe_suggestions SET shown_on = sqlc.arg(day)
+WHERE id = (
+    SELECT s.id FROM recipe_suggestions s
+    WHERE s.state = 'ready' AND s.shown_on IS NULL AND s.id > sqlc.arg(after)
+    ORDER BY s.id LIMIT 1
+)
+RETURNING *;
+
+-- name: TouchPlanningSession :exec
+INSERT INTO chef_planning_session (id, until) VALUES (1, sqlc.arg(until))
+ON CONFLICT (id) DO UPDATE SET until = MAX(until, excluded.until);
+
+-- name: GetPlanningSession :one
+SELECT until FROM chef_planning_session WHERE id = 1;

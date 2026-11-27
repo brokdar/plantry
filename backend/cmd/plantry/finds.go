@@ -98,3 +98,15 @@ type lazyFinds struct{ svc *finds.Service }
 func (l *lazyFinds) Request(ctx context.Context, dish string, trigger finds.Trigger) (*finds.Find, error) {
 	return l.svc.Request(ctx, dish, trigger)
 }
+
+// Touch, Stage and Settle make lazyFinds the planner's planning.ReadyFinds
+// (C3); the find service is built after the planner.
+func (l *lazyFinds) Touch(ctx context.Context) error { return l.svc.Touch(ctx) }
+
+func (l *lazyFinds) Stage(ctx context.Context, n int, windowStart time.Time) ([]int64, error) {
+	return l.svc.Stage(ctx, n, windowStart)
+}
+
+func (l *lazyFinds) Settle(ctx context.Context, windowStart time.Time, staged []int64, placed func(int64) bool) error {
+	return l.svc.Settle(ctx, windowStart, staged, placed)
+}
