@@ -811,6 +811,7 @@ FROM food_components fc
 JOIN foods p ON p.id = fc.parent_id AND p.kind = 'composed'
 JOIN foods l ON l.id = fc.child_id AND l.kind = 'leaf'
 WHERE fc.to_taste = 0
+  AND p.archived = 0
   AND (l.kcal_100g IS NULL OR l.protein_100g IS NULL OR l.fat_100g IS NULL OR l.carbs_100g IS NULL)
 ORDER BY p.name COLLATE NOCASE, p.id, fc.sort_order, fc.id
 `

@@ -144,6 +144,16 @@ function LineFix({
   )
 }
 
+/** A candidate may fix a leaf only with all four core macros (MATCH-2). */
+function hasCoreMacros(c: LookupCandidate): boolean {
+  return (
+    c.kcal_100g != null &&
+    c.protein_100g != null &&
+    c.fat_100g != null &&
+    c.carbs_100g != null
+  )
+}
+
 function SearchFix({ line }: { line: NeedsCheckLine }) {
   const { t, i18n } = useTranslation()
   const fix = useFixLeafNutrition()
@@ -154,7 +164,7 @@ function SearchFix({ line }: { line: NeedsCheckLine }) {
   // Library leaves are other ingredients; only a catalogue source supplies
   // nutrition for this one.
   const results = (lookup.data?.results ?? []).filter(
-    (r) => r.source !== "local"
+    (r) => r.source !== "local" && hasCoreMacros(r)
   )
 
   function pick(c: LookupCandidate) {

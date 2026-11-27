@@ -9,14 +9,18 @@ import { NeedsCheckEntry } from "./NeedsCheck"
 vi.mock("@/lib/api/foods", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/foods")>()),
   getNeedsCheck: vi.fn(),
-  updateFood: vi.fn(),
+  fixLeafNutrition: vi.fn(),
 }))
 vi.mock("@/lib/api/import", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/import")>()),
   lookupImportLine: vi.fn(),
 }))
 
-import { getNeedsCheck, updateFood, type NeedsCheck } from "@/lib/api/foods"
+import {
+  fixLeafNutrition,
+  getNeedsCheck,
+  type NeedsCheck,
+} from "@/lib/api/foods"
 import { lookupImportLine } from "@/lib/api/import"
 
 const legacy: NeedsCheck = {
@@ -79,7 +83,7 @@ describe("NeedsCheckEntry", () => {
     vi.mocked(getNeedsCheck)
       .mockResolvedValueOnce(legacy)
       .mockResolvedValue({ count: 0, leaves: [], recipes: [] })
-    vi.mocked(updateFood).mockResolvedValue({} as never)
+    vi.mocked(fixLeafNutrition).mockResolvedValue({} as never)
     renderWithRouter(<NeedsCheckEntry />)
 
     await userEvent.click(await screen.findByTestId("needs-check-entry"))
@@ -98,7 +102,7 @@ describe("NeedsCheckEntry", () => {
       screen.getByRole("button", { name: "Save nutrition" })
     )
 
-    expect(updateFood).toHaveBeenCalledWith(
+    expect(fixLeafNutrition).toHaveBeenCalledWith(
       7,
       expect.objectContaining({
         kind: "leaf",
@@ -116,7 +120,7 @@ describe("NeedsCheckEntry", () => {
 
   it("applies a picked catalogue result to the leaf, keeping its name", async () => {
     vi.mocked(getNeedsCheck).mockResolvedValue(legacy)
-    vi.mocked(updateFood).mockResolvedValue({} as never)
+    vi.mocked(fixLeafNutrition).mockResolvedValue({} as never)
     vi.mocked(lookupImportLine).mockResolvedValue({
       results: [
         {
@@ -129,6 +133,16 @@ describe("NeedsCheckEntry", () => {
           fat_100g: 1,
           carbs_100g: 10,
         },
+        {
+          source: "off",
+          name: "Mystery bar",
+          source_name: "Mystery bar",
+          barcode: "123",
+          kcal_100g: 80,
+          protein_100g: null,
+          fat_100g: 1,
+          carbs_100g: 10,
+        },
       ],
     } as never)
     renderWithRouter(<NeedsCheckEntry />)
@@ -137,9 +151,11 @@ describe("NeedsCheckEntry", () => {
     await userEvent.click(
       screen.getAllByRole("button", { name: "Search again" })[0]
     )
-    await userEvent.click(await screen.findByText("Mystery raw"))
+    expect(await screen.findByText("Mystery raw")).toBeTruthy()
+    expect(screen.queryByText("Mystery bar")).toBeNull()
+    await userEvent.click(screen.getByText("Mystery raw"))
 
-    expect(updateFood).toHaveBeenCalledWith(
+    expect(fixLeafNutrition).toHaveBeenCalledWith(
       7,
       expect.objectContaining({
         name: "Mystery",

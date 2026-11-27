@@ -13,6 +13,7 @@ import {
   getFood,
   getFoodAttributes,
   getFoodNutrition,
+  fixLeafNutrition,
   getNeedsCheck,
   getScaled,
   listFoodMacros,
@@ -70,7 +71,7 @@ export function useFixLeafNutrition() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: LeafFoodInput }) =>
-      updateFood(id, data),
+      fixLeafNutrition(id, data),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: foodKeys.all })
     },

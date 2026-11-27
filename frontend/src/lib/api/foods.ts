@@ -330,6 +330,18 @@ export function createFood(
   })
 }
 
+/** Writes nutrition onto an existing leaf (Needs-your-check fix). The server
+ *  keeps the leaf's name, role and any nutrient this payload leaves null. */
+export function fixLeafNutrition(
+  id: number,
+  input: LeafFoodInput
+): Promise<void> {
+  return apiFetch(`/foods/${id}/fix-nutrition`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
 export function updateFood(id: number, input: FoodInput): Promise<Food> {
   return apiFetch(`/foods/${id}`, {
     method: "PUT",

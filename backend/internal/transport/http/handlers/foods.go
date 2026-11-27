@@ -646,6 +646,9 @@ func (h *FoodHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if f.Description == nil {
 		f.Description = existing.Description
 	}
+	if f.Role == nil {
+		f.Role = existing.Role
+	}
 	f.Favorite = existing.Favorite
 	// variant group sticky
 	if f.Kind == food.KindComposed && f.VariantGroupID == nil {
