@@ -1,0 +1,44 @@
+{
+  "capabilities": { "web_search": false },
+  "turns": [
+    {
+      "for_tool": "chef_find_search",
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "tool_use",
+            "tool_use_id": "toolu_search",
+            "tool_name": "chef_find_search",
+            "tool_input": { "urls": ["{{SITE}}/chef-curry.html?r={{RUN}}"] }
+          }
+        ]
+      },
+      "usage": { "input_tokens": 800, "output_tokens": 100 }
+    },
+    {
+      "for_tool": "chef_find_adapt",
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "tool_use",
+            "tool_use_id": "toolu_adapt",
+            "tool_name": "chef_find_adapt",
+            "tool_input": {
+              "name": "Mild chicken curry",
+              "steps": [
+                "Sear the chicken thighs in the butter until golden.",
+                "Soften the onion in the same pan, about 5 minutes.",
+                "Let everything simmer gently for 20 minutes and serve on the rice."
+              ],
+              "swaps": [],
+              "requirements": { "equipment": ["stovetop"], "active_minutes": 25 }
+            }
+          }
+        ]
+      },
+      "usage": { "input_tokens": 900, "output_tokens": 300 }
+    }
+  ]
+}
