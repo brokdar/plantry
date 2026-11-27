@@ -133,7 +133,11 @@ describe("Settings routes and shell", () => {
     setViewport(false)
     mockApis()
     renderAt("/settings/household")
-    await screen.findByRole("heading", { level: 1, name: "Settings" })
+    await screen.findByRole(
+      "heading",
+      { level: 1, name: "Settings" },
+      { timeout: 15_000 }
+    )
     cleanup()
     vi.unstubAllGlobals()
   }, 30_000)

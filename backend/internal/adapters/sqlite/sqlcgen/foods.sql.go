@@ -482,6 +482,18 @@ func (q *Queries) GetLeafFoodIDByName(ctx context.Context, name string) (int64, 
 	return id, err
 }
 
+const hasConfirmedPlate = `-- name: HasConfirmedPlate :one
+SELECT EXISTS (SELECT 1 FROM plates WHERE state = 'confirmed')
+`
+
+// Whether any plate was ever confirmed: the household has cook history.
+func (q *Queries) HasConfirmedPlate(ctx context.Context) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasConfirmedPlate)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const leafIDsUsedInRecipes = `-- name: LeafIDsUsedInRecipes :many
 SELECT DISTINCT fc.child_id
 FROM food_components fc

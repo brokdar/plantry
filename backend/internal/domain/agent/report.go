@@ -1104,6 +1104,7 @@ func sessionMealLabels(st planning.State, is planning.Issue) []string {
 // issueMessageDE is the plain sentence of an issue code in German, for the codes
 // issueSentence has no numbers for.
 var issueMessageDE = map[string]string{
+	planning.CodeTrialRepeat:         "Dieses Rezept ist auf Probe und wird diese Woche schon gekocht.",
 	planning.CodeMealOutsideSlotBand: "Eine Mahlzeit hat mehr oder weniger von der Tagesenergie, als für diese Zeit gedacht ist.",
 	planning.CodeWeekFishBelowDGE:    "In der Woche gibt es keine Fischmahlzeit.",
 	planning.CodeWeekLegumesBelow:    "In der Woche gibt es keine Mahlzeit mit Hülsenfrüchten.",

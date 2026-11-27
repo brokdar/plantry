@@ -161,6 +161,8 @@ type Querier interface {
 	GetTasteItemByRef(ctx context.Context, arg GetTasteItemByRefParams) (TasteItem, error)
 	GetThemeSuggestion(ctx context.Context, windowStart string) (WeekThemeSuggestion, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
+	// Whether any plate was ever confirmed: the household has cook history.
+	HasConfirmedPlate(ctx context.Context) (bool, error)
 	HasQueuedChefJob(ctx context.Context, arg HasQueuedChefJobParams) (bool, error)
 	HasTasteSignal(ctx context.Context, arg HasTasteSignalParams) (int64, error)
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error

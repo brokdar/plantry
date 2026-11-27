@@ -93,6 +93,13 @@ func (s *Service) RecordFeedback(ctx context.Context, plateID int64, status Stat
 				return err
 			}
 		}
+		// A disliked first cooking archives a trial recipe: one still on trial
+		// on the plate's day (NEW-4).
+		if status == StatusDisliked && s.trials != nil {
+			if fb.ArchivedTrials, err = s.trials.ArchiveDisliked(ctx, recipeIDs(p), p.Date); err != nil {
+				return err
+			}
+		}
 		if len(tags) == 0 {
 			return nil
 		}
@@ -106,13 +113,6 @@ func (s *Service) RecordFeedback(ctx context.Context, plateID int64, status Stat
 	})
 	if err != nil {
 		return nil, err
-	}
-	// A disliked first cooking archives a trial recipe: one still on trial
-	// on the plate's day (NEW-4).
-	if status == StatusDisliked && s.trials != nil {
-		if fb.ArchivedTrials, err = s.trials.ArchiveDisliked(ctx, recipeIDs(p), p.Date); err != nil {
-			return nil, err
-		}
 	}
 	return fb, nil
 }

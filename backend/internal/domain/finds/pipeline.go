@@ -24,7 +24,7 @@ import (
 )
 
 // PromptVersion of the find run's model steps.
-const PromptVersion = "f2"
+const PromptVersion = "f3"
 
 const (
 	// fetchVersions is how many versions are fetched (FIND-11).
@@ -47,6 +47,10 @@ type Household struct {
 	Loves       []string
 	RatherNot   []string
 	KnownLeaves []string
+	// Cuisines are the cuisines the household eats (FIND-15), and FirstWeek
+	// says it has no cook history yet: week one is mild and familiar (COLD-4).
+	Cuisines  []string
+	FirstWeek bool
 }
 
 // Fetcher loads a page politely (httpfetch.Polite).
@@ -225,7 +229,14 @@ func (s *Service) pipeline(ctx context.Context, f *Find) (Outcome, error) {
 		o.State, o.Steps = StateFailed, []Step{{Key: "no_sites"}}
 		return o, nil
 	}
+	// Week one is mild and familiar (COLD-4): a find the user did not ask for
+	// by name, or Fill my library, stays within the household's cuisines and
+	// adapts mild.
+	h.FirstWeek = h.FirstWeek && (!f.Trigger.Requested() || f.Trigger == TriggerFill)
 	q := Query{Dish: f.Dish, Diet: h.Diet, Language: h.Lang}
+	if h.FirstWeek && f.Trigger == TriggerFill && len(h.Cuisines) > 0 {
+		q.Cuisine = h.Cuisines[int(f.ID%int64(len(h.Cuisines)))]
+	}
 	urls, err := s.search(ctx, client, model, q, domains, web)
 	var blocked *llm.DomainsBlockedError
 	if errors.As(err, &blocked) {

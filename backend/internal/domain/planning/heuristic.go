@@ -925,7 +925,7 @@ func (h *planner) mainCandidate(f FoodFacts, c plate.CellKey) bool {
 // trialTaken reports whether f is on trial and already cooked in a session
 // of the window, by this run or before it (NEW-1).
 func (h *planner) trialTaken(f FoodFacts) bool {
-	return f.Trial && (h.used[f.ID] > 0 || h.s.TrialCooked(f.ID))
+	return h.s.Settings.ChefOn && f.Trial && (h.used[f.ID] > 0 || h.s.TrialCooked(f.ID))
 }
 
 func (h *planner) isForced(c plate.CellKey) bool {

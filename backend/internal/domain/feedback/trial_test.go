@@ -2,6 +2,7 @@ package feedback_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
@@ -98,4 +100,41 @@ func TestRecordFeedback_TrialRecipes(t *testing.T) {
 	got, err = fb.RecordFeedback(ctx, eat(9, id("Stew")), feedback.StatusDisliked, nil)
 	require.NoError(t, err)
 	assert.Empty(t, got.ArchivedTrials)
+}
+
+type failingArchiver struct{}
+
+func (failingArchiver) ArchiveDisliked(context.Context, []int64, time.Time) ([]food.ArchivedTrial, error) {
+	return nil, errors.New("archive failed")
+}
+
+// NEW-4: the feedback and the archiving of a disliked trial share one
+// transaction: a failed archive leaves no feedback row.
+func TestRecordFeedback_FailedArchiveRollsBack(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	clock := func() time.Time { return time.Date(2026, 3, 2, 18, 0, 0, 0, time.UTC) }
+	for _, q := range []string{
+		`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.dinner', 'moon', 2, 1)`,
+		`INSERT INTO foods (name, kind, role, reference_portions, trial) VALUES ('Soup', 'composed', 'main', 1, 1)`,
+	} {
+		_, err := db.Exec(q)
+		require.NoError(t, err, q)
+	}
+	var slot, soup int64
+	require.NoError(t, db.QueryRow(`SELECT id FROM time_slots`).Scan(&slot))
+	require.NoError(t, db.QueryRow(`SELECT id FROM foods WHERE name = 'Soup'`).Scan(&soup))
+	plates, _ := testsvc.PlanAt(db, nil, clock)
+	one := 1.0
+	p, err := plates.Create(ctx, plate.PlateInput{
+		Date: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), SlotID: slot,
+		Components: []plate.PlateComponent{{FoodID: soup, Portions: &one}},
+	})
+	require.NoError(t, err)
+
+	fb := testsvc.Feedback(db).WithTrials(failingArchiver{})
+	_, err = fb.RecordFeedback(ctx, p.ID, feedback.StatusDisliked, nil)
+	require.Error(t, err)
+	_, err = sqlite.NewFeedbackRepo(db).Get(ctx, p.ID)
+	assert.ErrorIs(t, err, domain.ErrNotFound)
 }

@@ -97,6 +97,10 @@ UPDATE foods SET
 WHERE id = ?
 RETURNING *;
 
+-- name: HasConfirmedPlate :one
+-- Whether any plate was ever confirmed: the household has cook history.
+SELECT EXISTS (SELECT 1 FROM plates WHERE state = 'confirmed');
+
 -- name: CountComposedFoods :one
 SELECT COUNT(*) FROM foods WHERE kind = 'composed' AND archived = 0;
 

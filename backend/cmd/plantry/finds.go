@@ -28,6 +28,8 @@ func findHousehold(
 	never func(context.Context) ([]kitchen.Food, error),
 	tasteView func(context.Context, time.Time) (taste.View, error),
 	leaves func(context.Context, int) ([]string, error),
+	cuisines func(context.Context) ([]string, error),
+	history func(context.Context) (bool, error),
 ) func(context.Context) (finds.Household, error) {
 	return func(ctx context.Context) (finds.Household, error) {
 		p, err := prof(ctx)
@@ -72,7 +74,45 @@ func findHousehold(
 		if h.KnownLeaves, err = leaves(ctx, knownLeavesLimit); err != nil {
 			return finds.Household{}, err
 		}
+		if h.Cuisines, err = cuisines(ctx); err != nil {
+			return finds.Household{}, err
+		}
+		cooked, err := history(ctx)
+		if err != nil {
+			return finds.Household{}, err
+		}
+		h.FirstWeek = !cooked
 		return h, nil
+	}
+}
+
+// householdCuisines lists the cuisines the household eats (FIND-15): the ones
+// it loves (the cold-start answer included), Cuisines to explore, and the
+// locale's home cuisine. Library recipes carry no cuisine, so they add none.
+func householdCuisines(
+	prof func(context.Context) (*profile.Profile, error),
+	loved func(context.Context) ([]string, error),
+	explore func(context.Context) ([]string, error),
+) func(context.Context) ([]string, error) {
+	return func(ctx context.Context) ([]string, error) {
+		out, err := loved(ctx)
+		if err != nil {
+			return nil, err
+		}
+		more, err := explore(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, more...)
+		p, err := prof(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if strings.HasPrefix(p.Locale, "de") {
+			out = append(out, "german")
+		}
+		slices.Sort(out)
+		return slices.Compact(out), nil
 	}
 }
 

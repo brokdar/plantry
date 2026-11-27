@@ -50,6 +50,9 @@ const (
 	CodeVarietyRepeat         = "variety_repeat"
 	CodeVarietyRelaxed        = "variety_relaxed"
 	CodeVarietyRepeatWeek     = "variety_repeat_week"
+	// CodeTrialRepeat: a recipe on trial is cooked a second time in the window
+	// (NEW-1), whatever the variety weeks or the role.
+	CodeTrialRepeat = "trial_repeat"
 	// CodeVarietyRepeatNamed: a dish the user named repeats inside the variety
 	// window; applied with this warning (SF3).
 	CodeVarietyRepeatNamed = "variety_repeat_named"
@@ -117,6 +120,7 @@ func check(x *index) []Issue {
 	out = append(out, x.h6()...)
 	out = append(out, x.h7()...)
 	out = append(out, x.h8()...)
+	out = append(out, x.trialOnce()...)
 	out = append(out, x.h9()...)
 	return out
 }
@@ -549,12 +553,6 @@ func (x *index) h8() []Issue {
 			continue
 		}
 		code, sev := code, sev
-		if x.merged && x.s.Foods[ev.foodID].Trial && x.s.Window.Contains(prev) && !x.s.Named[ev.foodID] {
-			// A trial recipe cooks in one session per window, relaxed or not (NEW-1).
-			is := issue("H8", CodeVarietyRepeat, SeverityViolation)
-			out = append(out, x.onCook(is, ev).with("food_id", ev.foodID).with("last_eaten", prev.Format(time.DateOnly)))
-			continue
-		}
 		if !x.merged && code == CodeVarietyRepeat && x.s.Window.Contains(prev) {
 			code, sev = CodeVarietyRepeatWeek, SeverityWarning
 		}
@@ -562,6 +560,32 @@ func (x *index) h8() []Issue {
 			code, sev = CodeVarietyRepeatNamed, SeverityWarning
 		}
 		out = append(out, x.onCook(issue("H8", code, sev), ev).with("food_id", ev.foodID).with("last_eaten", prev.Format(time.DateOnly)))
+	}
+	return out
+}
+
+// trialOnce: a recipe on trial takes one cook per window, whatever the variety
+// weeks and the role (NEW-1; Chef on). A proposed cook of one that another cook
+// of the window already holds, persisted or an earlier proposed one, is a
+// violation. A food the user named is the user's choice.
+func (x *index) trialOnce() []Issue {
+	if !x.merged || !x.s.Settings.ChefOn {
+		return nil
+	}
+	var out []Issue
+	for i, ev := range x.cooks {
+		if !ev.proposed || ev.confirmed || x.routine(ev.cell) || !x.s.Foods[ev.foodID].Trial || x.s.Named[ev.foodID] {
+			continue
+		}
+		for j, o := range x.cooks {
+			if j == i || o.foodID != ev.foodID || x.routine(o.cell) || !x.s.Window.Contains(o.cell.Date) {
+				continue
+			}
+			if !o.proposed || plate.Before(o.cell, ev.cell, x.s.SlotOrder) {
+				out = append(out, x.onCook(issue("H8", CodeTrialRepeat, SeverityViolation), ev).with("food_id", ev.foodID))
+				break
+			}
+		}
 	}
 	return out
 }

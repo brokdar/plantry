@@ -501,6 +501,11 @@ func (r *FoodRepo) CountComposedFoods(ctx context.Context) (int64, error) {
 	return r.queriesFor(ctx).CountComposedFoods(ctx)
 }
 
+// HasCookHistory reports whether any plate was ever confirmed.
+func (r *FoodRepo) HasCookHistory(ctx context.Context) (bool, error) {
+	return r.queriesFor(ctx).HasConfirmedPlate(ctx)
+}
+
 // UneatenRecipes returns the recipes not eaten in [since, today] (as
 // History counts eating), by id.
 func (r *FoodRepo) UneatenRecipes(ctx context.Context, since, today time.Time) ([]food.RecipeRole, error) {

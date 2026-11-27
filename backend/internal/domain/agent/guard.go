@@ -64,6 +64,7 @@ var hardLabelDE = map[string]string{
 	planning.CodeDietIncompatible:      "ein Lebensmittel passt nicht zur Ernährungsweise",
 	planning.CodeKcalBelowFloor:        "der Tag läge unter seinem Mindestwert",
 	planning.CodeVarietyRepeat:         "ein Hauptgericht wurde zu kürzlich gekocht oder gegessen",
+	planning.CodeTrialRepeat:           "ein Rezept auf Probe würde in der Woche ein zweites Mal gekocht",
 	"leftover_before_cook":             "Reste würden vor dem Kochen gegessen",
 	"past_keep_days":                   "Reste wären nicht mehr haltbar",
 	"deficit":                          "es würde mehr gegessen, als gekocht wird",

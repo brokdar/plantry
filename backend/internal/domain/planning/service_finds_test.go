@@ -208,3 +208,23 @@ func TestFillLibrary_TenRequestedFinds(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, all, 10)
 }
+
+// A partial failure leaves fewer than ten fill finds open: the next tap starts
+// only the dishes without one.
+func TestFillLibrary_TopsUpAPartialBatch(t *testing.T) {
+	e := newFindsEnv(t, true)
+	got, err := e.finds.FillLibrary(e.ctx)
+	require.NoError(t, err)
+	require.Len(t, got, 10)
+	for _, f := range got[:3] {
+		e.finds.Abandon(e.ctx, f.ID, "error")
+	}
+	again, err := e.finds.FillLibrary(e.ctx)
+	require.NoError(t, err)
+	assert.Len(t, again, 10)
+	dishes := map[string]bool{}
+	for _, f := range again {
+		dishes[f.Dish] = true
+	}
+	assert.Len(t, dishes, 10, "ten distinct dishes open")
+}

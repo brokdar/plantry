@@ -394,8 +394,9 @@ var fillDishes = []string{
 }
 
 // FillLibrary starts the ten requested finds of "Fill my library"; each
-// ready one enters the library on trial. The caller checks the Chef is on. Finds still searching from an
-// earlier tap are returned instead of starting ten more.
+// ready one enters the library on trial. The caller checks the Chef is on. Finds
+// still searching from an earlier tap are returned with it; only the dishes
+// without one are started, so a partial failure tops up to ten.
 func (s *Service) FillLibrary(ctx context.Context) ([]Find, error) {
 	searching := StateSearching
 	open, err := s.d.Store.List(ctx, &searching, maxStaged)
@@ -403,11 +404,11 @@ func (s *Service) FillLibrary(ctx context.Context) ([]Find, error) {
 		return nil, err
 	}
 	open = slices.DeleteFunc(open, func(f Find) bool { return f.Trigger != TriggerFill })
-	if len(open) > 0 {
-		return open, nil
-	}
-	var out []Find
+	out := open
 	for _, dish := range fillDishes {
+		if slices.ContainsFunc(open, func(f Find) bool { return f.Dish == clean(dish) }) {
+			continue
+		}
 		f, err := s.Request(ctx, dish, TriggerFill)
 		if err != nil {
 			return out, err

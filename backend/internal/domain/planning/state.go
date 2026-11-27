@@ -321,6 +321,9 @@ type Target struct {
 // TrialCooked reports whether a cook session of the window cooks food id: a
 // trial recipe takes at most one per window (NEW-1).
 func (s *State) TrialCooked(id int64) bool {
+	if !s.Settings.ChefOn {
+		return false
+	}
 	for _, ss := range s.Sessions {
 		if ss.FoodID == id && s.Window.Contains(ss.CookDate) {
 			return true
