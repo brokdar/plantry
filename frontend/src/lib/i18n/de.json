@@ -2263,7 +2263,8 @@
       "kcal": "{{kcal}} kcal",
       "eaten": "{{when}} gegessen",
       "never": "noch nie gegessen",
-      "favorite": "Favorit"
+      "favorite": "Favorit",
+      "kcal_incomplete": "{{kcal}} kcal, unvollständig"
     },
     "ingredients": {
       "search": "Zutaten suchen",
@@ -2288,6 +2289,22 @@
       "no_results_body": "Versuch es mit einem anderen Suchbegriff.",
       "empty_title": "Noch keine Zutaten",
       "empty_body": "Zutaten erscheinen hier, sobald du Rezepte anlegst. Du kannst auch direkt eine anlegen."
+    },
+    "needs_check": {
+      "entry_one": "1 Rezept bitte prüfen",
+      "entry_other": "{{count}} Rezepte bitte prüfen",
+      "title": "Bitte prüfen",
+      "intro": "Diese Rezepte enthalten Zutaten ohne Nährwerte. Sie bleiben planbar; ihre Nährwerte gelten als unvollständig, bis du die Zutat korrigierst.",
+      "no_nutrition": "keine Nährwerte",
+      "search_again": "Neu suchen",
+      "enter": "Nährwerte eintragen",
+      "search_for": "Suchbegriff für {{name}}",
+      "pick": "Treffer wählen, um die Nährwerte pro 100 g zu übernehmen",
+      "shared_one": "Das korrigiert auch 1 Rezept.",
+      "shared_other": "Das korrigiert auch alle {{count}} Rezepte, die sie verwenden.",
+      "enter_hint": "Werte pro 100 g für „{{name}}“, von der Verpackung oder aus einer Nährwerttabelle.",
+      "save_nutrition": "Nährwerte speichern",
+      "remove_in_recipe": "Zeile im Rezept entfernen"
     }
   },
   "shop": {

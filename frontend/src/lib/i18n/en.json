@@ -2263,7 +2263,8 @@
       "kcal": "{{kcal}} kcal",
       "eaten": "eaten {{when}}",
       "never": "never eaten",
-      "favorite": "Favorite"
+      "favorite": "Favorite",
+      "kcal_incomplete": "{{kcal}} kcal, incomplete"
     },
     "ingredients": {
       "search": "Search ingredients",
@@ -2288,6 +2289,22 @@
       "no_results_body": "Try another search.",
       "empty_title": "No ingredients yet",
       "empty_body": "Ingredients appear here as you add recipes. You can also create one now."
+    },
+    "needs_check": {
+      "entry_one": "1 recipe needs your check",
+      "entry_other": "{{count}} recipes need your check",
+      "title": "Needs your check",
+      "intro": "These recipes use ingredients without nutrition data. They stay plannable; their nutrition shows as incomplete until you fix the ingredient.",
+      "no_nutrition": "no nutrition data",
+      "search_again": "Search again",
+      "enter": "Enter nutrition",
+      "search_for": "Search name for {{name}}",
+      "pick": "Pick a match to use its nutrition per 100 g",
+      "shared_one": "Fixing this also fixes 1 recipe.",
+      "shared_other": "Fixing this also fixes all {{count}} recipes that use it.",
+      "enter_hint": "Values per 100 g for “{{name}}”, from the package or a nutrition table.",
+      "save_nutrition": "Save nutrition",
+      "remove_in_recipe": "Remove a line in the recipe"
     }
   },
   "shop": {

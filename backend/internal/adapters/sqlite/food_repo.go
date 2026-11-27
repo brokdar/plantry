@@ -1087,3 +1087,20 @@ func scanFoodRow(rows *sql.Rows) (*sqlcgen.Food, error) {
 	}
 	return &row, nil
 }
+
+// NeedsCheckLines returns the recipe lines whose leaf has no core nutrition.
+func (r *FoodRepo) NeedsCheckLines(ctx context.Context) ([]food.NeedsCheckLine, error) {
+	rows, err := r.queriesFor(ctx).ListNeedsCheckLines(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]food.NeedsCheckLine, len(rows))
+	for i, row := range rows {
+		out[i] = food.NeedsCheckLine{
+			RecipeID: row.RecipeID, RecipeName: row.RecipeName,
+			LeafID: row.LeafID, LeafName: row.LeafName,
+			Amount: row.Amount, Unit: row.Unit,
+		}
+	}
+	return out, nil
+}

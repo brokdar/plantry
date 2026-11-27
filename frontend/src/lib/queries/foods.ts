@@ -13,6 +13,8 @@ import {
   getFood,
   getFoodAttributes,
   getFoodNutrition,
+  fixLeafNutrition,
+  getNeedsCheck,
   getScaled,
   listFoodMacros,
   listFoods,
@@ -52,6 +54,28 @@ export function useFoods(
     queryKey: foodKeys.list(params ?? {}),
     queryFn: () => listFoods(params),
     staleTime: options?.staleTime,
+  })
+}
+
+export function useNeedsCheck() {
+  return useQuery({
+    queryKey: foodKeys.needsCheck(),
+    queryFn: getNeedsCheck,
+  })
+}
+
+/** Writes nutrition onto an existing leaf (legacy fix): every recipe using
+ *  it, and the Needs-your-check list, change with it. */
+export function useFixLeafNutrition() {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: LeafFoodInput }) =>
+      fixLeafNutrition(id, data),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: foodKeys.all })
+    },
+    onError: (err) => toastError(err, t),
   })
 }
 

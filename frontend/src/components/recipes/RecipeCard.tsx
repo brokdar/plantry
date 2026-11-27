@@ -29,10 +29,15 @@ export function RecipeCard({ recipe, today }: RecipeCardProps) {
 
   const meta = [
     minutes > 0 ? t("recipes.card.minutes", { count: minutes }) : null,
-    kcal > 0
-      ? t("recipes.card.kcal", {
-          kcal: new Intl.NumberFormat(i18n.language).format(kcal),
-        })
+    kcal > 0 || !per_portion.complete
+      ? t(
+          per_portion.complete
+            ? "recipes.card.kcal"
+            : "recipes.card.kcal_incomplete",
+          {
+            kcal: new Intl.NumberFormat(i18n.language).format(kcal),
+          }
+        )
       : null,
     ago ? t("recipes.card.eaten", { when: ago }) : t("recipes.card.never"),
   ].filter(Boolean)

@@ -11,6 +11,7 @@ import { RecipeLibrary } from "./RecipeLibrary"
 vi.mock("@/lib/api/foods", () => ({
   listFoods: vi.fn(),
   restoreFood: vi.fn(),
+  getNeedsCheck: vi.fn(),
 }))
 
 vi.mock("@/lib/api/setup", () => ({
@@ -31,7 +32,7 @@ vi.mock("@/lib/dates", async (importOriginal) => ({
 }))
 
 import { listSuggestions } from "@/lib/api/discovery"
-import { listFoods, restoreFood } from "@/lib/api/foods"
+import { getNeedsCheck, listFoods, restoreFood } from "@/lib/api/foods"
 import { listSettings } from "@/lib/api/settings"
 import { getSetupStatus } from "@/lib/api/setup"
 import { mockSettingsList, mockSuggestion } from "@/test/fixtures"
@@ -65,6 +66,11 @@ describe("RecipeLibrary", () => {
     localStorage.clear()
     setupWith(10)
     providerSet("")
+    vi.mocked(getNeedsCheck).mockResolvedValue({
+      count: 0,
+      leaves: [],
+      recipes: [],
+    })
   })
 
   it("shows time, kcal per portion and last eaten on each card", async () => {
@@ -132,6 +138,24 @@ describe("RecipeLibrary", () => {
 
     await screen.findByTestId(`recipe-card-${mockTofuBowl.id}`)
     expect(screen.queryByTestId(`recipe-restore-${mockTofuBowl.id}`)).toBeNull()
+  })
+
+  it("says a card's kcal are incomplete rather than showing a silent undercount", async () => {
+    vi.mocked(listFoods).mockResolvedValue({
+      items: [
+        {
+          ...mockChickenCurry,
+          per_portion: { kcal: 300, protein: 20, complete: false },
+        },
+      ],
+      total: 1,
+    })
+
+    renderLibrary()
+
+    expect(
+      await screen.findByTestId(`recipe-card-${mockChickenCurry.id}-meta`)
+    ).toHaveTextContent("300 kcal, incomplete")
   })
 
   it("draws the initial as the placeholder when there is no photo", async () => {

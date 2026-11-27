@@ -270,3 +270,17 @@ WHERE f.kind = 'leaf'
 GROUP BY f.id, f.name
 ORDER BY COUNT(DISTINCT fc.parent_id) DESC, f.name
 LIMIT ?;
+
+-- name: ListNeedsCheckLines :many
+-- Recipe lines whose leaf lacks a core macro (legacy data, B2b). A to-taste
+-- line counts no nutrition, so it is not a problem.
+SELECT p.id AS recipe_id, p.name AS recipe_name,
+       l.id AS leaf_id, l.name AS leaf_name,
+       fc.amount, fc.unit
+FROM food_components fc
+JOIN foods p ON p.id = fc.parent_id AND p.kind = 'composed'
+JOIN foods l ON l.id = fc.child_id AND l.kind = 'leaf'
+WHERE fc.to_taste = 0
+  AND p.archived = 0
+  AND (l.kcal_100g IS NULL OR l.protein_100g IS NULL OR l.fat_100g IS NULL OR l.carbs_100g IS NULL)
+ORDER BY p.name COLLATE NOCASE, p.id, fc.sort_order, fc.id;

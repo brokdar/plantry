@@ -330,6 +330,18 @@ export function createFood(
   })
 }
 
+/** Writes nutrition onto an existing leaf (Needs-your-check fix). The server
+ *  keeps the leaf's name, role and any nutrient this payload leaves null. */
+export function fixLeafNutrition(
+  id: number,
+  input: LeafFoodInput
+): Promise<void> {
+  return apiFetch(`/foods/${id}/fix-nutrition`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
 export function updateFood(id: number, input: FoodInput): Promise<Food> {
   return apiFetch(`/foods/${id}`, {
     method: "PUT",
@@ -606,4 +618,36 @@ export function revertFoodChange(undo: FoodEventUndo): Promise<unknown> {
     method: "POST",
     body: JSON.stringify(undo),
   })
+}
+
+export interface NeedsCheckLine {
+  leaf_id: number
+  leaf_name: string
+  amount: number
+  unit: string
+}
+
+export interface NeedsCheckRecipe {
+  id: number
+  name: string
+  /** Problem lines of this recipe (on the recipes list only). */
+  lines?: NeedsCheckLine[]
+}
+
+export interface NeedsCheckLeaf {
+  id: number
+  name: string
+  recipes: NeedsCheckRecipe[]
+}
+
+/** Legacy "Needs your check": leaves without nutrition that recipes use and
+ *  the recipes with such a line. `count` is the number of recipes. */
+export interface NeedsCheck {
+  count: number
+  leaves: NeedsCheckLeaf[]
+  recipes: NeedsCheckRecipe[]
+}
+
+export function getNeedsCheck(): Promise<NeedsCheck> {
+  return apiFetch("/foods/needs-check")
 }

@@ -178,6 +178,9 @@ type Querier interface {
 	// cell, eaters and state: the ingredient sources of a shopping list.
 	ListLeafPlateComponentsInRange(ctx context.Context, arg ListLeafPlateComponentsInRangeParams) ([]ListLeafPlateComponentsInRangeRow, error)
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
+	// Recipe lines whose leaf lacks a core macro (legacy data, B2b). A to-taste
+	// line counts no nutrition, so it is not a problem.
+	ListNeedsCheckLines(ctx context.Context) ([]ListNeedsCheckLinesRow, error)
 	ListNeverItems(ctx context.Context) ([]ListNeverItemsRow, error)
 	ListPlanLight(ctx context.Context, arg ListPlanLightParams) ([]PlanLight, error)
 	ListPlateComponentsByDateRange(ctx context.Context, arg ListPlateComponentsByDateRangeParams) ([]ListPlateComponentsByDateRangeRow, error)

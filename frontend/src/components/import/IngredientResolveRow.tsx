@@ -475,16 +475,21 @@ const MACROS = ["kcal_100g", "protein_100g", "fat_100g", "carbs_100g"] as const
 type Macros = Record<(typeof MACROS)[number], number>
 
 /** A new leaf needs nutrition per 100 g (P3): all four core values. */
-function NewLeafForm({
+export function NewLeafForm({
   name,
   pending,
   onCreate,
   onCancel,
+  hint,
+  submitLabel,
 }: {
   name: string
   pending: boolean
   onCreate: (m: Macros) => void
   onCancel: () => void
+  /** Replaces the new-ingredient hint (legacy fix of an existing leaf). */
+  hint?: string
+  submitLabel?: string
 }) {
   const { t } = useTranslation()
   const [values, setValues] = useState<Record<string, string>>({})
@@ -504,7 +509,7 @@ function NewLeafForm({
       }}
     >
       <p className="text-xs text-ink-muted">
-        {t("import.step2.new_leaf_hint", { name })}
+        {hint ?? t("import.step2.new_leaf_hint", { name })}
       </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {MACROS.map((k) => (
@@ -524,7 +529,7 @@ function NewLeafForm({
       </div>
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={!valid || pending}>
-          {t("import.step2.create_leaf")}
+          {submitLabel ?? t("import.step2.create_leaf")}
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           {t("common.cancel")}
