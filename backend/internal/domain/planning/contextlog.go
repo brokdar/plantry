@@ -24,6 +24,7 @@ const (
 	excludeDiet        = "diet_incompatible"
 	excludeNever       = "never_item"
 	excludeSideRole    = "side_swap_other_role"
+	excludeSlotTime    = "over_slot_time"
 	excludeTokenBudget = "token_budget"
 )
 

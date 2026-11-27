@@ -50,3 +50,40 @@ func TestHeuristic_TimeAllowanceIsASoftPreference(t *testing.T) {
 		})
 	}
 }
+
+// GATE-2: with the Chef on, the only recipe over the slot's allowance is
+// ineligible for that slot (the cell stays empty); with it off it is still
+// picked. The chooser's list drops it too.
+func TestHeuristic_ChefOnBlocksRecipeOverSlotAllowance(t *testing.T) {
+	const slowID int64 = 101
+	build := func(chef bool, weekday, weekend int, batch bool, refPortions float64) planning.State {
+		s := baseState()
+		s.Settings.ChefOn, s.Settings.BatchCooking = chef, batch
+		s.Profile.MinutesWeekday, s.Profile.MinutesWeekend = weekday, weekend
+		slow := recipe(slowID, "Slow", food.RoleMain, "omnivore", 600)
+		slow.Minutes, slow.ReferencePortions = 45, refPortions
+		s.Foods = map[int64]planning.FoodFacts{slowID: slow}
+		return s
+	}
+	cases := []struct {
+		name   string
+		date   string
+		s      planning.State
+		placed bool
+	}{
+		{"chef off keeps it", tue, build(false, 30, 60, false, 1), true},
+		{"chef on, weekday over", tue, build(true, 30, 60, false, 1), false},
+		{"chef on, weekday within", tue, build(true, 50, 60, false, 1), true},
+		{"chef on, weekend allowance", sat, build(true, 30, 60, false, 1), true},
+		{"chef on, weekend over", sat, build(true, 30, 40, false, 1), false},
+		{"chef on, batch of 3 gets the weekend allowance", tue, build(true, 30, 60, true, 3), true},
+		{"chef on, batch of 2 does not", tue, build(true, 30, 60, true, 2), false},
+		{"chef on, unknown allowance blocks nothing", tue, build(true, 0, 0, false, 1), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := choose(t, planning.ChooseInput{State: tc.s, Target: targetCells(cell(tc.date, dinner))})
+			assert.Equal(t, tc.placed, len(p.Sessions) == 1)
+		})
+	}
+}

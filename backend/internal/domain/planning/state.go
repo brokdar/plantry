@@ -260,6 +260,9 @@ type Settings struct {
 	// BatchVariation is chef.batch_variation: the leftover plates of a
 	// batch get another side than its cook plate (PLATE-6).
 	BatchVariation bool
+	// ChefOn is chef.enabled: with it a recipe over a slot's time allowance
+	// is ineligible for that slot (GATE-2).
+	ChefOn bool
 }
 
 // Profile is the part of the user profile the rules read.
