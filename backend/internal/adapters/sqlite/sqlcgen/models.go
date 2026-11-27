@@ -426,6 +426,14 @@ type RecipeSuggestion struct {
 	DecidedAt       sql.NullString
 }
 
+type SubstitutionSwap struct {
+	BaseFoodID int64
+	FromFoodID int64
+	ToFoodID   int64
+	Swaps      int64
+	Offered    int64
+}
+
 type TimeSlot struct {
 	ID         int64
 	NameKey    string

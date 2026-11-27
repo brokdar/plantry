@@ -2351,7 +2351,17 @@
     "this_batch": "This changes this batch only.",
     "applied": "{{to}} instead of {{from}}",
     "applied_many": "{{to}} instead of {{from}} in {{count}} batches",
-    "back": "Back"
+    "back": "Back",
+    "offer": "You swapped {{from}} for {{to}} here before. Make it permanent?",
+    "keep_hint": "Keep this swap?",
+    "always": "Always in this recipe",
+    "save_variant": "Save as variant",
+    "done": "Done",
+    "always_warning_one": "This also changes the shopping list for {{count}} confirmed day.",
+    "always_warning_other": "This also changes the shopping list for {{count}} confirmed days.",
+    "always_confirm": "Change the recipe",
+    "kept_recipe": "Recipe now has {{to}} instead of {{from}}",
+    "kept_variant": "Saved as a variant with {{to}}"
   },
   "shop": {
     "range": "{{from}} to {{to}}",

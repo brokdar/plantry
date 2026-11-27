@@ -62,3 +62,22 @@ func (r *SubstitutionRepo) SetSessionFood(ctx context.Context, sessionID, foodID
 		return q.TouchPlatesOfSession(ctx, sql.NullInt64{Int64: sessionID, Valid: true})
 	})
 }
+
+func (r *SubstitutionRepo) DeleteHidden(ctx context.Context, foodID int64) error {
+	return r.queriesFor(ctx).DeleteHiddenVariant(ctx, foodID)
+}
+
+// CountSwap counts one more swap of from for to in recipe base; it reports
+// true exactly once, when the swap reaches its second time.
+func (r *SubstitutionRepo) CountSwap(ctx context.Context, baseID, fromID, toID int64) (bool, error) {
+	q := r.queriesFor(ctx)
+	row, err := q.CountSubstitutionSwap(ctx, sqlcgen.CountSubstitutionSwapParams{BaseFoodID: baseID, FromFoodID: fromID, ToFoodID: toID})
+	if err != nil {
+		return false, err
+	}
+	if row.Swaps < 2 || row.Offered != 0 {
+		return false, nil
+	}
+	err = q.MarkSubstitutionSwapOffered(ctx, sqlcgen.MarkSubstitutionSwapOfferedParams{BaseFoodID: baseID, FromFoodID: fromID, ToFoodID: toID})
+	return err == nil, err
+}

@@ -75,7 +75,11 @@ import {
   updateSession,
 } from "./sessions"
 import { getShoppingList } from "./shopping"
-import { applySubstitution, getSubstitutes } from "./substitutions"
+import {
+  applySubstitution,
+  getSubstitutes,
+  keepSubstitution,
+} from "./substitutions"
 import { getToday } from "./today"
 
 interface Case {
@@ -381,6 +385,13 @@ const cases: Case[] = [
     method: "POST",
     path: "/cook-sessions/7/overrides",
     body: { from_food_id: 5, to_food_id: 9 },
+  },
+  {
+    name: "keepSubstitution",
+    call: () => keepSubstitution(7, 5, 9, "variant"),
+    method: "POST",
+    path: "/cook-sessions/7/overrides/keep",
+    body: { from_food_id: 5, to_food_id: 9, mode: "variant" },
   },
   // Attribute labelling (Chef A3)
   {

@@ -19,6 +19,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/recipechange"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/substitution"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
@@ -49,12 +50,12 @@ func newSubEnv(t *testing.T) *subEnv {
 	require.NoError(t, e.foods.Update(ctx, e.onion))
 
 	sessions := sqlite.NewCookSessionRepo(e.db)
-	events := foodevent.NewService(sqlite.NewTxRunner(e.db), sqlite.NewFoodEventRepo(e.db), map[foodevent.Kind]foodevent.Restorer{}, nil)
-	svc := substitution.NewService(e.foods, sessions, sqlite.NewSubstitutionRepo(e.db), events)
-	restorers := map[foodevent.Kind]foodevent.Restorer{foodevent.KindSubstitution: svc}
-	events = foodevent.NewService(sqlite.NewTxRunner(e.db), sqlite.NewFoodEventRepo(e.db), restorers, nil)
-	svc = substitution.NewService(e.foods, sessions, sqlite.NewSubstitutionRepo(e.db), events)
+	restorers := map[foodevent.Kind]foodevent.Restorer{}
+	events := foodevent.NewService(sqlite.NewTxRunner(e.db), sqlite.NewFoodEventRepo(e.db), restorers, nil)
+	recipes := recipechange.NewService(e.foods, nil, nil, sqlite.NewRecipeChangeRepo(e.db), nil, events)
+	svc := substitution.NewService(e.foods, sessions, sqlite.NewSubstitutionRepo(e.db), recipes, events)
 	restorers[foodevent.KindSubstitution] = svc
+	restorers[foodevent.KindRecipeContent] = recipes
 	now := day(t, "2026-11-01")
 	svc.Now = func() time.Time { return now }
 
@@ -67,6 +68,7 @@ func newSubEnv(t *testing.T) *subEnv {
 	r.Get("/api/substitutes", sh.Options)
 	r.Post("/api/cook-sessions/{id}/overrides", sh.Apply)
 	r.Delete("/api/cook-sessions/{id}/overrides", sh.Remove)
+	r.Post("/api/cook-sessions/{id}/overrides/keep", sh.Keep)
 	r.Post("/api/food-events/revert", handlers.NewFoodEventHandler(events).Revert)
 
 	se := &subEnv{shopEnv: e, api: r, shallot: shallot, sessions: sessions, now: &now}
@@ -340,4 +342,120 @@ func TestSubstitution_HistoryFollowsTheRecipe(t *testing.T) {
 	for _, r := range uneaten {
 		assert.NotEqual(t, e.chili.ID, r.ID, "eaten through the variant, so not uneaten")
 	}
+}
+
+func (e *subEnv) keep(t *testing.T, session int64, mode string) (int, map[string]any) {
+	t.Helper()
+	return e.do(t, http.MethodPost, "/api/cook-sessions/"+strconv.FormatInt(session, 10)+"/overrides/keep",
+		map[string]any{"from_food_id": e.onion.ID, "to_food_id": e.shallot.ID, "mode": mode})
+}
+
+// HELP-7: "Always in this recipe" edits the recipe, points the batch back at
+// it, lists the change and one Undo restores both.
+func TestSubstitution_AlwaysEditsTheRecipeAndUndo(t *testing.T) {
+	e := newSubEnv(t)
+	ctx := context.Background()
+	e.swap(t, e.b)
+	variant := e.foodOf(t, e.b)
+
+	code, out := e.keep(t, e.b, "recipe")
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, e.chili.ID, e.foodOf(t, e.b), "the batch points at the recipe again")
+	base, err := e.foods.Get(ctx, e.chili.ID)
+	require.NoError(t, err)
+	ids := []int64{}
+	for _, c := range base.Children {
+		ids = append(ids, c.ChildID)
+	}
+	assert.Contains(t, ids, e.shallot.ID)
+	assert.NotContains(t, ids, e.onion.ID)
+	changes, err := sqlite.NewRecipeChangeRepo(e.db).Changes(ctx, e.chili.ID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Zwiebel \u2192 Schalotte"}, changes)
+	_, onionLeft := e.itemGrams(t, e.onion.ID)
+	assert.False(t, onionLeft, "the recipe has shallot now")
+
+	code, body := e.do(t, http.MethodPost, "/api/food-events/revert", undoBody(out))
+	require.Equal(t, http.StatusOK, code, body)
+	assert.Equal(t, variant, e.foodOf(t, e.b), "Undo brings the batch's swap back")
+	base, err = e.foods.Get(ctx, e.chili.ID)
+	require.NoError(t, err)
+	ids = ids[:0]
+	for _, c := range base.Children {
+		ids = append(ids, c.ChildID)
+	}
+	assert.Contains(t, ids, e.onion.ID, "Undo puts the recipe back")
+	changes, err = sqlite.NewRecipeChangeRepo(e.db).Changes(ctx, e.chili.ID)
+	require.NoError(t, err)
+	assert.Empty(t, changes)
+}
+
+// HELP-7: "Save as variant" makes the batch's hidden variant a visible one.
+func TestSubstitution_SaveAsVariantAndUndo(t *testing.T) {
+	e := newSubEnv(t)
+	ctx := context.Background()
+	e.swap(t, e.b)
+	variant := e.foodOf(t, e.b)
+
+	code, out := e.keep(t, e.b, "variant")
+	require.Equal(t, http.StatusOK, code, out)
+	assert.EqualValues(t, variant, out["food_id"])
+	assert.Equal(t, e.chili.Name+" with Schalotte", out["name"])
+	assert.Equal(t, variant, e.foodOf(t, e.b), "the batch keeps cooking it")
+	v, err := e.foods.Get(ctx, variant)
+	require.NoError(t, err)
+	assert.False(t, v.Archived)
+	assert.Equal(t, e.chili.Name+" with Schalotte", v.Name)
+	base, err := e.foods.Get(ctx, e.chili.ID)
+	require.NoError(t, err)
+	siblings, err := e.foods.Siblings(ctx, *base.VariantGroupID, e.chili.ID)
+	require.NoError(t, err)
+	require.Len(t, siblings, 1, "it is a visible variant in the group")
+	changes, err := sqlite.NewRecipeChangeRepo(e.db).Changes(ctx, variant)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Zwiebel \u2192 Schalotte"}, changes)
+	// A later swap in this batch builds on it and leaves it alone.
+	e.swap(t, e.a)
+	_, err = e.foods.Get(ctx, variant)
+	require.NoError(t, err)
+
+	code, body := e.do(t, http.MethodPost, "/api/food-events/revert", undoBody(out))
+	require.Equal(t, http.StatusOK, code, body)
+	v, err = e.foods.Get(ctx, variant)
+	require.NoError(t, err)
+	assert.True(t, v.Archived, "Undo hides it again")
+	assert.NotEqual(t, e.chili.Name+" with Schalotte", v.Name)
+	siblings, err = e.foods.Siblings(ctx, *base.VariantGroupID, e.chili.ID)
+	require.NoError(t, err)
+	assert.Empty(t, siblings)
+	changes, err = sqlite.NewRecipeChangeRepo(e.db).Changes(ctx, variant)
+	require.NoError(t, err)
+	assert.Empty(t, changes)
+}
+
+func TestSubstitution_KeepNeedsASwap(t *testing.T) {
+	e := newSubEnv(t)
+	for _, mode := range []string{"recipe", "variant"} {
+		code, out := e.keep(t, e.b, mode)
+		assert.Equal(t, http.StatusNotFound, code, out)
+	}
+	code, out := e.keep(t, e.b, "nope")
+	assert.Equal(t, http.StatusBadRequest, code, out)
+}
+
+// HELP-7: the second time the same swap is applied in a recipe the response
+// offers to make it permanent, once.
+func TestSubstitution_SecondSameSwapOffersPermanentOnce(t *testing.T) {
+	e := newSubEnv(t)
+	assert.Equal(t, false, e.swap(t, e.b)["offer_permanent"])
+	assert.Equal(t, true, e.swap(t, e.a)["offer_permanent"], "second swap, other batch")
+	code, out := e.do(t, http.MethodDelete, "/api/cook-sessions/"+strconv.FormatInt(e.b, 10)+"/overrides", nil)
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, false, e.swap(t, e.b)["offer_permanent"], "offered once only")
+}
+
+func TestSubstitution_ApplyReportsConfirmedDates(t *testing.T) {
+	e := newSubEnv(t)
+	out := e.swap(t, e.b)
+	assert.NotNil(t, out["confirmed_dates"])
 }

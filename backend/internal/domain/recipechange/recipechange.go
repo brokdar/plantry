@@ -255,6 +255,55 @@ func (s *Service) Edit(ctx context.Context, id int64, p Proposal) (Result, error
 	return Result{Food: out, FoodID: out.ID, Changes: p.Changes, Undo: undo, Check: pl.check}, nil
 }
 
+// ReplaceLines swaps the ingredient lines of recipe id in place and adds
+// change to its changes list: one recipe_content food event, so Undo puts the
+// recipe back (the substitution's "Always in this recipe", HELP-7). The lines
+// are stored foods already, so no matching or gate runs.
+func (s *Service) ReplaceLines(ctx context.Context, id int64, children []food.FoodComponent, change string) error {
+	base, err := s.recipe(ctx, id)
+	if err != nil {
+		return err
+	}
+	before, err := s.snapshot(ctx, base)
+	if err != nil {
+		return err
+	}
+	changes, err := s.store.Changes(ctx, id)
+	if err != nil {
+		return err
+	}
+	next := *base
+	next.Children = children
+	if err := s.foods.Update(ctx, &next); err != nil {
+		return fmt.Errorf("edit recipe: %w", err)
+	}
+	if err := s.store.PutChanges(ctx, id, append(changes, change)); err != nil {
+		return err
+	}
+	after, err := s.snapshot(ctx, &next)
+	if err != nil {
+		return err
+	}
+	return s.events.Record(ctx, foodevent.Event{
+		Kind: foodevent.KindRecipeContent, SubjectID: id, Action: foodevent.ActionUpdate, Before: before, After: after,
+	})
+}
+
+// PutChanges stores the changes list of food id; an empty list removes it.
+func (s *Service) PutChanges(ctx context.Context, id int64, changes []string) error {
+	return s.store.PutChanges(ctx, id, changes)
+}
+
+// ConfirmedDates are the dates of confirmed plates from today on that hold
+// recipe id (or a hidden variant of it).
+func (s *Service) ConfirmedDates(ctx context.Context, id int64) ([]string, error) {
+	dates, err := s.store.ConfirmedDates(ctx, id, s.Now())
+	if dates == nil {
+		dates = []string{}
+	}
+	return dates, err
+}
+
 // CheckRecipe runs the gates on stored recipe id ("Check this recipe"). It
 // needs no model: every line is a food already; a leaf without nutrition is
 // an unmatched line (P3).

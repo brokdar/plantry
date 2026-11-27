@@ -21,6 +21,39 @@ func (q *Queries) ClearHiddenVariantSession(ctx context.Context, sessionID sql.N
 	return err
 }
 
+const countSubstitutionSwap = `-- name: CountSubstitutionSwap :one
+INSERT INTO substitution_swaps (base_food_id, from_food_id, to_food_id) VALUES (?, ?, ?)
+ON CONFLICT (base_food_id, from_food_id, to_food_id) DO UPDATE SET swaps = swaps + 1
+RETURNING swaps, offered
+`
+
+type CountSubstitutionSwapParams struct {
+	BaseFoodID int64
+	FromFoodID int64
+	ToFoodID   int64
+}
+
+type CountSubstitutionSwapRow struct {
+	Swaps   int64
+	Offered int64
+}
+
+func (q *Queries) CountSubstitutionSwap(ctx context.Context, arg CountSubstitutionSwapParams) (CountSubstitutionSwapRow, error) {
+	row := q.db.QueryRowContext(ctx, countSubstitutionSwap, arg.BaseFoodID, arg.FromFoodID, arg.ToFoodID)
+	var i CountSubstitutionSwapRow
+	err := row.Scan(&i.Swaps, &i.Offered)
+	return i, err
+}
+
+const deleteHiddenVariant = `-- name: DeleteHiddenVariant :exec
+DELETE FROM hidden_variants WHERE food_id = ?
+`
+
+func (q *Queries) DeleteHiddenVariant(ctx context.Context, foodID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteHiddenVariant, foodID)
+	return err
+}
+
 const getHiddenVariant = `-- name: GetHiddenVariant :one
 SELECT food_id, base_food_id, session_id FROM hidden_variants WHERE food_id = ?
 `
@@ -104,6 +137,22 @@ func (q *Queries) ListUnusedHiddenVariantIDs(ctx context.Context) ([]int64, erro
 		return nil, err
 	}
 	return items, nil
+}
+
+const markSubstitutionSwapOffered = `-- name: MarkSubstitutionSwapOffered :exec
+UPDATE substitution_swaps SET offered = 1
+WHERE base_food_id = ? AND from_food_id = ? AND to_food_id = ?
+`
+
+type MarkSubstitutionSwapOfferedParams struct {
+	BaseFoodID int64
+	FromFoodID int64
+	ToFoodID   int64
+}
+
+func (q *Queries) MarkSubstitutionSwapOffered(ctx context.Context, arg MarkSubstitutionSwapOfferedParams) error {
+	_, err := q.db.ExecContext(ctx, markSubstitutionSwapOffered, arg.BaseFoodID, arg.FromFoodID, arg.ToFoodID)
+	return err
 }
 
 const setSessionComponentsFood = `-- name: SetSessionComponentsFood :exec

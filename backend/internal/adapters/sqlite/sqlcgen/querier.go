@@ -40,6 +40,7 @@ type Querier interface {
 	CountPlateEventsAfter(ctx context.Context, arg CountPlateEventsAfterParams) (int64, error)
 	CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
 	CountPresetsUsingFood(ctx context.Context, foodID int64) (int64, error)
+	CountSubstitutionSwap(ctx context.Context, arg CountSubstitutionSwapParams) (CountSubstitutionSwapRow, error)
 	CreateAIChange(ctx context.Context, arg CreateAIChangeParams) (AiChange, error)
 	CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64, error)
 	CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams) error
@@ -77,6 +78,7 @@ type Querier interface {
 	DeleteFoodInstructions(ctx context.Context, foodID int64) error
 	DeleteFoodPortion(ctx context.Context, arg DeleteFoodPortionParams) (sql.Result, error)
 	DeleteFoodTags(ctx context.Context, foodID int64) error
+	DeleteHiddenVariant(ctx context.Context, foodID int64) error
 	// D12: pending suggestions created before the cutoff go; their ids let the
 	// caller delete the images.
 	DeletePendingSuggestionsBefore(ctx context.Context, before string) ([]int64, error)
@@ -235,6 +237,7 @@ type Querier interface {
 	// table. Newest first so the cap drops the oldest rows.
 	ListUserPlateUpdates(ctx context.Context, arg ListUserPlateUpdatesParams) ([]ListUserPlateUpdatesRow, error)
 	MarkAIChangeUndone(ctx context.Context, arg MarkAIChangeUndoneParams) (sql.Result, error)
+	MarkSubstitutionSwapOffered(ctx context.Context, arg MarkSubstitutionSwapOfferedParams) error
 	MatchBasicAtHome(ctx context.Context, foodID int64) error
 	// Deletes up to 500 steps of runs started before the cutoff; the runs,
 	// prompts and tool schemas stay. The repo repeats it until nothing is left,

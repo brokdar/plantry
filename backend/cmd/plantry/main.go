@@ -440,7 +440,7 @@ func run() error {
 	// Shutdown waits for running jobs (before the recorder and the
 	// database), cancelling them when the wait runs out.
 	// Batch substitutions (HELP-3, HELP-7): rule-based, no provider needed.
-	substitutionSvc := substitution.NewService(foodRepo, sessionRepo, sqlite.NewSubstitutionRepo(conn), foodEventSvc)
+	substitutionSvc := substitution.NewService(foodRepo, sessionRepo, sqlite.NewSubstitutionRepo(conn), recipeChangeSvc, foodEventSvc)
 	foodRestorers[foodevent.KindSubstitution] = substitutionSvc
 	chefGuard := &chef.Guard{Settings: settingsSvc, Spend: aiRunRepo, Prices: priceOverrides, Now: time.Now}
 	matchGuard = chefGuard

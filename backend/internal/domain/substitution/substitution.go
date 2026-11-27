@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -46,6 +47,20 @@ type Store interface {
 	UnusedHidden(ctx context.Context) ([]int64, error)
 	// SetSessionFood points the session and its plate components at a food.
 	SetSessionFood(ctx context.Context, sessionID, foodID int64) error
+	// DeleteHidden removes the hidden-variant row of a food (it becomes an
+	// ordinary recipe).
+	DeleteHidden(ctx context.Context, foodID int64) error
+	// CountSwap counts one more swap of from for to in recipe base and
+	// reports true exactly once, at the second time.
+	CountSwap(ctx context.Context, baseID, fromID, toID int64) (bool, error)
+}
+
+// Recipes is the recipe-change side the permanent saves use
+// (recipechange.Service).
+type Recipes interface {
+	ReplaceLines(ctx context.Context, id int64, children []food.FoodComponent, change string) error
+	PutChanges(ctx context.Context, id int64, changes []string) error
+	ConfirmedDates(ctx context.Context, id int64) ([]string, error)
 }
 
 // Service applies and undoes substitutions.
@@ -53,14 +68,15 @@ type Service struct {
 	foods    food.Repository
 	sessions plate.SessionRepository
 	store    Store
+	recipes  Recipes
 	events   *foodevent.Service
 	// Now is the clock for the past-plate guard; time.Now unless a test sets it.
 	Now func() time.Time
 }
 
 // NewService creates a Service.
-func NewService(foods food.Repository, sessions plate.SessionRepository, store Store, events *foodevent.Service) *Service {
-	return &Service{foods: foods, sessions: sessions, store: store, events: events, Now: time.Now}
+func NewService(foods food.Repository, sessions plate.SessionRepository, store Store, recipes Recipes, events *foodevent.Service) *Service {
+	return &Service{foods: foods, sessions: sessions, store: store, recipes: recipes, events: events, Now: time.Now}
 }
 
 var _ foodevent.Restorer = (*Service)(nil)
@@ -140,23 +156,35 @@ func (s *Service) Options(ctx context.Context, fromID int64, sessionIDs []int64)
 	return out, applicable, nil
 }
 
+// Applied is the outcome of Apply.
+type Applied struct {
+	Undo foodevent.Undo
+	// OfferPermanent is true once, when the same swap in the same recipe is
+	// applied the second time.
+	OfferPermanent bool
+	// ConfirmedDates are the dates of confirmed plates from today on that
+	// hold the recipe: "Always in this recipe" changes their shopping.
+	ConfirmedDates []string
+}
+
 // Apply swaps leaf from for leaf to in the session's recipe and returns the
 // undo token. to must be one of the table's substitutes for from. Applying
 // again on the same session builds on the current variant and replaces it.
-func (s *Service) Apply(ctx context.Context, sessionID, fromID, toID int64) (foodevent.Undo, error) {
+func (s *Service) Apply(ctx context.Context, sessionID, fromID, toID int64) (Applied, error) {
 	from, err := s.leaf(ctx, fromID)
 	if err != nil {
-		return foodevent.Undo{}, err
+		return Applied{}, err
 	}
 	to, err := s.leaf(ctx, toID)
 	if err != nil {
-		return foodevent.Undo{}, err
+		return Applied{}, err
 	}
 	ratio, ok := tableRatio(from.Name, to.Name)
 	if !ok || !hasNutrition(to) {
-		return foodevent.Undo{}, fmt.Errorf("%w: %s is not a substitute for %s", domain.ErrInvalidInput, to.Name, from.Name)
+		return Applied{}, fmt.Errorf("%w: %s is not a substitute for %s", domain.ErrInvalidInput, to.Name, from.Name)
 	}
-	return s.events.Recorded(ctx, func(ctx context.Context) error {
+	var out Applied
+	undo, err := s.events.Recorded(ctx, func(ctx context.Context) error {
 		sess, err := s.sessions.GetSession(ctx, sessionID)
 		if err != nil {
 			return err
@@ -197,8 +225,148 @@ func (s *Service) Apply(ctx context.Context, sessionID, fromID, toID int64) (foo
 		if err := s.dropUnused(ctx, cur.ID); err != nil {
 			return err
 		}
+		if out.OfferPermanent, err = s.store.CountSwap(ctx, base, fromID, toID); err != nil {
+			return err
+		}
+		if out.ConfirmedDates, err = s.recipes.ConfirmedDates(ctx, base); err != nil {
+			return err
+		}
 		return s.record(ctx, sessionID, before, snap{FoodID: variant.ID})
 	})
+	if err != nil {
+		return Applied{}, err
+	}
+	out.Undo = undo
+	return out, nil
+}
+
+// hiddenOf returns the hidden variant the session points at; it is
+// domain.ErrNotFound when the session has no substitution.
+func (s *Service) hiddenOf(ctx context.Context, sessionID int64) (HiddenVariant, error) {
+	sess, err := s.sessions.GetSession(ctx, sessionID)
+	if err != nil {
+		return HiddenVariant{}, err
+	}
+	h, hidden, err := s.store.Hidden(ctx, sess.FoodID)
+	if err != nil {
+		return HiddenVariant{}, err
+	}
+	if !hidden || h.BaseFoodID == 0 {
+		return HiddenVariant{}, fmt.Errorf("%w: cook session %d has no substitution", domain.ErrNotFound, sessionID)
+	}
+	return h, nil
+}
+
+// Always makes the swap permanent in the recipe itself ("Always in this
+// recipe"): the base recipe is edited in place, the session points back at it
+// and the hidden variant is left unused. One undo token covers the edit and
+// the re-pointing.
+func (s *Service) Always(ctx context.Context, sessionID, fromID, toID int64) (foodevent.Undo, error) {
+	to, err := s.leaf(ctx, toID)
+	if err != nil {
+		return foodevent.Undo{}, err
+	}
+	from, err := s.leaf(ctx, fromID)
+	if err != nil {
+		return foodevent.Undo{}, err
+	}
+	ratio, ok := tableRatio(from.Name, to.Name)
+	if !ok || !hasNutrition(to) {
+		return foodevent.Undo{}, fmt.Errorf("%w: %s is not a substitute for %s", domain.ErrInvalidInput, to.Name, from.Name)
+	}
+	return s.events.Recorded(ctx, func(ctx context.Context) error {
+		h, err := s.hiddenOf(ctx, sessionID)
+		if err != nil {
+			return err
+		}
+		base, err := s.foods.Get(ctx, h.BaseFoodID)
+		if err != nil {
+			return err
+		}
+		if !slices.ContainsFunc(base.Children, func(c food.FoodComponent) bool { return c.ChildID == fromID }) {
+			return fmt.Errorf("%w: %s is not an ingredient of %s", domain.ErrInvalidInput, from.Name, base.Name)
+		}
+		before, err := s.snapshot(ctx, h.FoodID)
+		if err != nil {
+			return err
+		}
+		if err := s.recipes.ReplaceLines(ctx, base.ID, swapLine(base.Children, fromID, to, ratio), changeLine(from, to)); err != nil {
+			return err
+		}
+		if err := s.store.ClearSession(ctx, sessionID); err != nil {
+			return err
+		}
+		if err := s.store.SetSessionFood(ctx, sessionID, base.ID); err != nil {
+			return err
+		}
+		if err := s.dropUnused(ctx, h.FoodID); err != nil {
+			return err
+		}
+		return s.record(ctx, sessionID, before, snap{FoodID: base.ID})
+	})
+}
+
+// Saved is a hidden variant turned into a visible one.
+type Saved struct {
+	FoodID int64
+	Name   string
+	Undo   foodevent.Undo
+}
+
+// SaveVariant turns the session's hidden variant into a visible variant of
+// its recipe ("Save as variant"): the hidden-variant row goes, it is
+// unarchived and named "<recipe> with <substitute>", and its changes list
+// names the swap. The session keeps cooking it.
+func (s *Service) SaveVariant(ctx context.Context, sessionID, fromID, toID int64) (Saved, error) {
+	to, err := s.leaf(ctx, toID)
+	if err != nil {
+		return Saved{}, err
+	}
+	from, err := s.leaf(ctx, fromID)
+	if err != nil {
+		return Saved{}, err
+	}
+	var out Saved
+	undo, err := s.events.Recorded(ctx, func(ctx context.Context) error {
+		h, err := s.hiddenOf(ctx, sessionID)
+		if err != nil {
+			return err
+		}
+		base, err := s.foods.Get(ctx, h.BaseFoodID)
+		if err != nil {
+			return err
+		}
+		v, err := s.foods.Get(ctx, h.FoodID)
+		if err != nil {
+			return err
+		}
+		before := snap{FoodID: v.ID, Variant: &variantSnap{BaseFoodID: h.BaseFoodID, Name: v.Name}}
+		if err := s.store.DeleteHidden(ctx, v.ID); err != nil {
+			return err
+		}
+		v.Name = base.Name + " with " + to.Name
+		if err := s.foods.Update(ctx, v); err != nil {
+			return fmt.Errorf("name variant: %w", err)
+		}
+		if _, err := s.foods.SetArchived(ctx, v.ID, false); err != nil {
+			return fmt.Errorf("unarchive variant: %w", err)
+		}
+		if err := s.recipes.PutChanges(ctx, v.ID, []string{changeLine(from, to)}); err != nil {
+			return err
+		}
+		out.FoodID, out.Name = v.ID, v.Name
+		return s.record(ctx, sessionID, before, snap{FoodID: v.ID})
+	})
+	if err != nil {
+		return Saved{}, err
+	}
+	out.Undo = undo
+	return out, nil
+}
+
+// changeLine is the changes-list entry of a swap.
+func changeLine(from, to *food.Food) string {
+	return from.Name + " \u2192 " + to.Name
 }
 
 // guardPast refuses a session that is already cooked ("Done cooking") or has a
@@ -264,6 +432,9 @@ type snap struct {
 
 type variantSnap struct {
 	BaseFoodID int64 `json:"base_food_id"`
+	// Name is set when the variant was saved as a visible one: undoing it
+	// restores this name and hides the variant again.
+	Name string `json:"name,omitempty"`
 }
 
 func (s *Service) snapshot(ctx context.Context, foodID int64) (snap, error) {
@@ -304,11 +475,33 @@ func (s *Service) Restore(ctx context.Context, sessionID int64, before json.RawM
 		if err := s.store.PutHidden(ctx, HiddenVariant{FoodID: b.FoodID, BaseFoodID: b.Variant.BaseFoodID, SessionID: sessionID}); err != nil {
 			return err
 		}
+		if b.Variant.Name != "" {
+			if err := s.hideAgain(ctx, b.FoodID, b.Variant.Name); err != nil {
+				return err
+			}
+		}
 	}
 	if err := s.store.SetSessionFood(ctx, sessionID, b.FoodID); err != nil {
 		return err
 	}
 	return s.dropUnused(ctx)
+}
+
+// hideAgain undoes SaveVariant: the name comes back, the variant is archived
+// and its changes list goes.
+func (s *Service) hideAgain(ctx context.Context, id int64, name string) error {
+	v, err := s.foods.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("%w: the variant of the change is gone", domain.ErrPlanChangeStale)
+	}
+	v.Name = name
+	if err := s.foods.Update(ctx, v); err != nil {
+		return err
+	}
+	if _, err := s.foods.SetArchived(ctx, id, true); err != nil {
+		return err
+	}
+	return s.recipes.PutChanges(ctx, id, nil)
 }
 
 // dropUnused deletes the unused hidden variants, except the keep ones (the

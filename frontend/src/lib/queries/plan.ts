@@ -121,7 +121,7 @@ export function useUndoToast() {
     const close = () => {
       closed = true
     }
-    toast(message, {
+    return toast(message, {
       description,
       duration: UNDO_MS,
       action: {

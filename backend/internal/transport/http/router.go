@@ -166,6 +166,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				if h.Substitutions != nil {
 					r.Post("/overrides", h.Substitutions.Apply)
 					r.Delete("/overrides", h.Substitutions.Remove)
+					r.Post("/overrides/keep", h.Substitutions.Keep)
 				}
 			})
 		}

@@ -2351,7 +2351,17 @@
     "this_batch": "Das ändert nur dieses Vorkochen.",
     "applied": "{{to}} statt {{from}}",
     "applied_many": "{{to}} statt {{from}} in {{count}} Vorkochen",
-    "back": "Zurück"
+    "back": "Zurück",
+    "offer": "Du hast hier schon einmal {{from}} durch {{to}} ersetzt. Dauerhaft übernehmen?",
+    "keep_hint": "Den Tausch behalten?",
+    "always": "Immer in diesem Rezept",
+    "save_variant": "Als Variante speichern",
+    "done": "Fertig",
+    "always_warning_one": "Das ändert auch die Einkaufsliste von {{count}} bestätigten Tag.",
+    "always_warning_other": "Das ändert auch die Einkaufsliste von {{count}} bestätigten Tagen.",
+    "always_confirm": "Rezept ändern",
+    "kept_recipe": "Im Rezept steht jetzt {{to}} statt {{from}}",
+    "kept_variant": "Als Variante mit {{to}} gespeichert"
   },
   "shop": {
     "range": "{{from}} bis {{to}}",
