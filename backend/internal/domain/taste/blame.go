@@ -22,6 +22,26 @@ const (
 	FlavourMin = 2
 )
 
+// WholeShare is the blame share of a plate signal that counts as a whole
+// one in evidence: what a main's cuisine takes (MainShare x AttrShare).
+const WholeShare = MainShare * AttrShare
+
+// EvidenceShares turns the blame of a plate or recipe signal into evidence shares
+// (the n of TASTE-4): share relative to WholeShare, capped at HeroShare, the
+// most one signal put on one item before. Raw blame shares are small by
+// design, a main's cuisine gets 0.105 of a plate signal, so with n in raw
+// shares the Prior of 3 outweighed a month of consistent signals (CP2: ten
+// loved Italian plates left Italian at 0.17). Now every item of a main takes
+// the same share and two consistent plates make it lean, while one signal
+// still never does (taste_test.go). A side's items take less.
+func EvidenceShares(blamed []Blamed) []Blamed {
+	out := make([]Blamed, len(blamed))
+	for i, b := range blamed {
+		out[i] = Blamed{b.Ref, HeroShare * min(1, b.Share/WholeShare)}
+	}
+	return out
+}
+
 // Blamed is an item ref and the share of a signal it takes.
 type Blamed struct {
 	Ref

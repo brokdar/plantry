@@ -134,11 +134,13 @@ func TestCapture_PlateEventsByActor(t *testing.T) {
 	agent := actor.With(r.ctx, actor.Agent, 0)
 
 	r.plate(r.ctx, 3, r.curry, r.salad)
-	chicken, ok := r.item(taste.LevelHero, "chicken")
+	// In evidence shares (EvidenceShares): the main's items take HeroShare,
+	// the side's format 30/70 of it.
+	bowl, ok := r.item(taste.LevelFormat, "bowl")
 	require.True(t, ok)
-	assert.InDelta(t, taste.WeightPlateAdded*taste.MainShare*taste.HeroShare, chicken.Evidence.Pos, 1e-9, "the main takes 70 %")
-	coriander, _ := r.item(taste.LevelHero, "coriander")
-	assert.InDelta(t, taste.WeightPlateAdded*taste.SidesShare*taste.HeroShare, coriander.Evidence.Pos, 1e-9, "the side 30 %")
+	assert.InDelta(t, taste.WeightPlateAdded*taste.HeroShare, bowl.Evidence.Pos, 1e-9, "the main takes 70 %")
+	salad, _ := r.item(taste.LevelFormat, "salad")
+	assert.InDelta(t, taste.WeightPlateAdded*taste.HeroShare*taste.SidesShare/taste.MainShare, salad.Evidence.Pos, 1e-9, "the side 30 %")
 
 	draft := r.plate(agent, 4, r.salmon)
 	assert.Equal(t, plate.StateDraft, draft.State)
@@ -322,7 +324,7 @@ func TestSimulatedWeeks_UndoLearned(t *testing.T) {
 		}
 		return out
 	}
-	assert.Equal(t, []string{"bowl"}, keys(v), "bowls leaned two weeks ago; chicken and salmon in the first weeks")
+	assert.Empty(t, keys(v), "everything leaned in the first weeks, long before the last RecentDays")
 	for range 6 { // this week: six crunch tips applied
 		require.NoError(t, r.svc.Tip(r.ctx, "crunch", true))
 	}
@@ -340,7 +342,7 @@ func TestSimulatedWeeks_UndoLearned(t *testing.T) {
 	v, err = r.svc.View(r.ctx, time.Time{})
 	require.NoError(t, err)
 	assert.NotContains(t, polarities(v), taste.Ref{Level: taste.LevelFlavour, Key: "crunch"})
-	assert.Equal(t, []string{"bowl"}, keys(v))
+	assert.Empty(t, keys(v))
 }
 
 // AC-13 / TASTE-5: a statement flips a learned item; the user can flip and
@@ -399,4 +401,51 @@ func TestSimulatedWeeks_PlannerReadsTaste(t *testing.T) {
 	assert.Greater(t, s.Foods[r.curry].Taste, 0.0)
 	assert.Less(t, s.Foods[r.salmon].Taste, 0.0)
 	assert.Zero(t, s.Foods[r.salad].Taste, "no stored attributes: nothing to score")
+}
+
+// CP2: consistent evidence over a few weeks shows, one signal never does.
+// One plate a week (a main with a side), rated as given; the item's
+// polarity after the first and the fourth week. Raw blame shares as n left
+// a cuisine loved on ten plates below the threshold.
+func TestFourWeeks_ConsistentEvidenceLeans(t *testing.T) {
+	cases := []struct {
+		name         string
+		main         string // "curry" or "salmon"
+		ratings      []string
+		ref          taste.Ref
+		week1, week4 taste.Polarity
+	}{
+		{"loved cuisine of the main", "salmon", []string{"loved", "loved", "loved", "loved"}, taste.Ref{Level: taste.LevelCuisine, Key: "french"}, "", taste.Love},
+		{"loved hero of the main", "salmon", []string{"loved", "loved", "loved", "loved"}, taste.Ref{Level: taste.LevelHero, Key: "salmon"}, "", taste.Love},
+		{"loved, an OK week between", "curry", []string{"loved", "ok", "loved", "loved"}, taste.Ref{Level: taste.LevelHero, Key: "chicken"}, "", taste.Love},
+		{"a single dislike", "curry", []string{"disliked", "ok", "ok", "ok"}, taste.Ref{Level: taste.LevelHero, Key: "chicken"}, "", ""},
+		{"one dislike (weight 1.5) holds three loves back, never flips", "salmon", []string{"loved", "loved", "disliked", "loved"}, taste.Ref{Level: taste.LevelHero, Key: "salmon"}, "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRig(t, seed(t))
+			main := map[string]int64{"curry": r.curry, "salmon": r.salmon}[tc.main]
+			polarity := func() taste.Polarity {
+				it, ok := r.item(tc.ref.Level, tc.ref.Key)
+				if !ok {
+					return ""
+				}
+				return it.Effective(r.now)
+			}
+			for w, rating := range tc.ratings {
+				r.now = time.Date(2026, 3, 2+7*w, 19, 0, 0, 0, time.UTC)
+				if rating != "ok" {
+					p := &plate.Plate{ID: int64(100 + w), Components: []plate.PlateComponent{
+						{FoodID: main, Portions: ptr(1), Position: plate.PositionMain},
+						{FoodID: r.salad, Portions: ptr(1), Position: plate.PositionSide},
+					}}
+					require.NoError(t, r.svc.Rating(r.ctx, p, "", rating))
+				}
+				if w == 0 {
+					assert.Equal(t, tc.week1, polarity(), "after the first week")
+				}
+			}
+			assert.Equal(t, tc.week4, polarity(), "after four weeks")
+		})
+	}
 }

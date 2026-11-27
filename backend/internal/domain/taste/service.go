@@ -258,7 +258,7 @@ func recipesOf(p *plate.Plate) []int64 {
 }
 
 // plateSignal blames a plate signal on the plate's recipes (only those of
-// only, when given) by position (TASTE-3).
+// only, when given) by position (TASTE-3), as evidence shares (EvidenceShares).
 func (s *Service) plateSignal(ctx context.Context, kind SignalKind, w float64, p *plate.Plate, only []int64) error {
 	hasMain, sides := false, 0
 	for _, c := range p.Components {
@@ -285,7 +285,7 @@ func (s *Service) plateSignal(ctx context.Context, kind SignalKind, w float64, p
 			return err
 		}
 		foodID := c.FoodID
-		if err := s.apply(ctx, kind, w, Blame(a, share), &foodID, &plateID); err != nil {
+		if err := s.apply(ctx, kind, w, EvidenceShares(Blame(a, share)), &foodID, &plateID); err != nil {
 			return err
 		}
 	}
@@ -297,7 +297,7 @@ func (s *Service) recipeSignal(ctx context.Context, kind SignalKind, w float64, 
 	if err != nil {
 		return err
 	}
-	return s.apply(ctx, kind, w, Blame(a, 1), &foodID, nil)
+	return s.apply(ctx, kind, w, EvidenceShares(Blame(a, 1)), &foodID, nil)
 }
 
 // attributes reads a recipe's attributes (none for a leaf); a hidden

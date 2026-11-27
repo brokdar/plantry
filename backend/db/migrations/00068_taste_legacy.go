@@ -11,6 +11,7 @@ import (
 
 	"github.com/pressly/goose/v3"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/taste"
 )
 
@@ -31,7 +32,11 @@ func downTasteLegacy(context.Context, *sql.Tx) error { return nil }
 // MigrateTasteLegacy moves the profile's restriction chips that name a food
 // (case-insensitively) to never items, and its likes and dislikes tags to
 // weak evidence: one migrated signal of taste.WeightMigrated per tag on the
-// item taste.Classify names, below the learned threshold on its own. The
+// item taste.Classify names, below the learned threshold on its own. Only a
+// tag that is a label (food.IsLabel) and names a cuisine, technique, format
+// or taste word of the vocabularies, or a food of the catalogue (a hero is
+// a food's name), becomes an item: imported recipe tags such as
+// "celebration" or "chili con carne rezepte" name no food. The
 // chips and tags stay on the profile (the prompts still read them). It is
 // idempotent: a tag that already has a migrated signal is skipped.
 func MigrateTasteLegacy(ctx context.Context, tx *sql.Tx, now time.Time) error {
@@ -54,16 +59,20 @@ func MigrateTasteLegacy(ctx context.Context, tx *sql.Tx, now time.Time) error {
 	if err := json.Unmarshal([]byte(preferences), &prefs); err != nil {
 		return fmt.Errorf("00068: preferences: %w", err)
 	}
+	foods, err := leafKeys(ctx, tx)
+	if err != nil {
+		return err
+	}
 	at := now.Format("2006-01-02 15:04:05")
 	for key, sign := range map[string]float64{"likes": 1, "dislikes": -1} {
 		tags, _ := prefs[key].([]any)
 		for _, t := range tags {
 			tag, ok := t.(string)
-			if !ok {
+			if !ok || !food.IsLabel(tag) {
 				continue
 			}
 			ref := taste.Classify(strings.ReplaceAll(tag, "_", " "))
-			if ref.Key == "" {
+			if ref.Key == "" || (ref.Level == taste.LevelHero && !foods[ref.Key]) {
 				continue
 			}
 			if err := migrateTag(ctx, tx, ref, sign*taste.WeightMigrated, at); err != nil {
@@ -101,4 +110,23 @@ func migrateTag(ctx context.Context, tx *sql.Tx, ref taste.Ref, w float64, at st
 		return fmt.Errorf("00068: add item: %w", err)
 	}
 	return nil
+}
+
+// leafKeys are the item keys (taste.NormKey) of the catalogue's foods that a
+// hero can name: the leaf foods, as recipe attributes name their heroes.
+func leafKeys(ctx context.Context, tx *sql.Tx) (map[string]bool, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT name FROM foods WHERE kind = 'leaf'`)
+	if err != nil {
+		return nil, fmt.Errorf("leaf foods: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("leaf foods: %w", err)
+		}
+		out[taste.NormKey(name)] = true
+	}
+	return out, rows.Err()
 }

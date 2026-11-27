@@ -84,3 +84,34 @@ func TestConfirmStatement(t *testing.T) {
 	_, ok, _ = r.store.ItemByRef(r.ctx, ref, taste.ScopeWindow, week)
 	assert.True(t, ok, "and restores the window item")
 }
+
+// CP2: only a main is a staple. A side cooked, loved and starred as often
+// as a staple main is not one, by rule or by the star.
+func TestStaples_MainsOnly(t *testing.T) {
+	r := newRig(t, seed(t))
+	for i, date := range []string{"2026-02-23", "2026-02-09", "2026-01-12"} {
+		p := r.plate(r.ctx, 3+i, r.salad)
+		r.cook(r.salad, p.ID, date)
+	}
+	assert.False(t, r.isStaple(r.salad), "three sessions and a positive signal, but a side")
+	_, err := r.foods.SetFavorite(r.ctx, r.salad, true)
+	require.NoError(t, err)
+	assert.False(t, r.isStaple(r.salad), "the star pins no side")
+}
+
+// A favourite is pinned, but a dislike in the last 8 weeks (a taste signal or
+// a rated plate) rules out even a favourite; an older dislike does not.
+func TestStaples_FavouriteWithRecentDislike(t *testing.T) {
+	r := newRig(t, seed(t))
+	_, err := r.foods.SetFavorite(r.ctx, r.salmon, true)
+	require.NoError(t, err)
+	require.True(t, r.isStaple(r.salmon))
+
+	for name, signalAt := range map[string]string{"recent": "2026-03-01 12:00:00", "old": "2025-12-01 12:00:00"} {
+		_, err := r.db.Exec(`DELETE FROM taste_signals WHERE kind = 'disliked' AND food_id = ?`, r.salmon)
+		require.NoError(t, err)
+		_, err = r.db.Exec(`INSERT INTO taste_signals (kind, level, key, weight, share, at, food_id) VALUES ('disliked', 'recipe', 'x', -1, 1, ?, ?)`, signalAt, r.salmon)
+		require.NoError(t, err)
+		assert.Equal(t, name == "old", r.isStaple(r.salmon), "dislike signal "+name)
+	}
+}

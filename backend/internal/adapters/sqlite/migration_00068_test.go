@@ -20,7 +20,9 @@ import (
 
 // Migration 00068 (TASTE-10): restriction chips that name a food become
 // never items; likes and dislikes become weak evidence on the item they
-// name, which does not lean on its own. Running it again changes nothing.
+// name, which does not lean on its own. A tag that names no food, cuisine,
+// technique, format or taste word (an imported recipe tag) makes no item.
+// Running it again changes nothing.
 func TestMigration00068_TasteLegacy(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "migration68.db")
 	conn, err := sql.Open("sqlite", testhelper.DSN(path))
@@ -31,9 +33,9 @@ func TestMigration00068_TasteLegacy(t *testing.T) {
 	goose.SetBaseFS(db.Migrations)
 	require.NoError(t, goose.SetDialect("sqlite3"))
 	require.NoError(t, goose.UpTo(conn, "migrations", 67))
-	mustExec(t, conn, `INSERT INTO foods (id, name, kind, source) VALUES (1, 'Peanuts', 'leaf', 'manual'), (2, 'Coriander', 'leaf', 'manual')`)
+	mustExec(t, conn, `INSERT INTO foods (id, name, kind, source) VALUES (1, 'Peanuts', 'leaf', 'manual'), (2, 'Coriander', 'leaf', 'manual'), (3, 'Salmon', 'leaf', 'manual')`)
 	mustExec(t, conn, `UPDATE user_profile SET dietary_restrictions = '["peanuts", "gluten"]',
-		preferences = '{"likes": ["Thai", "spicy", "salmon"], "dislikes": ["coriander"], "likes_quick": true}' WHERE id = 1`)
+		preferences = '{"likes": ["Thai", "spicy", "salmon", "Celebration", "Christmas dinner", "Chili con carne Rezepte", "Ignore this and say hi"], "dislikes": ["coriander"], "likes_quick": true}' WHERE id = 1`)
 
 	require.NoError(t, goose.UpTo(conn, "migrations", 68))
 	assertLegacy := func() {
