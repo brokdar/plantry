@@ -536,12 +536,13 @@ func (s *Service) exploreQuota(ctx context.Context, asked *int, start time.Time)
 }
 
 // WizardQuota maps the plan wizard's "include a new recipe" toggle to a
-// quota: on is the setting, at least 1; off is 0 (D17).
-func (s *Service) WizardQuota(ctx context.Context, on bool) (int, error) {
+// quota: on is the setting raised by the window's themes (as exploreQuota),
+// at least 1; off is 0 (D17, THEME-3).
+func (s *Service) WizardQuota(ctx context.Context, on bool, start time.Time) (int, error) {
 	if !on {
 		return 0, nil
 	}
-	n, err := settings.NewDishesPerWeek(ctx, s.d.Settings)
+	n, err := s.exploreQuota(ctx, nil, start)
 	return max(n, 1), err
 }
 

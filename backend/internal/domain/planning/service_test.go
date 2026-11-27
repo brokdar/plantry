@@ -925,7 +925,7 @@ func TestService_ExploreQuota(t *testing.T) {
 	e := newSvcEnv(t)
 	set := testsvc.Settings(e.db)
 	quota := func(on bool) int {
-		q, err := e.svc.WizardQuota(e.ctx, on)
+		q, err := e.svc.WizardQuota(e.ctx, on, e.start)
 		require.NoError(t, err)
 		return q
 	}

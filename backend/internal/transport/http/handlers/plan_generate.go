@@ -24,7 +24,7 @@ type planGenerateService interface {
 	PreviewReplan(ctx context.Context, q planning.ReplanQuery) (*planning.ReplanPreview, error)
 	PreviewDay(ctx context.Context, start, today, date time.Time) (*planning.DayPreview, error)
 	Replan(ctx context.Context, req planning.ReplanRequest) (*planning.ReplanResult, error)
-	WizardQuota(ctx context.Context, on bool) (int, error)
+	WizardQuota(ctx context.Context, on bool, start time.Time) (int, error)
 	Alternatives(ctx context.Context, start, today time.Time, req planning.AltRequest) (planning.AltResult, error)
 }
 
@@ -80,7 +80,7 @@ func (h *PlanGenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	}
 	req.EatersByDate = body.EatersByDate
 	if body.IncludeNewRecipe != nil {
-		q, err := h.svc.WizardQuota(r.Context(), *body.IncludeNewRecipe)
+		q, err := h.svc.WizardQuota(r.Context(), *body.IncludeNewRecipe, req.Start)
 		if err != nil {
 			writePlanError(w, err)
 			return

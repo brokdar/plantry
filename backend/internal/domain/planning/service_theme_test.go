@@ -84,3 +84,22 @@ func TestGenerate_ThemeShapesNextWindow(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, next, "the theme ends with its window")
 }
+
+// THEME-3: the wizard's toggle on is raised by the window's themes like the
+// no-quota path (capped at 3), off stays 0.
+func TestService_WizardQuotaThemeRaise(t *testing.T) {
+	e := newSvcEnv(t)
+	require.NoError(t, testsvc.Settings(e.db).Set(e.ctx, "chef.new_dishes_per_week", "1"))
+	extra := 2
+	e.deps.ThemeDishes = func(context.Context, time.Time) (int, error) { return extra, nil }
+	svc := planning.NewService(e.deps)
+	quota := func(on bool) int {
+		q, err := svc.WizardQuota(e.ctx, on, e.start)
+		require.NoError(t, err)
+		return q
+	}
+	assert.Equal(t, 2, quota(true), "theme raises the setting")
+	assert.Zero(t, quota(false), "toggle off stays 0")
+	extra = 5
+	assert.Equal(t, 3, quota(true), "capped at 3")
+}
