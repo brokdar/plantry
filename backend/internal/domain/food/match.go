@@ -274,12 +274,20 @@ func (m *Matcher) gatherName(ctx context.Context, req MatchRequest, leaves []cat
 		confident = append(confident, fuzzy...)
 	}
 	lm.Candidates = dedupeCandidates(confident)
+	// Exact marks a catalogue leaf that is safe to link without asking: the
+	// same name, or the confident match below.
+	for i := range lm.Candidates {
+		if len(keys) > 0 && matchKey(lm.Candidates[i].Name) == keys[0] {
+			lm.Candidates[i].Exact = true
+		}
+	}
 	for i, c := range lm.Candidates {
 		if i >= len(confident) || !catalogueIdentityName(c.Name, e, keys) {
 			continue
 		}
 		if r := lm.check(c); r == "" {
 			lm.best = i
+			lm.Candidates[i].Exact = true
 			return lm
 		} else if reason == ReasonNoCandidate {
 			reason = r
