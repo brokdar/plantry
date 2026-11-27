@@ -35,6 +35,7 @@ func newFindsEnv(t *testing.T, chefOn bool) *findsEnv {
 	e.store = sqlite.NewFindRepo(e.db)
 	e.finds = finds.NewService(finds.Deps{
 		Store: e.store, Tx: sqlite.NewTxRunner(e.db),
+		Enqueue: func(context.Context, int64, bool) error { return nil },
 		Planning: finds.Planning{
 			Library: finds.NewLibrary(finds.LibraryDeps{
 				Foods: foods, Catalogue: foods, Origins: sqlite.NewFoodOriginRepo(e.db),
@@ -183,4 +184,27 @@ func TestGenerate_UndoTeachesNothingAndActivitiesFollowThePlates(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, list)
 	assert.Zero(t, more)
+}
+
+// COLD-3: "Fill my library" starts ten requested finds spread over distinct
+// dishes; a second tap while they search starts none.
+func TestFillLibrary_TenRequestedFinds(t *testing.T) {
+	e := newFindsEnv(t, true)
+	got, err := e.finds.FillLibrary(e.ctx)
+	require.NoError(t, err)
+	require.Len(t, got, 10)
+	dishes := map[string]bool{}
+	for _, f := range got {
+		assert.Equal(t, finds.TriggerFill, f.Trigger)
+		assert.True(t, f.Trigger.Requested(), "requested work, within the cap")
+		dishes[f.Dish] = true
+	}
+	assert.Len(t, dishes, 10)
+
+	again, err := e.finds.FillLibrary(e.ctx)
+	require.NoError(t, err)
+	assert.Len(t, again, 10, "the searching ones, no new batch")
+	all, err := e.finds.List(e.ctx, nil)
+	require.NoError(t, err)
+	assert.Len(t, all, 10)
 }

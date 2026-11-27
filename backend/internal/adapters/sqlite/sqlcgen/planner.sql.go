@@ -297,7 +297,7 @@ func (q *Queries) ListActiveTimeSlots(ctx context.Context) ([]TimeSlot, error) {
 }
 
 const listPlateComponentsByDateRange = `-- name: ListPlateComponentsByDateRange :many
-SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, pc.position, f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path
+SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, pc.position, f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path, CAST(f.trial = 1 AND f.trial_seen = 0 AS INTEGER) AS food_to_try
 FROM plate_components pc
 JOIN plates p ON p.id = pc.plate_id
 JOIN foods f ON f.id = pc.food_id
@@ -316,6 +316,7 @@ type ListPlateComponentsByDateRangeRow struct {
 	FoodKind       string
 	FoodRole       sql.NullString
 	FoodImagePath  sql.NullString
+	FoodToTry      int64
 }
 
 func (q *Queries) ListPlateComponentsByDateRange(ctx context.Context, arg ListPlateComponentsByDateRangeParams) ([]ListPlateComponentsByDateRangeRow, error) {
@@ -343,6 +344,7 @@ func (q *Queries) ListPlateComponentsByDateRange(ctx context.Context, arg ListPl
 			&i.FoodKind,
 			&i.FoodRole,
 			&i.FoodImagePath,
+			&i.FoodToTry,
 		); err != nil {
 			return nil, err
 		}
@@ -358,7 +360,7 @@ func (q *Queries) ListPlateComponentsByDateRange(ctx context.Context, arg ListPl
 }
 
 const listPlateComponentsByPlate = `-- name: ListPlateComponentsByPlate :many
-SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, pc.position, f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path
+SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, pc.position, f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path, CAST(f.trial = 1 AND f.trial_seen = 0 AS INTEGER) AS food_to_try
 FROM plate_components pc
 JOIN foods f ON f.id = pc.food_id
 WHERE pc.plate_id = ?
@@ -371,6 +373,7 @@ type ListPlateComponentsByPlateRow struct {
 	FoodKind       string
 	FoodRole       sql.NullString
 	FoodImagePath  sql.NullString
+	FoodToTry      int64
 }
 
 func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error) {
@@ -398,6 +401,7 @@ func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64)
 			&i.FoodKind,
 			&i.FoodRole,
 			&i.FoodImagePath,
+			&i.FoodToTry,
 		); err != nil {
 			return nil, err
 		}
@@ -413,7 +417,7 @@ func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64)
 }
 
 const listPlateComponentsByPlateIDs = `-- name: ListPlateComponentsByPlateIDs :many
-SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, pc.position, f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path
+SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, pc.position, f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path, CAST(f.trial = 1 AND f.trial_seen = 0 AS INTEGER) AS food_to_try
 FROM plate_components pc
 JOIN foods f ON f.id = pc.food_id
 WHERE pc.plate_id IN (/*SLICE:ids*/?)
@@ -426,6 +430,7 @@ type ListPlateComponentsByPlateIDsRow struct {
 	FoodKind       string
 	FoodRole       sql.NullString
 	FoodImagePath  sql.NullString
+	FoodToTry      int64
 }
 
 func (q *Queries) ListPlateComponentsByPlateIDs(ctx context.Context, ids []int64) ([]ListPlateComponentsByPlateIDsRow, error) {
@@ -463,6 +468,7 @@ func (q *Queries) ListPlateComponentsByPlateIDs(ctx context.Context, ids []int64
 			&i.FoodKind,
 			&i.FoodRole,
 			&i.FoodImagePath,
+			&i.FoodToTry,
 		); err != nil {
 			return nil, err
 		}

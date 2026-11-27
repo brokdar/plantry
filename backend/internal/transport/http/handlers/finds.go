@@ -132,3 +132,28 @@ func (h *FindsHandler) Discard(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, f)
 }
+
+// FillLibrary handles POST /api/chef/fill-library (COLD-3): ten requested
+// finds that enter the library on trial. 202 with the finds.
+func (h *FindsHandler) FillLibrary(w http.ResponseWriter, r *http.Request) {
+	on, err := h.chefOn(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "error.server")
+		return
+	}
+	if !on {
+		writeError(w, http.StatusConflict, "error.chef.off")
+		return
+	}
+	items, err := h.svc.FillLibrary(r.Context())
+	if errors.Is(err, llm.ErrProviderMissing) {
+		writeError(w, http.StatusServiceUnavailable, "error.ai.provider_missing")
+		return
+	}
+	if err != nil {
+		status, key := toHTTPWithResource(err, "find")
+		writeError(w, status, key)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"items": items})
+}

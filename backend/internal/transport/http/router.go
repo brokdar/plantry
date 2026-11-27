@@ -236,6 +236,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			api.Get("/finds", h.Finds.List)
 			api.Post("/finds", h.Finds.Create)
 			api.Get("/finds/{id}", h.Finds.Get)
+			api.Post("/chef/fill-library", h.Finds.FillLibrary)
 			api.Post("/finds/{id}/keep", h.Finds.Keep)
 			api.Post("/finds/{id}/discard", h.Finds.Discard)
 		}

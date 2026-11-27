@@ -83,14 +83,14 @@ RETURNING *;
 DELETE FROM plate_components WHERE id = ?;
 
 -- name: ListPlateComponentsByPlate :many
-SELECT sqlc.embed(pc), f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path
+SELECT sqlc.embed(pc), f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path, CAST(f.trial = 1 AND f.trial_seen = 0 AS INTEGER) AS food_to_try
 FROM plate_components pc
 JOIN foods f ON f.id = pc.food_id
 WHERE pc.plate_id = ?
 ORDER BY pc.sort_order, pc.id;
 
 -- name: ListPlateComponentsByDateRange :many
-SELECT sqlc.embed(pc), f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path
+SELECT sqlc.embed(pc), f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path, CAST(f.trial = 1 AND f.trial_seen = 0 AS INTEGER) AS food_to_try
 FROM plate_components pc
 JOIN plates p ON p.id = pc.plate_id
 JOIN foods f ON f.id = pc.food_id
@@ -107,7 +107,7 @@ SELECT * FROM plates WHERE date BETWEEN sqlc.arg(from_date) AND sqlc.arg(to_date
 SELECT * FROM plates WHERE id IN (sqlc.slice(ids)) ORDER BY date, slot_id, id;
 
 -- name: ListPlateComponentsByPlateIDs :many
-SELECT sqlc.embed(pc), f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path
+SELECT sqlc.embed(pc), f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path, CAST(f.trial = 1 AND f.trial_seen = 0 AS INTEGER) AS food_to_try
 FROM plate_components pc
 JOIN foods f ON f.id = pc.food_id
 WHERE pc.plate_id IN (sqlc.slice(ids))

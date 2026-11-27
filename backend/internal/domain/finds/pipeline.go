@@ -189,8 +189,15 @@ func (s *Service) Run(ctx context.Context, id int64) error {
 			return err
 		}
 	}
-	if _, err := s.d.Store.Finish(ctx, id, o); err != nil {
+	done, err := s.d.Store.Finish(ctx, id, o)
+	if err != nil {
 		return err
+	}
+	if runErr == nil && f.Trigger == TriggerFill && s.d.Planning.Library != nil && done.State == StateReady {
+		if err := s.addToLibrary(ctx, done); err != nil {
+			// The find stays ready; the review can still keep it.
+			s.d.Logger.WarnContext(ctx, "finds.fill kept no recipe", "find_id", id, "error", err)
+		}
 	}
 	return runErr
 }

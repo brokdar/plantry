@@ -39,10 +39,15 @@ const (
 	TriggerChat     Trigger = "chat"
 	TriggerDiscover Trigger = "discover"
 	TriggerPlanning Trigger = "planning"
+	// TriggerFill is "Fill my library" (COLD-3): requested work whose ready
+	// finds enter the library on trial by themselves.
+	TriggerFill Trigger = "fill"
 )
 
 // Requested reports whether the user asked for the find (GATE-4).
-func (t Trigger) Requested() bool { return t == TriggerChat || t == TriggerDiscover }
+func (t Trigger) Requested() bool {
+	return t == TriggerChat || t == TriggerDiscover || t == TriggerFill
+}
 
 // Origin is the label a Chef recipe carries (FIND-13).
 type Origin string
