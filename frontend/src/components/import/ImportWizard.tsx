@@ -16,7 +16,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import type { Draft } from "@/lib/api/import"
+import type {
+  Draft,
+  ImportCheck,
+  ImportChange,
+  IngredientEditValue,
+} from "@/lib/api/import"
 import { useExtractRecipe, useResolveImport } from "@/lib/queries/import"
 import type { FoodRole } from "@/lib/api/foods"
 import { useCreateFood } from "@/lib/queries/foods"
@@ -26,6 +31,7 @@ import { toast } from "@/lib/toast"
 
 import { draftOrder, draftRows, rowProblem } from "./draft-rows"
 import { IngredientResolveRow, type RowState } from "./IngredientResolveRow"
+import { ImportCheckSummary } from "./ImportCheckSummary"
 import { ImportNutritionSummary } from "./ImportNutritionSummary"
 import { StepsEditor } from "./StepsEditor"
 
@@ -36,6 +42,9 @@ export interface ImportWizardProps {
   /** The review's rows for `initialDraft`, e.g. preselected matches.
    *  Defaults to `draftRows(initialDraft)`. */
   initialRows?: RowState[]
+  /** The import check of `initialDraft` (a Discover add, IMP-1); its
+   *  changes are already in the draft. */
+  initialCheck?: ImportCheck
   /** Tags added to the draft's own on save. */
   extraTags?: string[]
   /** Called with the new recipe's id after it is saved, before the recipe
@@ -46,11 +55,13 @@ export interface ImportWizardProps {
 export function ImportWizard({
   initialDraft,
   initialRows,
+  initialCheck,
   extraTags = [],
   onSaved,
 }: ImportWizardProps = {}) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const lang = i18n.language.startsWith("en") ? "en" : "de"
 
   const [step, setStep] = useState<1 | 2>(initialDraft ? 2 : 1)
   const [draft, setDraft] = useState<Draft | null>(initialDraft ?? null)
@@ -73,7 +84,21 @@ export function ImportWizard({
     initialDraft?.cook_minutes ?? null
   )
   const [recipeName, setRecipeName] = useState(initialDraft?.name ?? "")
-  const [role, setRole] = useState<(typeof FOOD_ROLES)[number]>("main")
+  const [role, setRole] = useState<(typeof FOOD_ROLES)[number]>(
+    asRole(initialDraft?.role)
+  )
+  const [description, setDescription] = useState(
+    initialDraft?.description ?? ""
+  )
+  const [keepDays, setKeepDays] = useState<number | null>(
+    initialDraft?.keep_days ?? null
+  )
+  const [freezable, setFreezable] = useState<boolean | null>(
+    initialDraft?.freezable ?? null
+  )
+  const [check, setCheck] = useState<ImportCheck | null>(initialCheck ?? null)
+  const [undone, setUndone] = useState<ReadonlySet<string>>(new Set())
+  const [touchAdded, setTouchAdded] = useState(false)
   // Kept as the raw input string so the field can be cleared while typing;
   // validated (≥ 1) on save.
   const [portionsInput, setPortionsInput] = useState(
@@ -97,7 +122,7 @@ export function ImportWizard({
     setSubmitError(null)
     try {
       const res = await extract.mutateAsync(
-        showHtml ? { html } : { url: url.trim() }
+        showHtml ? { html, lang } : { url: url.trim(), lang }
       )
       const d = res.draft
       setDraft(d)
@@ -109,12 +134,70 @@ export function ImportWizard({
       setSteps(d.instructions)
       setPrepMinutes(d.prep_minutes)
       setCookMinutes(d.cook_minutes)
+      setRole(asRole(d.role))
+      setDescription(d.description)
+      setKeepDays(d.keep_days ?? null)
+      setFreezable(d.freezable ?? null)
+      setCheck(res.check ?? null)
+      setUndone(new Set())
+      setTouchAdded(false)
       setStep(2)
     } catch (err) {
       if (err instanceof ApiError)
         setSubmitError({ key: err.messageKey, params: err.params })
       else setSubmitError({ key: "error.server" })
     }
+  }
+
+  /** Puts one change's edits back (IMP-5: Undo before Save). */
+  function undoChange(change: ImportChange) {
+    for (const e of change.edits) {
+      switch (e.field) {
+        case "prep_minutes":
+          setPrepMinutes(e.before as number | null)
+          break
+        case "cook_minutes":
+          setCookMinutes(e.before as number | null)
+          break
+        case "keep_days":
+          setKeepDays(e.before as number | null)
+          break
+        case "freezable":
+          setFreezable(e.before as boolean | null)
+          break
+        case "role":
+          setRole(asRole(e.before as string | null))
+          break
+        case "name":
+          setRecipeName(e.before as string)
+          break
+        case "description":
+          setDescription(e.before as string)
+          break
+        case "step":
+          setSteps((prev) =>
+            prev.map((s, i) => (i === e.index ? (e.before as string) : s))
+          )
+          break
+        case "ingredient": {
+          const b = e.before as IngredientEditValue
+          setRows((prev) =>
+            prev.map((r, i) =>
+              i === e.index
+                ? {
+                    ...r,
+                    amount: b.amount,
+                    unit: b.unit || "g",
+                    proposed: b.proposed,
+                  }
+                : r
+            )
+          )
+          break
+        }
+      }
+    }
+    setUndone((prev) => new Set(prev).add(change.id))
   }
 
   async function onSave() {
@@ -160,7 +243,9 @@ export function ImportWizard({
         cook_minutes: resolved.cook_minutes ?? undefined,
         notes: resolved.notes,
         source_url: draft.source_url || undefined,
-        description: draft.description || undefined,
+        description: description || undefined,
+        keep_days: keepDays,
+        freezable,
         image_url: draft.image_url || undefined,
         children: resolved.children,
         instructions: resolved.instructions,
@@ -289,6 +374,21 @@ export function ImportWizard({
               {t("import.step2.llm_warning")}
             </p>
           )}
+
+          <ImportCheckSummary
+            check={check}
+            undone={undone}
+            onUndo={(id) => {
+              const change = check?.changes.find((c) => c.id === id)
+              if (change) undoChange(change)
+            }}
+            touchAdded={touchAdded}
+            onAddTouch={() => {
+              if (check?.finishing_touch)
+                setSteps((prev) => [...prev, check.finishing_touch!])
+              setTouchAdded(true)
+            }}
+          />
 
           <div className="flex flex-col gap-4">
             <div className="space-y-2">
@@ -444,6 +544,10 @@ export function ImportWizard({
       )}
     </div>
   )
+}
+
+function asRole(v: string | null | undefined): (typeof FOOD_ROLES)[number] {
+  return FOOD_ROLES.find((r) => r === v) ?? "main"
 }
 
 function MinutesInput({

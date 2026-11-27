@@ -119,7 +119,6 @@ type ListFilter struct {
 type Images interface {
 	SaveFromURL(ctx context.Context, url, category string, id int64) (string, error)
 	Delete(category string, id int64) error
-	Copy(fromCategory string, fromID int64, toCategory string, toID int64) (string, error)
 }
 
 // Store saves verified, annotated suggestions and records the user's

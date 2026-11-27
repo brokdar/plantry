@@ -25,8 +25,6 @@ type Querier interface {
 	AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams) ([]int64, error)
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
 	ClaimChefJob(ctx context.Context, now string) (ClaimChefJobRow, error)
-	// Undoes SetFoodImageIfNone: clears the image only while it is still path.
-	ClearFoodImage(ctx context.Context, arg ClearFoodImageParams) (int64, error)
 	ClearShownOn(ctx context.Context, shownOn sql.NullString) error
 	CountChefTipsCreatedBetween(ctx context.Context, arg CountChefTipsCreatedBetweenParams) ([]CountChefTipsCreatedBetweenRow, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
@@ -240,8 +238,6 @@ type Querier interface {
 	SetFoodArchived(ctx context.Context, arg SetFoodArchivedParams) (Food, error)
 	SetFoodDietClass(ctx context.Context, arg SetFoodDietClassParams) (Food, error)
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
-	// Sets only the image, and only on a food without one (discovery accept).
-	SetFoodImageIfNone(ctx context.Context, arg SetFoodImageIfNoneParams) (int64, error)
 	SetFoodNoCook(ctx context.Context, arg SetFoodNoCookParams) (Food, error)
 	SetFoodShopSection(ctx context.Context, arg SetFoodShopSectionParams) (Food, error)
 	SetPlatesState(ctx context.Context, arg SetPlatesStateParams) error

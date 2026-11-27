@@ -41,6 +41,7 @@ func newImportRouter(t *testing.T) http.Handler {
 	h := handlers.NewImportHandler(svc)
 	r := chi.NewRouter()
 	r.Post("/api/import/extract", h.Extract)
+	r.Post("/api/import/check", h.Check)
 	r.Get("/api/import/lookup", h.LookupLine)
 	return r
 }
@@ -155,4 +156,35 @@ func mustHost(t *testing.T, raw string) string {
 	u, err := url.Parse(raw)
 	require.NoError(t, err)
 	return strings.TrimSpace(u.Hostname())
+}
+
+func TestImportCheck_NoChefIsNoCheck(t *testing.T) {
+	h := newImportRouter(t)
+	html := `<script type="application/ld+json">{"@type":"Recipe","name":"Salat","recipeIngredient":["100 g Salat"],"recipeInstructions":["Mischen."]}</script>`
+	body, err := json.Marshal(map[string]string{"html": html})
+	require.NoError(t, err)
+	rec, _ := postExtract(t, h, context.Background(), string(body))
+	require.Equal(t, http.StatusOK, rec.Code)
+	var res struct {
+		Draft json.RawMessage `json:"draft"`
+		Check struct {
+			Ran     bool  `json:"ran"`
+			Changes []any `json:"changes"`
+		} `json:"check"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
+	assert.False(t, res.Check.Ran, "no checker, no check")
+	assert.Empty(t, res.Check.Changes)
+
+	// The same over a draft the client holds (a Discover add).
+	req := httptest.NewRequest(http.MethodPost, "/api/import/check",
+		bytes.NewBufferString(`{"draft":`+string(res.Draft)+`,"lang":"en"}`))
+	out := httptest.NewRecorder()
+	h.ServeHTTP(out, req)
+	require.Equal(t, http.StatusOK, out.Code)
+	assert.Contains(t, out.Body.String(), `"ran":false`)
+
+	bad := httptest.NewRecorder()
+	h.ServeHTTP(bad, httptest.NewRequest(http.MethodPost, "/api/import/check", bytes.NewBufferString(`{}`)))
+	assert.Equal(t, http.StatusBadRequest, bad.Code)
 }

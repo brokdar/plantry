@@ -19,6 +19,7 @@ type ImportService interface {
 	Extract(ctx context.Context, in importer.ExtractInput) (*importer.Draft, error)
 	ResolveLine(ctx context.Context, query, lang string) ([]food.Candidate, error)
 	Finalize(ctx context.Context, in importer.FinalizeInput) (*importer.FinalizedFood, error)
+	Check(ctx context.Context, d *importer.Draft, lang string) (*importer.Check, error)
 }
 
 // ImportHandler is the HTTP transport for the recipe import pipeline.
@@ -34,10 +35,21 @@ func NewImportHandler(svc ImportService) *ImportHandler {
 type extractRequest struct {
 	URL  string `json:"url"`
 	HTML string `json:"html"`
+	// Lang is the user's language ("de", "en") the import check translates
+	// a foreign-language recipe into; default "de".
+	Lang string `json:"lang"`
 }
 
 type extractResponse struct {
 	Draft *importer.Draft `json:"draft"`
+	// Check is the import check (IMP): its applied changes are already in
+	// the draft. Ran is false with the Chef off or no key.
+	Check *importer.Check `json:"check"`
+}
+
+type checkRequest struct {
+	Draft *importer.Draft `json:"draft"`
+	Lang  string          `json:"lang"`
 }
 
 type importLookupResponse struct {
@@ -109,10 +121,36 @@ func (h *ImportHandler) Extract(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
+	check := h.check(r.Context(), draft, req.Lang)
 	slog.InfoContext(r.Context(), "import extract", "request_id", reqID, "outcome", "ok",
 		"host", hostOf(req.URL), "method", draft.ExtractMethod, "ingredients", len(draft.Ingredients),
 		"warnings", draft.Warnings)
-	writeJSON(w, http.StatusOK, extractResponse{Draft: draft})
+	writeJSON(w, http.StatusOK, extractResponse{Draft: draft, Check: check})
+}
+
+// check runs the import check over draft. A failed check is no check: the
+// import goes on without it.
+func (h *ImportHandler) check(ctx context.Context, draft *importer.Draft, lang string) *importer.Check {
+	if lang != "en" {
+		lang = "de"
+	}
+	check, err := h.svc.Check(ctx, draft, lang)
+	if err != nil {
+		slog.WarnContext(ctx, "import check failed", "error", err)
+	}
+	return check
+}
+
+// Check handles POST /api/import/check: the import check over a draft the
+// client already holds (a Discover add), answered like extract.
+func (h *ImportHandler) Check(w http.ResponseWriter, r *http.Request) {
+	var req checkRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Draft == nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	check := h.check(r.Context(), req.Draft, req.Lang)
+	writeJSON(w, http.StatusOK, extractResponse{Draft: req.Draft, Check: check})
 }
 
 func hostOf(raw string) string {

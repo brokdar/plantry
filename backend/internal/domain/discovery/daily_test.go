@@ -226,9 +226,9 @@ func (h *harness) withImage(t *testing.T, id int64) []byte {
 	return data
 }
 
-// B5-AC4: accept sets food_id and the outcome and copies the image to a
-// food without one; a second decision is refused.
-func TestService_AcceptCopiesImage(t *testing.T) {
+// B5-AC4: accept sets food_id and the outcome and copies no image (IMP-7);
+// a second decision is refused.
+func TestService_AcceptDoesNotCopyImage(t *testing.T) {
 	site := recipeSite(t, "r1", "r2")
 	client := &batchClient{site: site, batches: [][]string{{"r1", "r2"}}}
 	h := newHarness(t, client, site)
@@ -237,7 +237,7 @@ func TestService_AcceptCopiesImage(t *testing.T) {
 	require.Len(t, sugs, 2)
 	ctx := context.Background()
 
-	data := h.withImage(t, sugs[0].ID)
+	h.withImage(t, sugs[0].ID)
 	f := h.newRecipe(t, nil)
 	got, err := h.svc.Accept(ctx, sugs[0].ID, f.ID)
 	require.NoError(t, err)
@@ -248,10 +248,7 @@ func TestService_AcceptCopiesImage(t *testing.T) {
 
 	saved, err := h.foods.Get(ctx, f.ID)
 	require.NoError(t, err)
-	require.NotNil(t, saved.ImagePath, "image copied")
-	copied, err := os.ReadFile(filepath.Join(h.images, *saved.ImagePath))
-	require.NoError(t, err)
-	assert.Equal(t, data, copied)
+	assert.Nil(t, saved.ImagePath, "IMP-7: the image is not copied to the food")
 
 	_, err = h.svc.Accept(ctx, sugs[0].ID, f.ID)
 	assert.ErrorIs(t, err, domain.ErrDiscoveryDecided)
@@ -457,7 +454,7 @@ func (h *hookDecide) Decide(ctx context.Context, id int64, d discovery.Decision)
 	return h.Repository.Decide(ctx, id, d)
 }
 
-// DoD S5: accept sets only the image; an edit saved while it runs survives.
+// DoD S5: accept leaves the food alone; an edit saved while it runs survives.
 func TestService_AcceptKeepsConcurrentEdit(t *testing.T) {
 	site := recipeSite(t, "r1")
 	client := &batchClient{site: site, batches: [][]string{{"r1"}}}
@@ -484,62 +481,4 @@ func TestService_AcceptKeepsConcurrentEdit(t *testing.T) {
 	saved, err := h.foods.Get(ctx, f.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Renamed meanwhile", saved.Name)
-	require.NotNil(t, saved.ImagePath, "image set")
-}
-
-// A food that got an image between the read and the accept keeps its file.
-func TestService_AcceptNeverOverwritesFoodImage(t *testing.T) {
-	site := recipeSite(t, "r1")
-	client := &batchClient{site: site, batches: [][]string{{"r1"}}}
-	hd := &hookDecide{}
-	h := newHarnessRepo(t, client, site, func(r *sqlite.RecipeSuggestionRepo) discovery.Repository {
-		hd.Repository = r
-		return hd
-	})
-	runID := h.runAndWait(t, discovery.Request{Mode: discovery.ModeExplore, Cuisine: "thai"})
-	sugs := h.suggestions(t, runID)
-	require.Len(t, sugs, 1)
-	h.withImage(t, sugs[0].ID)
-	f := h.newRecipe(t, nil)
-	ctx := context.Background()
-	own := filepath.Join("foods", fmt.Sprintf("%d.jpg", f.ID))
-	hd.before = func() {
-		require.NoError(t, os.MkdirAll(filepath.Join(h.images, "foods"), 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(h.images, own), []byte("users own"), 0o644))
-		set, err := h.foods.SetImageIfNone(ctx, f.ID, own)
-		require.NoError(t, err)
-		require.True(t, set)
-	}
-
-	_, err := h.svc.Accept(ctx, sugs[0].ID, f.ID)
-	require.NoError(t, err)
-	data, err := os.ReadFile(filepath.Join(h.images, own))
-	require.NoError(t, err)
-	assert.Equal(t, "users own", string(data), "file untouched")
-	saved, err := h.foods.Get(ctx, f.ID)
-	require.NoError(t, err)
-	require.NotNil(t, saved.ImagePath)
-	assert.Equal(t, own, *saved.ImagePath)
-}
-
-// A failed copy leaves the food without an image path again.
-func TestService_AcceptCopyFailureClearsImagePath(t *testing.T) {
-	site := recipeSite(t, "r1")
-	client := &batchClient{site: site, batches: [][]string{{"r1"}}}
-	h := newHarness(t, client, site)
-	runID := h.runAndWait(t, discovery.Request{Mode: discovery.ModeExplore, Cuisine: "thai"})
-	sugs := h.suggestions(t, runID)
-	require.Len(t, sugs, 1)
-	// The row names an image whose file is missing.
-	missing := filepath.Join(discovery.ImageCategory, fmt.Sprintf("%d.jpg", sugs[0].ID))
-	require.NoError(t, h.repo.SetImagePath(context.Background(), sugs[0].ID, &missing))
-	f := h.newRecipe(t, nil)
-	ctx := context.Background()
-
-	got, err := h.svc.Accept(ctx, sugs[0].ID, f.ID)
-	require.NoError(t, err)
-	assert.Equal(t, discovery.StatusAccepted, got.Status)
-	saved, err := h.foods.Get(ctx, f.ID)
-	require.NoError(t, err)
-	assert.Nil(t, saved.ImagePath)
 }

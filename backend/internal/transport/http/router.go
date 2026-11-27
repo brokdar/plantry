@@ -273,6 +273,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 		if h.Import != nil {
 			api.Route("/import", func(r chi.Router) {
 				r.Post("/extract", h.Import.Extract)
+				r.Post("/check", h.Import.Check)
 				r.Post("/resolve", h.Import.Resolve)
 				r.Get("/lookup", h.Import.LookupLine)
 			})

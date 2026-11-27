@@ -71,15 +71,9 @@ type Preferences interface {
 	DiscoveryCuisines(ctx context.Context) ([]string, error)
 }
 
-// Foods reads saved foods and sets a food's image (FoodRepo): accept copies
-// the suggestion's image to the food.
+// Foods reads saved foods (FoodRepo).
 type Foods interface {
 	Get(ctx context.Context, id int64) (*food.Food, error)
-	// SetImageIfNone sets only the image of a food without one and reports
-	// whether it did.
-	SetImageIfNone(ctx context.Context, id int64, path string) (bool, error)
-	// ClearImageIf undoes SetImageIfNone while the image is still path.
-	ClearImageIf(ctx context.Context, id int64, path string) error
 }
 
 // Deps wires a Service.

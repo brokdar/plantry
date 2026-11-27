@@ -434,9 +434,8 @@ test("AC-2: Add to my recipes opens a prefilled review; saving adds the recipe a
           ?.food_id
     )
     .toBe(foodId)
-  // Accept, a separate request sent after the food's save, copies the
-  // suggestion's image to the food.
-  expect((await getFood()).image_path).toBeTruthy()
+  // Accept does not copy the suggestion's image to the food (IMP-7).
+  expect((await getFood()).image_path ?? null).toBeNull()
   const run = (await (
     await request.get(`${API}/api/ai/runs/${idea.run_id}`)
   ).json()) as Run

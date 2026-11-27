@@ -15,6 +15,7 @@ vi.mock("@/lib/api/discovery", () => ({
   rejectSuggestion: vi.fn(),
 }))
 vi.mock("@/lib/api/import", () => ({
+  checkImportDraft: vi.fn(),
   extractRecipe: vi.fn(),
   lookupImportLine: vi.fn(),
   resolveImport: vi.fn(),
@@ -35,7 +36,11 @@ import {
   rejectSuggestion,
 } from "@/lib/api/discovery"
 import { createFood, getFoodNutrition, listPortions } from "@/lib/api/foods"
-import { lookupImportLine, resolveImport } from "@/lib/api/import"
+import {
+  checkImportDraft,
+  lookupImportLine,
+  resolveImport,
+} from "@/lib/api/import"
 import { discoveryKeys } from "@/lib/queries/keys"
 import { toast } from "sonner"
 
@@ -105,6 +110,9 @@ beforeEach(async () => {
   vi.clearAllMocks()
   await i18n.changeLanguage("en")
   vi.mocked(listSuggestions).mockResolvedValue({ items: [suggestion(40)] })
+  vi.mocked(checkImportDraft).mockImplementation((d) =>
+    Promise.resolve({ draft: d, check: { ran: false, changes: [], flags: [] } })
+  )
   vi.mocked(lookupImportLine).mockResolvedValue({
     results: [],
     recommended_index: -1,
@@ -153,6 +161,52 @@ describe("SuggestionReview", () => {
     expect("image_url" in payload ? payload.image_url : undefined).toBe(
       undefined
     )
+  })
+
+  it("runs the import check first and shows its changes with Undo (IMP-1, IMP-5)", async () => {
+    vi.mocked(checkImportDraft).mockImplementation((d) =>
+      Promise.resolve({
+        draft: { ...d, instructions: ["Chicken braten, 74 °C im Kern."] },
+        check: {
+          ran: true,
+          changes: [
+            {
+              id: "c1",
+              kind: "safety_cue",
+              reason: "Poultry needs a core temperature",
+              edits: [
+                {
+                  field: "step",
+                  index: 0,
+                  before: "Chicken braten.",
+                  after: "Chicken braten, 74 °C im Kern.",
+                },
+              ],
+            },
+          ],
+          flags: [],
+        },
+      })
+    )
+    const user = await renderReview()
+
+    expect(await screen.findByText("Checked: 1 change")).toBeVisible()
+    expect(
+      screen.getByDisplayValue("Chicken braten, 74 °C im Kern.")
+    ).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "Undo" }))
+    expect(screen.getByDisplayValue("Chicken braten.")).toBeVisible()
+    expect(screen.getByText("Undone")).toBeVisible()
+    expect(checkImportDraft).toHaveBeenCalledTimes(1)
+  })
+
+  it("opens the review as it was when the check fails", async () => {
+    vi.mocked(checkImportDraft).mockRejectedValue(new Error("down"))
+    await renderReview()
+    expect(
+      await screen.findByRole("heading", { name: /review recipe/i })
+    ).toBeVisible()
+    expect(screen.queryByTestId("import-check")).toBeNull()
   })
 
   it("shows the matched leaf's name when it differs from the draft line", async () => {

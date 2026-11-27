@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -121,44 +120,15 @@ func (s *Service) dailyAvailable(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-// Accept marks the suggestion accepted as the saved food foodID (D11) and,
-// when the food has no image, copies the suggestion's image to it (D16).
-// An unknown food is domain.ErrNotFound; a failed copy is logged only (the
-// food's image path is cleared again).
+// Accept marks the suggestion accepted as the saved food foodID (D11). The
+// suggestion's image is not copied to the food (IMP-7): the photo stays the
+// site's. An unknown food is domain.ErrNotFound.
 func (s *Service) Accept(ctx context.Context, id, foodID int64) (*Suggestion, error) {
-	f, err := s.d.Foods.Get(ctx, foodID)
-	if err != nil {
+	if _, err := s.d.Foods.Get(ctx, foodID); err != nil {
 		return nil, err
 	}
-	sug, err := s.d.Store.Accept(ctx, id, foodID)
-	if err != nil {
-		return nil, err
-	}
-	if sug.ImagePath == nil || f.ImagePath != nil || s.d.Store.Images == nil {
-		return sug, nil
-	}
-	// Claim the food's image path first, so a food that got an image since
-	// the read keeps its file: only the claimant writes foods/<id>.jpg.
-	want := filepath.Join(foodImageCategory, fmt.Sprintf("%d.jpg", foodID))
-	claimed, err := s.d.Foods.SetImageIfNone(ctx, foodID, want)
-	if err != nil {
-		s.d.Logger.WarnContext(ctx, "discovery.accept image path update failed", "food_id", foodID, "error", err)
-		return sug, nil
-	}
-	if !claimed {
-		return sug, nil
-	}
-	if _, err := s.d.Store.Images.Copy(ImageCategory, sug.ID, foodImageCategory, foodID); err != nil {
-		s.d.Logger.WarnContext(ctx, "discovery.accept image copy failed", "suggestion_id", id, "food_id", foodID, "error", err)
-		if clrErr := s.d.Foods.ClearImageIf(ctx, foodID, want); clrErr != nil {
-			s.d.Logger.WarnContext(ctx, "discovery.accept image path clear failed", "food_id", foodID, "error", clrErr)
-		}
-	}
-	return sug, nil
+	return s.d.Store.Accept(ctx, id, foodID)
 }
-
-// foodImageCategory is the imagestore category of food images.
-const foodImageCategory = "foods"
 
 // Reject marks the suggestion rejected (D11) and removes its image (D16).
 func (s *Service) Reject(ctx context.Context, id int64, reason *Reason) (*Suggestion, error) {

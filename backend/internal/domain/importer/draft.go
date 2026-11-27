@@ -66,4 +66,8 @@ type Draft struct {
 	// SourceKcalPerServing is the source page's calorie claim, for display and
 	// comparison only — never used for macros.
 	SourceKcalPerServing *float64 `json:"source_kcal_per_serving"`
+	// Role, KeepDays and Freezable are set only by the import check (IMP-2).
+	Role      string `json:"role,omitempty"`
+	KeepDays  *int   `json:"keep_days,omitempty"`
+	Freezable *bool  `json:"freezable,omitempty"`
 }
