@@ -2,7 +2,7 @@ import { apiFetch } from "./client"
 import type { EffectiveDietClass } from "./foods"
 import type { Draft } from "./import"
 
-export type DiscoveryMode = "daily" | "explore" | "known"
+export type DiscoveryMode = "daily" | "explore" | "known" | "find"
 export type SuggestionStatus = "pending" | "accepted" | "rejected"
 export type RejectReason = "too_long" | "ingredients" | "taste"
 export type DiscoveryRunStatus = "running" | "ok" | "error" | "partial"

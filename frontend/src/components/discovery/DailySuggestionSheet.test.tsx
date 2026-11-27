@@ -152,6 +152,23 @@ describe("DailySuggestionSheet", () => {
     expect(localStorage.getItem(DISMISSED_KEY)).toBe(DATE)
   })
 
+  it("Add to my recipes on a ready find opens the find review", async () => {
+    settings(ON)
+    vi.mocked(getDailySuggestion).mockResolvedValue({
+      kind: "suggestion",
+      suggestion: mockSuggestion({ id: 7, mode: "find" }),
+    })
+    renderWithRouter(<DailySuggestionSheet date={DATE} />)
+    await screen.findByRole("heading", { name: "Fesenjan" })
+    await userEvent.click(
+      screen.getByRole("button", { name: "Add to my recipes" })
+    )
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: "/recipes",
+      search: { add: "find", find: 7 },
+    })
+  })
+
   it("Show another swaps in the new idea", async () => {
     settings(ON)
     vi.mocked(anotherSuggestion).mockResolvedValue({

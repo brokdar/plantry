@@ -99,6 +99,8 @@ type harness struct {
 	// log output (read after the run).
 	annotator *discovery.Annotator
 	logs      *syncBuffer
+	// chef is chef.enabled as the service reads it.
+	chef *bool
 }
 
 // syncBuffer is a goroutine-safe log sink.
@@ -142,10 +144,12 @@ func newHarnessRepo(t *testing.T, client llm.Client, site *httptest.Server, wrap
 		resolver = llm.StaticResolver(rec.Meter(client, "fake"), "fake-model")
 	}
 	prefs := &fakePrefs{}
+	chef := new(bool)
 	annotator := &discovery.Annotator{Matcher: food.NewMatcher(foods, nil, nil), Used: foods, Nutrition: food.NewNutritionResolver(foods)}
 	svc := discovery.NewService(discovery.Deps{
 		LLM:       resolver,
 		Prefs:     prefs,
+		ChefOn:    func(context.Context) (bool, error) { return *chef, nil },
 		Foods:     foods,
 		Recorder:  rec,
 		Profile:   staticProfile{promptProfile()},
@@ -161,7 +165,7 @@ func newHarnessRepo(t *testing.T, client llm.Client, site *httptest.Server, wrap
 		Logger:    logger,
 	})
 	t.Cleanup(func() { _ = svc.Shutdown(context.Background()) })
-	return &harness{db: db, svc: svc, repo: repo, foods: foods, prefs: prefs, images: dir, site: site, annotator: annotator, logs: logs}
+	return &harness{db: db, svc: svc, repo: repo, foods: foods, prefs: prefs, images: dir, site: site, annotator: annotator, logs: logs, chef: chef}
 }
 
 // fakeClient loads a script; {{SITE}} becomes the site's URL.

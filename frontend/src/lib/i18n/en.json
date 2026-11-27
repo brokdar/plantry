@@ -1720,6 +1720,14 @@
     }
   },
   "plan": {
+    "assistant_did": {
+      "title": "What the assistant did",
+      "find_placed": "Added {{name}} to this week",
+      "undo": "Undo",
+      "undo_label": "Undo: {{name}}",
+      "more": "and {{count}} more",
+      "undone": "Taken out again"
+    },
     "undo": {
       "plate_removed": "Plate removed",
       "batch_removed": "Batch removed",
@@ -2284,6 +2292,7 @@
         "matched": "Matched {{lines}} ingredients, {{unmatched}} not found",
         "checks_passed": "All checks passed",
         "checks_failed": "Needs a look: {{codes}}",
+        "no_sites": "No enabled recipe site can be searched right now",
         "nothing_found": "Found no usable recipe",
         "no_search": "This provider can't search the web on its own",
         "no_provider": "No AI provider is set up",

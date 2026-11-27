@@ -1720,6 +1720,14 @@
     }
   },
   "plan": {
+    "assistant_did": {
+      "title": "Das hat der Assistent getan",
+      "find_placed": "{{name}} zu dieser Woche hinzugefügt",
+      "undo": "Rückgängig",
+      "undo_label": "Rückgängig: {{name}}",
+      "more": "und {{count}} weitere",
+      "undone": "Wieder herausgenommen"
+    },
     "undo": {
       "plate_removed": "Essen entfernt",
       "batch_removed": "Vorkochen entfernt",
@@ -2284,6 +2292,7 @@
         "matched": "{{lines}} Zutaten zugeordnet, {{unmatched}} nicht gefunden",
         "checks_passed": "Alle Prüfungen bestanden",
         "checks_failed": "Braucht einen Blick: {{codes}}",
+        "no_sites": "Gerade lässt sich keine der aktivierten Rezeptseiten durchsuchen",
         "nothing_found": "Kein brauchbares Rezept gefunden",
         "no_search": "Dieser Anbieter kann nicht selbst im Web suchen",
         "no_provider": "Kein KI-Anbieter eingerichtet",

@@ -247,3 +247,27 @@ func (r *RecipeSuggestionRepo) Run(ctx context.Context, id int64) (discovery.Run
 		ID: row.ID, Status: row.Status, ErrorKey: fromNullString(row.ErrorKey), Notes: row.Notes.String,
 	}, nil
 }
+
+// ShowNextFind is ShowNext over ready finds (FIND-2, Chef on).
+func (r *RecipeSuggestionRepo) ShowNextFind(ctx context.Context, day string, after int64) (*discovery.Suggestion, error) {
+	var out *discovery.Suggestion
+	err := r.inTx(ctx, func(ctx context.Context) error {
+		q := r.queriesFor(ctx)
+		if err := q.ClearShownOn(ctx, toNullString(&day)); err != nil {
+			return fmt.Errorf("clear shown on %s: %w", day, err)
+		}
+		row, err := q.ShowNextReadyFind(ctx, sqlcgen.ShowNextReadyFindParams{Day: toNullString(&day), After: after})
+		if errors.Is(err, sql.ErrNoRows) {
+			return errNoNextSuggestion
+		}
+		if err != nil {
+			return fmt.Errorf("show next find on %s: %w", day, err)
+		}
+		out, err = mapRecipeSuggestion(row)
+		return err
+	})
+	if errors.Is(err, errNoNextSuggestion) {
+		return nil, nil
+	}
+	return out, err
+}

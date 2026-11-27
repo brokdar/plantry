@@ -308,8 +308,10 @@ func run() error {
 		Settings: settingsSvc, Profile: profileSvc, Corrections: sqlite.NewPlateEventRepo(conn),
 		Version: sqlite.NewDataVersion(conn), Taste: tasteSvc, Never: neverFoods,
 	})
+	readyFinds := &lazyFinds{}
 	planningSvc := planning.NewService(planning.Deps{
 		Builder: planBuilder,
+		Finds:   readyFinds,
 		Light:   planLight,
 		Plates:  plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: availabilitySvc, Overrides: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
 		RunLog: planning.RecorderLog{Recorder: runRecorder}, Runs: aiRunRepo, Tx: txRunner,
@@ -448,6 +450,7 @@ func run() error {
 	discoverySvc := discovery.NewService(discovery.Deps{
 		LLM:       llmResolver,
 		Prefs:     settingsSvc,
+		ChefOn:    settingsSvc.ChefEnabled,
 		Foods:     foodRepo,
 		Recorder:  runRecorder,
 		Profile:   profileSvc,
@@ -522,8 +525,27 @@ func run() error {
 			return err
 		},
 		Taste: tasteSvc, Tx: txRunner, Logger: logger,
+		Planning: finds.Planning{
+			Library: finds.NewLibrary(finds.LibraryDeps{
+				Foods: foodSvc, Catalogue: foodRepo, Origins: sqlite.NewFoodOriginRepo(conn),
+				Finalizer: importSvc, Plates: plateSvc,
+			}),
+			ChefOn: settingsSvc.ChefEnabled,
+			NewDishes: func(ctx context.Context) (int, error) {
+				return plate.IntSetting(ctx, settingsSvc, settingsdom.KeyPlanExplorePerWeek)
+			},
+			Dish: func(ctx context.Context, day time.Time) (string, error) {
+				cuisines, err := settingsSvc.DiscoveryCuisines(ctx)
+				if err != nil {
+					return "", err
+				}
+				return discovery.DailyCuisine(cuisines, day), nil
+			},
+			Now: time.Now,
+		},
 	})
 	findRequester.svc = findSvc
+	readyFinds.svc = findSvc
 	foodSvc.WithSaved(func(ctx context.Context, id int64) {
 		if err := labelling.Saved(ctx, id); err != nil {
 			logger.WarnContext(ctx, "chef.labelling.queue failed", "food_id", id, "error", err)
@@ -596,21 +618,31 @@ func run() error {
 	}, aiRateLimiter)
 
 	h := transport.Handlers{
-		Foods:         handlers.NewFoodHandler(foodSvc, nutritionResolver, imgStore).WithClock(clock.Now),
-		Lookup:        handlers.NewLookupHandler(resolver, foodSvc, fdcProvider),
-		ImageProxy:    handlers.NewImageProxyHandler(),
-		ImageStore:    imgStore,
-		Slots:         handlers.NewSlotHandler(slotSvc),
-		Plates:        handlers.NewPlateHandler(plateSvc),
-		CookSessions:  handlers.NewCookSessionHandler(plateSvc),
-		PlanWrite:     handlers.NewPlanWriteHandler(plateSvc),
-		PlanRead:      handlers.NewPlanReadHandler(planViewSvc).WithClock(clock.Now),
-		PlanGenerate:  handlers.NewPlanGenerateHandler(planningSvc).WithClock(clock.Now),
-		Today:         handlers.NewTodayHandler(planViewSvc).WithClock(clock.Now),
-		Profile:       handlers.NewProfileHandler(profileSvc),
-		Kitchen:       handlers.NewKitchenHandler(profileSvc, kitchenSvc),
-		Taste:         handlers.NewTasteHandler(tasteSvc).WithKitchen(kitchenSvc, foodSvc, profileSvc),
-		Finds:         handlers.NewFindsHandler(findSvc, settingsSvc.ChefEnabled),
+		Foods:        handlers.NewFoodHandler(foodSvc, nutritionResolver, imgStore).WithClock(clock.Now),
+		Lookup:       handlers.NewLookupHandler(resolver, foodSvc, fdcProvider),
+		ImageProxy:   handlers.NewImageProxyHandler(),
+		ImageStore:   imgStore,
+		Slots:        handlers.NewSlotHandler(slotSvc),
+		Plates:       handlers.NewPlateHandler(plateSvc),
+		CookSessions: handlers.NewCookSessionHandler(plateSvc),
+		PlanWrite:    handlers.NewPlanWriteHandler(plateSvc),
+		PlanRead:     handlers.NewPlanReadHandler(planViewSvc).WithClock(clock.Now),
+		PlanGenerate: handlers.NewPlanGenerateHandler(planningSvc).WithClock(clock.Now),
+		Today:        handlers.NewTodayHandler(planViewSvc).WithClock(clock.Now),
+		Profile:      handlers.NewProfileHandler(profileSvc),
+		Kitchen:      handlers.NewKitchenHandler(profileSvc, kitchenSvc),
+		Taste:        handlers.NewTasteHandler(tasteSvc).WithKitchen(kitchenSvc, foodSvc, profileSvc),
+		Finds:        handlers.NewFindsHandler(findSvc, settingsSvc.ChefEnabled),
+		ChefPlan: handlers.NewChefPlanHandler(handlers.ChefPlanDeps{
+			Finds: findSvc, ChefOn: settingsSvc.ChefEnabled, Plates: plateSvc,
+			ShoppingDay: func(ctx context.Context) (int, error) {
+				return plate.IntSetting(ctx, settingsSvc, settingsdom.KeyPlanShoppingDay)
+			},
+			LiveTips: func(ctx context.Context, start time.Time) (int, error) {
+				v, err := tipSvc.Sync(ctx, start)
+				return len(v.Tips), err
+			},
+		}),
 		NotForMe:      handlers.NewNotForMeHandler(foodSvc, tasteSvc),
 		Presets:       handlers.NewPresetHandler(presetSvc),
 		AI:            aiHandler,

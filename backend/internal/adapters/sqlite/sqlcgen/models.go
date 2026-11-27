@@ -161,6 +161,11 @@ type ChefJob struct {
 	UpdatedAt string
 }
 
+type ChefPlanningSession struct {
+	ID    int64
+	Until string
+}
+
 type ChefTip struct {
 	ID          int64
 	PlateID     sql.NullInt64
@@ -188,6 +193,11 @@ type CookSession struct {
 	State          string
 	AiRunID        sql.NullInt64
 	Reason         sql.NullString
+}
+
+type FindSearchBlock struct {
+	Domain       string
+	BlockedUntil string
 }
 
 type FindSourcePenalty struct {
@@ -445,6 +455,7 @@ type RecipeSuggestion struct {
 	StepsJson       string
 	QuestionsJson   string
 	UpdatedAt       string
+	PlacedOn        sql.NullString
 }
 
 type SubstitutionSwap struct {

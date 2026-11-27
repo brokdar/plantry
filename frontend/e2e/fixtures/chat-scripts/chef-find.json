@@ -33,7 +33,10 @@
                 "Let everything simmer gently for 20 minutes and serve on the rice."
               ],
               "swaps": [],
-              "requirements": { "equipment": ["stovetop"], "active_minutes": 25 }
+              "requirements": {
+                "equipment": ["stovetop"],
+                "active_minutes": 25
+              }
             }
           }
         ]

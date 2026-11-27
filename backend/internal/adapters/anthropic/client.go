@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -147,6 +148,9 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 			reason = c.learnFromRejection(req, w, apiErr)
 		}
 		if reason == "" {
+			if d := blockedDomains(apiErr); len(d) > 0 {
+				return nil, &llm.DomainsBlockedError{Domains: d, Err: apiErr}
+			}
 			return nil, apiErr
 		}
 		if reason == "container_rejected_400" {
@@ -604,6 +608,30 @@ func (e *APIError) Error() string {
 
 // capBody is llm.CapBody.
 func capBody(s string) string { return llm.CapBody(s) }
+
+// blockedDomainsRE reads the quoted domains of a web search 400 for allowed
+// domains that block Anthropic's crawler: "The following domains are not
+// accessible to our user agent: ['bbcgoodfood.com']".
+var (
+	blockedDomainsRE = regexp.MustCompile(`not accessible to our user agent:\s*\[([^\]]*)\]`)
+	quotedRE         = regexp.MustCompile(`['"]([^'"]+)['"]`)
+)
+
+// blockedDomains are the domains such a 400 names; nil for any other error.
+func blockedDomains(e *APIError) []string {
+	if e.Status != http.StatusBadRequest {
+		return nil
+	}
+	m := blockedDomainsRE.FindStringSubmatch(e.Message)
+	if m == nil {
+		return nil
+	}
+	var out []string
+	for _, q := range quotedRE.FindAllStringSubmatch(m[1], -1) {
+		out = append(out, q[1])
+	}
+	return out
+}
 
 // rejectsWebSearch reports whether a 400 refused the web search tool itself.
 func rejectsWebSearch(e *APIError) bool {

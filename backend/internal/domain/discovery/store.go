@@ -84,6 +84,9 @@ type Repository interface {
 	// the oldest pending, never-shown suggestion with an id above after; nil
 	// when there is none, leaving day as it was (D12).
 	ShowNext(ctx context.Context, day string, after int64) (*Suggestion, error)
+	// ShowNextFind is ShowNext over ready finds: with the Chef on the daily
+	// idea is a ready find (FIND-2).
+	ShowNextFind(ctx context.Context, day string, after int64) (*Suggestion, error)
 	// ClearShown clears day from the suggestion holding it.
 	ClearShown(ctx context.Context, day string) error
 	// DailyRunFailed reports whether a discovery run for day ended without

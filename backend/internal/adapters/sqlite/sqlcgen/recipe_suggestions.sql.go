@@ -24,7 +24,7 @@ INSERT INTO recipe_suggestions (
     mode, query, source_url, draft_json, annotations_json, grounded, ai_run_id, shown_on
 )
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
 `
 
 type CreateRecipeSuggestionParams struct {
@@ -76,6 +76,7 @@ func (q *Queries) CreateRecipeSuggestion(ctx context.Context, arg CreateRecipeSu
 		&i.StepsJson,
 		&i.QuestionsJson,
 		&i.UpdatedAt,
+		&i.PlacedOn,
 	)
 	return i, err
 }
@@ -102,7 +103,7 @@ UPDATE recipe_suggestions SET
     status = ?1, reason = ?2, food_id = ?3,
     decided_at = datetime('now')
 WHERE id = ?4 AND status = 'pending' AND state IS NULL
-RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
 `
 
 type DecideRecipeSuggestionParams struct {
@@ -147,6 +148,7 @@ func (q *Queries) DecideRecipeSuggestion(ctx context.Context, arg DecideRecipeSu
 		&i.StepsJson,
 		&i.QuestionsJson,
 		&i.UpdatedAt,
+		&i.PlacedOn,
 	)
 	return i, err
 }
@@ -251,7 +253,7 @@ func (q *Queries) GetDiscoveryRun(ctx context.Context, id int64) (GetDiscoveryRu
 }
 
 const getRecipeSuggestion = `-- name: GetRecipeSuggestion :one
-SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at FROM recipe_suggestions WHERE id = ?
+SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on FROM recipe_suggestions WHERE id = ?
 `
 
 func (q *Queries) GetRecipeSuggestion(ctx context.Context, id int64) (RecipeSuggestion, error) {
@@ -283,12 +285,13 @@ func (q *Queries) GetRecipeSuggestion(ctx context.Context, id int64) (RecipeSugg
 		&i.StepsJson,
 		&i.QuestionsJson,
 		&i.UpdatedAt,
+		&i.PlacedOn,
 	)
 	return i, err
 }
 
 const getShownSuggestion = `-- name: GetShownSuggestion :one
-SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at FROM recipe_suggestions WHERE shown_on = ?
+SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on FROM recipe_suggestions WHERE shown_on = ?
 `
 
 // D12: the suggestion assigned to a day.
@@ -321,12 +324,13 @@ func (q *Queries) GetShownSuggestion(ctx context.Context, shownOn sql.NullString
 		&i.StepsJson,
 		&i.QuestionsJson,
 		&i.UpdatedAt,
+		&i.PlacedOn,
 	)
 	return i, err
 }
 
 const listRecipeSuggestions = `-- name: ListRecipeSuggestions :many
-SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at FROM recipe_suggestions
+SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on FROM recipe_suggestions
 WHERE status <> 'hidden'
   AND (CAST(?1 AS TEXT) IS NULL OR status = CAST(?1 AS TEXT))
   AND (CAST(?2 AS INTEGER) IS NULL OR ai_run_id = CAST(?2 AS INTEGER))
@@ -377,6 +381,7 @@ func (q *Queries) ListRecipeSuggestions(ctx context.Context, arg ListRecipeSugge
 			&i.StepsJson,
 			&i.QuestionsJson,
 			&i.UpdatedAt,
+			&i.PlacedOn,
 		); err != nil {
 			return nil, err
 		}
@@ -465,7 +470,7 @@ WHERE id = (
     WHERE s.status = 'pending' AND s.state IS NULL AND s.shown_on IS NULL AND s.id > ?2
     ORDER BY s.id LIMIT 1
 )
-RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
 `
 
 type ShowNextPendingParams struct {
@@ -504,6 +509,7 @@ func (q *Queries) ShowNextPending(ctx context.Context, arg ShowNextPendingParams
 		&i.StepsJson,
 		&i.QuestionsJson,
 		&i.UpdatedAt,
+		&i.PlacedOn,
 	)
 	return i, err
 }
