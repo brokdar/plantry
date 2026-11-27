@@ -238,7 +238,9 @@ type job struct {
 	from, to     time.Time
 	eaters       map[string]float64
 	exploreQuota int
-	instruction  string
+	// findNotes say why ready finds were left for a later week (stage).
+	findNotes   []string
+	instruction string
 	// light are the request's light intents, then (after choosing) the
 	// chooser's too.
 	light []LightIntent
@@ -973,7 +975,8 @@ func (s *Service) execute(ctx context.Context, run Run, j job) {
 				end = RunEnd{Status: airun.StatusError, ErrorKey: "error.server"}
 			}
 		}()
-		staged := s.stage(tctx, j)
+		var staged []int64
+		staged, j.findNotes = s.stage(tctx, j)
 		defer s.settle(ctx, j, staged) // also after a panic in generate
 		return s.generate(tctx, run.ID(), j)
 	}()
@@ -983,17 +986,18 @@ func (s *Service) execute(ctx context.Context, run Run, j job) {
 	run.Finish(ctx, end)
 }
 
-// stage adds ready finds for a window generation's new dishes (FIND-3).
-// A failure plans without them.
-func (s *Service) stage(ctx context.Context, j job) []int64 {
+// stage adds ready finds for a window generation's new dishes (FIND-3) and
+// returns the notes on the ready ones it left for later. A failure plans
+// without them.
+func (s *Service) stage(ctx context.Context, j job) ([]int64, []string) {
 	if s.d.Finds == nil || j.kind != airun.KindGenerate || j.exploreQuota <= 0 {
-		return nil
+		return nil, nil
 	}
-	ids, err := s.d.Finds.Stage(ctx, j.exploreQuota, j.w.Start)
+	ids, notes, err := s.d.Finds.Stage(ctx, j.exploreQuota, j.w.Start)
 	if err != nil {
 		s.d.Logger.WarnContext(ctx, "plan.finds stage failed", "error", err)
 	}
-	return ids
+	return ids, notes
 }
 
 // settle returns the staged finds the window's plates do not eat.
@@ -1301,6 +1305,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	if wishNote != "" {
 		prop.Notes = joinNotes(prop.Notes, wishNote)
 	}
+	prop.Notes = joinNotes(append([]string{prop.Notes}, j.findNotes...)...)
 	merged := Merge(base, j.target, prop)
 	issues := Check(merged, j.target)
 	stage(StageChecking, issueAttrs(issues)...)

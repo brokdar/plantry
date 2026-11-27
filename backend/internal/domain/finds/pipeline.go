@@ -24,7 +24,7 @@ import (
 )
 
 // PromptVersion of the find run's model steps.
-const PromptVersion = "f3"
+const PromptVersion = "f5"
 
 const (
 	// fetchVersions is how many versions are fetched (FIND-11).
@@ -38,11 +38,13 @@ const (
 // Household is what the pipeline knows about the household. Only Lang and
 // Diet ever reach a search query (NFR-5); the rest stays in the adapt step.
 type Household struct {
-	Lang        string
-	Diet        string
-	Portions    int
-	Gates       gates.Household
-	Kitchen     profile.Kitchen
+	Lang     string
+	Diet     string
+	Portions int
+	Gates    gates.Household
+	Kitchen  profile.Kitchen
+	// MeatDaysMax is the weekly meat-day limit (H5); nil: none.
+	MeatDaysMax *int
 	Never       []string
 	Loves       []string
 	RatherNot   []string
@@ -51,6 +53,9 @@ type Household struct {
 	// says it has no cook history yet: week one is mild and familiar (COLD-4).
 	Cuisines  []string
 	FirstWeek bool
+	// Recipes are the library's recipe names: an autonomous find never
+	// brings one of them again.
+	Recipes []string
 }
 
 // Fetcher loads a page politely (httpfetch.Polite).
@@ -193,9 +198,27 @@ func (s *Service) Run(ctx context.Context, id int64) error {
 			return err
 		}
 	}
-	done, err := s.d.Store.Finish(ctx, id, o)
+	var done *Find
+	err = s.inTx(ctx, func(ctx context.Context) error {
+		if o.State == StateReady {
+			dup, err := s.knownURL(ctx, o.SourceURL)
+			if err != nil {
+				return err
+			}
+			if dup {
+				// A find running alongside kept the same page first.
+				o.State, o.Steps = StateFailed, append(o.Steps, Step{Key: "duplicate"})
+			}
+		}
+		var err error
+		done, err = s.d.Store.Finish(ctx, id, o)
+		return err
+	})
 	if err != nil {
 		return err
+	}
+	if runErr == nil && done.State == StateFailed && f.Trigger == TriggerPlanning {
+		s.retry(ctx, done)
 	}
 	if runErr == nil && f.Trigger == TriggerFill && s.d.Planning.Library != nil && done.State == StateReady {
 		if err := s.addToLibrary(ctx, done); err != nil {
@@ -259,7 +282,13 @@ func (s *Service) pipeline(ctx context.Context, f *Find) (Outcome, error) {
 		return o, nil
 	}
 	o.Steps = append(o.Steps, Step{Key: "searched", Params: map[string]string{"sites": strings.Join(domains, ", ")}})
-	cands, err := s.fetch(ctx, urls, domains)
+	keep := func(*importer.Draft) bool { return true }
+	if f.Trigger == TriggerPlanning {
+		if keep, err = s.planningKeep(ctx, h); err != nil {
+			return o, err
+		}
+	}
+	cands, err := s.fetch(ctx, urls, domains, keep)
 	if err != nil {
 		return o, err
 	}
@@ -336,6 +365,7 @@ func (s *Service) attempt(ctx context.Context, client llm.Client, model string, 
 	for _, fl := range o.Gates.Flags {
 		o.Flags = append(o.Flags, Flag{Code: fl.Code, Reason: fl.Reason})
 	}
+	o.Flags = append(o.Flags, heatFlags(a.draft, h)...)
 	problems, questions := KitchenFit(a.requirements, h.Kitchen, h.KnownLeaves, asked)
 	o.Questions = questions
 	if len(o.Gates.Blocks) == 0 && len(problems) == 0 {
@@ -355,6 +385,51 @@ func (s *Service) attempt(ctx context.Context, client llm.Client, model string, 
 	}
 	o.State = StateFailed
 	return o, false, nil
+}
+
+// knownURL reports whether a food or another find already has the page.
+func (s *Service) knownURL(ctx context.Context, raw string) (bool, error) {
+	if raw == "" {
+		return false, nil
+	}
+	known, err := s.d.Store.SourceURLs(ctx)
+	if err != nil {
+		return false, err
+	}
+	norm := discovery.NormalizeURL(raw)
+	return slices.ContainsFunc(known, func(k string) bool { return discovery.NormalizeURL(k) == norm }), nil
+}
+
+// maxRetries bounds the next dishes failed autonomous finds start within one
+// session length.
+const maxRetries = 2
+
+// retry is GATE-4 for an autonomous find that failed after searching: the
+// next candidate is another dish (the sources were tried already), at most
+// maxRetries per session length; each runs under the cap like any find.
+func (s *Service) retry(ctx context.Context, f *Find) {
+	if !slices.ContainsFunc(f.Steps, func(st Step) bool { return st.Key == "searched" }) {
+		return // no search, no sites, no provider: another dish fails alike
+	}
+	failed := StateFailed
+	list, err := s.d.Store.List(ctx, &failed, maxStaged)
+	if err != nil {
+		s.d.Logger.WarnContext(ctx, "finds.retry read failed", "find_id", f.ID, "error", err)
+		return
+	}
+	since := s.now().Add(-SessionLength)
+	n := 0
+	for _, g := range list {
+		if g.ID != f.ID && g.Trigger == TriggerPlanning && g.CreatedAt.After(since) {
+			n++
+		}
+	}
+	if n >= maxRetries {
+		return
+	}
+	if err := s.request(ctx, []string{nextDish(f.Dish)}); err != nil {
+		s.d.Logger.WarnContext(ctx, "finds.retry failed", "find_id", f.ID, "error", err)
+	}
 }
 
 // userFixable: every block is one the user can fix in the review (an
@@ -442,9 +517,32 @@ func (s *Service) search(ctx context.Context, client llm.Client, model string, q
 	return reply.URLs, nil
 }
 
-// fetch loads up to fetchVersions recipes from the URLs on the allowed
-// sites that are not in the library or a find already.
-func (s *Service) fetch(ctx context.Context, urls, domains []string) ([]Candidate, error) {
+// planningKeep is what an autonomous planning find keeps of the fetched
+// recipes: a main that fits a lunch or dinner cell of the kitchen, never a
+// dish the library or a ready find already has.
+func (s *Service) planningKeep(ctx context.Context, h Household) (func(*importer.Draft) bool, error) {
+	state := StateReady
+	ready, err := s.d.Store.List(ctx, &state, maxStaged)
+	if err != nil {
+		return nil, err
+	}
+	have := map[string]bool{}
+	for _, name := range h.Recipes {
+		have[sameDish(name)] = true
+	}
+	for _, f := range ready {
+		if f.Draft != nil {
+			have[sameDish(f.Draft.Name)] = true
+		}
+	}
+	return func(d *importer.Draft) bool {
+		return cellUnfit(d, h.Kitchen) == "" && !have[sameDish(d.Name)]
+	}, nil
+}
+
+// fetch loads up to fetchVersions recipes that keep accepts from the URLs
+// on the allowed sites that are not in the library or a find already.
+func (s *Service) fetch(ctx context.Context, urls, domains []string, keep func(*importer.Draft) bool) ([]Candidate, error) {
 	known, err := s.d.Store.SourceURLs(ctx)
 	if err != nil {
 		return nil, err
@@ -474,6 +572,10 @@ func (s *Service) fetch(ctx context.Context, urls, domains []string) ([]Candidat
 		d, err := s.d.Extractor.Extract(ctx, importer.ExtractInput{HTML: body, Options: importer.Options{NoLLMFallback: true}})
 		if err != nil {
 			s.d.Logger.InfoContext(ctx, "finds.extract skipped", "site", site, "error", err)
+			continue
+		}
+		if !keep(d) {
+			s.d.Logger.InfoContext(ctx, "finds.fetch unfit", "site", site, "name", d.Name)
 			continue
 		}
 		if final == "" {
@@ -506,8 +608,16 @@ func allowedSite(raw string, domains []string) string {
 
 func (s *Service) adapt(ctx context.Context, client llm.Client, model string, d *importer.Draft, h Household, flags []Flag) (adaptation, error) {
 	var reply adaptReply
-	if err := callTool(ctx, client, adaptRequest(model, d, h, flags), AdaptTool, &reply); err != nil {
-		return adaptation{}, err
+	// A reply that holds the model's reasoning in a swap is asked for once
+	// more; if it still does, applyAdapt drops those swaps.
+	for try := 0; try < 2; try++ {
+		reply = adaptReply{}
+		if err := callTool(ctx, client, adaptRequest(model, d, h, flags), AdaptTool, &reply); err != nil {
+			return adaptation{}, err
+		}
+		if !reply.hasReasoning() {
+			break
+		}
 	}
 	a, err := applyAdapt(d, reply, h.Lang)
 	if err != nil {
@@ -530,6 +640,9 @@ func (s *Service) match(ctx context.Context, d *importer.Draft, requested bool) 
 	for i := range d.Ingredients {
 		m := res.Lines[i]
 		d.Ingredients[i].Match = &m
+		if in := &d.Ingredients[i]; in.NeedsWeight && m.PortionGrams != nil {
+			in.PortionGrams, in.NeedsWeight = m.PortionGrams, false
+		}
 		if m.Status != food.MatchMatched {
 			unmatched++
 		}

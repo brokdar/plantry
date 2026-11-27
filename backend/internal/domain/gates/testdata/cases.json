@@ -654,6 +654,25 @@
   "flags": []
  },
  {
+  "name": "pass_chicken_no_pink_remains",
+  "recipe": {
+   "name": "Chicken yakisoba",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "chicken breast",
+     "grams": 300
+    }
+   ],
+   "steps": [
+    "Add the chicken strips and cook until no pink remains, about 5 minutes; the chicken should reach 165°F (74°C) at its thickest point."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
   "name": "block_kidney_beans_slow_cooker",
   "recipe": {
    "name": "Chili",

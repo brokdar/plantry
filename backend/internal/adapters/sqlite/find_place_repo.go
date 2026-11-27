@@ -39,6 +39,18 @@ func (r *FindRepo) Unplace(ctx context.Context, id int64) (*finds.Find, error) {
 	return mapFind(row)
 }
 
+// Pass records that a generation offered the ready find to the window that
+// starts on windowStart and did not use it.
+func (r *FindRepo) Pass(ctx context.Context, id int64, windowStart time.Time) error {
+	err := r.queriesFor(ctx).PassFind(ctx, sqlcgen.PassFindParams{
+		PassedOn: sql.NullString{String: windowStart.Format(time.DateOnly), Valid: true}, ID: id,
+	})
+	if err != nil {
+		return fmt.Errorf("pass find %d: %w", id, err)
+	}
+	return nil
+}
+
 // Placed lists the finds placed in the window that starts on windowStart.
 func (r *FindRepo) Placed(ctx context.Context, windowStart time.Time) ([]finds.Find, error) {
 	rows, err := r.queriesFor(ctx).ListPlacedFinds(ctx, sql.NullString{String: windowStart.Format(time.DateOnly), Valid: true})
@@ -54,15 +66,6 @@ func (r *FindRepo) Placed(ctx context.Context, windowStart time.Time) ([]finds.F
 		out = append(out, *f)
 	}
 	return out, nil
-}
-
-// OpenAutonomous counts ready finds and searching planning finds.
-func (r *FindRepo) OpenAutonomous(ctx context.Context) (int, error) {
-	n, err := r.queriesFor(ctx).CountOpenPlanningFinds(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("count open finds: %w", err)
-	}
-	return int(n), nil
 }
 
 // TouchSession keeps the planning session open until at least until.

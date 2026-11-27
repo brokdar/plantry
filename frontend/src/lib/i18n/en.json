@@ -2362,6 +2362,7 @@
         "checks_failed": "Needs a look: {{codes}}",
         "no_sites": "No enabled recipe site can be searched right now",
         "nothing_found": "Found no usable recipe",
+        "duplicate": "Another find kept the same recipe page first",
         "no_search": "This provider can't search the web on its own",
         "no_provider": "No AI provider is set up",
         "off": "The assistant is switched off",
@@ -2383,7 +2384,8 @@
         "outlier_salt_per_kg": "Salt ({{value}} g/kg) differs from other versions ({{typical}} g/kg)",
         "outlier_oven_temp": "Oven temperature ({{value}}) differs from other versions ({{typical}})",
         "outlier_total_minutes": "Time ({{value}} min) differs from other versions ({{typical}} min)",
-        "outlier_liquid_to_starch": "Liquid to starch ({{value}}) differs from other versions ({{typical}})"
+        "outlier_liquid_to_starch": "Liquid to starch ({{value}}) differs from other versions ({{typical}})",
+        "heat_hot_spice": "“{{line}}” is still hot for a mild kitchen; swap it for a mild spice or leave it out."
       },
       "questions": "A question about your kitchen",
       "question": {

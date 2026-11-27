@@ -458,6 +458,7 @@ type RecipeSuggestion struct {
 	QuestionsJson   string
 	UpdatedAt       string
 	PlacedOn        sql.NullString
+	PassedOn        sql.NullString
 }
 
 type SubstitutionSwap struct {

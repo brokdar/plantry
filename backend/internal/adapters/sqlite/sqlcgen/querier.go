@@ -36,8 +36,6 @@ type Querier interface {
 	CountChefTipsCreatedBetween(ctx context.Context, arg CountChefTipsCreatedBetweenParams) ([]CountChefTipsCreatedBetweenRow, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
-	// Autonomous finds that are ready or still searching (prefetch counts them).
-	CountOpenPlanningFinds(ctx context.Context) (int64, error)
 	// What a generation run wrote that still exists (B6).
 	CountPlanRunRows(ctx context.Context, id sql.NullInt64) (CountPlanRunRowsRow, error)
 	CountPlateEventsAfter(ctx context.Context, arg CountPlateEventsAfterParams) (int64, error)
@@ -219,7 +217,8 @@ type Querier interface {
 	// Leaf components on plates dated in [from_date, to_date] with their plate's
 	// cell, eaters and state: the ingredient sources of a shopping list.
 	ListLeafPlateComponentsInRange(ctx context.Context, arg ListLeafPlateComponentsInRangeParams) ([]ListLeafPlateComponentsInRangeRow, error)
-	// The cuisines the library's recipes carry (FIND-15), neutral left out.
+	// The cuisines the library's recipes carry (FIND-15), neutral left out, the
+	// most recipes first.
 	ListLibraryCuisines(ctx context.Context) ([]string, error)
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	// Recipe lines whose leaf lacks a core macro (legacy data, B2b). A to-taste
@@ -290,6 +289,9 @@ type Querier interface {
 	MarkKitchenQuestionAsked(ctx context.Context, question string) error
 	MarkSubstitutionSwapOffered(ctx context.Context, arg MarkSubstitutionSwapOfferedParams) error
 	MatchBasicAtHome(ctx context.Context, foodID int64) error
+	// A generation offered the ready find to the window starting on passed_on
+	// and did not use it.
+	PassFind(ctx context.Context, arg PassFindParams) error
 	// "Looks wrong" lowers the site's rank (NEW-4).
 	PenaliseSource(ctx context.Context, site string) error
 	// The planner placed a ready find (FIND-4 ready -> in_library) in the

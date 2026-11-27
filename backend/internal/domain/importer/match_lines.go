@@ -2,6 +2,7 @@ package importer
 
 import (
 	"context"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,8 +35,18 @@ var (
 	priceRE = regexp.MustCompile(`(?i)\s*\(\s*(?:[$€£]\s?\d[\d.,]*|\d[\d.,]*\s?(?:[$€£]|usd|eur|euro))\s*\)`)
 	// looseSeasoningRE is a seasoning measured in no unit: "a tiny pinch
 	// cayenne", "a few turns of black pepper", "eine Prise Salz".
-	looseSeasoningRE = regexp.MustCompile(`(?i)^(?:(?:an?|ein|eine)\s+)?(?:(?:tiny|small|little|big|kleine?|winzige)\s+)?(?:(?:pinch|dash|splash|sprinkle|prise|spritzer|hauch)|(?:few|ein paar)\s+(?:turns|grinds|twists|dashes|umdrehungen))(?:\s+(?:of|von))?\s+(\S.*)$`)
-	residueRE        = regexp.MustCompile(`^[\s)(*\-–,;]+|[\s)(*\-–,;]+$`)
+	looseSeasoningRE = regexp.MustCompile(`(?i)^(?:(?:an?|ein|eine)\s+)?(?:(?:tiny|small|little|big|kleine?|winzige)\s+)?(?:(?:pinch|dash|splash|sprinkle|prise|spritzer|hauch)|(?:few|ein paar|\d+)\s+(?:turns|grinds|twists|dashes|cranks?|umdrehungen))(?:\s+(?:of|von))?\s+(\S.*)$`)
+	// canSizeRE is a can stated by its contents: "13oz. can X", "2 (15 oz)
+	// cans X": the count and the ounces make the grams.
+	canSizeRE = regexp.MustCompile(`(?i)^(?:(\d+(?:\.\d+)?)\s+)?\(?\s*(\d+(?:[.,]\d+)?)\s*(?:oz|ounces?)\.?\s*\)?\s*(?:cans?|tins?)\b\s*(?:of\s+)?(\S.*)$`)
+	// inchGingerRE is fresh ginger measured in inches of root.
+	inchGingerRE = regexp.MustCompile(`(?i)^(\d+(?:\.\d+)?)[-\s]*inch(?:\s+piece)?(?:\s+of)?\s+((?:fresh\s+)?ginger\b.*)$`)
+	residueRE    = regexp.MustCompile(`^[\s)(*\-–,;]+|[\s)(*\-–,;]+$`)
+)
+
+const (
+	gramsPerOz         = 28.35
+	gramsPerInchGinger = 6.0 // a thumb-width inch of fresh root
 )
 
 // spoonCupUnits are volume units whose line may also state metric weight
@@ -51,7 +62,19 @@ var headNouns = setOf("oil", "broth", "stock", "bread", "chillies", "chilies", "
 // doubled parentheses and note references, a range as its midpoint,
 // "juice of 1/2 lime", "1/2 cup / 125 ml" (metric wins), cut words.
 func prepareLine(raw string) string {
-	s := raw
+	s := strings.TrimSpace(raw)
+	if m := canSizeRE.FindStringSubmatch(s); m != nil {
+		n := 1.0
+		if m[1] != "" {
+			n, _ = strconv.ParseFloat(m[1], 64)
+		}
+		oz, _ := strconv.ParseFloat(strings.ReplaceAll(m[2], ",", "."), 64)
+		s = strconv.FormatFloat(math.Round(n*oz*gramsPerOz), 'f', -1, 64) + " g " + m[3]
+	}
+	if m := inchGingerRE.FindStringSubmatch(s); m != nil {
+		in, _ := strconv.ParseFloat(m[1], 64)
+		s = strconv.FormatFloat(math.Round(in*gramsPerInchGinger), 'f', -1, 64) + " g " + m[2]
+	}
 	if m := looseSeasoningRE.FindStringSubmatch(s); m != nil {
 		s = m[1] + ", to taste"
 	}

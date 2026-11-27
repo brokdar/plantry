@@ -80,3 +80,72 @@ func TestAdapt_DraftJSONHasInstructionsAndSearchIsNotCached(t *testing.T) {
 	assert.True(t, reqs[0].NoCache, "search")
 	assert.NotContains(t, reqs[1].Messages[0].Content[0].Text, "Household portions")
 }
+
+const reasoningSwap = `[{"line":0,"to":"15oz. can diced tomatoes is replaced by 1 15oz. can diced tomatoes omitted; add 1 cup of additional vegetable broth? no.","reason":"x"}]`
+
+// CP3 round 3: a swap line holding the model's reasoning makes the adapt
+// step ask once more (search + two adapt calls; the fake replays its first
+// turn for the repeated request); a swap that still holds reasoning is
+// dropped and the source line stays.
+func TestAdapt_ReasoningSwapIsRetriedOnceThenDropped(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...),
+		toolTurn(finds.AdaptTool, adaptJSON(reasoningSwap)))
+	f := r.run(t, finds.TriggerPlanning)
+	require.Equal(t, finds.StateReady, f.State, f.Steps)
+	assert.Len(t, r.client.Requests(), 3)
+	assert.Empty(t, f.Changes)
+	assert.Contains(t, f.Draft.Ingredients[0].RawText, "chicken")
+	assert.NotContains(t, f.Draft.Ingredients[0].Name, "replaced")
+}
+
+// CP3 fix: the adapt request carries the household's heat tolerance, lowered
+// to mild when taste leans away from heat (FIND-12), and a hot spice left
+// in a mild household is flagged.
+func TestAdapt_HeatFollowsTasteAndHotSpiceIsFlagged(t *testing.T) {
+	t.Parallel()
+	hotKitchen := kitchen
+	hotKitchen.Heat = "hot"
+	for _, tc := range []struct {
+		name      string
+		rather    []string
+		wantHeat  string
+		wantFlags int
+	}{
+		{"taste dislikes heat", []string{"heat"}, "Heat tolerance: mild.", 1},
+		{"kitchen heat stands", nil, "Heat tolerance: hot.", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRig(t, true, lineMatcher{}, hotKitchen, searchTurn(curryURLs...),
+				toolTurn(finds.AdaptTool, adaptJSON(`[{"line":0,"to":"2 tsp hot curry powder","reason":"x"}]`)))
+			r.house.RatherNot = tc.rather
+			f := r.run(t, finds.TriggerPlanning)
+			reqs := r.client.Requests()
+			assert.Contains(t, reqs[1].Messages[0].Content[0].Text, tc.wantHeat)
+			assert.Contains(t, reqs[1].System, "hot spice")
+			n := 0
+			for _, fl := range f.Flags {
+				if fl.Code == "heat_hot_spice" {
+					n++
+					assert.Contains(t, fl.Reason, "hot curry powder")
+				}
+			}
+			assert.Equal(t, tc.wantFlags, n, f.Flags)
+		})
+	}
+}
+
+func TestHotSpiceRE_OnlySpices(t *testing.T) {
+	hot := []string{"1 tbsp hot curry powder", "2 tsp hot paprika", "1 tsp cayenne pepper", "2 red chilies, sliced", "1 tbsp sriracha", "1 TL scharfes Currypulver"}
+	notHot := []string{"1 cup hot water", "1 hot dog bun", "2 tbsp hot cocoa mix", "1 tsp mild curry powder", "1 tbsp sweet paprika"}
+	for _, l := range hot {
+		if !finds.HotSpiceRE.MatchString(l) {
+			t.Errorf("%q: want hot", l)
+		}
+	}
+	for _, l := range notHot {
+		if finds.HotSpiceRE.MatchString(l) {
+			t.Errorf("%q: want not hot", l)
+		}
+	}
+}

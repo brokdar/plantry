@@ -33,8 +33,8 @@ func TestMigration00069_PendingSuggestionsBecomeReadyFinds(t *testing.T) {
 		       ('explore', 'https://a.example/2', '{"name":"Pho"}', '{}', NULL, 1, 'rejected')`)
 	require.NoError(t, err)
 
-	// 00070 only adds placed_on, which the repo reads.
-	require.NoError(t, goose.UpTo(conn, "migrations", 70))
+	// 00070 and 00074 only add placed_on and passed_on, which the repo reads.
+	require.NoError(t, goose.UpTo(conn, "migrations", 74))
 	repo := sqlite.NewFindRepo(conn)
 	ready := finds.StateReady
 	got, err := repo.List(ctx, &ready, 10)

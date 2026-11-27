@@ -124,7 +124,7 @@ func TestChefPlan_OpenedWithoutCuisines(t *testing.T) {
 		Planning: finds.Planning{
 			ChefOn: chefOn, Now: func() time.Time { return now },
 			NewDishes: func(context.Context) (int, error) { return 1, nil },
-			Dish:      func(context.Context, time.Time) (string, error) { return "", nil },
+			Cuisines:  func(context.Context) ([]string, error) { return nil, nil },
 		},
 	})
 	h := handlers.NewChefPlanHandler(handlers.ChefPlanDeps{

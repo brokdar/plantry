@@ -2,6 +2,7 @@ package finds_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,22 +11,26 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // sessionRig is a find service with a settable clock that counts the finds
 // it queues (each would be a capped run).
 type sessionRig struct {
-	svc    *finds.Service
-	store  *sqlite.FindRepo
-	now    time.Time
-	dish   string
-	queued []string
+	svc      *finds.Service
+	store    *sqlite.FindRepo
+	now      time.Time
+	cuisines []string
+	house    finds.Household
+	queued   []string
 }
 
 func newSessionRig(t *testing.T, chefOn bool, newDishes int) *sessionRig {
 	t.Helper()
-	r := &sessionRig{store: sqlite.NewFindRepo(testhelper.NewTestDB(t)), now: time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC), dish: "thai"}
+	r := &sessionRig{store: sqlite.NewFindRepo(testhelper.NewTestDB(t)), now: time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC), cuisines: []string{"thai"}}
+	r.house = finds.Household{Kitchen: profile.Kitchen{MinutesWeekday: 30, MinutesWeekend: 60}}
 	r.svc = finds.NewService(finds.Deps{
 		Store: r.store,
 		Enqueue: func(_ context.Context, id int64, requested bool) error {
@@ -35,10 +40,13 @@ func newSessionRig(t *testing.T, chefOn bool, newDishes int) *sessionRig {
 			r.queued = append(r.queued, f.Dish)
 			return nil
 		},
+		Household: func(context.Context) (finds.Household, error) {
+			return r.house, nil
+		},
 		Planning: finds.Planning{
 			ChefOn:    func(context.Context) (bool, error) { return chefOn, nil },
 			NewDishes: func(context.Context) (int, error) { return newDishes, nil },
-			Dish:      func(context.Context, time.Time) (string, error) { return r.dish, nil },
+			Cuisines:  func(context.Context) ([]string, error) { return r.cuisines, nil },
 			Now:       func() time.Time { return r.now },
 		},
 	})
@@ -73,7 +81,8 @@ func TestPlanningSession_NextWindowPrefetches(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))
-	assert.Equal(t, []string{"thai"}, r.queued, "2 new dishes, 1 ready: 1 search")
+	require.Len(t, r.queued, 1, "2 new dishes, 1 ready: 1 search")
+	assert.True(t, strings.HasPrefix(r.queued[0], "thai "), r.queued[0])
 	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))
 	assert.Len(t, r.queued, 1, "the searching one counts")
 
@@ -99,7 +108,7 @@ func TestPlanningSession_NextWindowPrefetches(t *testing.T) {
 // to search for: opening the next window starts no find and fails nothing.
 func TestPlanningSession_NoCuisineInScopeStartsNoFind(t *testing.T) {
 	r := newSessionRig(t, true, 1)
-	r.dish = ""
+	r.cuisines = nil
 	require.NoError(t, r.svc.Opened(context.Background(), nextWindow, false, true))
 	assert.Empty(t, r.queued)
 }
@@ -110,7 +119,10 @@ func TestPlanningSession_ThemeAndChefOff(t *testing.T) {
 	ctx := context.Background()
 	r := newSessionRig(t, true, 1)
 	require.NoError(t, r.svc.ThemeSet(ctx, "japanese", 2))
-	assert.Equal(t, []string{"japanese", "japanese"}, r.queued)
+	require.Len(t, r.queued, 2)
+	assert.True(t, strings.HasPrefix(r.queued[0], "japanese "), r.queued[0])
+	assert.True(t, strings.HasPrefix(r.queued[1], "japanese "), r.queued[1])
+	assert.NotEqual(t, r.queued[0], r.queued[1], "two finds of one theme look for different mains")
 
 	off := newSessionRig(t, false, 2)
 	require.NoError(t, off.svc.Touch(ctx))
@@ -120,4 +132,88 @@ func TestPlanningSession_ThemeAndChefOff(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, open)
 	assert.Empty(t, off.queued)
+}
+
+// readyDraft stores a ready planning find with the draft.
+func (r *sessionRig) readyDraft(t *testing.T, d *importer.Draft) {
+	t.Helper()
+	ctx := context.Background()
+	f, err := r.store.Create(ctx, "french main dish", finds.TriggerPlanning)
+	require.NoError(t, err)
+	_, err = r.store.Finish(ctx, f.ID, finds.Outcome{State: finds.StateReady, Draft: d, SourceURL: "https://example.org/" + d.Name})
+	require.NoError(t, err)
+}
+
+// CP3b item 1, FIND-3: a ready find that cannot fill a lunch or dinner main
+// (a side, or longer than the longest time allowance) stays ready but does
+// not hold the window's new searches back.
+func TestPrefetch_ReadyFindThatCannotFillAMainDoesNotCount(t *testing.T) {
+	r := newSessionRig(t, true, 2)
+	r.readyDraft(t, &importer.Draft{Name: "French Onion Soup", Tags: []string{"Dinner", "Side Dish", "Soup"}, PrepMinutes: ptr(10), CookMinutes: ptr(90)})
+	r.readyDraft(t, &importer.Draft{Name: "Slow ragu", Tags: []string{"Main Course"}, TotalMinutes: ptr(180)})
+
+	require.NoError(t, r.svc.Opened(context.Background(), nextWindow, false, true))
+	require.Len(t, r.queued, 2, "neither ready find fills a main cell: 2 searches")
+	assert.NotEqual(t, r.queued[0], r.queued[1])
+	for _, d := range r.queued {
+		assert.True(t, strings.HasPrefix(d, "thai ") && strings.HasSuffix(d, "main") || d == "thai main dish", d)
+	}
+
+	fits := newSessionRig(t, true, 2)
+	fits.readyDraft(t, &importer.Draft{Name: "Dal", Tags: []string{"Main Course", "Side Dish"}, TotalMinutes: ptr(45)})
+	require.NoError(t, fits.svc.Opened(context.Background(), nextWindow, false, true))
+	assert.Len(t, fits.queued, 1, "a fitting ready main counts")
+}
+
+// CP3 run 3 item 5: a fitting ready find a generation passed over (it could
+// not use it in its window) no longer counts toward New dishes: the next
+// window searches a new one.
+func TestPrefetch_PassedReadyFindDoesNotCount(t *testing.T) {
+	r := newSessionRig(t, true, 1)
+	r.readyDraft(t, &importer.Draft{Name: "Roasted Bratwurst", Tags: []string{"Main Course"}, TotalMinutes: ptr(60)})
+	ready := finds.StateReady
+	list, err := r.store.List(context.Background(), &ready, 5)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.NoError(t, r.store.Pass(context.Background(), list[0].ID, nextWindow.AddDate(0, 0, -7)))
+
+	require.NoError(t, r.svc.Opened(context.Background(), nextWindow, false, true))
+	assert.Len(t, r.queued, 1, "the passed find stays ready but a new one is searched")
+}
+
+// CP3 run 3 item 6: planning finds follow the household's cuisines best
+// first (its loves, not the home cuisine at the end), vary by find and by
+// week, and ask for meat-free mains when the weekly meat-day limit is tight.
+func TestPrefetch_DishesFollowTheHousehold(t *testing.T) {
+	r := newSessionRig(t, true, 2)
+	r.cuisines = []string{"indian", "italian", "mexican", "chinese", "german"}
+	limit := 3
+	r.house.MeatDaysMax = &limit
+	require.NoError(t, r.svc.Opened(context.Background(), nextWindow, false, true))
+	require.Len(t, r.queued, 2)
+	assert.NotEqual(t, r.queued[0], r.queued[1])
+	for _, d := range r.queued {
+		assert.Contains(t, d, " meat-free ", d)
+		assert.NotContains(t, d, "german", "the home cuisine comes last")
+		assert.NotContains(t, d, "chinese")
+	}
+
+	free := newSessionRig(t, true, 1)
+	free.cuisines = []string{"indian"}
+	limit7 := 7
+	free.house.MeatDaysMax = &limit7
+	require.NoError(t, free.svc.Opened(context.Background(), nextWindow, false, true))
+	require.Len(t, free.queued, 1)
+	assert.NotContains(t, free.queued[0], "meat-free", "no tight limit: any main")
+	assert.True(t, strings.HasPrefix(free.queued[0], "indian "))
+}
+
+// CP3b item 2: the finds of consecutive weeks look for different mains.
+func TestThemeSet_DishesVaryByWeek(t *testing.T) {
+	r := newSessionRig(t, true, 1)
+	require.NoError(t, r.svc.ThemeSet(context.Background(), "japanese", 1))
+	r.now = r.now.AddDate(0, 0, 7)
+	require.NoError(t, r.svc.ThemeSet(context.Background(), "japanese", 1))
+	require.Len(t, r.queued, 2)
+	assert.NotEqual(t, r.queued[0], r.queued[1])
 }

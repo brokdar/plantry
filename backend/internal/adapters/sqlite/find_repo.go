@@ -173,6 +173,7 @@ func mapFind(row sqlcgen.RecipeSuggestion) (*finds.Find, error) {
 		ID: row.ID, Trigger: finds.Trigger(row.FindTrigger.String), State: finds.State(row.State.String),
 		Dish: row.Query.String, SourceURL: row.SourceUrl, Reason: fromNullString(row.Reason),
 		FoodID: fromNullInt64(row.FoodID), RunID: fromNullInt64(row.AiRunID), PlacedOn: fromNullString(row.PlacedOn),
+		PassedOn: fromNullString(row.PassedOn),
 	}
 	if row.Origin.Valid {
 		o := finds.Origin(row.Origin.String)
