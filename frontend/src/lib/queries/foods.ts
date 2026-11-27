@@ -22,6 +22,8 @@ import {
   listVariants,
   refetchFood,
   revertFoodChange,
+  notForMe,
+  type NotForMeReason,
   setDietClass,
   setFoodAttributes,
   setNoCook,
@@ -289,6 +291,35 @@ export function useSetFoodArchived() {
         queryClient.invalidateQueries({ queryKey: foodKeys.detail(id) }),
         queryClient.invalidateQueries({ queryKey: planKeys.all }),
       ]),
+    onError: (err) => toastError(err, t),
+  })
+}
+
+/** "Not for me" on a library recipe: hides it and offers Undo. */
+export function useNotForMe() {
+  const { t } = useTranslation()
+  const offerUndo = useUndoToast()
+  const revert = useMutation({
+    mutationFn: (undo: FoodEventUndo) => revertFoodChange(undo),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: foodKeys.all }),
+        queryClient.invalidateQueries({ queryKey: planKeys.all }),
+      ]),
+    onError: (err) => toastError(err, t),
+  })
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason: NotForMeReason }) =>
+      notForMe(id, reason),
+    onSuccess: async (res) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: foodKeys.all }),
+        queryClient.invalidateQueries({ queryKey: planKeys.all }),
+      ])
+      offerUndo(t("recipe_detail.not_for_me.done"), () =>
+        revert.mutate(res.undo)
+      )
+    },
     onError: (err) => toastError(err, t),
   })
 }

@@ -611,6 +611,24 @@ export function setFoodAttributes(
   })
 }
 
+export type NotForMeReason =
+  | "taste"
+  | "ingredients"
+  | "too_long"
+  | "looks_wrong"
+
+/** POST /api/foods/{id}/not-for-me {reason}: hides the recipe from planning
+ *  and teaches the taste model; the token undoes it. */
+export function notForMe(
+  id: number,
+  reason: NotForMeReason
+): Promise<{ undo: FoodEventUndo }> {
+  return apiFetch(`/foods/${id}/not-for-me`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  })
+}
+
 /** POST /api/food-events/revert — undoes a food change; 409
  *  `error.plan.change_stale` once a later change touched the row. */
 export function revertFoodChange(undo: FoodEventUndo): Promise<unknown> {

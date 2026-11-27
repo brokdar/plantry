@@ -1607,6 +1607,15 @@
     "favorite": "Favorit",
     "hide": "Nicht mehr planen",
     "restore": "Wieder planen",
+    "not_for_me": {
+      "button": "Nichts für mich",
+      "prompt": "Was hat dich gestört?",
+      "taste": "Nicht mein Geschmack",
+      "ingredients": "Zutaten",
+      "too_long": "Dauert zu lange",
+      "looks_wrong": "Sieht falsch aus",
+      "done": "Wird nicht mehr geplant."
+    },
     "hidden_note": "Wird nicht mehr geplant. Bleibt im Verlauf und lässt sich weiter von Hand einplanen.",
     "source": "Von {{host}}",
     "portions": "Portionen",

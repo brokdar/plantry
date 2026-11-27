@@ -19,6 +19,7 @@ vi.mock("@/lib/api/foods", () => ({
   createVariant: vi.fn(),
   updateFood: vi.fn(),
   setDietClass: vi.fn(),
+  notForMe: vi.fn(),
 }))
 
 vi.mock("@/lib/api/plan", () => ({ getPlan: vi.fn() }))
@@ -37,6 +38,7 @@ import {
   createVariant,
   getFoodNutrition,
   getScaled,
+  notForMe,
   setDietClass,
   archiveFood,
   restoreFood,
@@ -449,5 +451,24 @@ describe("RecipeDetail", () => {
     await user.click(await screen.findByRole("button", { name: "Add to plan" }))
     expect(await screen.findByTestId("add-to-plan-sheet")).toBeInTheDocument()
     expect(await screen.findAllByRole("radio")).not.toHaveLength(0)
+  })
+
+  it("shows Not for me only with the Chef on and sends the reason", async () => {
+    const { unmount } = renderWithRouter(<RecipeDetail recipe={recipe} />)
+    await screen.findByRole("heading", { level: 1, name: "Chicken Curry" })
+    expect(screen.queryByTestId("recipe-not-for-me")).toBeNull()
+    unmount()
+
+    vi.mocked(listSettings).mockResolvedValue(
+      mockSettingsList([{ key: "chef.enabled", value: "true", source: "db" }])
+    )
+    vi.mocked(notForMe).mockResolvedValue({
+      undo: { first_event_id: 1, last_event_id: 1 },
+    })
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+    await user.click(await screen.findByTestId("recipe-not-for-me"))
+    await user.click(screen.getByRole("button", { name: "Takes too long" }))
+    expect(notForMe).toHaveBeenCalledWith(recipe.id, "too_long")
   })
 })

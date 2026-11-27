@@ -1607,6 +1607,15 @@
     "favorite": "Favorite",
     "hide": "Hide from planning",
     "restore": "Restore",
+    "not_for_me": {
+      "button": "Not for me",
+      "prompt": "What put you off?",
+      "taste": "Not my taste",
+      "ingredients": "Ingredients",
+      "too_long": "Takes too long",
+      "looks_wrong": "Looks wrong",
+      "done": "Hidden from planning."
+    },
     "hidden_note": "Hidden from planning. It stays in your history and can still be added by hand.",
     "source": "From {{host}}",
     "portions": "Portions",
