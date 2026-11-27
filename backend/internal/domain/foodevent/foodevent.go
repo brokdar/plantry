@@ -25,12 +25,15 @@ const (
 	KindAttribute    Kind = "attribute"
 	KindTasteItem    Kind = "taste_item"
 	KindSubstitution Kind = "substitution"
+	// KindRecipeContent is an assistant's recipe change: a filled variant
+	// (create) or an in-place edit (update) (VAR-1, VAR-2).
+	KindRecipeContent Kind = "recipe_content"
 )
 
 // Valid reports whether k is a known kind.
 func (k Kind) Valid() bool {
 	switch k {
-	case KindRecipe, KindAttribute, KindTasteItem, KindSubstitution:
+	case KindRecipe, KindAttribute, KindTasteItem, KindSubstitution, KindRecipeContent:
 		return true
 	}
 	return false
@@ -76,6 +79,13 @@ type Log interface {
 // It runs in the Revert's unit of work.
 type Restorer interface {
 	Restore(ctx context.Context, subjectID int64, before json.RawMessage) error
+}
+
+// Verifier is an optional Restorer extension: Verify runs before Restore and
+// returns domain.ErrPlanChangeStale when the row no longer matches after, the
+// snapshot the change being undone wrote (the row changed outside the log).
+type Verifier interface {
+	Verify(ctx context.Context, subjectID int64, after json.RawMessage) error
 }
 
 // Undo is the revert token of a change: the range of events it wrote.
@@ -187,6 +197,11 @@ func (s *Service) Revert(ctx context.Context, u Undo) ([]Subject, error) {
 			}
 		}
 		for _, e := range slices.Backward(events) {
+			if v, ok := s.restorers[e.Kind].(Verifier); ok {
+				if err := v.Verify(ctx, e.SubjectID, e.After); err != nil {
+					return err
+				}
+			}
 			if err := s.restorers[e.Kind].Restore(ctx, e.SubjectID, e.Before); err != nil {
 				return err
 			}

@@ -29,6 +29,7 @@ import {
   useSetFoodArchived,
   useSetFoodFavorite,
 } from "@/lib/queries/foods"
+import { useSettingItems } from "@/lib/queries/settings"
 import { lastEatenAgo, rememberedLibrarySearch } from "@/lib/recipes/library"
 import { cn } from "@/lib/utils"
 
@@ -36,6 +37,7 @@ import { AddToPlanSheet } from "./AddToPlanSheet"
 import { FoodDietSelect } from "./DietClassSelect"
 import { DietUnknownWarning } from "./DietUnknownWarning"
 import { NutritionCompletenessWarning } from "./NutritionCompletenessWarning"
+import { AskRecipe } from "./AskRecipe"
 import { RecipeAttributes } from "./RecipeAttributes"
 
 type RecipeDetailProps = {
@@ -64,6 +66,10 @@ export function RecipeDetail({
   const setArchived = useSetFoodArchived()
   const createVariant = useCreateVariant()
   const defaultKeep = useSettingField("plan.default_keep_days", "3")
+  const settings = useSettingItems().data
+  const chatOn =
+    settings?.["chef.enabled"]?.value === "true" &&
+    Boolean(settings?.["ai.provider"]?.value)
   const [today] = useState(todayISO)
   const [portions, setPortions] = useState(
     initial ?? recipe.reference_portions ?? 1
@@ -341,6 +347,8 @@ export function RecipeDetail({
           )}
         </div>
       </header>
+
+      {chatOn && <AskRecipe recipeId={recipe.id} />}
 
       <div className="grid gap-10 md:grid-cols-12 md:gap-8">
         <section

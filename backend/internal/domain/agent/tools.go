@@ -113,6 +113,8 @@ type Services struct {
 	Tx    domain.Transactor
 	// Undo may be nil: undo_last_change is then not registered.
 	Undo *Changes
+	// Recipes are the recipe tools; a nil part is not registered.
+	Recipes RecipeTools
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -393,6 +395,7 @@ func defaultTools(svc Services) []Tool {
 	if svc.Undo != nil {
 		tools = append(tools, toolUndoLastChange(svc))
 	}
+	tools = append(tools, recipeTools(svc)...)
 	for i := range tools {
 		tools[i].CodeCallable = codeCallableTools[tools[i].Name]
 		if tools[i].Name == "undo_last_change" || tools[i].Name == "regenerate" {

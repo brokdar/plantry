@@ -1,3 +1,4 @@
+import type { FoodEventUndo } from "@/lib/api/foods"
 import type {
   ConversationChange,
   ConversationMessage,
@@ -27,6 +28,20 @@ export interface TranscriptTurn {
   changes: ConversationChange[]
   /** Tool calls of this turn that failed (one failure line each). */
   failures: ToolFailure[]
+  /** Recipe changes the tool calls of this turn saved, each with its Undo
+   *  token (create_variant, edit_recipe, set_recipe_attributes). */
+  recipeChanges: RecipeChange[]
+}
+
+const RECIPE_TOOLS = ["create_variant", "edit_recipe", "set_recipe_attributes"]
+
+/** A saved recipe change of the chat: what the call was and how to undo it. */
+export interface RecipeChange {
+  /** The tool call's id. */
+  id: string
+  tool: string
+  recipeId?: number
+  undo: FoodEventUndo
 }
 
 /** A tool call that did not do what was asked: an error result, or a run
@@ -114,6 +129,8 @@ export function buildTranscript(
   const changeOf = new Map<string, number>()
   const noChange = new Set<string>()
   const failed = new Set<string>()
+  const recipeUndo = new Map<string, FoodEventUndo>()
+  const recipeIdOf = new Map<string, number>()
   let pendingUnlock: UnlockRequestPayload | null = null
   let n = 0
   for (const m of messages) {
@@ -132,6 +149,17 @@ export function buildTranscript(
         | null
       const changeId = result?.change_id
       if (typeof changeId === "number") changeOf.set(key, changeId)
+      const undo = result?.undo as FoodEventUndo | undefined
+      if (
+        undo &&
+        typeof undo.first_event_id === "number" &&
+        undo.first_event_id > 0 &&
+        !b.tool_result_is_error
+      ) {
+        recipeUndo.set(key, undo)
+        if (typeof result?.recipe_id === "number")
+          recipeIdOf.set(key, result.recipe_id)
+      }
       const preview = previewRows(b)
       if (preview) {
         noChange.add(key)
@@ -163,10 +191,20 @@ export function buildTranscript(
       .join("\n\n")
     const own: ConversationChange[] = []
     const failures: ToolFailure[] = []
+    const recipeChanges: RecipeChange[] = []
     if (m.role === "assistant") {
       for (const b of blocks) {
         if (b.type !== "tool_use") continue
         const key = keyOf.get(b) ?? ""
+        const undo = recipeUndo.get(key)
+        if (undo && RECIPE_TOOLS.includes(b.tool_use_name ?? "")) {
+          recipeChanges.push({
+            id: b.tool_use_id ?? "",
+            tool: b.tool_use_name ?? "",
+            recipeId: recipeIdOf.get(key),
+            undo,
+          })
+        }
         if (failed.has(key)) {
           failures.push({
             id: b.tool_use_id ?? "",
@@ -184,8 +222,14 @@ export function buildTranscript(
         if (at >= 0) own.push(...queue.splice(at, 1))
       }
     }
-    if (text === "" && own.length === 0 && failures.length === 0) continue
-    turns.push({ message: m, text, changes: own, failures })
+    if (
+      text === "" &&
+      own.length === 0 &&
+      failures.length === 0 &&
+      recipeChanges.length === 0
+    )
+      continue
+    turns.push({ message: m, text, changes: own, failures, recipeChanges })
   }
   // Named by a result whose call is not in the conversation: shown last.
   for (const c of changes) {

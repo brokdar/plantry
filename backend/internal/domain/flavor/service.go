@@ -117,6 +117,53 @@ func (s *Service) Set(ctx context.Context, id int64, p Patch) (View, foodevent.U
 	return view, undo, nil
 }
 
+// SetAuto applies the assistant's values p.Fields to food id (VAR-4, ATTR-2):
+// a field the user set keeps the user's value (A1's user-wins merge) and is
+// returned in kept. p.Clear is ignored: the assistant only sets or corrects.
+func (s *Service) SetAuto(ctx context.Context, id int64, p Patch) (View, foodevent.Undo, []Field, error) {
+	var view View
+	var kept []Field
+	undo, err := s.events.Recorded(ctx, func(ctx context.Context) error {
+		in, err := s.input(ctx, id)
+		if err != nil {
+			return err
+		}
+		p.Clear = nil
+		if err := p.check(in); err != nil {
+			return err
+		}
+		old, err := s.store.Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		next := Record{FoodID: id, Version: Version, Sources: map[Field]Source{}}
+		for f, src := range old.Sources {
+			next.Sources[f] = src
+			copyField(&next.Values, old.Values, f)
+		}
+		for _, f := range p.Fields {
+			if old.Sources[f] == SourceUser {
+				kept = append(kept, f)
+				continue
+			}
+			next.Sources[f] = SourceAuto
+			copyField(&next.Values, p.Set, f)
+		}
+		if err := s.write(ctx, old, next); err != nil {
+			return err
+		}
+		view = View{FoodID: id, Resolved: Resolve(in, next)}
+		if !next.Empty() {
+			view.Version = next.Version
+		}
+		return nil
+	})
+	if err != nil {
+		return View{}, foodevent.Undo{}, nil, err
+	}
+	return view, undo, kept, nil
+}
+
 // write stores next in place of old and records the change; nothing when
 // they are equal.
 func (s *Service) write(ctx context.Context, old, next Record) error {

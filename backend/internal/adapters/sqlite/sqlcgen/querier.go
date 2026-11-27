@@ -28,6 +28,10 @@ type Querier interface {
 	// Frees the session's slot for another variant.
 	ClearHiddenVariantSession(ctx context.Context, sessionID sql.NullInt64) error
 	ClearShownOn(ctx context.Context, shownOn sql.NullString) error
+	// The dates of confirmed plates from today on that hold the recipe (or a
+	// hidden substitution variant of it): their shopping changes with an
+	// in-place edit (VAR-2).
+	ConfirmedPlateDatesOf(ctx context.Context, arg ConfirmedPlateDatesOfParams) ([]string, error)
 	CountChefTipsCreatedBetween(ctx context.Context, arg CountChefTipsCreatedBetweenParams) ([]CountChefTipsCreatedBetweenRow, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
@@ -36,6 +40,7 @@ type Querier interface {
 	CountPlateEventsAfter(ctx context.Context, arg CountPlateEventsAfterParams) (int64, error)
 	CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
 	CountPresetsUsingFood(ctx context.Context, foodID int64) (int64, error)
+	CountSubstitutionSwap(ctx context.Context, arg CountSubstitutionSwapParams) (CountSubstitutionSwapRow, error)
 	CreateAIChange(ctx context.Context, arg CreateAIChangeParams) (AiChange, error)
 	CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64, error)
 	CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams) error
@@ -68,10 +73,12 @@ type Querier interface {
 	DeleteCookSession(ctx context.Context, id int64) (sql.Result, error)
 	DeleteFood(ctx context.Context, id int64) (sql.Result, error)
 	DeleteFoodAttributes(ctx context.Context, foodID int64) error
+	DeleteFoodChanges(ctx context.Context, foodID int64) error
 	DeleteFoodComponents(ctx context.Context, parentID int64) error
 	DeleteFoodInstructions(ctx context.Context, foodID int64) error
 	DeleteFoodPortion(ctx context.Context, arg DeleteFoodPortionParams) (sql.Result, error)
 	DeleteFoodTags(ctx context.Context, foodID int64) error
+	DeleteHiddenVariant(ctx context.Context, foodID int64) error
 	// D12: pending suggestions created before the cutoff go; their ids let the
 	// caller delete the images.
 	DeletePendingSuggestionsBefore(ctx context.Context, before string) ([]int64, error)
@@ -113,6 +120,7 @@ type Querier interface {
 	GetDiscoveryRun(ctx context.Context, id int64) (GetDiscoveryRunRow, error)
 	GetFood(ctx context.Context, id int64) (Food, error)
 	GetFoodAttributes(ctx context.Context, foodID int64) (FoodAttribute, error)
+	GetFoodChanges(ctx context.Context, foodID int64) (string, error)
 	GetFoodKind(ctx context.Context, id int64) (string, error)
 	GetHiddenVariant(ctx context.Context, foodID int64) (HiddenVariant, error)
 	GetLeafFoodIDByName(ctx context.Context, name string) (int64, error)
@@ -229,11 +237,13 @@ type Querier interface {
 	// table. Newest first so the cap drops the oldest rows.
 	ListUserPlateUpdates(ctx context.Context, arg ListUserPlateUpdatesParams) ([]ListUserPlateUpdatesRow, error)
 	MarkAIChangeUndone(ctx context.Context, arg MarkAIChangeUndoneParams) (sql.Result, error)
+	MarkSubstitutionSwapOffered(ctx context.Context, arg MarkSubstitutionSwapOfferedParams) error
 	MatchBasicAtHome(ctx context.Context, foodID int64) error
 	// Deletes up to 500 steps of runs started before the cutoff; the runs,
 	// prompts and tool schemas stay. The repo repeats it until nothing is left,
 	// so no single statement holds the write lock for long.
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
+	PutFoodChanges(ctx context.Context, arg PutFoodChangesParams) error
 	RecoverChefJobs(ctx context.Context, arg RecoverChefJobsParams) (int64, error)
 	ReinsertPlate(ctx context.Context, arg ReinsertPlateParams) error
 	RemoveBasicAtHome(ctx context.Context, foodID int64) error

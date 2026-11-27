@@ -9,11 +9,16 @@ import { renderWithRouter } from "@/test/render"
 vi.mock("@/lib/api/substitutions", () => ({
   getSubstitutes: vi.fn(),
   applySubstitution: vi.fn(),
+  keepSubstitution: vi.fn(),
 }))
 vi.mock("@/lib/api/foods", () => ({ revertFoodChange: vi.fn() }))
 vi.mock("@/lib/toast", () => ({ toast: vi.fn(), toastError: vi.fn() }))
 
-import { applySubstitution, getSubstitutes } from "@/lib/api/substitutions"
+import {
+  applySubstitution,
+  getSubstitutes,
+  keepSubstitution,
+} from "@/lib/api/substitutions"
 
 import { SubstituteButton, SubstituteDialog } from "./SubstituteDialog"
 
@@ -36,6 +41,11 @@ describe("SubstituteDialog", () => {
     })
     vi.mocked(applySubstitution).mockResolvedValue({
       undo: { first_event_id: 4, last_event_id: 4 },
+      offer_permanent: false,
+      confirmed_dates: [],
+    })
+    vi.mocked(keepSubstitution).mockResolvedValue({
+      undo: { first_event_id: 5, last_event_id: 6 },
     })
   })
 
@@ -55,8 +65,73 @@ describe("SubstituteDialog", () => {
     await waitFor(() =>
       expect(applySubstitution).toHaveBeenCalledWith(7, 51, 90)
     )
+    // The swap stays one tap away from permanent; Done closes the dialog.
+    expect(await screen.findByTestId("substitute-keep")).toBeInTheDocument()
+    await user.click(screen.getByTestId("substitute-done"))
     await waitFor(() =>
       expect(screen.queryByTestId("substitute-dialog")).not.toBeInTheDocument()
+    )
+  })
+
+  it("Save as variant: keeps the swap as a visible variant, no confirmation", async () => {
+    const user = userEvent.setup()
+    renderWithRouter(
+      <SubstituteDialog
+        open
+        onOpenChange={() => {}}
+        sessionIds={[7]}
+        from={{ id: 51, name: "Onion" }}
+      />
+    )
+    await user.click(await screen.findByTestId("substitute-option"))
+    await user.click(await screen.findByTestId("substitute-variant"))
+    await waitFor(() =>
+      expect(keepSubstitution).toHaveBeenCalledWith(7, 51, 90, "variant")
+    )
+  })
+
+  it("Always in this recipe: warns first when confirmed plates hold the recipe", async () => {
+    const user = userEvent.setup()
+    vi.mocked(applySubstitution).mockResolvedValue({
+      undo: { first_event_id: 4, last_event_id: 4 },
+      offer_permanent: true,
+      confirmed_dates: ["2026-11-05", "2026-11-06"],
+    })
+    renderWithRouter(
+      <SubstituteDialog
+        open
+        onOpenChange={() => {}}
+        sessionIds={[7]}
+        from={{ id: 51, name: "Onion" }}
+      />
+    )
+    await user.click(await screen.findByTestId("substitute-option"))
+    expect(
+      await screen.findByText(/swapped Onion for Shallot here before/)
+    ).toBeInTheDocument()
+    await user.click(screen.getByTestId("substitute-always"))
+    expect(keepSubstitution).not.toHaveBeenCalled()
+    expect(screen.getByRole("status")).toHaveTextContent("2 confirmed days")
+    await user.click(screen.getByTestId("substitute-always-confirm"))
+    await waitFor(() =>
+      expect(keepSubstitution).toHaveBeenCalledWith(7, 51, 90, "recipe")
+    )
+  })
+
+  it("Always in this recipe: no warning without confirmed plates", async () => {
+    const user = userEvent.setup()
+    renderWithRouter(
+      <SubstituteDialog
+        open
+        onOpenChange={() => {}}
+        sessionIds={[7]}
+        from={{ id: 51, name: "Onion" }}
+      />
+    )
+    await user.click(await screen.findByTestId("substitute-option"))
+    await user.click(await screen.findByTestId("substitute-always"))
+    await waitFor(() =>
+      expect(keepSubstitution).toHaveBeenCalledWith(7, 51, 90, "recipe")
     )
   })
 

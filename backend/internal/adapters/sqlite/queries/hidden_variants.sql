@@ -29,3 +29,15 @@ WHERE id IN (SELECT plate_id FROM plate_components WHERE cook_session_id = ?);
 -- The recipe each of the foods is a hidden variant of.
 SELECT food_id, base_food_id FROM hidden_variants
 WHERE food_id IN (sqlc.slice(ids)) AND base_food_id IS NOT NULL;
+
+-- name: DeleteHiddenVariant :exec
+DELETE FROM hidden_variants WHERE food_id = ?;
+
+-- name: CountSubstitutionSwap :one
+INSERT INTO substitution_swaps (base_food_id, from_food_id, to_food_id) VALUES (?, ?, ?)
+ON CONFLICT (base_food_id, from_food_id, to_food_id) DO UPDATE SET swaps = swaps + 1
+RETURNING swaps, offered;
+
+-- name: MarkSubstitutionSwapOffered :exec
+UPDATE substitution_swaps SET offered = 1
+WHERE base_food_id = ? AND from_food_id = ? AND to_food_id = ?;

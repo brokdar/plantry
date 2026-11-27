@@ -1,10 +1,8 @@
 package handlers
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
-	"slices"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -76,34 +74,9 @@ func (h *AttributeHandler) Put(w http.ResponseWriter, r *http.Request) {
 // decodeAttributePatch reads {field: value | null}; an unknown field or a
 // value of the wrong type is not ok.
 func decodeAttributePatch(r *http.Request) (flavor.Patch, bool) {
-	var raw map[string]json.RawMessage
-	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil || raw == nil {
+	var raw json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
 		return flavor.Patch{}, false
 	}
-	var p flavor.Patch
-	set := map[string]json.RawMessage{}
-	for k, v := range raw {
-		f := flavor.Field(k)
-		if !slices.Contains(flavor.Fields, f) {
-			return flavor.Patch{}, false
-		}
-		if bytes.Equal(bytes.TrimSpace(v), []byte("null")) {
-			p.Clear = append(p.Clear, f)
-			continue
-		}
-		p.Fields = append(p.Fields, f)
-		set[k] = v
-	}
-	b, err := json.Marshal(set)
-	if err != nil {
-		return flavor.Patch{}, false
-	}
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&p.Set); err != nil {
-		return flavor.Patch{}, false
-	}
-	slices.Sort(p.Fields)
-	slices.Sort(p.Clear)
-	return p, true
+	return flavor.DecodePatch(raw)
 }

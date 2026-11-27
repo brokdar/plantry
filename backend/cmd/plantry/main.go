@@ -48,6 +48,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/recipechange"
 	settingsdom "github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/setup"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
@@ -333,6 +334,21 @@ func run() error {
 			return food.MatchPermit{Run: d.Run, Warn: d.Warn, Uncapped: d.Reason == chef.ReasonOff}, err
 		})
 
+	// Food change log (VAR-5): each producer registers its Restorer here.
+	foodRestorers := map[foodevent.Kind]foodevent.Restorer{}
+	foodEventSvc := foodevent.NewService(sqlite.NewTxRunner(conn), sqlite.NewFoodEventRepo(conn), foodRestorers, clock.Now)
+	foodSvc.WithEvents(foodEventSvc)
+	foodRestorers[foodevent.KindRecipe] = foodSvc
+	// Recipe attributes (ATTR): derived on read, user edits logged as
+	// attribute food events.
+	flavorSvc := flavor.NewService(foodAttributeRepo, foodRepo, nutritionResolver, foodEventSvc)
+	foodRestorers[foodevent.KindAttribute] = flavorSvc
+	// Assistant recipe changes (VAR-1, VAR-2, HELP-4): filled variants and
+	// in-place edits through matching and the gates, a chef_help run on the
+	// recipe page.
+	recipeChangeSvc := recipechange.NewService(foodRepo, sqlite.NewFoodOriginRepo(conn), matcher,
+		sqlite.NewRecipeChangeRepo(conn), profileSvc, foodEventSvc).WithModel(llmResolver, runRecorder)
+	foodRestorers[foodevent.KindRecipeContent] = recipeChangeSvc
 	aiRepo := sqlite.NewAIRepo(conn)
 	changeRepo := sqlite.NewAIChangeRepo(conn)
 	changes := agent.NewChanges(changeRepo, plateSvc, availabilitySvc, planLight, txRunner, clock.Now)
@@ -352,9 +368,10 @@ func run() error {
 		State: func(ctx context.Context, w window.Window, today time.Time) (planning.State, error) {
 			return planBuilder.Build(ctx, w, today, w.Start, w.End)
 		},
-		Light: planLight,
-		Tx:    txRunner,
-		Undo:  changes,
+		Light:   planLight,
+		Tx:      txRunner,
+		Undo:    changes,
+		Recipes: agent.RecipeTools{Changes: recipeChangeSvc, Attributes: flavorSvc},
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
@@ -422,17 +439,8 @@ func run() error {
 	// Boot recovery requeues jobs a crash or shutdown left running.
 	// Shutdown waits for running jobs (before the recorder and the
 	// database), cancelling them when the wait runs out.
-	// Food change log (VAR-5): each producer registers its Restorer here.
-	foodRestorers := map[foodevent.Kind]foodevent.Restorer{}
-	foodEventSvc := foodevent.NewService(sqlite.NewTxRunner(conn), sqlite.NewFoodEventRepo(conn), foodRestorers, clock.Now)
-	foodSvc.WithEvents(foodEventSvc)
-	foodRestorers[foodevent.KindRecipe] = foodSvc
-	// Recipe attributes (ATTR): derived on read, user edits logged as
-	// attribute food events.
-	flavorSvc := flavor.NewService(foodAttributeRepo, foodRepo, nutritionResolver, foodEventSvc)
-	foodRestorers[foodevent.KindAttribute] = flavorSvc
 	// Batch substitutions (HELP-3, HELP-7): rule-based, no provider needed.
-	substitutionSvc := substitution.NewService(foodRepo, sessionRepo, sqlite.NewSubstitutionRepo(conn), foodEventSvc)
+	substitutionSvc := substitution.NewService(foodRepo, sessionRepo, sqlite.NewSubstitutionRepo(conn), recipeChangeSvc, foodEventSvc)
 	foodRestorers[foodevent.KindSubstitution] = substitutionSvc
 	chefGuard := &chef.Guard{Settings: settingsSvc, Spend: aiRunRepo, Prices: priceOverrides, Now: time.Now}
 	matchGuard = chefGuard
@@ -569,6 +577,7 @@ func run() error {
 		Availability:  handlers.NewAvailabilityHandler(availabilitySvc).WithClock(clock.Now),
 		FoodEvents:    handlers.NewFoodEventHandler(foodEventSvc),
 		Substitutions: handlers.NewSubstitutionHandler(substitutionSvc),
+		RecipeChanges: handlers.NewRecipeChangeHandler(recipeChangeSvc),
 		Attributes:    handlers.NewAttributeHandler(flavorSvc),
 		Setup:         handlers.NewSetupHandler(setup.NewService(settingsSvc, foodRepo)),
 		DevMode:       cfg.DevMode,

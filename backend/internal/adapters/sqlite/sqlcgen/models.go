@@ -248,6 +248,11 @@ type FoodAttribute struct {
 	SourcesJson string
 }
 
+type FoodChange struct {
+	FoodID      int64
+	ChangesJson string
+}
+
 type FoodComponent struct {
 	ID        int64
 	ParentID  int64
@@ -419,6 +424,14 @@ type RecipeSuggestion struct {
 	ShownOn         sql.NullString
 	CreatedAt       string
 	DecidedAt       sql.NullString
+}
+
+type SubstitutionSwap struct {
+	BaseFoodID int64
+	FromFoodID int64
+	ToFoodID   int64
+	Swaps      int64
+	Offered    int64
 }
 
 type TimeSlot struct {

@@ -8,6 +8,8 @@
 package flavor
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -339,4 +341,39 @@ func (p Patch) apply(rec Record) Record {
 		copyField(&out.Values, p.Set, f)
 	}
 	return out
+}
+
+// DecodePatch reads {field: value | null}; an unknown field or a value of
+// the wrong type is not ok.
+func DecodePatch(b []byte) (Patch, bool) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil || raw == nil {
+		return Patch{}, false
+	}
+	var p Patch
+	set := map[string]json.RawMessage{}
+	for k, v := range raw {
+		f := Field(k)
+		if !slices.Contains(Fields, f) {
+			return Patch{}, false
+		}
+		if bytes.Equal(bytes.TrimSpace(v), []byte("null")) {
+			p.Clear = append(p.Clear, f)
+			continue
+		}
+		p.Fields = append(p.Fields, f)
+		set[k] = v
+	}
+	enc, err := json.Marshal(set)
+	if err != nil {
+		return Patch{}, false
+	}
+	dec := json.NewDecoder(bytes.NewReader(enc))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&p.Set); err != nil {
+		return Patch{}, false
+	}
+	slices.Sort(p.Fields)
+	slices.Sort(p.Clear)
+	return p, true
 }

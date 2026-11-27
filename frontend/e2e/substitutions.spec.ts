@@ -30,6 +30,7 @@ interface Seed {
   start: string
   end: string
   sessionId: number
+  chiliId: number
   onion: string
   cleanup: () => Promise<void>
 }
@@ -85,6 +86,7 @@ async function seed(): Promise<Seed> {
     start,
     end: days[6],
     sessionId,
+    chiliId: chili.id,
     onion: onion.name,
     cleanup: async () => {
       await cleanupSlot(slot.id)
@@ -96,8 +98,13 @@ async function seed(): Promise<Seed> {
   }
 }
 
-async function undo(page: Page) {
-  await page.getByRole("button", { name: "Undo" }).click()
+async function undo(page: Page, toast?: string) {
+  // After keeping a swap, wait for the keep toast: it replaces the swap's.
+  if (toast) await expect(page.getByText(toast)).toBeVisible()
+  const button = page.getByRole("button", { name: "Undo" })
+  // The replaced toast is still leaving.
+  await expect(button).toHaveCount(1)
+  await button.click()
 }
 
 test.describe("Substitutions", () => {
@@ -120,6 +127,7 @@ test.describe("Substitutions", () => {
       const option = dialog.getByTestId("substitute-option").first()
       await expect(option).toContainText(/360 g .*Schalotte/)
       await option.click()
+      await dialog.getByTestId("substitute-done").click()
 
       await expect(ingredient("Schalotte")).toContainText("360 g")
       await expect(ingredient("Zwiebel")).toHaveCount(0)
@@ -150,6 +158,7 @@ test.describe("Substitutions", () => {
       await page.getByRole("button", { name: `Options for ${s.onion}` }).click()
       await page.getByRole("menuitem", { name: "Not available" }).click()
       await page.getByTestId("substitute-option").first().click()
+      await page.getByTestId("substitute-done").click()
 
       await expect(row("Schalotte")).toBeVisible()
       await expect(row("Zwiebel")).toHaveCount(0)
@@ -157,6 +166,75 @@ test.describe("Substitutions", () => {
       await undo(page)
       await expect(row("Zwiebel")).toBeVisible()
       await expect(row("Schalotte")).toHaveCount(0)
+    } finally {
+      await s.cleanup()
+    }
+  })
+
+  // HELP-7: one tap after a swap makes it permanent, as a visible variant or
+  // in the recipe itself; Undo takes it back.
+  test("cook mode: Save as variant, then Always in this recipe", async ({
+    page,
+    request,
+  }) => {
+    const s = await seed()
+    try {
+      await page.setViewportSize({ width: 375, height: 812 })
+      await page.goto(`/cook/${s.sessionId}`)
+      const pickShallot = async () => {
+        await page.getByTestId("substitute-open").click()
+        const dialog = page.getByTestId("substitute-dialog")
+        await dialog
+          .getByTestId("substitute-pick")
+          .filter({ hasText: "Zwiebel" })
+          .click()
+        await dialog.getByTestId("substitute-option").first().click()
+        return dialog
+      }
+      const variants = async () =>
+        (
+          (await (
+            await request.get(`${API}/api/foods/${s.chiliId}/variants`)
+          ).json()) as { items: { name: string }[] }
+        ).items
+
+      await (await pickShallot()).getByTestId("substitute-variant").click()
+      await expect.poll(async () => (await variants()).length).toBe(1)
+      expect((await variants())[0].name).toMatch(/with Schalotte/)
+      await undo(page, "Saved as a variant with")
+      await expect.poll(async () => (await variants()).length).toBe(0)
+      // Undo returns to the batch's own swap; drop that too.
+      await request.delete(`${API}/api/cook-sessions/${s.sessionId}/overrides`)
+      await page.reload()
+
+      // The batch's plate is confirmed, so the recipe change warns first.
+      const dialog = await pickShallot()
+      await dialog.getByTestId("substitute-always").click()
+      await expect(dialog.getByRole("status")).toContainText("confirmed day")
+      await dialog.getByTestId("substitute-always-confirm").click()
+      await expect(
+        page.getByTestId("cook-ingredient").filter({ hasText: "Schalotte" })
+      ).toBeVisible()
+      const recipe = (await (
+        await request.get(`${API}/api/foods/${s.chiliId}`)
+      ).json()) as { children: { child_name: string }[] }
+      expect(recipe.children.map((c) => c.child_name).join()).toMatch(
+        /Schalotte/
+      )
+      await undo(page, "Recipe now has")
+      await expect
+        .poll(async () =>
+          (
+            (await (
+              await request.get(`${API}/api/foods/${s.chiliId}`)
+            ).json()) as {
+              children: { child_name: string }[]
+            }
+          ).children
+            .map((c) => c.child_name)
+            .join()
+        )
+        .toMatch(/Zwiebel/)
     } finally {
       await s.cleanup()
     }
