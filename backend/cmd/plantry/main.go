@@ -603,6 +603,7 @@ func run() error {
 		Kitchen:       handlers.NewKitchenHandler(profileSvc, kitchenSvc),
 		Taste:         handlers.NewTasteHandler(tasteSvc).WithKitchen(kitchenSvc, foodSvc, profileSvc),
 		Finds:         handlers.NewFindsHandler(findSvc, settingsSvc.ChefEnabled),
+		NotForMe:      handlers.NewNotForMeHandler(foodSvc, tasteSvc),
 		Presets:       handlers.NewPresetHandler(presetSvc),
 		AI:            aiHandler,
 		AIRuns:        aiRunsHandler,

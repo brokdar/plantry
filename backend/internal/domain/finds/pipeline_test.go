@@ -265,3 +265,34 @@ func TestPipeline_SkipsKnownSources(t *testing.T) {
 	require.Equal(t, finds.StateReady, second.State)
 	require.Empty(t, second.Flags)
 }
+
+// AC-7: whatever the scenario, a find that reaches ready has no unmatched
+// line, no blocking gate and no copied photo; a find with an unmatched line
+// never reaches ready, and none carries an image.
+func TestPipeline_AC7(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		m       lineMatcher
+		trigger finds.Trigger
+		adapt   fake.Turn
+	}{
+		"clean":      {lineMatcher{}, finds.TriggerPlanning, adaptTurn(true, fitsKitchen)},
+		"unmatched":  {lineMatcher{unmatched: []string{"curry paste"}}, finds.TriggerChat, adaptTurn(false, fitsKitchen)},
+		"discover":   {lineMatcher{}, finds.TriggerDiscover, adaptTurn(false, fitsKitchen)},
+		"needs tool": {lineMatcher{}, finds.TriggerChat, adaptTurn(false, `{"equipment":["wok"],"active_minutes":25}`)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r := newRig(t, true, tc.m, kitchen, searchTurn(curryURLs...), tc.adapt)
+			f := r.run(t, tc.trigger)
+			if f.Draft != nil {
+				require.Empty(t, f.Draft.ImageURL, "no copied photo")
+			}
+			if f.State != finds.StateReady {
+				return
+			}
+			require.Empty(t, f.Gates.Blocks, "no GATE-1 block on a ready find")
+			require.NotContains(t, name, "unmatched")
+		})
+	}
+}
