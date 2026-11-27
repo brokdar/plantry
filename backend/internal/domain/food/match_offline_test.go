@@ -34,11 +34,12 @@ func TestMatch_OfflineCatalogueWithoutFDCKey(t *testing.T) {
 		fdcID  int // 0: unmatched
 		reason string
 	}{
-		{"en", food.MatchLine{Name: "apple cider vinegar", Amount: 2, Unit: "tbsp"}, 172237, ""},
+		{"en", food.MatchLine{Name: "apple cider vinegar", Amount: 2, Unit: "tbsp"}, 173469, ""},
 		{"en", food.MatchLine{Name: "Worcestershire sauce", Amount: 1, Unit: "tbsp"}, 171610, ""},
 		{"en", food.MatchLine{Name: "French bread", Amount: 1, Unit: "piece"}, 172675, ""},
 		{"en", food.MatchLine{Name: "cayenne pepper", Amount: 0.5, Unit: "tsp"}, 170932, ""},
 		{"en", food.MatchLine{Name: "rice vinegar", Amount: 1, Unit: "tbsp"}, 172237, ""},
+		{"en", food.MatchLine{Name: "red wine vinegar", Amount: 1, Unit: "tbsp"}, 172240, ""},
 		{"en", food.MatchLine{Name: "ground pork", Amount: 500, Unit: "g"}, 2514745, ""},
 		{"en", food.MatchLine{Name: "oyster sauce", Amount: 2, Unit: "tbsp"}, 174529, ""},
 		{"en", food.MatchLine{Name: "black beans", Amount: 400, Unit: "g"}, 175188, ""},
@@ -87,4 +88,18 @@ func TestEnsureLeaf_OfflineCandidateReusesLeafWithSameFdcID(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, created)
 	assert.Equal(t, existing.ID, id)
+}
+
+// TestMatch_StrictEntryNeedsOwnWords: a strict synonym entry whose FDC term
+// names another food (garam masala -> "spices cumin seed") is a review
+// candidate, not a confident match.
+func TestMatch_StrictEntryNeedsOwnWords(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	provider := fdc.NewDynamicProvider(settings.NewService(sqlite.NewAppSettingsRepo(db), settings.NewEnvSnapshot(nil), crypto.NilCipher{})).WithFallback(fdclocal.New())
+	m := food.NewMatcher(sqlite.NewFoodRepo(db), provider, nil)
+
+	res, err := m.Match(ctx, food.MatchRequest{Lang: "en", Lines: []food.MatchLine{{Name: "garam masala", Amount: 1, Unit: "tsp"}}})
+	require.NoError(t, err)
+	assert.NotEqual(t, food.MatchMatched, res.Lines[0].Status, "%v", res.Lines[0].Candidates)
 }

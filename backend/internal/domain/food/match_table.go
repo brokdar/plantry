@@ -29,6 +29,9 @@ type Synonym struct {
 	// that marks the generic food among the results.
 	FDC       string `json:"fdc"`
 	FDCPrefer string `json:"fdc_prefer"`
+	// Strict: a result is confident only when it names the line's own
+	// distinguishing words (the entry has no FDC food of its own).
+	Strict bool `json:"strict"`
 	// OFF is the Open Food Facts search term for products FDC lacks.
 	OFF string `json:"off"`
 	// Density is grams per ml; PieceG grams per piece (count units).
