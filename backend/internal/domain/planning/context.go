@@ -21,6 +21,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/taste"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -56,9 +57,18 @@ type BuilderDeps struct {
 	// Attributes reads the stored recipe attributes (one bounded query);
 	// the facts carry them merged with the derived ones.
 	Attributes Attributes
+	// Taste reads the household's taste profile (taste.Service.Profile);
+	// nil: every food's taste score is 0.
+	Taste TasteReader
 	// Version, when set, lets Build reuse the State it built last for the
 	// same arguments while the data has not changed (see Versioner).
 	Version Versioner
+}
+
+// TasteReader reads the taste profile at now for the window starting at
+// window.
+type TasteReader interface {
+	Profile(ctx context.Context, now, window time.Time) (taste.Profile, error)
 }
 
 // Versioner reports a token that changes whenever the rows a State is built
@@ -335,11 +345,21 @@ func (b *Builder) addFoods(ctx context.Context, s *State, foods map[int64]*food.
 			timesEaten[f.HiddenBaseID] += timesEaten[id]
 		}
 	}
+	var tp taste.Profile
+	if b.d.Taste != nil {
+		if tp, err = b.d.Taste.Profile(ctx, s.Today, s.Window.Start); err != nil {
+			return fmt.Errorf("taste: %w", err)
+		}
+	}
 	likes := stringSet(prof.Preferences[profile.PreferenceKeyLikes])
 	dislikes := stringSet(prof.Preferences[profile.PreferenceKeyDislikes])
 	for _, id := range all {
 		ff := facts(foods[id], macros[id], timesEaten[id], likes, dislikes)
 		ff.Attrs = flavor.Resolve(flavor.InputOf(foods[id], macros[id]), attrs[id]).Values
+		if ff.Composed() {
+			ff.Protein = proteinOf(ff.Attrs)
+			ff.Taste = tp.Recipe(ff.Attrs)
+		}
 		s.Foods[id] = ff
 	}
 	ShareGroupHistory(s.Foods)

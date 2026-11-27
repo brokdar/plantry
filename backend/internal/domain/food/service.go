@@ -39,6 +39,19 @@ type Service struct {
 	portionProvider PortionProvider                     // optional; SyncPortionsFromFDC returns ErrLookupFailed when nil
 	saved           func(ctx context.Context, id int64) // optional; see WithSaved
 	events          Recorder                            // set by WithEvents; Archive needs it
+	favourite       FavouriteLearner                    // optional; see WithFavourites
+}
+
+// FavouriteLearner learns from a favourite star (taste.Service.Favourite).
+type FavouriteLearner interface {
+	Favourite(ctx context.Context, foodID int64, on bool) error
+}
+
+// WithFavourites sets the learner SetFavorite tells, in its unit of work
+// (it needs WithEvents for that).
+func (s *Service) WithFavourites(l FavouriteLearner) *Service {
+	s.favourite = l
+	return s
 }
 
 // NewService creates a food service backed by the given repository.
@@ -275,7 +288,19 @@ func (s *Service) setArchived(ctx context.Context, id int64, archived bool) (*Fo
 // SetFavorite toggles the favorite flag. Favorites surface first in listings
 // and bias the kitchen agent's fill-empty picks.
 func (s *Service) SetFavorite(ctx context.Context, id int64, favorite bool) (*Food, error) {
-	return s.repo.SetFavorite(ctx, id, favorite)
+	if s.favourite == nil || s.events == nil {
+		return s.repo.SetFavorite(ctx, id, favorite)
+	}
+	var out *Food
+	_, err := s.events.Recorded(ctx, func(ctx context.Context) error {
+		f, err := s.repo.SetFavorite(ctx, id, favorite)
+		if err != nil {
+			return err
+		}
+		out = f
+		return s.favourite.Favourite(ctx, id, favorite)
+	})
+	return out, err
 }
 
 // ── Portions ──────────────────────────────────────────────────────────

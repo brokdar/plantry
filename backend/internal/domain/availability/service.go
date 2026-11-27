@@ -519,7 +519,7 @@ func (s *Service) removeMeals(ctx context.Context, cells []plate.CellKey) (plate
 	if s.plates == nil {
 		return plate.MealResult{}, errPlatesNotWired
 	}
-	return s.plates.RemoveMealsAt(ctx, cells)
+	return s.plates.RemoveMealsAt(plate.WithoutTaste(ctx), cells) // an away cell is no taste
 }
 
 var errPlatesNotWired = errors.New("availability: plate service not wired")

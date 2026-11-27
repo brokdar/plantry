@@ -10,3 +10,10 @@ SELECT id, kind, subject_id, action, actor, before_json, after_json, at
 FROM food_events
 WHERE id >= sqlc.arg(first_id) AND id <= sqlc.arg(last_id)
 ORDER BY id;
+
+-- name: ListRecentFoodEvents :many
+SELECT id, kind, subject_id, action, actor, before_json, after_json, at
+FROM food_events
+WHERE kind = sqlc.arg(kind) AND at >= sqlc.arg(since)
+ORDER BY id DESC
+LIMIT sqlc.arg(max_rows);

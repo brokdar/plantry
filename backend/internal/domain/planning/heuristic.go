@@ -100,7 +100,9 @@ type planner struct {
 	// could not meet (a meat day past the limit, a cell without a main).
 	notes []string
 	seen  map[int64][]time.Time
-	used  map[int64]int
+	// exposed are the eaten and placed plates' mains (monotony, TASTE-9).
+	exposed []exposure
+	used    map[int64]int
 	// usedDish counts the same placements by dish (a variant group is one).
 	usedDish   map[int64]int
 	avoid      map[int64]bool
@@ -177,6 +179,7 @@ func newPlanner(in ChooseInput) *planner {
 			h.seen[k] = append(h.seen[k], hp.Date)
 		}
 	}
+	h.initExposure()
 	for _, ss := range s.Sessions {
 		f, ok := s.Foods[ss.FoodID]
 		if !ok || !varietyRole(f.Role) || !f.Composed() {
@@ -525,6 +528,7 @@ func (h *planner) place(pp ProposedPlate, code string) {
 		}
 	}
 	h.prop.Plates = append(h.prop.Plates, pp)
+	h.expose(pp)
 }
 
 // cook starts a session (plus a side for a main) on c and places the plates
@@ -705,8 +709,10 @@ type candidate struct {
 // (H8), not replaced, complete nutrition (a day with unknown kcal is never
 // lifted), an explore recipe (newest first) while the explore
 // quota is open, then never-eaten ones to fill a shortfall; never-eaten
-// recipes last otherwise; known diet class, least recently eaten, favorite,
-// liked, closest to the meal's kcal share, food id. Diet-incompatible recipes never
+// recipes last otherwise; known diet class, fewest monotony caps passed
+// (TASTE-9), best taste score (TASTE, soft: learned items never exclude),
+// least recently eaten, favorite, liked, closest to the meal's kcal share,
+// food id. Diet-incompatible recipes never
 // qualify; one that adds a meat day past the limit only when nothing else
 // does. A recipe a routine plate eats is never picked, and mains come before
 // standalone and role-less recipes among equals (a breakfast recipe is not a
@@ -717,6 +723,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 	light := h.s.lightMeal(c.Date, c.SlotID) || h.s.lightDay(c.Date)
 	var cands []candidate
 	dge := h.dgeState()
+	expo := h.exposureAt(c)
 	for _, f := range h.s.Foods {
 		if !h.mainCandidate(f, c) || !h.reachesForced(f, c) {
 			continue
@@ -750,7 +757,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		atCap := h.x.mealOf(c.SlotID) == mealFull && h.dishFull(f.ID)
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
 			b2f(h.s.tooSlow(f, c)), b2f(h.overAllowance(f, c)), b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.usedDish[h.s.dish(f.ID)]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(!f.NutritionComplete), b2f(f.Role != food.RoleMain),
-			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
+			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), float64(overMonotony(f, expo)), -tasteKey(f), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
 	return best(cands)
@@ -880,8 +887,8 @@ func (h *planner) reachesForced(f FoodFacts, c plate.CellKey) bool {
 // proposal (the week's side rotation), then with plate fit on: no clash
 // with the plate, the least plate fat above the week's range (excessFat),
 // the side whose kcal come closest to what the plate lacks to its share (in
-// sideKcalBucket steps), the fewest raised gaps (PLATE-4, PLATE-5), then as
-// pickMain. The swapped-out food, a side the household would rather not
+// sideKcalBucket steps), the fewest raised gaps (PLATE-4, PLATE-5), the best
+// taste score, then as pickMain. The swapped-out food, a side the household would rather not
 // get (State.RatherNot: the plate goes without a side instead; addSide may
 // still add one for nutrition) and, with plate fit on, the proposal's
 // excluded foods are no candidate, nor is the main or a food the plate
@@ -930,6 +937,7 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 			}
 			keys = append(keys, fat, kcalKey, float64(raised))
 		}
+		keys = append(keys, -tasteKey(f)) // taste breaks ties after plate fit
 		cands = append(cands, candidate{id: f.ID, keys: append(keys,
 			b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore,
 		)})
@@ -981,6 +989,10 @@ func (h *planner) fits(f FoodFacts) bool {
 	t := diet.Class(h.s.Profile.DietType)
 	return t == "" || !diet.Valid(f.DietClass) || diet.Compatible(f.DietClass, t)
 }
+
+// tasteKey is a food's taste score (FoodFacts.Taste) in tenths: a soft key,
+// so scores closer than that count as equal.
+func tasteKey(f FoodFacts) float64 { return math.Round(f.Taste*10) / 10 }
 
 func b2f(b bool) float64 {
 	if b {

@@ -46,6 +46,20 @@ func (r *FoodEventRepo) Range(ctx context.Context, first, last int64) ([]foodeve
 	if err != nil {
 		return nil, fmt.Errorf("list food events in range: %w", err)
 	}
+	return foodEventsFrom(rows)
+}
+
+// Recent returns the events of kind at or after since, newest first, at
+// most limit.
+func (r *FoodEventRepo) Recent(ctx context.Context, kind foodevent.Kind, since time.Time, limit int64) ([]foodevent.Event, error) {
+	rows, err := r.queriesFor(ctx).ListRecentFoodEvents(ctx, sqlcgen.ListRecentFoodEventsParams{Kind: string(kind), Since: formatTime(since), MaxRows: limit})
+	if err != nil {
+		return nil, fmt.Errorf("list recent food events: %w", err)
+	}
+	return foodEventsFrom(rows)
+}
+
+func foodEventsFrom(rows []sqlcgen.FoodEvent) ([]foodevent.Event, error) {
 	out := make([]foodevent.Event, 0, len(rows))
 	for _, row := range rows {
 		at, err := time.Parse(timeLayout, row.At)

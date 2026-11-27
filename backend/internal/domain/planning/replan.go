@@ -218,7 +218,7 @@ func (s *Service) Replan(ctx context.Context, req ReplanRequest) (*ReplanResult,
 		if len(sc.preview.ConfirmedAffected) > 0 && !req.UnlockConfirmed {
 			return &ConfirmedAffectedError{Plates: sc.preview.ConfirmedAffected}
 		}
-		res.Removed, err = s.d.Plates.RemovePlates(ctx, sc.removal(req.Spare))
+		res.Removed, err = s.d.Plates.RemovePlates(plate.WithoutTaste(ctx), sc.removal(req.Spare)) // a re-plan is no taste
 		if err != nil {
 			return err
 		}

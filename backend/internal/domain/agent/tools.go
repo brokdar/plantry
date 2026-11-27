@@ -16,12 +16,14 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/taste"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -115,6 +117,13 @@ type Services struct {
 	Undo *Changes
 	// Recipes are the recipe tools; a nil part is not registered.
 	Recipes RecipeTools
+	// Taste may be nil: record_preference then writes the profile only.
+	Taste TasteStatements
+}
+
+// TasteStatements records a confirmed taste statement (taste.Service.State).
+type TasteStatements interface {
+	State(ctx context.Context, ref taste.Ref, polarity taste.Polarity, scope taste.Scope, window time.Time) (taste.Item, foodevent.Undo, error)
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -473,7 +482,25 @@ func toolRecordPreference(svc Services) Tool {
 				return nil, ToolEffectNone, fmt.Errorf("%w: value: %v", domain.ErrInvalidInput, err)
 			}
 			p.Preferences[in.Key] = v
-			if _, err := svc.Profile.Update(ctx, p); err != nil {
+			write := func(ctx context.Context) error {
+				if _, err := svc.Profile.Update(ctx, p); err != nil {
+					return err
+				}
+				// A likes_/dislikes_ preference is also a taste statement that
+				// outranks learned evidence (TASTE-10); D2 adds the chips.
+				if ref, polarity, ok := taste.PreferenceStatement(in.Key, v); ok && svc.Taste != nil {
+					if _, _, err := svc.Taste.State(ctx, ref, polarity, taste.ScopeAlways, time.Time{}); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			if svc.Tx != nil {
+				err = svc.Tx.InTx(ctx, write)
+			} else {
+				err = write(ctx)
+			}
+			if err != nil {
 				return nil, ToolEffectNone, err
 			}
 			return mustJSON(map[string]any{"recorded": true, "key": in.Key}), ToolEffectNone, nil

@@ -147,7 +147,32 @@ type Service struct {
 	tx       domain.Transactor
 	now      func() time.Time
 	roles    func(*food.Food) *food.Role
+	taste    TasteSink
 }
+
+// TasteSink learns from plate changes (taste.Service.PlateChanged): it is
+// called for every plate event a mutation writes, in its unit of work, and
+// decides itself which ones teach.
+type TasteSink interface {
+	PlateChanged(ctx context.Context, action Action, before, after *Plate) error
+}
+
+// WithTaste sets the taste sink and returns s.
+func (s *Service) WithTaste(t TasteSink) *Service {
+	s.taste = t
+	return s
+}
+
+type noTasteKey struct{}
+
+// WithoutTaste marks ctx so the mutations made in it are not passed to the
+// taste sink: a tip's Apply, a re-plan's or an away cell's removals are not
+// hand edits of a meal.
+func WithoutTaste(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noTasteKey{}, true)
+}
+
+func tasteOff(ctx context.Context) bool { v, _ := ctx.Value(noTasteKey{}).(bool); return v }
 
 // NewService creates a plate service.
 func NewService(d Deps) *Service {

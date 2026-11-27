@@ -24,6 +24,19 @@ type Service struct {
 	plates   PlateReader
 	tags     TagReader
 	profiles ProfileStore
+	taste    Rater
+}
+
+// Rater learns from a plate's rating (taste.Service.Rating); old is the
+// previous status ("" when unrated).
+type Rater interface {
+	Rating(ctx context.Context, p *plate.Plate, old, status string) error
+}
+
+// WithTaste sets the taste learner and returns s.
+func (s *Service) WithTaste(r Rater) *Service {
+	s.taste = r
+	return s
 }
 
 // NewService constructs a feedback service.
@@ -55,6 +68,15 @@ func (s *Service) RecordFeedback(ctx context.Context, plateID int64, status Stat
 	err = s.tx.InTx(ctx, func(ctx context.Context) error {
 		if err := s.repo.Upsert(ctx, fb); err != nil {
 			return err
+		}
+		if s.taste != nil {
+			old := ""
+			if p.Feedback != nil {
+				old = p.Feedback.Status
+			}
+			if err := s.taste.Rating(ctx, p, old, string(status)); err != nil {
+				return err
+			}
 		}
 		if len(tags) == 0 {
 			return nil

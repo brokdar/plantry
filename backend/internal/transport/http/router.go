@@ -28,6 +28,7 @@ type Handlers struct {
 	Today         *handlers.TodayHandler
 	Profile       *handlers.ProfileHandler
 	Kitchen       *handlers.KitchenHandler
+	Taste         *handlers.TasteHandler
 	Presets       *handlers.PresetHandler
 	AI            *handlers.AIHandler
 	AIRuns        *handlers.AIRunsHandler
@@ -218,6 +219,11 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			})
 		}
 
+		if h.Taste != nil {
+			api.Get("/taste", h.Taste.Get)
+			api.Delete("/taste/items/{id}", h.Taste.Delete)
+			api.Put("/taste/items/{id}", h.Taste.Put)
+		}
 		if h.Kitchen != nil {
 			api.Route("/kitchen", func(r chi.Router) {
 				r.Get("/", h.Kitchen.Get)

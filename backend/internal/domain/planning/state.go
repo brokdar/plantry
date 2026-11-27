@@ -217,6 +217,12 @@ type FoodFacts struct {
 	// assistant, then derived values); set by the Builder only. Plate fit
 	// reads them (platefit.go).
 	Attrs flavor.Attributes
+	// Protein is a recipe's first meat, fish or legume hero (monotony,
+	// TASTE-9); "" without one. Set by the Builder.
+	Protein string
+	// Taste is the recipe's taste score from the household's taste items
+	// (taste.Profile.Recipe, -1..1; 0 without items). Set by the Builder.
+	Taste float64
 	// Fresh and Starch are plate fit's inputs derived from the name and
 	// ingredients (freshStarch); nil is unknown.
 	Fresh, Starch *bool
