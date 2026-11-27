@@ -76,3 +76,29 @@ func TestHeuristic_DishCap(t *testing.T) {
 	ev := planning.Evaluate(planning.Merge(s, tgt, p), tgt)
 	assert.Empty(t, dishIssues(ev))
 }
+
+// A hidden substitution variant counts as its recipe for S8: two dinners of
+// the variant and two of the recipe are four meals of one dish.
+func TestDishRepeats_HiddenVariantCountsAsItsRecipe(t *testing.T) {
+	const hidden int64 = 702
+	s := baseState()
+	s.SlotKind = map[int64]slot.Kind{breakfast: slot.KindLight}
+	h := s.Foods[curry]
+	h.ID, h.Archived, h.BaseFood = hidden, true, curry
+	s.Foods[hidden] = h
+	tgt := windowTarget(s)
+	var prop planning.Proposal
+	for _, d := range []string{sat, sun} {
+		prop.Plates = append(prop.Plates, pplate(d, dinner, fresh(curry)))
+	}
+	m := planning.Merge(s, tgt, prop)
+	for i, d := range []string{mon, tue} {
+		m.Plates = append(m.Plates, planning.Plate{ID: int64(20 + i), Date: day(d), SlotID: dinner, Eaters: 1, Components: []planning.Component{
+			{FoodID: hidden, Portions: f64(1), Position: plate.PositionMain},
+		}})
+	}
+	got := dishIssues(planning.Evaluate(m, tgt))
+	require.Len(t, got, 1)
+	assert.EqualValues(t, curry, got[0].Params["food_id"])
+	assert.EqualValues(t, 4, got[0].Params["meals"])
+}

@@ -2332,6 +2332,22 @@
       "remove_in_recipe": "Zeile im Rezept entfernen"
     }
   },
+  "substitute": {
+    "cook_entry": "Mir fehlt eine Zutat",
+    "shop_entry": "Nicht da",
+    "title": "Statt {{name}}",
+    "pick_title": "Welche Zutat fehlt?",
+    "pick_hint": "Such eine aus diesem Rezept aus.",
+    "none": "Für {{name}} kann ich keinen Ersatz anbieten.",
+    "loading": "Ersatz wird gesucht",
+    "option": "{{amount}} {{name}}",
+    "some_batches": "Das gilt für {{count}} von {{total}} Vorkochen; die anderen haben die Zutat nicht im Rezept oder sind schon gekocht.",
+    "all_batches": "Das gilt für alle {{count}} Vorkochen, die es brauchen.",
+    "this_batch": "Das ändert nur dieses Vorkochen.",
+    "applied": "{{to}} statt {{from}}",
+    "applied_many": "{{to}} statt {{from}} in {{count}} Vorkochen",
+    "back": "Zurück"
+  },
   "shop": {
     "range": "{{from}} bis {{to}}",
     "range_title": "Einkaufszeitraum",

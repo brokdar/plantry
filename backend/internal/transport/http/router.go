@@ -41,6 +41,7 @@ type Handlers struct {
 	Shopping      *handlers.ShoppingHandler
 	Availability  *handlers.AvailabilityHandler
 	FoodEvents    *handlers.FoodEventHandler
+	Substitutions *handlers.SubstitutionHandler
 	Attributes    *handlers.AttributeHandler
 	Setup         *handlers.SetupHandler
 	Version       string               // build version shown by /api/health
@@ -155,7 +156,15 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Post("/move-cook", h.CookSessions.MoveCook)
 				r.Post("/confirm", h.CookSessions.Confirm)
 				r.Post("/unlock", h.CookSessions.Unlock)
+				if h.Substitutions != nil {
+					r.Post("/overrides", h.Substitutions.Apply)
+					r.Delete("/overrides", h.Substitutions.Remove)
+				}
 			})
+		}
+
+		if h.Substitutions != nil {
+			api.Get("/substitutes", h.Substitutions.Options)
 		}
 
 		if h.PlanWrite != nil || h.PlanRead != nil || h.PlanGenerate != nil {

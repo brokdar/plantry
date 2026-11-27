@@ -1,8 +1,10 @@
 package agent_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -85,4 +87,26 @@ func TestChatPrompt_ShowsDeficitAndFacts(t *testing.T) {
 	facts := agent.ChatFacts(st)
 	assert.Contains(t, facts, "| main |")
 	assert.Contains(t, facts, "Kcal per eater and day")
+}
+
+// A confirmed plate of a hidden substitution variant 4 weeks ago, with
+// nothing newer, counts for its recipe's 8-week count.
+func TestBuilder_OldHiddenVariantPlateCountsForItsRecipe(t *testing.T) {
+	t.Parallel()
+	e := newPlanToolEnv(t)
+	// The keep-days lookback must not reach the plate (freezing stretches it).
+	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.freezing_enabled", "false"))
+	var chili int64
+	require.NoError(t, e.db.QueryRow(`SELECT id FROM foods WHERE name = 'Chili'`).Scan(&chili))
+	variant := e.insert(`INSERT INTO foods (name, kind, role, reference_portions, archived) VALUES ('Chili (Schalotte)', 'composed', 'main', 4, 1)`)
+	e.sql(`INSERT INTO hidden_variants (food_id, base_food_id) VALUES (?, ?)`, variant, chili)
+	slotID := e.insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.snack', 'moon', 9, 1)`)
+	p := e.insert(`INSERT INTO plates (slot_id, date, state) VALUES (?, ?, 'confirmed')`, slotID, planToday.AddDate(0, 0, -28).Format(time.DateOnly))
+	cookDate := planToday.AddDate(0, 0, -28).Format(time.DateOnly)
+	sess := e.insert(`INSERT INTO cook_sessions (food_id, cook_date, cook_slot_id, portions) VALUES (?, ?, ?, 1)`, variant, cookDate, slotID)
+	e.sql(`INSERT INTO plate_components (plate_id, food_id, portions, cook_session_id, sort_order) VALUES (?, ?, 1, ?, 0)`, p, variant, sess)
+
+	st, err := testsvc.PlanningDeps(e.db).Builder.Build(e.ctx, window.Window{Start: planStart, End: planStart.AddDate(0, 0, 6)}, planToday, planStart, planStart.AddDate(0, 0, 6))
+	require.NoError(t, err)
+	assert.Equal(t, 1, st.Foods[chili].TimesEaten8Weeks)
 }

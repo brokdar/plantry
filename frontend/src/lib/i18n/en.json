@@ -2332,6 +2332,22 @@
       "remove_in_recipe": "Remove a line in the recipe"
     }
   },
+  "substitute": {
+    "cook_entry": "I don't have an ingredient",
+    "shop_entry": "Not available",
+    "title": "Instead of {{name}}",
+    "pick_title": "Which ingredient is missing?",
+    "pick_hint": "Pick one from this recipe.",
+    "none": "No substitute I can offer for {{name}}.",
+    "loading": "Looking for substitutes",
+    "option": "{{amount}} {{name}}",
+    "some_batches": "This applies to {{count}} of {{total}} batches; the others have no such ingredient in the recipe or are already cooked.",
+    "all_batches": "This applies to all {{count}} batches that need it.",
+    "this_batch": "This changes this batch only.",
+    "applied": "{{to}} instead of {{from}}",
+    "applied_many": "{{to}} instead of {{from}} in {{count}} batches",
+    "back": "Back"
+  },
   "shop": {
     "range": "{{from}} to {{to}}",
     "range_title": "Shopping range",

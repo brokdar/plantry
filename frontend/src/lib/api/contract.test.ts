@@ -75,6 +75,7 @@ import {
   updateSession,
 } from "./sessions"
 import { getShoppingList } from "./shopping"
+import { applySubstitution, getSubstitutes } from "./substitutions"
 import { getToday } from "./today"
 
 interface Case {
@@ -367,6 +368,19 @@ const cases: Case[] = [
     method: "POST",
     path: "/food-events/revert",
     body: { first_event_id: 3, last_event_id: 4 },
+  },
+  {
+    name: "getSubstitutes",
+    call: () => getSubstitutes(5, [7, 8]),
+    method: "GET",
+    path: "/substitutes?food_id=5&session_ids=7,8",
+  },
+  {
+    name: "applySubstitution",
+    call: () => applySubstitution(7, 5, 9),
+    method: "POST",
+    path: "/cook-sessions/7/overrides",
+    body: { from_food_id: 5, to_food_id: 9 },
   },
   // Attribute labelling (Chef A3)
   {

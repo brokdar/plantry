@@ -52,6 +52,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/setup"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/substitution"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/tips"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
@@ -430,6 +431,9 @@ func run() error {
 	// attribute food events.
 	flavorSvc := flavor.NewService(foodAttributeRepo, foodRepo, nutritionResolver, foodEventSvc)
 	foodRestorers[foodevent.KindAttribute] = flavorSvc
+	// Batch substitutions (HELP-3, HELP-7): rule-based, no provider needed.
+	substitutionSvc := substitution.NewService(foodRepo, sessionRepo, sqlite.NewSubstitutionRepo(conn), foodEventSvc)
+	foodRestorers[foodevent.KindSubstitution] = substitutionSvc
 	chefGuard := &chef.Guard{Settings: settingsSvc, Spend: aiRunRepo, Prices: priceOverrides, Now: time.Now}
 	matchGuard = chefGuard
 	// Attribute labelling (ATTR-2): a chef_attributes job per saved recipe
@@ -564,6 +568,7 @@ func run() error {
 		Shopping:      handlers.NewShoppingHandler(shoppingSvc).WithClock(clock.Now),
 		Availability:  handlers.NewAvailabilityHandler(availabilitySvc).WithClock(clock.Now),
 		FoodEvents:    handlers.NewFoodEventHandler(foodEventSvc),
+		Substitutions: handlers.NewSubstitutionHandler(substitutionSvc),
 		Attributes:    handlers.NewAttributeHandler(flavorSvc),
 		Setup:         handlers.NewSetupHandler(setup.NewService(settingsSvc, foodRepo)),
 		DevMode:       cfg.DevMode,

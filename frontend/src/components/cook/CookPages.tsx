@@ -17,6 +17,7 @@ import { useTimeSlots } from "@/lib/queries/slots"
 import { slotLabel } from "@/lib/slot-label"
 
 import { CookMode } from "./CookMode"
+import { SubstituteButton } from "./SubstituteDialog"
 import { useSessionPortions } from "./useSessionPortions"
 
 function stepsOf(food: Food | undefined): string[] {
@@ -108,6 +109,12 @@ export function CookSessionPage({ sessionId }: { sessionId: number }) {
       portions={portions}
       onPortionsChange={change}
       coverage={coverage}
+      help={
+        <SubstituteButton
+          sessionId={s.id}
+          ingredients={scaled.data?.ingredients}
+        />
+      }
       freezePortions={s.frozen_portions}
       close={
         <CloseButton>

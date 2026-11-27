@@ -3,6 +3,7 @@ import { ChevronDown, MoreHorizontal } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
+import { SubstituteDialog } from "@/components/cook/SubstituteDialog"
 import { BatchBadge } from "@/components/batch/BatchBadge"
 import { DraftTag } from "@/components/batch/DraftTag"
 import { Button } from "@/components/ui/button"
@@ -222,6 +223,13 @@ function RowMenu({
   const move = useSetShopSection()
   const offerUndo = useUndoToast()
   const setBasic = useSetBasic()
+  const [substituting, setSubstituting] = useState(false)
+  // Every batch that needs the item: the swap applies to all of them.
+  const sessionIds = [
+    ...new Set(
+      item.used_in.flatMap((u) => (u.session_id !== null ? [u.session_id] : []))
+    ),
+  ]
 
   function toggleAtHome() {
     const id = item.food_id
@@ -261,40 +269,56 @@ function RowMenu({
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          aria-label={t("shop.row_menu", { name: item.name })}
-          className="size-11 shrink-0 text-ink-muted md:pointer-fine:size-9"
-        >
-          <MoreHorizontal strokeWidth={1.5} aria-hidden="true" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-52">
-        <DropdownMenuLabel>{t("shop.move_to")}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={section}
-          onValueChange={(next) => {
-            if (next !== section) moveTo(next as ShopSection)
-          }}
-        >
-          {SHOP_SECTIONS.map((s) => (
-            <DropdownMenuRadioItem key={s} value={s}>
-              {t(`shop.section.${s}`)}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-        <ResetSection
-          foodId={item.food_id}
-          onReset={() => move.mutate({ id: item.food_id, section: null })}
-        />
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={toggleAtHome}>
-          {t(atHome ? "shop.not_always_at_home" : "shop.always_at_home")}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            aria-label={t("shop.row_menu", { name: item.name })}
+            className="size-11 shrink-0 text-ink-muted md:pointer-fine:size-9"
+          >
+            <MoreHorizontal strokeWidth={1.5} aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-52">
+          {sessionIds.length > 0 && (
+            <>
+              <DropdownMenuItem onSelect={() => setSubstituting(true)}>
+                {t("substitute.shop_entry")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          <DropdownMenuLabel>{t("shop.move_to")}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={section}
+            onValueChange={(next) => {
+              if (next !== section) moveTo(next as ShopSection)
+            }}
+          >
+            {SHOP_SECTIONS.map((s) => (
+              <DropdownMenuRadioItem key={s} value={s}>
+                {t(`shop.section.${s}`)}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+          <ResetSection
+            foodId={item.food_id}
+            onReset={() => move.mutate({ id: item.food_id, section: null })}
+          />
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={toggleAtHome}>
+            {t(atHome ? "shop.not_always_at_home" : "shop.always_at_home")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <SubstituteDialog
+        open={substituting}
+        onOpenChange={setSubstituting}
+        sessionIds={sessionIds}
+        from={{ id: item.food_id, name: item.name }}
+      />
+    </>
   )
 }
 
