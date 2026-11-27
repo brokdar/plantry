@@ -87,6 +87,11 @@ test("Fill my library: recipes arrive on trial with the badge until opened", asy
     )
     await setSetting("chef.enabled", "true")
 
+    // Fills of an earlier run stay as finds; only the new ones are this test's.
+    const before = (await (
+      await ctx.get("/api/finds?state=in_library")
+    ).json()) as { items: { id: number }[] }
+    const old = new Set(before.items.map((f) => f.id))
     await page.goto("/recipes")
     await page.getByTestId("fill-library-button").click()
     await expect(page.getByTestId("fill-library-button")).toBeDisabled()
@@ -96,9 +101,11 @@ test("Fill my library: recipes arrive on trial with the badge until opened", asy
         async () => {
           const res = await ctx.get("/api/finds?state=in_library")
           const { items } = (await res.json()) as {
-            items: { food_id: number; trigger: string }[]
+            items: { id: number; food_id: number; trigger: string }[]
           }
-          const fills = items.filter((f) => f.trigger === "fill")
+          const fills = items.filter(
+            (f) => f.trigger === "fill" && !old.has(f.id)
+          )
           foodIds.splice(0, foodIds.length, ...fills.map((f) => f.food_id))
           return fills.length
         },
@@ -146,6 +153,25 @@ test("Fill my library: recipes arrive on trial with the badge until opened", asy
     expect(after.trial, "opening clears the badge, not the trial").toBe(true)
   } finally {
     if (slot) await cleanupSlot(slot.id)
+    // Fill finds keep arriving after the first one: wait for the last, then
+    // remove every one, or they stay as explore recipes for later specs.
+    await expect
+      .poll(
+        async () => {
+          const r = await ctx.get("/api/finds?state=searching")
+          return ((await r.json()) as { items: unknown[] }).items.length
+        },
+        { timeout: 60_000 }
+      )
+      .toBe(0)
+      .catch(() => undefined)
+    const done = (await (
+      await ctx.get("/api/finds?state=in_library")
+    ).json()) as {
+      items: { food_id: number; trigger: string }[]
+    }
+    for (const f of done.items.filter((i) => i.trigger === "fill"))
+      if (!foodIds.includes(f.food_id)) foodIds.push(f.food_id)
     for (const id of foodIds) await cleanupFood(id)
     for (const id of leafIds) await cleanupFood(id)
     await ctx.dispose()
