@@ -213,13 +213,19 @@ test.describe("Recipe Import", () => {
       if (await saltSearch.isVisible()) {
         await saltSearch.fill(`E2E Salz ${tag}`)
         await saltSearch.press("Enter")
+        await page
+          .getByRole("button", { name: new RegExp(`E2E Salz ${tag}`) })
+          .click()
       }
       await expect(page.getByText("2 ingredients need a choice")).toBeVisible()
 
-      // Search again with another name: its exact catalogue hit links.
+      // Search again with another name and pick its catalogue hit.
       const search = page.getByLabel(`Search name for E2E Zauberwurz ${tag}`)
       await search.fill(`E2E Mandrake ${tag}`)
       await search.press("Enter")
+      await page
+        .getByRole("button", { name: new RegExp(`E2E Mandrake ${tag}`) })
+        .click()
       await expect(page.getByText("1 ingredient needs a choice")).toBeVisible()
       await expect(save).toBeDisabled()
 

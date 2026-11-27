@@ -407,7 +407,9 @@ func (s *Service) checkHonest(ctx context.Context, row FinalizedChild) error {
 	if f.Kind != food.KindLeaf {
 		return &LineError{Err: domain.ErrImportNoNutrition, Food: f.Name}
 	}
-	if row.ToTaste && !food.IsToTasteGroup(food.LineGroup(f.Name, "")) {
+	// A leaf of a known non-seasoning group ("chicken") cannot be to taste;
+	// an unknown name is let through, the line's own name proposed it.
+	if g := food.LineGroup(f.Name, ""); row.ToTaste && g != "" && !food.IsToTasteGroup(g) {
 		return &LineError{Err: domain.ErrImportInvalidResolution, Food: f.Name}
 	}
 	if !row.ToTaste && (f.Kcal100g == nil || f.Protein100g == nil || f.Fat100g == nil || f.Carbs100g == nil) {

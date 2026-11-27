@@ -37,18 +37,20 @@ const DISHES = [
   ["Lentil bowl", "Lentils", "Rice"],
 ] as const
 
-const INGREDIENTS = [
-  "Lentils",
-  "Carrots",
-  "Chickpeas",
-  "Tomatoes",
-  "Pasta",
-  "Beans",
-  "Peppers",
-  "Rice",
-  "Potatoes",
-  "Cream",
-]
+// Plausible kcal per 100 g: the import links only a leaf its match accepts
+// (kcal band per food group), never one that is off for the food.
+const INGREDIENTS: Record<string, number> = {
+  Lentils: 350,
+  Carrots: 41,
+  Chickpeas: 139,
+  Tomatoes: 18,
+  Pasta: 360,
+  Beans: 340,
+  Peppers: 30,
+  Rice: 350,
+  Potatoes: 77,
+  Cream: 300,
+}
 
 function recipeHTML(name: string, a: string, b: string, tag: string): string {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
@@ -96,10 +98,10 @@ test("a fresh install goes from the wizard defaults to an accepted week without 
       "slot.dinner",
     ])
 
-    for (const name of INGREDIENTS) {
+    for (const [name, kcal] of Object.entries(INGREDIENTS)) {
       const leaf = await seedLeafFood({
         name: `${name} ${tag}`,
-        kcal_100g: 250,
+        kcal_100g: kcal,
         protein_100g: 6,
         fat_100g: 2,
         carbs_100g: 18,

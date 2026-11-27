@@ -277,9 +277,11 @@ func TestFinalize_P3RejectsUnmatchedAndNutritionlessLines(t *testing.T) {
 	}
 
 	t.Run("to taste is refused on a non-seasoning", func(t *testing.T) {
+		chicken := &food.Food{Kind: food.KindLeaf, Name: "Chicken breast", Source: &src}
+		require.NoError(t, env.foods.Create(ctx, chicken))
 		_, err := env.importer.Finalize(ctx, importer.FinalizeInput{
 			Name: "R", Role: "main", ReferencePortions: 2,
-			Children: []importer.FinalizedChild{ok, {Resolution: importer.ResolutionExisting, FoodID: bare.ID, ToTaste: true}},
+			Children: []importer.FinalizedChild{ok, {Resolution: importer.ResolutionExisting, FoodID: chicken.ID, ToTaste: true}},
 		})
 		require.ErrorIs(t, err, domain.ErrImportInvalidResolution)
 	})
