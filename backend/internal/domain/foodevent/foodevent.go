@@ -25,12 +25,15 @@ const (
 	KindAttribute    Kind = "attribute"
 	KindTasteItem    Kind = "taste_item"
 	KindSubstitution Kind = "substitution"
+	// KindRecipeContent is an assistant's recipe change: a filled variant
+	// (create) or an in-place edit (update) (VAR-1, VAR-2).
+	KindRecipeContent Kind = "recipe_content"
 )
 
 // Valid reports whether k is a known kind.
 func (k Kind) Valid() bool {
 	switch k {
-	case KindRecipe, KindAttribute, KindTasteItem, KindSubstitution:
+	case KindRecipe, KindAttribute, KindTasteItem, KindSubstitution, KindRecipeContent:
 		return true
 	}
 	return false

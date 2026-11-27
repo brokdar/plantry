@@ -248,6 +248,11 @@ type FoodAttribute struct {
 	SourcesJson string
 }
 
+type FoodChange struct {
+	FoodID      int64
+	ChangesJson string
+}
+
 type FoodComponent struct {
 	ID        int64
 	ParentID  int64

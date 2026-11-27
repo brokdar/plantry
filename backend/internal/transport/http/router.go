@@ -42,6 +42,7 @@ type Handlers struct {
 	Availability  *handlers.AvailabilityHandler
 	FoodEvents    *handlers.FoodEventHandler
 	Substitutions *handlers.SubstitutionHandler
+	RecipeChanges *handlers.RecipeChangeHandler
 	Attributes    *handlers.AttributeHandler
 	Setup         *handlers.SetupHandler
 	Version       string               // build version shown by /api/health
@@ -80,6 +81,12 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Get("/", h.Foods.Get)
 					r.Put("/", h.Foods.Update)
 					r.Delete("/", h.Foods.Delete)
+					if h.RecipeChanges != nil {
+						r.Post("/ask", h.RecipeChanges.Ask)
+						r.Post("/edit", h.RecipeChanges.Edit)
+						r.Get("/check", h.RecipeChanges.Check)
+						r.Get("/changes", h.RecipeChanges.Changes)
+					}
 					r.Get("/nutrition", h.Foods.Nutrition)
 					r.Get("/scaled", h.Foods.Scaled)
 					r.Post("/favorite", h.Foods.SetFavorite)
