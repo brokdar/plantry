@@ -2,13 +2,11 @@ package taste_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/taste"
 )
 
@@ -85,38 +83,4 @@ func TestConfirmStatement(t *testing.T) {
 	assert.False(t, ok, "Undo takes the permanent item back")
 	_, ok, _ = r.store.ItemByRef(r.ctx, ref, taste.ScopeWindow, week)
 	assert.True(t, ok, "and restores the window item")
-}
-
-// CP2 trial: staples come only from main dishes cooked for lunch or dinner;
-// a side dish and a main-role breakfast cooked as often are no staples.
-func TestStaples_OnlyMainDishesOfLunchAndDinner(t *testing.T) {
-	r := newRig(t, seed(t))
-	res, err := r.db.Exec(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.breakfast', 'sun', 0, 1)`)
-	require.NoError(t, err)
-	breakfast, err := res.LastInsertId()
-	require.NoError(t, err)
-	res, err = r.db.Exec(`INSERT INTO foods (name, kind, role, reference_portions) VALUES ('Overnight oats', 'composed', 'main', 1)`)
-	require.NoError(t, err)
-	oats, err := res.LastInsertId()
-	require.NoError(t, err)
-
-	for day, date := range map[int]string{3: "2026-02-23", 4: "2026-02-09", 5: "2026-01-12"} {
-		r.cook(r.curry, r.plate(r.ctx, day, r.curry).ID, date)
-		r.cook(r.salad, r.plate(r.ctx, day+10, r.salad).ID, date)
-		one := 1.0
-		b, err := r.plates.Create(r.ctx, plate.PlateInput{
-			Date: time.Date(2026, 3, day, 0, 0, 0, 0, time.UTC), SlotID: breakfast,
-			Components: []plate.PlateComponent{{FoodID: oats, Portions: &one}},
-		})
-		require.NoError(t, err)
-		res, err := r.db.Exec(`INSERT INTO cook_sessions (food_id, cook_date, cook_slot_id, portions, state) VALUES (?, ?, ?, 1, 'confirmed')`, oats, date, breakfast)
-		require.NoError(t, err)
-		id, err := res.LastInsertId()
-		require.NoError(t, err)
-		_, err = r.db.Exec(`UPDATE plate_components SET cook_session_id = ? WHERE plate_id = ?`, id, b.ID)
-		require.NoError(t, err)
-	}
-	assert.True(t, r.isStaple(r.curry), "a main at dinner")
-	assert.False(t, r.isStaple(r.salad), "a side dish")
-	assert.False(t, r.isStaple(oats), "a main-role breakfast")
 }

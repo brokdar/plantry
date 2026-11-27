@@ -246,9 +246,8 @@ type Querier interface {
 	// Every food's and suggestion's (any status) source_url, for the
 	// normalized duplicate check.
 	ListSourceURLs(ctx context.Context) ([]string, error)
-	// Recipes that are staples (THEME-1): pinned by the favourite star, or a main
-	// dish (role main, cooked for lunch or dinner: sides, breakfasts and snacks
-	// are no staples) with at least @min_sessions confirmed cook sessions since @sessions_since (a hidden
+	// Recipes that are staples (THEME-1): pinned by the favourite star, or at
+	// least @min_sessions confirmed cook sessions since @sessions_since (a hidden
 	// substitution variant's sessions count for its base recipe, a session counts
 	// when a linked plate was not marked not_eaten), a positive signal, and no
 	// dislike signal since @dislike_since.
