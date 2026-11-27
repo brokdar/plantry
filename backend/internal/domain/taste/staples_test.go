@@ -98,3 +98,20 @@ func TestStaples_MainsOnly(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, r.isStaple(r.salad), "the star pins no side")
 }
+
+// A favourite is pinned, but a dislike in the last 8 weeks (a taste signal or
+// a rated plate) rules out even a favourite; an older dislike does not.
+func TestStaples_FavouriteWithRecentDislike(t *testing.T) {
+	r := newRig(t, seed(t))
+	_, err := r.foods.SetFavorite(r.ctx, r.salmon, true)
+	require.NoError(t, err)
+	require.True(t, r.isStaple(r.salmon))
+
+	for name, signalAt := range map[string]string{"recent": "2026-03-01 12:00:00", "old": "2025-12-01 12:00:00"} {
+		_, err := r.db.Exec(`DELETE FROM taste_signals WHERE kind = 'disliked' AND food_id = ?`, r.salmon)
+		require.NoError(t, err)
+		_, err = r.db.Exec(`INSERT INTO taste_signals (kind, level, key, weight, share, at, food_id) VALUES ('disliked', 'recipe', 'x', -1, 1, ?, ?)`, signalAt, r.salmon)
+		require.NoError(t, err)
+		assert.Equal(t, name == "old", r.isStaple(r.salmon), "dislike signal "+name)
+	}
+}

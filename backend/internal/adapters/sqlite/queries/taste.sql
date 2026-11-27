@@ -39,11 +39,14 @@ DELETE FROM taste_items WHERE id = ?;
 -- Recipes that are staples (THEME-1): pinned by the favourite star, or at
 -- least @min_sessions confirmed cook sessions since @sessions_since (a hidden
 -- substitution variant's sessions count for its base recipe, a session counts
--- when a linked plate was not marked not_eaten), a positive signal, and no
--- dislike signal since @dislike_since. Only a main is a staple: a side, a
+-- when a linked plate was not marked not_eaten), a positive signal. A dislike
+-- (signal or rated plate) since @dislike_since rules out even a favourite. Only a main is a staple: a side, a
 -- breakfast or a dessert is not a dish the week is built on.
 SELECT f.id FROM foods f
 WHERE f.kind = 'composed' AND f.archived = 0 AND f.role = 'main'
+  AND NOT EXISTS (SELECT 1 FROM taste_signals ts WHERE ts.food_id = f.id AND ts.kind IN ('disliked', 'not_for_me') AND ts.at >= sqlc.arg(dislike_since))
+  AND NOT EXISTS (SELECT 1 FROM plate_components pc JOIN plate_feedback pf ON pf.plate_id = pc.plate_id
+                  WHERE pc.food_id = f.id AND pf.status = 'disliked' AND pf.rated_at >= sqlc.arg(dislike_since))
   AND (f.favorite = 1 OR (
         (SELECT COUNT(*) FROM cook_sessions cs
           WHERE (cs.food_id = f.id OR cs.food_id IN (SELECT hv.food_id FROM hidden_variants hv WHERE hv.base_food_id = f.id))
@@ -53,6 +56,5 @@ WHERE f.kind = 'composed' AND f.archived = 0 AND f.role = 'main'
                           AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
                                           WHERE pf.plate_id = pc.plate_id AND pf.status = 'not_eaten'))
         ) >= sqlc.arg(min_sessions)
-        AND EXISTS (SELECT 1 FROM taste_signals ts WHERE ts.food_id = f.id AND ts.kind IN ('loved', 'favourite', 'plate_added'))
-        AND NOT EXISTS (SELECT 1 FROM taste_signals ts WHERE ts.food_id = f.id AND ts.kind IN ('disliked', 'not_for_me') AND ts.at >= sqlc.arg(dislike_since))))
+        AND EXISTS (SELECT 1 FROM taste_signals ts WHERE ts.food_id = f.id AND ts.kind IN ('loved', 'favourite', 'plate_added'))))
 ORDER BY f.id;
