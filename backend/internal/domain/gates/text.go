@@ -1,7 +1,6 @@
 package gates
 
 import (
-	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -55,22 +54,6 @@ func appendUnique(dst []string, add ...string) []string {
 }
 
 func containsStr(list []string, s string) bool { return slices.Contains(list, s) }
-
-var minutesRe = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*(min|minute|minuten|minutes|std|stunde|stunden|h|hour|hours|hr)\b`)
-
-// maxMinutes is the longest duration a text states, in minutes.
-func maxMinutes(s string) float64 {
-	best := 0.0
-	for _, m := range minutesRe.FindAllStringSubmatch(s, -1) {
-		v := parseNum(m[1])
-		switch m[2] {
-		case "std", "stunde", "stunden", "h", "hour", "hours", "hr":
-			v *= 60
-		}
-		best = max(best, v)
-	}
-	return best
-}
 
 func parseNum(s string) float64 {
 	var whole, frac, div float64 = 0, 0, 1

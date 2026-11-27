@@ -6,9 +6,16 @@ import (
 )
 
 var (
-	kidneyKw   = []string{"kidneybohne", "kidney bean", "kidney-bohne", "rote bohne", "red bean", "weisse bohne", "white bean", "cannellini", "weisse riesenbohne"}
-	cannedKw   = []string{"dose", "canned", "tinned", "aus der dose", "gekocht", "vorgekocht", "cooked", "glas", "abgetropft", "drained", "konserve"}
-	driedKw    = []string{"getrocknet", "trocken", "dried", "dry "}
+	kidneyKw = []string{"kidneybohne", "kidney bean", "kidney-bohne", "rote bohne", "red bean", "weisse bohne", "white bean", "cannellini", "weisse riesenbohne"}
+	cannedKw = []string{"dose", "canned", "tinned", "aus der dose", "gekocht", "vorgekocht", "cooked", "glas", "abgetropft", "drained", "konserve"}
+	driedRe  = regexp.MustCompile(`getrocknet|trocken|dried|\bdry\b|\broh\w*|\braw\b|ungekocht|uncooked`)
+	// soakDurRe cuts a soak duration out of a step, so that "12 Std.
+	// einweichen" does not count as boiling time.
+	soakDurRe  = regexp.MustCompile(`\d+(?:[.,]\d+)?\s*(?:min\w*|std\.?|stunden?|h|hours?|hr)\s*(?:lang\s+)?(?:ein|ueber\s*nacht\s*)?(?:weichen|eingeweicht|soak\w*)|soak\w*[^.;]*?\d+(?:[.,]\d+)?\s*(?:min\w*|std\.?|stunden?|h|hours?|hr)\b`)
+	boilWord   = `(?:kochen|boil\w*|aufkoch\w*|durchkoch\w*|sprudelnd\w*|kochend\w*)`
+	durUnit    = `(min\w*|std\.?|stunden?|h|hours?|hr)\b`
+	durBefore  = regexp.MustCompile(`(\d+(?:[.,]\d+)?)\s*` + durUnit + `\.?\s*(?:lang\s+)?(?:\w+\s+){0,3}?` + boilWord)
+	durAfter   = regexp.MustCompile(boilWord + `\s+(?:\w+\s+){0,3}?(?:for\s+|fuer\s+|ca\.?\s+|mindestens\s+)?(\d+(?:[.,]\d+)?)\s*` + durUnit)
 	soakKw     = []string{"einweichen", "eingeweicht", "soak", "ueber nacht", "overnight"}
 	slowKw     = []string{"slow cooker", "slowcooker", "schongarer", "crockpot", "crock pot", "multikocher"}
 	boilKw     = []string{"sprudelnd", "aufkoch", "boil", "durchkoch", "hart kochen", "kochen", "kochend"}
@@ -22,6 +29,23 @@ func (c *checker) hazards() {
 	c.canning()
 }
 
+// boilMinutes is the longest duration a step pairs with a boil word, soak
+// durations left out.
+func boilMinutes(s string) float64 {
+	s = soakDurRe.ReplaceAllString(s, " ")
+	best := 0.0
+	for _, re := range []*regexp.Regexp{durBefore, durAfter} {
+		for _, m := range re.FindAllStringSubmatch(s, -1) {
+			v := parseNum(m[1])
+			if strings.HasPrefix(m[2], "std") || strings.HasPrefix(m[2], "stunde") || m[2] == "h" || strings.HasPrefix(m[2], "hour") || m[2] == "hr" {
+				v *= 60
+			}
+			best = max(best, v)
+		}
+	}
+	return best
+}
+
 // kidneyBeans blocks dried kidney beans without a hard boil of at least 10
 // minutes (phytohaemagglutinin; BfR "Rohe Bohnen sind giftig" and FDA Bad Bug
 // Book: boil 10 minutes; a slow cooker does not reach it). A bean line counts
@@ -29,10 +53,13 @@ func (c *checker) hazards() {
 // otherwise it is assumed canned or cooked.
 func (c *checker) kidneyBeans() {
 	for i, n := range c.names {
-		if !containsAny(n, kidneyKw) || containsAny(n, cannedKw) {
+		if !containsAny(n, kidneyKw) {
 			continue
 		}
-		dried := containsAny(n, driedKw)
+		dried := driedRe.MatchString(n)
+		if !dried && containsAny(n, cannedKw) {
+			continue
+		}
 		for _, s := range c.steps {
 			if containsAny(s, soakKw) || containsAny(s, slowKw) && containsAny(s, []string{"bohne", "bean"}) {
 				dried = true
@@ -43,7 +70,7 @@ func (c *checker) kidneyBeans() {
 		}
 		boiled := false
 		for _, s := range c.steps {
-			if containsAny(s, boilKw) && !simmerOnly.MatchString(s) && !containsAny(s, slowKw) && maxMinutes(s) >= 10 {
+			if containsAny(s, boilKw) && !simmerOnly.MatchString(s) && !containsAny(s, slowKw) && boilMinutes(s) >= 10 {
 				boiled = true
 			}
 		}

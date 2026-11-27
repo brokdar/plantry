@@ -27,7 +27,7 @@ var outlierGroups = []struct {
 	keywords []string
 	maxG     float64
 }{
-	{"meat_fish", []string{"hack", "haehnchen", "huehnchen", "huhn", "pute", "schwein", "rind", "lamm", "lachs", "fisch", "chicken", "beef", "pork", "salmon", "steak", "filet"}, 350},
+	{"meat_fish", []string{"hack", "haehnchen", "huehnchen", "huhn", "pute", "schwein", "rind", "lamm", "huehner", "lachs", "fisch", "scholle", "rotbarsch", "hering", "makrele", "sardine", "karpfen", "barsch", "saibling", "pangasius", "tilapia", "kabeljau", "seelachs", "forelle", "zander", "heilbutt", "plaice", "redfish", "herring", "mackerel", "perch", "pollock", "cod", "trout", "chicken", "beef", "pork", "salmon", "steak", "filet"}, 350},
 	{"grain", []string{"=reis", "-reis", "=rice", "nudel", "pasta", "spaghetti", "penne", "couscous", "bulgur"}, 200},
 	{"potato", []string{"kartoffel", "potato"}, 600},
 	{"fat", []string{"=oel", "-oel", "butter", "margarine", "schmalz", "=oil", "-oil"}, 40},

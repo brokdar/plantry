@@ -21,10 +21,16 @@ type protein struct {
 // "Rinderhack" is not whole-muscle beef.
 var proteins = []protein{
 	{"mince", []string{"hack", "mince", "ground beef", "ground pork", "ground turkey", "ground meat", "bolognese", "frikadelle", "bratwurst masse"}, 71},
-	{"poultry", []string{"haehnchen", "huehnchen", "huhn", "pute", "truthahn", "ente", "gans", "gefluegel", "chicken", "turkey", "duck", "poultry"}, 74},
+	{"poultry", []string{"haehnchen", "huehnchen", "huehner", "huhn", "pute", "truthahn", "ente", "gans", "gefluegel", "chicken", "turkey", "duck", "poultry"}, 74},
 	{"pork", []string{"schwein", "pork", "nacken", "kassler", "schnitzel"}, 70},
-	{"fish", []string{"fisch", "lachs", "forelle", "kabeljau", "dorade", "seelachs", "thunfisch", "salmon", "cod", "trout", "tuna", "fish", "zander", "heilbutt"}, 70},
+	{"fish", []string{
+		"fisch", "lachs", "forelle", "kabeljau", "dorade", "seelachs", "thunfisch", "salmon", "cod", "trout", "tuna", "fish", "zander", "heilbutt",
+		"scholle", "rotbarsch", "hering", "makrele", "sardine", "karpfen", "barsch", "saibling", "pangasius", "tilapia",
+		"plaice", "redfish", "herring", "mackerel", "perch", "pollock",
+	}, 70},
 }
+
+var notPoultry = strings.NewReplacer("huehnerbruehe", " ", "huehnerfond", " ")
 
 // fishSauce is cut out of ingredient names before the protein check.
 var notFish = strings.NewReplacer("fischsauce", " ", "fish sauce", " ", "fischstaebchen", " ", "fischfond", " ")
@@ -37,8 +43,11 @@ func (c *checker) proteinsIn() []protein {
 	for _, p := range proteins {
 		for i := range c.names {
 			n := c.names[i]
-			if p.code == "fish" {
+			switch p.code {
+			case "fish":
 				n = notFish.Replace(n)
+			case "poultry":
+				n = notPoultry.Replace(n)
 			}
 			if p.code != "mince" && containsAny(n, proteins[0].keywords) {
 				continue // "Haehnchenhack" and "Schweinehack" are mince
@@ -101,7 +110,7 @@ func (c *checker) temperatures() {
 					t = (t - 32) * 5 / 9
 				}
 				for _, p := range mine {
-					if t < p.minC {
+					if t+0.5 < p.minC { // 165 F is 73.9 C, 160 F 71.1 C
 						c.block("core_temp_low", -1, si, "Core temperature "+m[1]+" is below the safe minimum for "+p.code+".",
 							"group", p.code, "stated", m[1], "min", itoa(int(p.minC)))
 						break

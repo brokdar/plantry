@@ -1173,5 +1173,291 @@
   "flags": [
    "few_versions"
   ]
+ },
+ {
+  "name": "control_poultry_165F_ok",
+  "recipe": {
+   "name": "control_poultry_165F_ok",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hähnchenbrust",
+     "grams": 600
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Hähnchenbrust braten, Kerntemperatur 165 °F erreichen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "control_mince_160F_ok",
+  "recipe": {
+   "name": "control_mince_160F_ok",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Rinderhack",
+     "grams": 500
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Hack braten, Kerntemperatur 160 °F erreichen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "block_poultry_150F",
+  "recipe": {
+   "name": "block_poultry_150F",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hähnchenbrust",
+     "grams": 600
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Hähnchenbrust braten, Kerntemperatur 150 °F erreichen."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "core_temp_low"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_huehnerbrust_pink",
+  "recipe": {
+   "name": "block_huehnerbrust_pink",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hühnerbrust",
+     "grams": 600
+    }
+   ],
+   "steps": [
+    "Hühnerbrust innen rosa braten."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "rare_unsafe"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_huehnerbrust_keep4",
+  "recipe": {
+   "name": "block_huehnerbrust_keep4",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hühnerbrust",
+     "grams": 600
+    }
+   ],
+   "steps": [
+    "Hühnerbrust braten."
+   ],
+   "keep_days": 4
+  },
+  "household": {},
+  "blocks": [
+   "keep_days"
+  ],
+  "flags": []
+ },
+ {
+  "name": "control_huehnerbruehe_keep4",
+  "recipe": {
+   "name": "control_huehnerbruehe_keep4",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hühnerbrühe",
+     "grams": 500
+    },
+    {
+     "name": "Möhren",
+     "grams": 200
+    }
+   ],
+   "steps": [
+    "Möhren in der Brühe kochen."
+   ],
+   "keep_days": 4
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "block_scholle_keep3",
+  "recipe": {
+   "name": "block_scholle_keep3",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Schollenfilet",
+     "grams": 600
+    }
+   ],
+   "steps": [
+    "Schollenfilet braten."
+   ],
+   "keep_days": 3
+  },
+  "household": {},
+  "blocks": [
+   "keep_days"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_rotbarsch_50C",
+  "recipe": {
+   "name": "block_rotbarsch_50C",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Rotbarsch",
+     "grams": 600
+    }
+   ],
+   "steps": [
+    "Rotbarsch braten, Kerntemperatur 50 °C."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "core_temp_low"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_beans_dried_soak_only",
+  "recipe": {
+   "name": "block_beans_dried_soak_only",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kidneybohnen, getrocknet",
+     "grams": 250
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Bohnen 12 Std. einweichen, dann kochen."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "kidney_beans_unboiled"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_beans_ungekocht_5min",
+  "recipe": {
+   "name": "block_beans_ungekocht_5min",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kidneybohnen, ungekocht",
+     "grams": 250
+    }
+   ],
+   "steps": [
+    "Bohnen 5 Minuten erhitzen."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "kidney_beans_unboiled"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_beans_dry_en_no_boil",
+  "recipe": {
+   "name": "block_beans_dry_en_no_boil",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kidney beans, dry",
+     "grams": 250
+    }
+   ],
+   "steps": [
+    "Add the beans to the stew."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "kidney_beans_unboiled"
+  ],
+  "flags": []
+ },
+ {
+  "name": "control_beans_dried_boiled",
+  "recipe": {
+   "name": "control_beans_dried_boiled",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kidneybohnen, getrocknet",
+     "grams": 250
+    }
+   ],
+   "steps": [
+    "Bohnen 12 Std. einweichen, abgießen und 10 Minuten sprudelnd kochen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "control_beans_canned_clean",
+  "recipe": {
+   "name": "control_beans_canned_clean",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kidneybohnen, gekocht",
+     "grams": 250
+    }
+   ],
+   "steps": [
+    "Bohnen 5 Minuten erhitzen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
  }
 ]
