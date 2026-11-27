@@ -38,7 +38,7 @@ export function ImportNutritionSummary({
   const { t, i18n } = useTranslation()
   const linked = rows.filter(
     (r): r is RowState & { foodId: number } =>
-      r.resolution === "existing" && r.foodId != null
+      !r.removed && !r.toTaste && r.foodId != null
   )
   const ids = [...new Set(linked.map((r) => r.foodId))]
 

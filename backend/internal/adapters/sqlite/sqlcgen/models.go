@@ -256,6 +256,7 @@ type FoodComponent struct {
 	Unit      string
 	Grams     float64
 	SortOrder int64
+	ToTaste   int64
 }
 
 type FoodEvent struct {

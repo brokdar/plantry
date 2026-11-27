@@ -250,3 +250,33 @@ func TestNutritionResolver_PerPortionDetailedMany_CycleIsRejected(t *testing.T) 
 	_, err := food.NewNutritionResolver(repo).PerPortionDetailedMany(context.Background(), []int64{11})
 	assert.ErrorIs(t, err, domain.ErrInvalidInput)
 }
+
+func TestNutritionResolver_ToTasteLineCountsNothing(t *testing.T) {
+	salt := completeLeaf(2, "Salt")
+	salt.Kcal100g, salt.Fiber100g = nil, nil // no nutrition: still complete
+	repo := &treeRepo{
+		foods: map[int64]*food.Food{
+			1:  completeLeaf(1, "Rice"),
+			2:  salt,
+			3:  completeLeaf(3, "Parsley"),
+			10: {ID: 10, Name: "Bowl", Kind: food.KindComposed},
+			20: {ID: 20, Name: "Dinner", Kind: food.KindComposed},
+		},
+		children: map[int64][]food.FoodComponent{
+			10: {{ChildID: 1, Grams: 200}, {ChildID: 2, Grams: 1, ToTaste: true}, {ChildID: 3, Grams: 50, ToTaste: true}},
+			20: {{ChildID: 10, Grams: 100}},
+		},
+	}
+	res := food.NewNutritionResolver(repo)
+	d, err := res.PerPortionDetailed(context.Background(), 10)
+	require.NoError(t, err)
+	assert.True(t, d.Complete)
+	assert.InDelta(t, 200.0, d.Macros.Kcal, 1e-9)
+	require.Len(t, d.Leaves, 1)
+	assert.Equal(t, int64(1), d.Leaves[0].ID)
+
+	// Nested: the bowl's per-100 g ignores the to-taste grams.
+	d, err = res.PerPortionDetailed(context.Background(), 20)
+	require.NoError(t, err)
+	assert.InDelta(t, 100.0, d.Macros.Kcal, 1e-9)
+}

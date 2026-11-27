@@ -110,10 +110,38 @@ func ParseLine(raw, lang string) []DraftIngredient {
 	}
 	for i := range rows {
 		splitAlternatives(&rows[i])
-		rows[i].ToTaste = rows[i].Amount == 0
+		if rows[i].Amount == 0 {
+			noAmount(&rows[i])
+		}
 		rows[i].DietClass = diet.Classify(rows[i].Name)
 	}
 	return rows
+}
+
+// proposedAmounts are the amounts a quantity-less line of a group that is
+// not a seasoning gets (MATCH-6: "oil for frying" needs an amount). The
+// review shows them as proposed; the user can change them.
+var proposedAmounts = map[string]struct {
+	amount float64
+	unit   string
+}{
+	"fat":       {1, "tbsp"},
+	"condiment": {1, "tbsp"},
+	"sugar":     {1, "tsp"},
+}
+
+// noAmount settles a line without an amount: a seasoning is "to taste", a
+// food the table knows gets a proposed amount, anything else stays without
+// one and the review asks for it.
+func noAmount(r *DraftIngredient) {
+	group := food.LineGroup(r.Name, r.Note)
+	if food.IsToTasteGroup(group) {
+		r.ToTaste = true
+		return
+	}
+	if p, ok := proposedAmounts[group]; ok {
+		r.Amount, r.Unit, r.Proposed = p.amount, p.unit, true
+	}
 }
 
 func splitCompound(p DraftIngredient, names string) []DraftIngredient {
@@ -196,11 +224,13 @@ func cleanResidue(s string) string {
 	return strings.Join(w, " ")
 }
 
-// MatchLineOf is a draft row as the matcher reads it.
+// MatchLineOf is a draft row as the matcher reads it. A line still without
+// an amount matches its food like a to-taste line: the amount is the
+// review's to enter (MATCH-6), not a reason the food is unknown.
 func MatchLineOf(ing DraftIngredient) food.MatchLine {
 	return food.MatchLine{
 		Name: ing.Name, Alternatives: ing.Alternatives, Note: ing.Note,
-		Amount: ing.Amount, Unit: ing.Unit, PortionGrams: ing.PortionGrams, ToTaste: ing.ToTaste,
+		Amount: ing.Amount, Unit: ing.Unit, PortionGrams: ing.PortionGrams, ToTaste: ing.ToTaste || ing.Amount == 0,
 	}
 }
 

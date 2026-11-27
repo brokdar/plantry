@@ -273,7 +273,7 @@ func (w *walk) total(f *Food, depth int) (nutrition.Macros, map[int64]string, bo
 	}
 	var total nutrition.Macros
 	fiberMissing := false
-	for _, ch := range f.Children {
+	for _, ch := range counted(f.Children) {
 		sub, err := w.per100g(ch.ChildID, depth+1)
 		if err != nil {
 			return nutrition.Macros{}, nil, false, err
@@ -293,14 +293,14 @@ func (w *walk) leaves(f *Food, k float64, depth int) []LeafGrams {
 		return nil
 	}
 	totalGrams := 0.0
-	for _, ch := range f.Children {
+	for _, ch := range counted(f.Children) {
 		totalGrams += ch.Grams
 	}
 	if totalGrams <= 0 {
 		return nil
 	}
 	var out []LeafGrams
-	for _, ch := range f.Children {
+	for _, ch := range counted(f.Children) {
 		c, ok := w.nodes[ch.ChildID]
 		if !ok || ch.Grams <= 0 {
 			continue
@@ -310,11 +310,23 @@ func (w *walk) leaves(f *Food, k float64, depth int) []LeafGrams {
 			continue
 		}
 		cTotal := 0.0
-		for _, cc := range c.Children {
+		for _, cc := range counted(c.Children) {
 			cTotal += cc.Grams
 		}
 		if cTotal > 0 {
 			out = append(out, w.leaves(c, ch.Grams*k/cTotal, depth+1)...)
+		}
+	}
+	return out
+}
+
+// counted drops the to-taste lines: they count no nutrition (MATCH-6) and
+// no weight in any sum.
+func counted(children []FoodComponent) []FoodComponent {
+	out := make([]FoodComponent, 0, len(children))
+	for _, ch := range children {
+		if !ch.ToTaste {
+			out = append(out, ch)
 		}
 	}
 	return out
@@ -341,7 +353,7 @@ func (w *walk) per100g(id int64, depth int) (subtree, error) {
 	s := subtree{per100g: total, missing: missing, fiberMissing: fiberMissing}
 	if f.Kind == KindComposed {
 		totalGrams := float64(0)
-		for _, ch := range f.Children {
+		for _, ch := range counted(f.Children) {
 			totalGrams += ch.Grams
 		}
 		s.per100g = nutrition.Macros{}

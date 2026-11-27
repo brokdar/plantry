@@ -22,8 +22,10 @@ export interface DraftIngredient {
   diet_class: EffectiveDietClass
   /** Other foods the line offers ("oder Butterschmalz"). */
   alternatives?: string[] | null
-  /** The line has no amount ("Salz", "nach Geschmack"). */
+  /** A seasoning line without an amount (MATCH-6): saved "to taste". */
   to_taste?: boolean
+  /** Amount and unit are the import's proposal for a quantity-less line. */
+  proposed?: boolean
   /** The matching path's result (MATCH-2); null when not matched. */
   match?: LineMatch | null
 }
@@ -93,13 +95,15 @@ export function lookupImportLine(
   return apiFetch(`/import/lookup?${q}`)
 }
 
-export type Resolution = "existing" | "skip" | "new"
+export type Resolution = "existing" | "new"
 
 export interface ResolveChildInput {
   resolution: Resolution
   food_id: number
   amount: number
   unit: string
+  /** A to-taste line: amount and unit are ignored. */
+  to_taste?: boolean
   /** Grams per count unit the user edited in the review; null keeps the
    *  leaf's portion or the default estimate. */
   portion_grams: number | null

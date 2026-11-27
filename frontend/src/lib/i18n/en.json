@@ -32,30 +32,48 @@
       "amount": "Amount",
       "unit": "Unit",
       "resolved_label": "Linked",
-      "res_existing": "Link to library",
-      "res_skip": "Skip",
       "pick_match": "Pick a match",
       "searching": "Searching…",
       "no_match": "No match in library.",
-      "create_new": "Create as new ingredient",
       "change": "Change",
-      "unparsed_warning": "Could not parse — please review",
       "llm_warning": "Extracted with AI — please review every row.",
       "source_local": "In library",
       "source_fdc": "USDA",
       "source_off": "Open Food Facts",
       "kcal_100g": "{{kcal}} kcal/100 g",
-      "optional_skipped": "Optional, skipped",
       "amount_for": "Amount for {{name}}",
       "unit_for": "Unit for {{name}}",
-      "resolution_for": "How to use {{name}}",
       "portion_estimate": "1 {{unit}} ≈",
       "portion_grams_for": "Grams per {{unit}} of {{name}}",
       "portion_estimated": "estimate",
       "portion_saved": "saved for this ingredient",
       "warning_suspicious_unit": "Check the unit: mg looks like a typo here.",
       "lookup_not_configured": "No match in library. Nutrition search needs a FoodData Central key in Settings.",
-      "lookup_sources_unavailable": "No match in library. The nutrition sources didn't answer; try again later."
+      "lookup_sources_unavailable": "No match in library. The nutrition sources didn't answer; try again later.",
+      "undo_remove": "Undo",
+      "edit_line": "Edit {{name}}",
+      "done": "Done",
+      "problem_match": "Needs a match",
+      "problem_amount": "Needs an amount",
+      "problem_weight": "Needs a weight",
+      "tried": "Tried: {{list}}",
+      "reason_no_candidate": "Nothing found.",
+      "reason_state_mismatch": "Only found it in another state (dry, cooked, canned).",
+      "reason_implausible_kcal": "The results had implausible calories.",
+      "reason_no_grams": "The amount does not convert to grams.",
+      "reason_no_nutrition": "The results had no nutrition.",
+      "search_for": "Search name for {{name}}",
+      "search": "Search",
+      "create_with_nutrition": "Create with nutrition per 100 g",
+      "new_leaf_hint": "New ingredient “{{name}}”: enter the values per 100 g from the package or a nutrition table.",
+      "new_kcal_100g": "kcal",
+      "new_protein_100g": "Protein (g)",
+      "new_fat_100g": "Fat (g)",
+      "new_carbs_100g": "Carbs (g)",
+      "create_leaf": "Create ingredient",
+      "enter_amount": "Enter an amount",
+      "proposed": "proposed",
+      "remove_line": "Remove {{name}} from the recipe"
     },
     "step3": {
       "role_label": "Role",
@@ -73,7 +91,12 @@
       "kcal_pending": "kcal per portion appear once every ingredient is chosen.",
       "source_kcal": "Source: {{kcal}} kcal",
       "image_download_failed": "Recipe saved, but the photo could not be downloaded.",
-      "portions_invalid": "Enter at least 1 portion."
+      "portions_invalid": "Enter at least 1 portion.",
+      "needs_amount_one": "Enter an amount for {{count}} ingredient",
+      "needs_amount_other": "Enter an amount for {{count}} ingredients",
+      "no_lines": "Keep at least one ingredient",
+      "prep_label": "Prep (min)",
+      "cook_label": "Cook (min)"
     },
     "status": {
       "extracting": "Extracting…",
@@ -84,6 +107,14 @@
     "warning": {
       "redirected_other_recipe": "The site sent us to a different page than the link. Check that this is the recipe you wanted.",
       "times_from_steps": "The page lists no times. The cooking time is the sum of the times in the steps."
+    },
+    "steps": {
+      "title": "Steps",
+      "step_n": "Step {{n}}",
+      "move_up": "Move step {{n}} up",
+      "move_down": "Move step {{n}} down",
+      "delete": "Delete step {{n}}",
+      "add": "Add a step"
     }
   },
   "plate": {
@@ -753,7 +784,8 @@
     },
     "role": "Role",
     "role_auto": "None",
-    "role_hint": "Used when this ingredient is planned as a side. Leave it on none to follow the store section."
+    "role_hint": "Used when this ingredient is planned as a side. Leave it on none to follow the store section.",
+    "to_taste": "to taste"
   },
   "component": {
     "edit_eyebrow": "Editor",
@@ -1222,7 +1254,9 @@
       "blocked": "Couldn't load {{host}} (blocked by the site). Paste the recipe text instead.",
       "timeout": "Couldn't load {{host}} (no answer in time). Try again or paste the recipe text instead.",
       "unreachable": "Couldn't reach {{host}}. Check the address and your connection, or paste the recipe text instead.",
-      "no_recipe_no_ai": "No recipe found on this page. Paste the recipe text or set up the assistant."
+      "no_recipe_no_ai": "No recipe found on this page. Paste the recipe text or set up the assistant.",
+      "unmatched_line": "Every ingredient needs a match before the recipe can be saved.",
+      "no_nutrition": "An ingredient has no nutrition per 100 g. Pick another match or enter its values."
     },
     "food": {
       "invalid_portions": "Portions must be more than 0 and at most 100.",

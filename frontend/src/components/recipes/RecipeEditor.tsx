@@ -121,6 +121,7 @@ export function RecipeEditor({
             unit: ci.unit,
             grams: ci.grams,
             sort_order: ci.sort_order,
+            to_taste: ci.to_taste ?? false,
           })),
           instructions: (component.instructions ?? []).map((inst) => ({
             step_number: inst.step_number,
@@ -232,6 +233,7 @@ export function RecipeEditor({
         unit: ci.unit,
         grams: ci.grams,
         sort_order: idx,
+        to_taste: ci.to_taste,
       })),
       instructions: values.instructions.map((inst, idx) => ({
         step_number: idx + 1,
@@ -782,6 +784,7 @@ export function RecipeEditor({
                       unit: "g",
                       grams: 100,
                       sort_order: ingredientFields.length,
+                      to_taste: false,
                     })
                   }
                   data-testid="add-ingredient"

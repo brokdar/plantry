@@ -78,7 +78,13 @@ export function ScaledIngredients({
                     done ? "text-ink-muted line-through" : "text-ink"
                   )}
                 >
-                  {formatQuantity(ing.display.amount, ing.display.unit, i18n)}
+                  {ing.to_taste
+                    ? t("ingredient.to_taste")
+                    : formatQuantity(
+                        ing.display.amount,
+                        ing.display.unit,
+                        i18n
+                      )}
                 </span>
                 {partial && ing.buy && (
                   <span className="text-small text-ink-muted tabular-nums">

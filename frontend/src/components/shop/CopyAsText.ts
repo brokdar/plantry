@@ -4,6 +4,7 @@ import { formatQuantity, type Formatter } from "@/lib/plan/format"
 /** What to buy, as shown on a row: the shopping unit (`buy`, count units)
  *  when present, otherwise the display quantity ("3 pcs", "600 g"). */
 export function quantityText(item: ShoppingListItem, f: Formatter): string {
+  if (item.to_taste) return f.t("ingredient.to_taste")
   const q = item.buy ?? item.display
   return formatQuantity(q.amount, q.unit, f)
 }

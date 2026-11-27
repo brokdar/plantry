@@ -422,6 +422,7 @@ func (r *FoodRepo) ListChildrenByParents(ctx context.Context, parentIDs []int64)
 			Unit:      row.Unit,
 			Grams:     row.Grams,
 			SortOrder: int(row.SortOrder),
+			ToTaste:   row.ToTaste != 0,
 		})
 	}
 	return out, nil
@@ -772,6 +773,7 @@ func (r *FoodRepo) insertComposedChildren(ctx context.Context, qtx *sqlcgen.Quer
 			Unit:      ch.Unit,
 			Grams:     ch.Grams,
 			SortOrder: int64(ch.SortOrder),
+			ToTaste:   boolToInt(ch.ToTaste),
 		}); err != nil {
 			return err
 		}
@@ -816,6 +818,7 @@ func (r *FoodRepo) loadComposed(ctx context.Context, q *sqlcgen.Queries, f *food
 			Unit:      row.Unit,
 			Grams:     row.Grams,
 			SortOrder: int(row.SortOrder),
+			ToTaste:   row.ToTaste != 0,
 		}
 	}
 	instRows, err := q.ListFoodInstructions(ctx, f.ID)

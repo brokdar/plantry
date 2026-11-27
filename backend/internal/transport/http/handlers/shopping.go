@@ -47,6 +47,7 @@ type shoppingItemResponse struct {
 	Name       string                `json:"name"`
 	TotalGrams float64               `json:"total_grams"`
 	Display    units.Quantity        `json:"display"`
+	ToTaste    bool                  `json:"to_taste"`
 	Buy        *units.Quantity       `json:"buy"`
 	UsedIn     []shoppingUseResponse `json:"used_in"`
 }
@@ -117,7 +118,7 @@ func toShoppingListResponse(rng shopping.Range, l *shopping.List) shoppingListRe
 			}
 			items[j] = shoppingItemResponse{
 				FoodID: it.FoodID, Name: it.Name, TotalGrams: it.TotalGrams,
-				Display: it.Display, Buy: it.Buy, UsedIn: uses,
+				Display: it.Display, Buy: it.Buy, UsedIn: uses, ToTaste: it.ToTaste,
 			}
 		}
 		resp.Sections[i] = shoppingSectionResponse{Section: string(sec.Section), Items: items}

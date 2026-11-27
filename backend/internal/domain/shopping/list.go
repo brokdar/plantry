@@ -70,6 +70,9 @@ type Item struct {
 	Display    units.Quantity
 	Buy        *units.Quantity
 	UsedIn     []Use
+	// ToTaste: only "to taste" lines need it (MATCH-6); listed without an
+	// amount (Display is zero).
+	ToTaste bool
 }
 
 // Use is what an item is bought for: a session (its recipe and cook cell)
@@ -133,6 +136,7 @@ type acc struct {
 	unit     string
 	mixed    bool
 	grams    float64
+	toTaste  bool
 	uses     []Use
 	sessions map[int64]bool
 }
@@ -140,7 +144,11 @@ type acc struct {
 // add sums a contribution. Metric mass and volume add up in their base unit
 // (g, ml), so 500 ml and 1 l share a unit; any other unit difference makes
 // the item mixed (shown in grams).
-func (a *acc) add(amount float64, unit string, grams float64) {
+func (a *acc) add(amount float64, unit string, grams float64, toTaste bool) {
+	if toTaste {
+		a.toTaste = true
+		return
+	}
 	amount, u := units.ToBase(amount, unit)
 	if !a.started {
 		a.started = true
@@ -207,9 +215,9 @@ func (s *Service) List(ctx context.Context, from, to time.Time, includeDrafts bo
 			ref = *recipe.ReferencePortions
 		}
 		use := Use{SessionID: &cs.ID, FoodID: recipe.ID, FoodName: recipe.Name, Date: cs.CookDate, SlotID: cs.CookSlotID, Draft: cs.State == plate.StateDraft}
-		err := expand(nodes, recipe, cs.Portions/ref, 0, func(leaf *food.Food, amount float64, unit string, grams float64) {
+		err := expand(nodes, recipe, cs.Portions/ref, 0, func(leaf *food.Food, amount float64, unit string, grams float64, toTaste bool) {
 			a := get(leaf)
-			a.add(amount, unit, grams)
+			a.add(amount, unit, grams, toTaste)
 			if !a.sessions[cs.ID] {
 				a.sessions[cs.ID] = true
 				a.uses = append(a.uses, use)
@@ -222,7 +230,7 @@ func (s *Service) List(ctx context.Context, from, to time.Time, includeDrafts bo
 	for _, lu := range leaves {
 		leaf := nodes[lu.FoodID]
 		a := get(leaf)
-		a.add(lu.Amount*lu.Eaters, lu.Unit, lu.Grams*lu.Eaters)
+		a.add(lu.Amount*lu.Eaters, lu.Unit, lu.Grams*lu.Eaters, false)
 		a.uses = append(a.uses, Use{FoodID: leaf.ID, FoodName: leaf.Name, Date: lu.Date, SlotID: lu.SlotID, Draft: lu.Draft})
 	}
 
@@ -244,7 +252,7 @@ func (s *Service) List(ctx context.Context, from, to time.Time, includeDrafts bo
 // the share of its batch the parent uses: factor × link grams / the child's
 // total child grams.
 func expand(nodes map[int64]*food.Food, f *food.Food, factor float64, depth int,
-	emit func(leaf *food.Food, amount float64, unit string, grams float64),
+	emit func(leaf *food.Food, amount float64, unit string, grams float64, toTaste bool),
 ) error {
 	if depth > maxDepth {
 		return fmt.Errorf("%w: food tree deeper than %d", domain.ErrInvalidInput, maxDepth)
@@ -252,12 +260,14 @@ func expand(nodes map[int64]*food.Food, f *food.Food, factor float64, depth int,
 	for _, ch := range f.Children {
 		child := nodes[ch.ChildID]
 		if child.Kind == food.KindLeaf {
-			emit(child, ch.Amount*factor, ch.Unit, ch.Grams*factor)
+			emit(child, ch.Amount*factor, ch.Unit, ch.Grams*factor, ch.ToTaste)
 			continue
 		}
 		total := 0.0
 		for _, gc := range child.Children {
-			total += gc.Grams
+			if !gc.ToTaste {
+				total += gc.Grams
+			}
 		}
 		if total <= 0 {
 			continue
@@ -276,9 +286,12 @@ func group(accs map[int64]*acc, order plate.SlotOrder) *List {
 	for _, a := range accs {
 		it := Item{FoodID: a.leaf.ID, Name: a.leaf.Name, TotalGrams: a.grams, UsedIn: a.uses}
 		sec := SectionOf(a.leaf)
-		if a.mixed || (a.unit == "ml" && !volumeFood(sec, a.leaf.Name)) {
+		switch {
+		case !a.started:
+			it.ToTaste = true
+		case a.mixed || (a.unit == "ml" && !volumeFood(sec, a.leaf.Name)):
 			it.Display = units.Display(a.grams, "g")
-		} else {
+		default:
 			it.Display = units.Display(a.amount, a.unit)
 			if buy, ok := units.Buy(a.amount, a.unit); ok {
 				it.Buy = &buy

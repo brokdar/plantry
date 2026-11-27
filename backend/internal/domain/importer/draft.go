@@ -36,8 +36,12 @@ type DraftIngredient struct {
 	DietClass diet.Class `json:"diet_class"`
 	// Alternatives are the other foods the line offers ("oder Butterschmalz").
 	Alternatives []string `json:"alternatives"`
-	// ToTaste marks a line without an amount ("Salz", "nach Geschmack").
+	// ToTaste marks a seasoning line without an amount ("Salz", "nach
+	// Geschmack"; MATCH-6: salt, pepper, dried spices, fresh herbs).
 	ToTaste bool `json:"to_taste"`
+	// Proposed: the line had no amount and Amount/Unit are the rule-based
+	// proposal (MATCH-6), shown as proposed in the review.
+	Proposed bool `json:"proposed"`
 	// Match is the line's match (MATCH-2): status, reason, what was tried,
 	// candidates and the pick. nil when the draft was not matched.
 	Match *food.LineMatch `json:"match"`

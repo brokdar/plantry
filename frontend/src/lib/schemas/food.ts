@@ -95,6 +95,7 @@ export const composedChildSchema = z.object({
   unit: z.string().min(1),
   grams: z.coerce.number().min(0).default(0),
   sort_order: z.coerce.number().min(0).default(0),
+  to_taste: z.boolean().default(false),
   // Per-100g macros stored client-side for live nutrition preview.
   kcal_100g: z.coerce.number().min(0).default(0).optional(),
   protein_100g: z.coerce.number().min(0).default(0).optional(),

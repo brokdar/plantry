@@ -180,6 +180,9 @@ type FoodComponent struct {
 	Grams       float64
 	GramsSource string
 	SortOrder   int
+	// ToTaste marks a "to taste" seasoning line (MATCH-6): Amount and Grams
+	// stay nominal and every nutrition sum skips the row.
+	ToTaste bool
 }
 
 // Grams-resolution sources surfaced by the service for UI confidence badges.
