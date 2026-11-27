@@ -16,9 +16,8 @@ const EXPLORE_TAG = "explore"
 /**
  * The import review prefilled from a pending suggestion
  * (`/recipes?add=discover&suggestion=<id>`, D18): its draft without the image
- * (on accept the server copies the suggestion's own image), rows
- * matched to the leaves the annotator
- * found, and the `explore` tag. Saving goes through the normal import, then
+ * (Discover never copies a page photo, IMP-7/FIND-14), rows matched to the
+ * leaves the annotator found, and the `explore` tag. Saving goes through the normal import, then
  * accepts the suggestion with the new food id; closing changes nothing. An
  * id that is no longer pending closes with a note. With the Chef on, the
  * import check runs first (IMP-1) and its changes are in the draft; a failed
