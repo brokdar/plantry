@@ -250,16 +250,20 @@ function RowEditor({ ing, state, lang, onChange }: RowProps) {
   useEffect(() => {
     if (state.foodId) return
     if (!lookup.data) return
-    // The draft's confident catalogue match (MATCH-2) wins; else an exact
-    // catalogue hit of the row's search.
+    // A catalogue leaf of the line's own name wins; else the draft's
+    // confident catalogue match (MATCH-2), e.g. "Onion" for "Zwiebel".
     const m = ing.match
     const picked =
       m && m.status !== "unmatched" && m.pick >= 0
         ? m.candidates[m.pick]
         : undefined
-    const hit = picked?.existing_id
-      ? picked
-      : results.find((r) => r.source === "local" && r.exact)
+    const own = state.query.trim().toLowerCase()
+    const hit =
+      results.find(
+        (r) => r.source === "local" && r.name.trim().toLowerCase() === own
+      ) ??
+      (picked?.existing_id ? picked : undefined) ??
+      results.find((r) => r.source === "local" && r.exact)
     if (hit && hit.existing_id) {
       onChange(relink(hit.existing_id, hit.name))
     }

@@ -5,8 +5,9 @@ import { cleanupFood, seedLeafFood, uid } from "./helpers"
 // A trimmed chefkoch.de JSON-LD block (Gemüse-Reispfanne), pasted as HTML so
 // nothing is fetched from the network. It keeps the shapes that used to break
 // the importer: a numeric yield, glued units ("250g"), "Zehe/n", "Zwiebel(n)"
-// and the quantity-less "Salz und Pfeffer". Each ingredient name carries the
-// run tag so it matches exactly one seeded leaf.
+// (the to-taste "Salz und Pfeffer" needs catalogue leaves and is covered in
+// import.spec.ts). Each ingredient name carries the run tag so it matches
+// exactly one seeded leaf.
 function chefkochHTML(tag: string): string {
   return `<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
 <script type="application/ld+json">
@@ -25,8 +26,7 @@ function chefkochHTML(tag: string): string {
     "2 Zwiebel(n) ${tag}",
     "2 Zehe/n Knoblauch ${tag}",
     "1 EL Olivenöl ${tag}",
-    "400g Tomaten ${tag}",
-    "Salz und Pfeffer"
+    "400g Tomaten ${tag}"
   ],
   "recipeInstructions": "Reis garen. Zwiebeln und Knoblauch in Olivenöl anbraten, Tomaten zugeben und mit dem Reis mischen. Mit Salz und Pfeffer abschmecken.",
   "nutrition": {
@@ -48,7 +48,6 @@ function chefkochHTML(tag: string): string {
 //   Knoblauch  2 × 3   =   6 g × 149 kcal =   8.94
 //   Olivenöl   1 × 15  =  15 g × 884 kcal = 132.60
 //   Tomaten    400 g          ×  18 kcal =  72.00
-//   Salz und Pfeffer: no quantity, skipped
 //                                  total = 1176.54 kcal / 4 portions
 const EXPECTED_KCAL_PER_PORTION = 1176.54 / 4 // 294.135
 

@@ -170,8 +170,17 @@ test.describe("Recipe Import", () => {
       fat_100g: 0.5,
       carbs_100g: 33,
     })
-    const salt = await seedLeafFood({ name: `E2E Salz ${tag}`, kcal_100g: 0 })
-    const cleanup = [spa.id, kno.id, salt.id]
+    const mandrake = await seedLeafFood({
+      name: `E2E Mandrake ${tag}`,
+      kcal_100g: 60,
+      protein_100g: 2,
+      fat_100g: 0.3,
+      carbs_100g: 12,
+    })
+    // No nutrition: a to-taste line needs none.
+    const salt = await seedLeafFood({ name: `E2E Salz ${tag}` })
+    const seeded = [spa.id, kno.id, mandrake.id, salt.id]
+    const cleanup = [...seeded]
 
     try {
       await page.goto("/recipes?add=url")
@@ -182,6 +191,7 @@ test.describe("Recipe Import", () => {
           chefkochHTML(tag, [
             "nach Geschmack Salz",
             `50 g E2E Zauberwurz ${tag}`,
+            `30 g E2E Alraune ${tag}`,
           ])
         )
       await page.getByRole("button", { name: /extract recipe/i }).click()
@@ -190,20 +200,26 @@ test.describe("Recipe Import", () => {
       ).toBeVisible()
 
       const save = page.getByRole("button", { name: /save recipe/i })
-      await expect(page.getByText("2 ingredients need a choice")).toBeVisible({
+      await expect(page.getByText(/ingredients need a choice/)).toBeVisible({
         timeout: 10_000,
       })
       await expect(save).toBeDisabled()
-      await expect(page.getByRole("option", { name: /skip/i })).toHaveCount(0)
-
-      // Salt: search again with another name, then one tap on the result.
-      const search = page.getByLabel("Search name for Salz")
-      await search.fill(`E2E Salz ${tag}`)
-      await search.press("Enter")
-      await page
-        .getByRole("button", { name: new RegExp(`E2E Salz ${tag}`) })
-        .click()
+      await expect(page.getByText(/^Skip$/)).toHaveCount(0)
       await expect(page.getByText("to taste").first()).toBeVisible()
+
+      // Salt needs no amount; it links to a catalogue salt when the lane's
+      // data has one, else to the seeded leaf found under another name.
+      const saltSearch = page.getByLabel("Search name for Salz")
+      if (await saltSearch.isVisible()) {
+        await saltSearch.fill(`E2E Salz ${tag}`)
+        await saltSearch.press("Enter")
+      }
+      await expect(page.getByText("2 ingredients need a choice")).toBeVisible()
+
+      // Search again with another name: its exact catalogue hit links.
+      const search = page.getByLabel(`Search name for E2E Zauberwurz ${tag}`)
+      await search.fill(`E2E Mandrake ${tag}`)
+      await search.press("Enter")
       await expect(page.getByText("1 ingredient needs a choice")).toBeVisible()
       await expect(save).toBeDisabled()
 
@@ -230,14 +246,14 @@ test.describe("Recipe Import", () => {
         children: { child_id: number; to_taste: boolean }[]
       }
       cleanup.unshift(body.id)
-      const newLeaf = body.children.find(
-        (c) => ![spa.id, kno.id, salt.id].includes(c.child_id)
+      const toTaste = body.children.filter((c) => c.to_taste)
+      const added = body.children.filter(
+        (c) => !c.to_taste && !seeded.includes(c.child_id)
       )
-      if (newLeaf) cleanup.push(newLeaf.child_id)
-      expect(body.children).toHaveLength(4)
-      expect(
-        body.children.filter((c) => c.to_taste).map((c) => c.child_id)
-      ).toEqual([salt.id])
+      cleanup.push(...added.map((c) => c.child_id))
+      expect(body.children).toHaveLength(5)
+      expect(toTaste).toHaveLength(1)
+      expect(added).toHaveLength(1)
 
       await expect(page).toHaveURL(new RegExp(`/recipes/${body.id}$`))
       await expect(page.getByText("to taste")).toBeVisible()
