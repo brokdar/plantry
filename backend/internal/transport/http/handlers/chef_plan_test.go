@@ -25,6 +25,11 @@ type noPlates struct{}
 
 func (noPlates) Range(context.Context, time.Time, time.Time) ([]plate.Plate, error) { return nil, nil }
 
+// onDraft is a Library whose recipes all sit on a draft plate.
+type onDraft struct{ finds.Library }
+
+func (onDraft) OnDraft(context.Context, int64, time.Time) (bool, error) { return true, nil }
+
 // PRO-4, PRO-5: the assistant's list and the window's tips stay within five
 // unasked lines; the rest is counted. The next window opens a planning
 // session; with the Chef off the list is empty and nothing opens.
@@ -50,7 +55,8 @@ func TestChefPlanHandler(t *testing.T) {
 	chefOn := func(context.Context) (bool, error) { return on, nil }
 	now := time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC)
 	svc := finds.NewService(finds.Deps{Store: store, Planning: finds.Planning{
-		ChefOn: chefOn, Now: func() time.Time { return now },
+		Library: onDraft{},
+		ChefOn:  chefOn, Now: func() time.Time { return now },
 		NewDishes: func(context.Context) (int, error) { return 0, nil },
 	}})
 	h := handlers.NewChefPlanHandler(handlers.ChefPlanDeps{
