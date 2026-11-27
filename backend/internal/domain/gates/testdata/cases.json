@@ -1,0 +1,1463 @@
+[
+ {
+  "name": "control_chili_canned_beans",
+  "recipe": {
+   "name": "Chili con Carne",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Rinderhack",
+     "grams": 500
+    },
+    {
+     "name": "Kidneybohnen aus der Dose",
+     "grams": 400
+    },
+    {
+     "name": "Tomaten aus der Dose",
+     "grams": 400
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 150
+    },
+    {
+     "name": "Salz",
+     "grams": 3,
+     "to_taste": true
+    }
+   ],
+   "steps": [
+    "Das Hackfleisch krümelig braten, bis nichts mehr rosa ist.",
+    "Bohnen und Tomaten zugeben und 30 Minuten köcheln lassen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "control_carbonara_classic_flags_raw_egg_only",
+  "recipe": {
+   "name": "Spaghetti Carbonara",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Spaghetti",
+     "grams": 400
+    },
+    {
+     "name": "Speck",
+     "grams": 150
+    },
+    {
+     "name": "Eigelb",
+     "grams": 80
+    },
+    {
+     "name": "Pecorino",
+     "grams": 80
+    },
+    {
+     "name": "Pfeffer",
+     "grams": 2
+    }
+   ],
+   "steps": [
+    "Spaghetti in Salzwasser kochen.",
+    "Speck knusprig braten.",
+    "Eigelb mit Pecorino verrühren und mit der heißen Pasta mischen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": [
+   "raw_egg"
+  ]
+ },
+ {
+  "name": "control_bread_in_band",
+  "recipe": {
+   "name": "Weizenbrot",
+   "portions": 10,
+   "ingredients": [
+    {
+     "name": "Weizenmehl",
+     "grams": 500
+    },
+    {
+     "name": "Wasser",
+     "grams": 340
+    },
+    {
+     "name": "Trockenhefe",
+     "grams": 5
+    },
+    {
+     "name": "Salz",
+     "grams": 10
+    }
+   ],
+   "steps": [
+    "Teig kneten, gehen lassen, 40 Minuten bei 230 Grad backen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "control_pound_cake_in_band",
+  "recipe": {
+   "name": "Rührkuchen",
+   "portions": 12,
+   "ingredients": [
+    {
+     "name": "Weizenmehl",
+     "grams": 250
+    },
+    {
+     "name": "Butter",
+     "grams": 250
+    },
+    {
+     "name": "Zucker",
+     "grams": 250
+    },
+    {
+     "name": "Eier",
+     "grams": 250
+    },
+    {
+     "name": "Backpulver",
+     "grams": 8
+    }
+   ],
+   "steps": [
+    "Alles verrühren und 60 Minuten bei 170 Grad backen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "control_dried_beans_boiled",
+  "recipe": {
+   "name": "Bohnentopf",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Getrocknete Kidneybohnen",
+     "grams": 250
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Bohnen über Nacht einweichen.",
+    "Bohnen abgießen und 15 Minuten sprudelnd kochen.",
+    "Dann weitere 40 Minuten köcheln lassen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "control_garlic_fried_kept_3_days",
+  "recipe": {
+   "name": "Tomatensauce",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Knoblauch",
+     "grams": 20
+    },
+    {
+     "name": "Olivenöl",
+     "grams": 30
+    },
+    {
+     "name": "Tomaten aus der Dose",
+     "grams": 800
+    }
+   ],
+   "steps": [
+    "Knoblauch in Öl anbraten.",
+    "Tomaten zugeben und 20 Minuten köcheln."
+   ],
+   "keep_days": 3
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "control_cooked_chicken_74",
+  "recipe": {
+   "name": "Hähnchenbrust",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hähnchenbrust",
+     "grams": 600
+    },
+    {
+     "name": "Olivenöl",
+     "grams": 20
+    }
+   ],
+   "steps": [
+    "Braten, bis die Kerntemperatur 75 °C erreicht."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "control_sauce_reduced_not_canning",
+  "recipe": {
+   "name": "Gulasch",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Rindfleisch",
+     "grams": 800
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 300
+    }
+   ],
+   "steps": [
+    "Die Sauce 20 Minuten einkochen lassen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "block_unmatched",
+  "recipe": {
+   "name": "Suppe",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Zucchini",
+     "grams": 300
+    },
+    {
+     "name": "Drachenfrucht",
+     "grams": 100,
+     "unmatched": true
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "unmatched_ingredient"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_never_by_id",
+  "recipe": {
+   "name": "Salat",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Rucola",
+     "grams": 100,
+     "food_id": 7
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {
+   "never_food_ids": [
+    7
+   ]
+  },
+  "blocks": [
+   "never_item"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_never_hidden_in_pesto",
+  "recipe": {
+   "name": "Pasta",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Spaghetti",
+     "grams": 400
+    },
+    {
+     "name": "Pesto",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {
+   "never_names": [
+    "Pinienkerne"
+   ]
+  },
+  "blocks": [
+   "never_item"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_allergen_nuts_in_pesto",
+  "recipe": {
+   "name": "Pasta",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Spaghetti",
+     "grams": 400
+    },
+    {
+     "name": "Basilikum-Pesto",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {
+   "allergens": [
+    "nuts"
+   ]
+  },
+  "blocks": [
+   "allergen"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_allergen_celery_in_stock_cube",
+  "recipe": {
+   "name": "Suppe",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kartoffeln",
+     "grams": 500
+    },
+    {
+     "name": "Gemüsebrühwürfel",
+     "grams": 20
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {
+   "allergens": [
+    "celery"
+   ]
+  },
+  "blocks": [
+   "allergen"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_allergen_plant_milk_is_not_dairy",
+  "recipe": {
+   "name": "Porridge",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Haferflocken",
+     "grams": 200
+    },
+    {
+     "name": "Kokosmilch",
+     "grams": 400
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {
+   "allergens": [
+    "dairy"
+   ]
+  },
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "block_worcestershire_vegetarian",
+  "recipe": {
+   "name": "Linsensuppe",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Linsen",
+     "grams": 300
+    },
+    {
+     "name": "Worcestershiresauce",
+     "grams": 10
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {
+   "diet": "vegetarian"
+  },
+  "blocks": [
+   "diet_conflict"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_fish_sauce_vegetarian",
+  "recipe": {
+   "name": "Gemüsepfanne",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Brokkoli",
+     "grams": 300
+    },
+    {
+     "name": "Fischsauce",
+     "grams": 20
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {
+   "diet": "vegetarian"
+  },
+  "blocks": [
+   "diet_conflict"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_fish_sauce_ok_for_pescetarian",
+  "recipe": {
+   "name": "Gemüsepfanne",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Brokkoli",
+     "grams": 300
+    },
+    {
+     "name": "Fischsauce",
+     "grams": 20
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {
+   "diet": "pescetarian"
+  },
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "block_gelatine_vegetarian",
+  "recipe": {
+   "name": "Panna Cotta",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Sahne",
+     "grams": 500
+    },
+    {
+     "name": "Gelatine",
+     "grams": 12
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {
+   "diet": "vegetarian"
+  },
+  "blocks": [
+   "diet_conflict"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_chicken_core_65",
+  "recipe": {
+   "name": "Hähnchen",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hähnchenschenkel",
+     "grams": 800
+    }
+   ],
+   "steps": [
+    "Braten, bis die Kerntemperatur 65 °C erreicht ist."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "core_temp_low"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_chicken_core_fahrenheit_150",
+  "recipe": {
+   "name": "Chicken",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Chicken breast",
+     "grams": 600
+    }
+   ],
+   "steps": [
+    "Cook until the internal temperature reaches 150 °F."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "core_temp_low"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_pork_core_63",
+  "recipe": {
+   "name": "Schweinebraten",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Schweinenacken",
+     "grams": 1200
+    }
+   ],
+   "steps": [
+    "Im Ofen garen, Kerntemperatur 63 Grad."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "core_temp_low"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_fish_core_60",
+  "recipe": {
+   "name": "Lachs",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Lachsfilet",
+     "grams": 600
+    }
+   ],
+   "steps": [
+    "Garen, bis der Kern 60 Grad hat (Thermometer)."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "core_temp_low"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_mince_medium_rare",
+  "recipe": {
+   "name": "Burger",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Rinderhack",
+     "grams": 600
+    },
+    {
+     "name": "Brötchen",
+     "grams": 240
+    }
+   ],
+   "steps": [
+    "Die Patties medium rare braten."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "rare_unsafe"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_chicken_pink",
+  "recipe": {
+   "name": "Hähnchen",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hähnchenbrust",
+     "grams": 600
+    }
+   ],
+   "steps": [
+    "Das Fleisch darf innen noch rosa sein."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "rare_unsafe"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_kidney_beans_slow_cooker",
+  "recipe": {
+   "name": "Chili",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Getrocknete Kidneybohnen",
+     "grams": 300
+    },
+    {
+     "name": "Tomaten aus der Dose",
+     "grams": 400
+    }
+   ],
+   "steps": [
+    "Alles in den Slow Cooker geben und 8 Stunden garen."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "kidney_beans_unboiled"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_kidney_beans_soaked_only",
+  "recipe": {
+   "name": "Bohnen",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kidneybohnen",
+     "grams": 300
+    }
+   ],
+   "steps": [
+    "Über Nacht einweichen.",
+    "Dann 5 Minuten kochen."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "kidney_beans_unboiled"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_garlic_in_oil_stored",
+  "recipe": {
+   "name": "Knoblauchöl",
+   "portions": 30,
+   "ingredients": [
+    {
+     "name": "Knoblauch",
+     "grams": 100
+    },
+    {
+     "name": "Olivenöl",
+     "grams": 300
+    }
+   ],
+   "steps": [
+    "Knoblauch in Öl einlegen und im Glas aufbewahren."
+   ],
+   "keep_days": 14
+  },
+  "household": {},
+  "blocks": [
+   "garlic_herbs_in_oil",
+   "keep_days"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_herb_oil_ingredient_kept",
+  "recipe": {
+   "name": "Brot-Dip",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kräuteröl",
+     "grams": 100
+    },
+    {
+     "name": "Baguette",
+     "grams": 200
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ],
+   "keep_days": 7
+  },
+  "household": {},
+  "blocks": [
+   "garlic_herbs_in_oil",
+   "keep_days"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_canning_wording",
+  "recipe": {
+   "name": "Pflaumenmus",
+   "portions": 30,
+   "ingredients": [
+    {
+     "name": "Pflaumen",
+     "grams": 1000
+    },
+    {
+     "name": "Zucker",
+     "grams": 500
+    }
+   ],
+   "steps": [
+    "Pflaumen kochen und heiß in Gläser einkochen."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "canning"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_fermenting",
+  "recipe": {
+   "name": "Sauerkraut",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Weißkohl",
+     "grams": 1000
+    },
+    {
+     "name": "Salz",
+     "grams": 20
+    }
+   ],
+   "steps": [
+    "Kohl fermentieren lassen, zwei Wochen."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "canning"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_keep_rice_3_days",
+  "recipe": {
+   "name": "Reispfanne",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Basmatireis",
+     "grams": 300
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ],
+   "keep_days": 3
+  },
+  "household": {},
+  "blocks": [
+   "keep_days"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_keep_fish_3_days",
+  "recipe": {
+   "name": "Fischcurry",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kabeljau",
+     "grams": 500
+    },
+    {
+     "name": "Kokosmilch",
+     "grams": 400
+    }
+   ],
+   "steps": [
+    "Alles garen, bis der Fisch eine Kerntemperatur von 72 °C hat."
+   ],
+   "keep_days": 3
+  },
+  "household": {},
+  "blocks": [
+   "keep_days"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_keep_default_6_days",
+  "recipe": {
+   "name": "Eintopf",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kartoffeln",
+     "grams": 800
+    },
+    {
+     "name": "Möhren",
+     "grams": 300
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ],
+   "keep_days": 6
+  },
+  "household": {},
+  "blocks": [
+   "keep_days"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_incomplete_everything",
+  "recipe": {
+   "name": "",
+   "portions": 0,
+   "ingredients": [],
+   "steps": []
+  },
+  "household": {},
+  "blocks": [
+   "missing_ingredients",
+   "missing_name",
+   "missing_steps",
+   "missing_yield"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_bread_too_dry",
+  "recipe": {
+   "name": "Landbrot",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Weizenmehl",
+     "grams": 500
+    },
+    {
+     "name": "Wasser",
+     "grams": 150
+    },
+    {
+     "name": "Trockenhefe",
+     "grams": 5
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "baking_ratio"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_cake_too_much_baking_powder",
+  "recipe": {
+   "name": "Kuchen",
+   "portions": 12,
+   "ingredients": [
+    {
+     "name": "Weizenmehl",
+     "grams": 250
+    },
+    {
+     "name": "Butter",
+     "grams": 200
+    },
+    {
+     "name": "Zucker",
+     "grams": 200
+    },
+    {
+     "name": "Eier",
+     "grams": 200
+    },
+    {
+     "name": "Backpulver",
+     "grams": 40
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "baking_ratio"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_pastry_no_fat",
+  "recipe": {
+   "name": "Mürbeteig",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Weizenmehl",
+     "grams": 300
+    },
+    {
+     "name": "Wasser",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "baking_ratio"
+  ],
+  "flags": []
+ },
+ {
+  "name": "flag_amount_outlier",
+  "recipe": {
+   "name": "Reispfanne",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Reis",
+     "grams": 1000
+    },
+    {
+     "name": "Paprika",
+     "grams": 200
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": [
+   "amount_outlier"
+  ]
+ },
+ {
+  "name": "flag_tiramisu_raw_egg",
+  "recipe": {
+   "name": "Tiramisu",
+   "portions": 8,
+   "ingredients": [
+    {
+     "name": "Mascarpone",
+     "grams": 500
+    },
+    {
+     "name": "Eigelb",
+     "grams": 80
+    },
+    {
+     "name": "Löffelbiskuit",
+     "grams": 200
+    },
+    {
+     "name": "Kaffee",
+     "grams": 200
+    }
+   ],
+   "steps": [
+    "Eigelb mit Zucker schaumig schlagen und Mascarpone unterheben."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": [
+   "raw_egg"
+  ]
+ },
+ {
+  "name": "flag_soft_boiled_egg_step",
+  "recipe": {
+   "name": "Frühstück",
+   "portions": 2,
+   "ingredients": [
+    {
+     "name": "Eier",
+     "grams": 200
+    },
+    {
+     "name": "Brot",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Die Eier weichgekocht servieren."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": [
+   "raw_egg"
+  ]
+ },
+ {
+  "name": "flag_pasteurised_egg_no_flag",
+  "recipe": {
+   "name": "Mayonnaise",
+   "portions": 8,
+   "ingredients": [
+    {
+     "name": "Pasteurisiertes Eigelb",
+     "grams": 40
+    },
+    {
+     "name": "Öl",
+     "grams": 200
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "flag_rare_steak",
+  "recipe": {
+   "name": "Steak",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Rindersteak",
+     "grams": 600
+    }
+   ],
+   "steps": [
+    "Das Steak rare braten."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": [
+   "rare_whole_muscle"
+  ]
+ },
+ {
+  "name": "flag_high_sodium",
+  "recipe": {
+   "name": "Teriyaki",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Reis",
+     "grams": 400
+    },
+    {
+     "name": "Sojasauce",
+     "grams": 300
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": [
+   "high_sodium"
+  ]
+ },
+ {
+  "name": "flag_few_versions",
+  "recipe": {
+   "name": "Gemüsesuppe",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Möhren",
+     "grams": 500
+    }
+   ],
+   "steps": [
+    "Zwiebel anbraten.",
+    "Servieren."
+   ],
+   "versions": 2
+  },
+  "household": {},
+  "blocks": [],
+  "flags": [
+   "few_versions"
+  ]
+ },
+ {
+  "name": "control_poultry_165F_ok",
+  "recipe": {
+   "name": "control_poultry_165F_ok",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hähnchenbrust",
+     "grams": 600
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Hähnchenbrust braten, Kerntemperatur 165 °F erreichen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "control_mince_160F_ok",
+  "recipe": {
+   "name": "control_mince_160F_ok",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Rinderhack",
+     "grams": 500
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Hack braten, Kerntemperatur 160 °F erreichen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "block_poultry_150F",
+  "recipe": {
+   "name": "block_poultry_150F",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hähnchenbrust",
+     "grams": 600
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Hähnchenbrust braten, Kerntemperatur 150 °F erreichen."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "core_temp_low"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_huehnerbrust_pink",
+  "recipe": {
+   "name": "block_huehnerbrust_pink",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hühnerbrust",
+     "grams": 600
+    }
+   ],
+   "steps": [
+    "Hühnerbrust innen rosa braten."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "rare_unsafe"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_huehnerbrust_keep4",
+  "recipe": {
+   "name": "block_huehnerbrust_keep4",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hühnerbrust",
+     "grams": 600
+    }
+   ],
+   "steps": [
+    "Hühnerbrust braten."
+   ],
+   "keep_days": 4
+  },
+  "household": {},
+  "blocks": [
+   "keep_days"
+  ],
+  "flags": []
+ },
+ {
+  "name": "control_huehnerbruehe_keep4",
+  "recipe": {
+   "name": "control_huehnerbruehe_keep4",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hühnerbrühe",
+     "grams": 500
+    },
+    {
+     "name": "Möhren",
+     "grams": 200
+    }
+   ],
+   "steps": [
+    "Möhren in der Brühe kochen."
+   ],
+   "keep_days": 4
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "block_scholle_keep3",
+  "recipe": {
+   "name": "block_scholle_keep3",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Schollenfilet",
+     "grams": 600
+    }
+   ],
+   "steps": [
+    "Schollenfilet braten."
+   ],
+   "keep_days": 3
+  },
+  "household": {},
+  "blocks": [
+   "keep_days"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_rotbarsch_50C",
+  "recipe": {
+   "name": "block_rotbarsch_50C",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Rotbarsch",
+     "grams": 600
+    }
+   ],
+   "steps": [
+    "Rotbarsch braten, Kerntemperatur 50 °C."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "core_temp_low"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_beans_dried_soak_only",
+  "recipe": {
+   "name": "block_beans_dried_soak_only",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kidneybohnen, getrocknet",
+     "grams": 250
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100
+    }
+   ],
+   "steps": [
+    "Bohnen 12 Std. einweichen, dann kochen."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "kidney_beans_unboiled"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_beans_ungekocht_5min",
+  "recipe": {
+   "name": "block_beans_ungekocht_5min",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kidneybohnen, ungekocht",
+     "grams": 250
+    }
+   ],
+   "steps": [
+    "Bohnen 5 Minuten erhitzen."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "kidney_beans_unboiled"
+  ],
+  "flags": []
+ },
+ {
+  "name": "block_beans_dry_en_no_boil",
+  "recipe": {
+   "name": "block_beans_dry_en_no_boil",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kidney beans, dry",
+     "grams": 250
+    }
+   ],
+   "steps": [
+    "Add the beans to the stew."
+   ]
+  },
+  "household": {},
+  "blocks": [
+   "kidney_beans_unboiled"
+  ],
+  "flags": []
+ },
+ {
+  "name": "control_beans_dried_boiled",
+  "recipe": {
+   "name": "control_beans_dried_boiled",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kidneybohnen, getrocknet",
+     "grams": 250
+    }
+   ],
+   "steps": [
+    "Bohnen 12 Std. einweichen, abgießen und 10 Minuten sprudelnd kochen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ },
+ {
+  "name": "control_beans_canned_clean",
+  "recipe": {
+   "name": "control_beans_canned_clean",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Kidneybohnen, gekocht",
+     "grams": 250
+    }
+   ],
+   "steps": [
+    "Bohnen 5 Minuten erhitzen."
+   ]
+  },
+  "household": {},
+  "blocks": [],
+  "flags": []
+ }
+]

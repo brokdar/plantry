@@ -17,10 +17,8 @@ const API_PORT_GLOBAL = 8280 + LANE
 const PORT_GLOBAL = 5273 + LANE
 const DB_PATH_GLOBAL = `/tmp/plantry-e2e-global-${LANE}.db`
 const IMAGE_PATH_GLOBAL = `/tmp/plantry-e2e-images-global-${LANE}`
-// Read by e2e/helpers.ts and e2e/global-setup.ts (workers inherit the env).
+// Read by e2e/helpers.ts (workers inherit the env).
 process.env.E2E_API_PORT = String(API_PORT)
-process.env.E2E_DB_PATH = DB_PATH
-process.env.E2E_DB_PATH_GLOBAL = DB_PATH_GLOBAL
 // The discovery fixture site (Phase 5 D20): serves the recipe pages the fake
 // research client points at. Read by e2e/discovery-fixture.ts.
 const SITE_PORT = 9100 + LANE
@@ -69,7 +67,6 @@ const SETUP_SPEC = "setup-wizard.spec.ts"
 const FRESH_SPEC = "fresh-install.spec.ts"
 
 export default defineConfig<object, { apiPort: number }>({
-  globalSetup: "./e2e/global-setup.ts",
   testDir: "./e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
@@ -157,7 +154,11 @@ export default defineConfig<object, { apiPort: number }>({
     // specs chat back to back, and at --repeat-each the default turned
     // chats away mid-run.
     {
-      command: `cd ../backend && PLANTRY_PORT=${API_PORT} PLANTRY_DB_PATH=${DB_PATH} PLANTRY_IMAGE_PATH=${IMAGE_PATH} PLANTRY_LOG_LEVEL=error PLANTRY_DEV_MODE=1 PLANTRY_OFF_DISABLED=1 PLANTRY_SECRET_KEY=0123456789abcdef0123456789abcdef PLANTRY_AI_PROVIDER=fake PLANTRY_AI_MODEL=fake-e2e PLANTRY_AI_RATE_LIMIT_PER_MIN=1000 PLANTRY_AI_FAKE_SCRIPT=../frontend/e2e/fixtures/chat-scripts/plan-dinner.json go run ./cmd/plantry`,
+      // The database is wiped here, before the server opens it: a wipe after the
+      // server started (a globalSetup) unlinks the open file, and the next
+      // pooled connection reopens an empty database ("no such table" 500s).
+      // The server log goes to /tmp/plantry-e2e-server-<lane>.log (level error).
+      command: `rm -f ${DB_PATH} ${DB_PATH}-wal ${DB_PATH}-shm && cd ../backend && PLANTRY_PORT=${API_PORT} PLANTRY_DB_PATH=${DB_PATH} PLANTRY_IMAGE_PATH=${IMAGE_PATH} PLANTRY_LOG_LEVEL=error PLANTRY_DEV_MODE=1 PLANTRY_OFF_DISABLED=1 PLANTRY_SECRET_KEY=0123456789abcdef0123456789abcdef PLANTRY_AI_PROVIDER=fake PLANTRY_AI_MODEL=fake-e2e PLANTRY_AI_RATE_LIMIT_PER_MIN=1000 PLANTRY_AI_FAKE_SCRIPT=../frontend/e2e/fixtures/chat-scripts/plan-dinner.json go run ./cmd/plantry >>/tmp/plantry-e2e-server-${LANE}.log 2>&1`,
       url: `http://localhost:${API_PORT}/api/health`,
       reuseExistingServer: false,
       timeout: 60_000,
@@ -170,7 +171,7 @@ export default defineConfig<object, { apiPort: number }>({
       timeout: 60_000,
     },
     {
-      command: `cd ../backend && PLANTRY_PORT=${API_PORT_GLOBAL} PLANTRY_DB_PATH=${DB_PATH_GLOBAL} PLANTRY_IMAGE_PATH=${IMAGE_PATH_GLOBAL} PLANTRY_LOG_LEVEL=error PLANTRY_DEV_MODE=1 PLANTRY_OFF_DISABLED=1 PLANTRY_SECRET_KEY=0123456789abcdef0123456789abcdef PLANTRY_AI_PROVIDER=fake PLANTRY_AI_MODEL=fake-e2e PLANTRY_AI_RATE_LIMIT_PER_MIN=1000 PLANTRY_AI_FAKE_SCRIPT=../frontend/e2e/fixtures/chat-scripts/plan-dinner.json go run ./cmd/plantry`,
+      command: `rm -f ${DB_PATH_GLOBAL} ${DB_PATH_GLOBAL}-wal ${DB_PATH_GLOBAL}-shm && cd ../backend && PLANTRY_PORT=${API_PORT_GLOBAL} PLANTRY_DB_PATH=${DB_PATH_GLOBAL} PLANTRY_IMAGE_PATH=${IMAGE_PATH_GLOBAL} PLANTRY_LOG_LEVEL=error PLANTRY_DEV_MODE=1 PLANTRY_OFF_DISABLED=1 PLANTRY_SECRET_KEY=0123456789abcdef0123456789abcdef PLANTRY_AI_PROVIDER=fake PLANTRY_AI_MODEL=fake-e2e PLANTRY_AI_RATE_LIMIT_PER_MIN=1000 PLANTRY_AI_FAKE_SCRIPT=../frontend/e2e/fixtures/chat-scripts/plan-dinner.json go run ./cmd/plantry >>/tmp/plantry-e2e-server-global-${LANE}.log 2>&1`,
       url: `http://localhost:${API_PORT_GLOBAL}/api/health`,
       reuseExistingServer: false,
       timeout: 60_000,
