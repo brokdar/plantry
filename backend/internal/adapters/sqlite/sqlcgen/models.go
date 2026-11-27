@@ -300,6 +300,12 @@ type FoodsFt struct {
 	Name string
 }
 
+type HiddenVariant struct {
+	FoodID     int64
+	BaseFoodID sql.NullInt64
+	SessionID  sql.NullInt64
+}
+
 type NeverItem struct {
 	FoodID int64
 }

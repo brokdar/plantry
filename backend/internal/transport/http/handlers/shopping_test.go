@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -27,6 +28,7 @@ import (
 // for 4 with 400 g kidney beans and 2 piece onions (120 g each), and an
 // apple leaf with a 150 g piece.
 type shopEnv struct {
+	db       *sql.DB
 	router   http.Handler
 	plates   *plate.Service
 	settings *settings.Service
@@ -60,7 +62,7 @@ func newShopEnv(t *testing.T) *shopEnv {
 		return f
 	}
 	e := &shopEnv{
-		router: r, plates: testsvc.Plates(db), settings: set, foods: foods, slotID: s.ID,
+		db: db, router: r, plates: testsvc.Plates(db), settings: set, foods: foods, slotID: s.ID,
 		beans: leaf("Kidneybohnen (Dose)"), onion: leaf("Zwiebel"), apple: leaf("Apfel"),
 	}
 	require.NoError(t, foods.UpsertPortion(ctx, &food.Portion{FoodID: e.apple.ID, Unit: "piece", Grams: 150}))

@@ -41,6 +41,7 @@ type Synonym struct {
 // synonymTable indexes the bundled table by normalized name.
 type synonymTable struct {
 	byName map[string]*Synonym
+	byID   map[string]*Synonym
 }
 
 var synonyms = mustLoadSynonyms()
@@ -50,11 +51,12 @@ func mustLoadSynonyms() *synonymTable {
 	if err := json.Unmarshal(synonymsJSON, &entries); err != nil {
 		panic(fmt.Sprintf("food: synonym table: %v", err))
 	}
-	t := &synonymTable{byName: map[string]*Synonym{}}
+	t := &synonymTable{byName: map[string]*Synonym{}, byID: map[string]*Synonym{}}
 	for _, e := range entries {
 		if _, ok := kcalBands[e.Group]; !ok && e.Group != "water" {
 			panic(fmt.Sprintf("food: synonym %s: unknown group %q", e.ID, e.Group))
 		}
+		t.byID[e.ID] = e
 		e.names = map[string]struct{}{}
 		for _, list := range [][]string{e.EN, e.DE} {
 			for _, n := range list {

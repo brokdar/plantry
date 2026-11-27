@@ -39,6 +39,8 @@ export interface CookModeProps {
   onPortionsChange: (portions: number) => void
   /** Session mode: "Covers Sun dinner, Mon lunch · 2 spare". */
   coverage?: string
+  /** Session mode: the "I don't have an ingredient" entry. */
+  help?: ReactNode
   /** Session mode: portions to freeze, reminded on the last step. */
   freezePortions?: number
   /** The way out, e.g. a link back to Today or the recipe. */
@@ -69,6 +71,7 @@ export function CookMode({
   portions,
   onPortionsChange,
   coverage,
+  help,
   freezePortions = 0,
   close,
   onDone,
@@ -217,6 +220,7 @@ export function CookMode({
               {t("cook.tabs.ingredients")}
             </h2>
             <ScaledIngredients ingredients={ingredients} />
+            {help}
             {garnishes && garnishes.length > 0 && (
               <section
                 className="flex flex-col gap-2"

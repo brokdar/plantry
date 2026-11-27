@@ -206,8 +206,10 @@ func (r *FoodRepo) List(ctx context.Context, q food.ListQuery) (*food.ListResult
 		builder = builder.Where("archived = 0")
 		countBuilder = countBuilder.Where("archived = 0")
 	case food.ArchiveOnly:
-		builder = builder.Where("archived = 1")
-		countBuilder = countBuilder.Where("archived = 1")
+		// A hidden variant of a batch substitution is archived but not listed.
+		const archivedListed = "archived = 1 AND id NOT IN (SELECT food_id FROM hidden_variants)"
+		builder = builder.Where(archivedListed)
+		countBuilder = countBuilder.Where(archivedListed)
 	}
 	if q.Kind != "" {
 		builder = builder.Where("kind = ?", string(q.Kind))

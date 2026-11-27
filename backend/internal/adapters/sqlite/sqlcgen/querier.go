@@ -25,6 +25,8 @@ type Querier interface {
 	AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams) ([]int64, error)
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
 	ClaimChefJob(ctx context.Context, now string) (ClaimChefJobRow, error)
+	// Frees the session's slot for another variant.
+	ClearHiddenVariantSession(ctx context.Context, sessionID sql.NullInt64) error
 	ClearShownOn(ctx context.Context, shownOn sql.NullString) error
 	CountChefTipsCreatedBetween(ctx context.Context, arg CountChefTipsCreatedBetweenParams) ([]CountChefTipsCreatedBetweenRow, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
@@ -111,6 +113,7 @@ type Querier interface {
 	GetFood(ctx context.Context, id int64) (Food, error)
 	GetFoodAttributes(ctx context.Context, foodID int64) (FoodAttribute, error)
 	GetFoodKind(ctx context.Context, id int64) (string, error)
+	GetHiddenVariant(ctx context.Context, foodID int64) (HiddenVariant, error)
 	GetLeafFoodIDByName(ctx context.Context, name string) (int64, error)
 	// A generation run as GET /api/plan/runs/{id} shows it (B6).
 	GetPlanRun(ctx context.Context, id int64) (GetPlanRunRow, error)
@@ -216,6 +219,8 @@ type Querier interface {
 	// Composed foods with at least one ingredient whose stored attributes hold
 	// no assistant (auto) value: what the library labelling pass labels.
 	ListUnlabelledRecipeIDs(ctx context.Context) ([]int64, error)
+	// Hidden variants no cook session or plate component points at.
+	ListUnusedHiddenVariantIDs(ctx context.Context) ([]int64, error)
 	// Scans plate_events without a date/actor index: fine for a single-user audit
 	// table. Newest first so the cap drops the oldest rows.
 	ListUserPlateUpdates(ctx context.Context, arg ListUserPlateUpdatesParams) ([]ListUserPlateUpdatesRow, error)
@@ -249,6 +254,8 @@ type Querier interface {
 	// (discarded -> open, partially_accepted -> accepted). A single confirm
 	// (confirmed) of some of a run's drafts makes an open run partially_accepted.
 	SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) error
+	SetSessionComponentsFood(ctx context.Context, arg SetSessionComponentsFoodParams) error
+	SetSessionFood(ctx context.Context, arg SetSessionFoodParams) error
 	SetSessionsState(ctx context.Context, arg SetSessionsStateParams) error
 	SetTimeSlotBand(ctx context.Context, arg SetTimeSlotBandParams) error
 	// D12: assigns the day to the oldest pending, never-shown suggestion after
@@ -259,6 +266,7 @@ type Querier interface {
 	SpendAIRuns(ctx context.Context, arg SpendAIRunsParams) (float64, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
 	TouchPlate(ctx context.Context, id int64) error
+	TouchPlatesOfSession(ctx context.Context, cookSessionID sql.NullInt64) error
 	TouchPresetLastUsedAt(ctx context.Context, id int64) error
 	TouchPresetUpdatedAt(ctx context.Context, id int64) error
 	UpdateAIRunStepResult(ctx context.Context, arg UpdateAIRunStepResultParams) error
@@ -276,6 +284,7 @@ type Querier interface {
 	UpsertCookSession(ctx context.Context, arg UpsertCookSessionParams) error
 	UpsertFoodAttributes(ctx context.Context, arg UpsertFoodAttributesParams) error
 	UpsertFoodPortion(ctx context.Context, arg UpsertFoodPortionParams) error
+	UpsertHiddenVariant(ctx context.Context, arg UpsertHiddenVariantParams) error
 	UpsertPlateFeedback(ctx context.Context, arg UpsertPlateFeedbackParams) (PlateFeedback, error)
 	UpsertProfile(ctx context.Context, arg UpsertProfileParams) (UserProfile, error)
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
