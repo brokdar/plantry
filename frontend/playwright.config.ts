@@ -51,6 +51,7 @@ const GLOBAL_SETTINGS_SPECS = [
   "chef-ready-finds.spec.ts",
   "chef-tips.spec.ts",
   "chef-themes.spec.ts",
+  "chef-trial.spec.ts",
   "import-check.spec.ts",
   "discovery-explore-plan.spec.ts",
   "plan-anchor-settings.spec.ts",
