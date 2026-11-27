@@ -201,6 +201,7 @@ function FlagText({ flag }: { flag: FindFlag }) {
       {t(`discovery.find.flag.${flag.code}`, {
         value: flag.value,
         typical: flag.typical,
+        line: flag.reason,
         defaultValue: flag.reason ?? flag.code,
       })}
     </>

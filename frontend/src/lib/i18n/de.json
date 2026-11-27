@@ -2384,7 +2384,8 @@
         "outlier_salt_per_kg": "Salz ({{value}} g/kg) weicht von anderen Versionen ab ({{typical}} g/kg)",
         "outlier_oven_temp": "Ofentemperatur ({{value}}) weicht von anderen Versionen ab ({{typical}})",
         "outlier_total_minutes": "Zeit ({{value}} Min.) weicht von anderen Versionen ab ({{typical}} Min.)",
-        "outlier_liquid_to_starch": "Flüssigkeit zu Stärke ({{value}}) weicht von anderen Versionen ab ({{typical}})"
+        "outlier_liquid_to_starch": "Flüssigkeit zu Stärke ({{value}}) weicht von anderen Versionen ab ({{typical}})",
+        "heat_hot_spice": "„{{line}}“ ist für eine milde Küche noch scharf; nimm ein mildes Gewürz oder lass es weg."
       },
       "questions": "Eine Frage zu eurer Küche",
       "question": {

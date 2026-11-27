@@ -126,7 +126,7 @@ func effectiveHeat(h Household) profile.Heat {
 }
 
 // hotSpiceRE finds a hot spice in an ingredient line.
-var hotSpiceRE = regexp.MustCompile(`(?i)\b(hot|spicy|scharf\w*)\b|cayenne|harissa|jalape|habanero|sriracha|sambal|\bchil+[ie]s? (flakes|peppers?)|\b(red|green|fresh|dried|thai|bird'?s eye) chil`)
+var hotSpiceRE = regexp.MustCompile(`(?i)\bhot (pepper|sauce|curry|paste|chil\w*|spice\w*|paprika|madras)|\bspicy\b|\bscharf\w*|cayenne|harissa|jalape|habanero|sriracha|sambal|\bchil+[ie]s? (flakes|peppers?)|\b(red|green|fresh|dried|thai|bird'?s eye) chil`)
 
 // heatFlags flags the lines of an adapted draft that still hold a hot spice
 // in a household whose heat tolerance is mild or none (FIND-12).

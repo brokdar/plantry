@@ -134,3 +134,18 @@ func TestAdapt_HeatFollowsTasteAndHotSpiceIsFlagged(t *testing.T) {
 		})
 	}
 }
+
+func TestHotSpiceRE_OnlySpices(t *testing.T) {
+	hot := []string{"1 tbsp hot curry powder", "2 tsp hot paprika", "1 tsp cayenne pepper", "2 red chilies, sliced", "1 tbsp sriracha", "1 TL scharfes Currypulver"}
+	notHot := []string{"1 cup hot water", "1 hot dog bun", "2 tbsp hot cocoa mix", "1 tsp mild curry powder", "1 tbsp sweet paprika"}
+	for _, l := range hot {
+		if !finds.HotSpiceRE.MatchString(l) {
+			t.Errorf("%q: want hot", l)
+		}
+	}
+	for _, l := range notHot {
+		if finds.HotSpiceRE.MatchString(l) {
+			t.Errorf("%q: want not hot", l)
+		}
+	}
+}
