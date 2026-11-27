@@ -1283,7 +1283,7 @@
       "unreachable": "{{host}} ist nicht erreichbar. Prüfe die Adresse und deine Verbindung oder füge den Rezepttext ein.",
       "no_recipe_no_ai": "Auf dieser Seite steht kein Rezept. Füge den Rezepttext ein oder richte den Assistenten ein.",
       "unmatched_line": "Jede Zutat braucht einen Treffer, bevor das Rezept gespeichert werden kann.",
-      "no_nutrition": "Eine Zutat hat keine Nährwerte pro 100 g. Wähle einen anderen Treffer oder trag ihre Werte ein."
+      "no_nutrition": "„{{food}}“ hat keine Nährwerte pro 100 g. Wähle dafür einen anderen Treffer oder trag die Werte ein."
     },
     "food": {
       "invalid_portions": "Die Portionen müssen größer als 0 und höchstens 100 sein.",

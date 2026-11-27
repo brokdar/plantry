@@ -246,6 +246,8 @@ func TestFinalize_P3RejectsUnmatchedAndNutritionlessLines(t *testing.T) {
 	src := food.SourceManual
 	bare := &food.Food{Kind: food.KindLeaf, Name: "Mystery", Source: &src}
 	require.NoError(t, env.foods.Create(ctx, bare))
+	saltLeaf := &food.Food{Kind: food.KindLeaf, Name: "Salz", Source: &src}
+	require.NoError(t, env.foods.Create(ctx, saltLeaf))
 	role := food.RoleMain
 	refs := 1.0
 	dish := &food.Food{
@@ -274,15 +276,23 @@ func TestFinalize_P3RejectsUnmatchedAndNutritionlessLines(t *testing.T) {
 		})
 	}
 
+	t.Run("to taste is refused on a non-seasoning", func(t *testing.T) {
+		_, err := env.importer.Finalize(ctx, importer.FinalizeInput{
+			Name: "R", Role: "main", ReferencePortions: 2,
+			Children: []importer.FinalizedChild{ok, {Resolution: importer.ResolutionExisting, FoodID: bare.ID, ToTaste: true}},
+		})
+		require.ErrorIs(t, err, domain.ErrImportInvalidResolution)
+	})
+
 	t.Run("to taste saves without an amount and counts nothing", func(t *testing.T) {
-		salt := importer.FinalizedChild{Resolution: importer.ResolutionExisting, FoodID: bare.ID, ToTaste: true}
+		salt := importer.FinalizedChild{Resolution: importer.ResolutionExisting, FoodID: saltLeaf.ID, ToTaste: true}
 		out, err := env.importer.Finalize(ctx, importer.FinalizeInput{
 			Name: "R", Role: "main", ReferencePortions: 2, Children: []importer.FinalizedChild{ok, salt},
 		})
 		require.NoError(t, err)
 		require.Len(t, out.Children, 2)
 		assert.Equal(t, importer.FinalizedFoodChild{
-			ChildID: bare.ID, Amount: 1, Unit: "g", Grams: 1,
+			ChildID: saltLeaf.ID, Amount: 1, Unit: "g", Grams: 1,
 			GramsSource: food.GramsSourceDirect, SortOrder: 1, ToTaste: true,
 		}, out.Children[1])
 

@@ -12,7 +12,7 @@ export function toastError(
   // passes `fallbackMessage`, use it for any non-API error so the user sees
   // an action-specific message instead of the generic "Something went wrong".
   if (err instanceof ApiError) {
-    toast.error(t(err.messageKey))
+    toast.error(t(err.messageKey, err.params))
     return
   }
   toast.error(fallbackMessage ?? t("error.server"))

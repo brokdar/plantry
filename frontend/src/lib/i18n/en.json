@@ -1256,7 +1256,7 @@
       "unreachable": "Couldn't reach {{host}}. Check the address and your connection, or paste the recipe text instead.",
       "no_recipe_no_ai": "No recipe found on this page. Paste the recipe text or set up the assistant.",
       "unmatched_line": "Every ingredient needs a match before the recipe can be saved.",
-      "no_nutrition": "An ingredient has no nutrition per 100 g. Pick another match or enter its values."
+      "no_nutrition": "“{{food}}” has no nutrition per 100 g. Pick another match for it or enter its values."
     },
     "food": {
       "invalid_portions": "Portions must be more than 0 and at most 100.",

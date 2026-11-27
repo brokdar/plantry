@@ -377,8 +377,20 @@ func (s *Service) Finalize(ctx context.Context, in FinalizeInput) (*FinalizedFoo
 	return out, nil
 }
 
+// LineError names the food of the line a P3 refusal is about, so the
+// transport can point at it. It unwraps to the domain error.
+type LineError struct {
+	Err  error
+	Food string
+}
+
+func (e *LineError) Error() string { return fmt.Sprintf("%v: %s", e.Err, e.Food) }
+func (e *LineError) Unwrap() error { return e.Err }
+
 // checkHonest enforces P3 on one row: it names a food, the food is a leaf,
-// and the leaf has nutrition per 100 g unless the line is to taste.
+// and the leaf has nutrition per 100 g unless the line is to taste (only a
+// seasoning may be, MATCH-6). /api/import/resolve is the P3 gate; POST
+// /api/foods stays permissive for manual recipes.
 func (s *Service) checkHonest(ctx context.Context, row FinalizedChild) error {
 	switch row.Resolution {
 	case ResolutionExisting, ResolutionNew:
@@ -393,10 +405,13 @@ func (s *Service) checkHonest(ctx context.Context, row FinalizedChild) error {
 		return fmt.Errorf("load food %d: %w", row.FoodID, err)
 	}
 	if f.Kind != food.KindLeaf {
-		return fmt.Errorf("%w: %s is not an ingredient", domain.ErrImportNoNutrition, f.Name)
+		return &LineError{Err: domain.ErrImportNoNutrition, Food: f.Name}
+	}
+	if row.ToTaste && !food.IsToTasteGroup(food.LineGroup(f.Name, "")) {
+		return &LineError{Err: domain.ErrImportInvalidResolution, Food: f.Name}
 	}
 	if !row.ToTaste && (f.Kcal100g == nil || f.Protein100g == nil || f.Fat100g == nil || f.Carbs100g == nil) {
-		return fmt.Errorf("%w: %s", domain.ErrImportNoNutrition, f.Name)
+		return &LineError{Err: domain.ErrImportNoNutrition, Food: f.Name}
 	}
 	return nil
 }

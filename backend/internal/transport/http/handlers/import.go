@@ -179,6 +179,11 @@ func (h *ImportHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	out, err := h.svc.Finalize(r.Context(), input)
 	if err != nil {
 		status, key := toHTTP(err)
+		var le *importer.LineError
+		if errors.As(err, &le) {
+			writeErrorParams(w, status, key, map[string]string{"food": le.Food})
+			return
+		}
 		writeError(w, status, key)
 		return
 	}

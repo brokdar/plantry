@@ -41,6 +41,15 @@ import { toast } from "sonner"
 import { draftRows } from "./draft-rows"
 import { ImportWizard } from "./ImportWizard"
 
+const localMehl: LookupCandidate = {
+  ...mockLookupCandidate,
+  name: "Mehl",
+  source: "local",
+  fdc_id: null,
+  existing_id: 7,
+  exact: true,
+}
+
 const draft: Draft = {
   name: "Zwiebelkuchen",
   description: "Ein herbstlicher Klassiker.",
@@ -64,6 +73,14 @@ const draft: Draft = {
       diet_class: "vegan",
       needs_weight: false,
       warning: "",
+      match: {
+        status: "matched",
+        tried: ["catalogue"],
+        candidates: [localMehl],
+        pick: 0,
+        grams: 200,
+        name: "Mehl",
+      },
     },
   ],
   tags: [],
@@ -71,15 +88,6 @@ const draft: Draft = {
   extract_method: "jsonld",
   warnings: [],
   source_kcal_per_serving: 520,
-}
-
-const localMehl: LookupCandidate = {
-  ...mockLookupCandidate,
-  name: "Mehl",
-  source: "local",
-  fdc_id: null,
-  existing_id: 7,
-  exact: true,
 }
 
 const prefixLocal: LookupCandidate = {
@@ -177,6 +185,14 @@ const saltLine: DraftIngredient = {
   original_unit: "",
   name: "Salz",
   to_taste: true,
+  match: {
+    status: "matched",
+    tried: ["catalogue"],
+    candidates: [{ ...localMehl, name: "Salz", existing_id: 9 }],
+    pick: 0,
+    grams: null,
+    name: "Salz",
+  },
 }
 
 const oilLine: DraftIngredient = {
@@ -187,6 +203,25 @@ const oilLine: DraftIngredient = {
   original_unit: "",
   name: "Olivenöl",
   proposed: true,
+  match: {
+    status: "matched",
+    tried: ["catalogue"],
+    candidates: [{ ...localMehl, name: "Olivenöl", existing_id: 10 }],
+    pick: 0,
+    grams: 15,
+    name: "Olivenöl",
+  },
+}
+
+/** The draft's "Mehl" line with no accepted match: the review leaves it
+ *  for the user to pick. */
+function useUnmatchedMehl() {
+  vi.mocked(extractRecipe).mockResolvedValue({
+    draft: {
+      ...draft,
+      ingredients: [{ ...draft.ingredients[0]!, match: null }],
+    },
+  })
 }
 
 async function openReview() {
@@ -210,6 +245,7 @@ describe("ImportWizard", () => {
   })
 
   it("creates a leaf with the nutrition of a candidate that is not in the library", async () => {
+    useUnmatchedMehl()
     mockLookup([externalMehl])
     vi.mocked(createFood).mockResolvedValue(createdLeaf)
     const user = await openReview()
@@ -239,6 +275,7 @@ describe("ImportWizard", () => {
   })
 
   it("reuses the existing leaf when the create hits a duplicate name", async () => {
+    useUnmatchedMehl()
     mockLookup([externalMehl])
     vi.mocked(createFood).mockRejectedValue(
       new ApiError(409, "error.food.duplicate_name", 42)
@@ -266,6 +303,7 @@ describe("ImportWizard", () => {
   })
 
   it("shows a toast when creating the ingredient fails", async () => {
+    useUnmatchedMehl()
     mockLookup([])
     vi.mocked(createFood).mockRejectedValue(new ApiError(500, "error.server"))
     const user = await openReview()
@@ -287,6 +325,7 @@ describe("ImportWizard", () => {
   })
 
   it("disables save while rows are unresolved and says how many", async () => {
+    useUnmatchedMehl()
     mockLookup([])
     await openReview()
 
@@ -315,6 +354,7 @@ describe("ImportWizard", () => {
   })
 
   it("does not auto-link a catalogue match that only starts with the name", async () => {
+    useUnmatchedMehl()
     mockLookup([prefixLocal])
     await openReview()
 
@@ -389,6 +429,7 @@ describe("ImportWizard", () => {
   })
 
   it("creates a new ingredient only with nutrition per 100 g (P3)", async () => {
+    useUnmatchedMehl()
     mockLookup([])
     vi.mocked(createFood).mockResolvedValue(createdLeaf)
     const user = await openReview()
@@ -415,6 +456,60 @@ describe("ImportWizard", () => {
       carbs_100g: 76,
     })
     expect(await screen.findByText(/linked/i)).toBeInTheDocument()
+  })
+
+  it("does not link a same-name leaf the backend's match rejected (P3)", async () => {
+    // "Mehl" has a catalogue leaf of that name, but the match found it
+    // unusable (no nutrition): the row stays a problem, Save stays disabled.
+    mockLookup([localMehl])
+    vi.mocked(extractRecipe).mockResolvedValue({
+      draft: {
+        ...draft,
+        ingredients: [
+          {
+            ...draft.ingredients[0]!,
+            match: {
+              status: "unmatched",
+              reason: "no_nutrition",
+              tried: ["catalogue"],
+              candidates: [],
+              pick: -1,
+              grams: null,
+              name: "Mehl",
+            },
+          },
+        ],
+      },
+    })
+    await openReview()
+    await waitFor(() => expect(lookupImportLine).toHaveBeenCalled())
+    expect(screen.getByRole("button", { name: /save recipe/i })).toBeDisabled()
+    expect(screen.queryByText(/linked/i)).toBeNull()
+  })
+
+  it("links the candidate the backend's match picked", async () => {
+    mockLookup([prefixLocal])
+    vi.mocked(extractRecipe).mockResolvedValue({
+      draft: {
+        ...draft,
+        ingredients: [
+          {
+            ...draft.ingredients[0]!,
+            match: {
+              status: "matched",
+              tried: ["catalogue"],
+              candidates: [prefixLocal],
+              pick: 0,
+              grams: 200,
+              name: "Mehl",
+            },
+          },
+        ],
+      },
+    })
+    await openReview()
+    expect(await screen.findByText(/linked/i)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /save recipe/i })).toBeEnabled()
   })
 
   it("offers no Skip: an unmatched line blocks Save until it is removed (AC-10)", async () => {
@@ -555,6 +650,14 @@ describe("ImportWizard", () => {
             needs_weight: true,
             warning: "",
             diet_class: "vegan",
+            match: {
+              status: "matched",
+              tried: ["catalogue"],
+              candidates: [localMehl],
+              pick: 0,
+              grams: null,
+              name: "Mehl",
+            },
           },
         ],
       },
@@ -727,6 +830,14 @@ describe("ImportWizard", () => {
           diet_class: "vegan",
           needs_weight: false,
           warning: "",
+          match: {
+            status: "matched",
+            tried: ["catalogue"],
+            candidates: [zwiebel],
+            pick: 0,
+            grams: 240,
+            name: "Zwiebel",
+          },
         },
       ],
     }

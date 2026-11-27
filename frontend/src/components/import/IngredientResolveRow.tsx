@@ -245,27 +245,21 @@ function RowEditor({ ing, state, lang, onChange }: RowProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [portions.data, leafPortion?.grams])
 
-  // Auto-select only an exact catalogue match; prefix/contains matches
-  // ("Zwiebelsuppe" for "Zwiebel") stay pickable but need a user choice.
+  // Auto-select only the backend's accepted match; anything else stays
+  // pickable but needs a user choice.
   useEffect(() => {
     if (state.foodId) return
     if (!lookup.data) return
-    // A catalogue leaf of the line's own name wins; else the draft's
-    // confident catalogue match (MATCH-2), e.g. "Onion" for "Zwiebel".
+    // Link only what the backend's match accepted (MATCH-2: it checked
+    // nutrition, state and kcal band). A same-name leaf the match rejected
+    // stays a problem for the user.
     const m = ing.match
     const picked =
       m && m.status !== "unmatched" && m.pick >= 0
         ? m.candidates[m.pick]
         : undefined
-    const own = state.query.trim().toLowerCase()
-    const hit =
-      results.find(
-        (r) => r.source === "local" && r.name.trim().toLowerCase() === own
-      ) ??
-      (picked?.existing_id ? picked : undefined) ??
-      results.find((r) => r.source === "local" && r.exact)
-    if (hit && hit.existing_id) {
-      onChange(relink(hit.existing_id, hit.name))
+    if (picked?.existing_id) {
+      onChange(relink(picked.existing_id, picked.name))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lookup.data])
