@@ -17,6 +17,7 @@ type LibraryDeps struct {
 	Foods interface {
 		Create(ctx context.Context, f *food.Food) error
 		Delete(ctx context.Context, id int64) error
+		StartTrial(ctx context.Context, id int64) error
 	}
 	Catalogue food.Repository
 	Origins   food.OriginStore
@@ -47,6 +48,10 @@ func (l library) Finalize(ctx context.Context, in importer.FinalizeInput) (*impo
 func (l library) Create(ctx context.Context, f *food.Food) error { return l.d.Foods.Create(ctx, f) }
 
 func (l library) Delete(ctx context.Context, id int64) error { return l.d.Foods.Delete(ctx, id) }
+
+func (l library) StartTrial(ctx context.Context, id int64) error {
+	return l.d.Foods.StartTrial(ctx, id)
+}
 
 // OnDraft reports whether a draft plate of the window eats foodID.
 func (l library) OnDraft(ctx context.Context, foodID int64, windowStart time.Time) (bool, error) {

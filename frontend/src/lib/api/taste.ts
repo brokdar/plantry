@@ -86,3 +86,14 @@ export function confirmStatement(
     body: JSON.stringify({ ...statement, scope }),
   })
 }
+
+/** POST /api/taste/propose: the statements a free-text answer proposes
+ *  (COLD-1); nothing is stored until a chip is tapped. */
+export function proposeStatements(text: string): Promise<{
+  statements: Statement[]
+}> {
+  return apiFetch(`/taste/propose`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  })
+}

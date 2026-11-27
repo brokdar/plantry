@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
@@ -101,6 +102,8 @@ type rig struct {
 	store  *sqlite.FindRepo
 	client *fake.Client
 	db     *sql.DB
+	// house sets the Cuisines and FirstWeek of the household the rig returns.
+	house finds.Household
 }
 
 func newRig(t *testing.T, web bool, m lineMatcher, kitchen profile.Kitchen, turns ...fake.Turn) *rig {
@@ -124,7 +127,7 @@ func newRigWrapped(t *testing.T, wrap func(*fake.Client) llm.Client, web bool, m
 		Store: store, LLM: llm.StaticResolver(rec.Meter(provider, "fake"), "fake-model"), Runs: rec,
 		Fetcher: pageFetcher{t}, Extractor: importer.NewService(nil, jsonld.Extractor{}, nil, nil, nil), Matcher: m,
 		Household: func(context.Context) (finds.Household, error) {
-			return finds.Household{Lang: "en", Diet: "vegetarian", Portions: 2, Kitchen: kitchen}, nil
+			return finds.Household{Lang: "en", Diet: "vegetarian", Portions: 2, Kitchen: kitchen, Cuisines: r.house.Cuisines, FirstWeek: r.house.FirstWeek}, nil
 		},
 		Sites: func(context.Context) ([]settings.ChefSite, error) {
 			return []settings.ChefSite{
@@ -424,4 +427,42 @@ func TestDiscard_LearnFailureKeepsFindOpen(t *testing.T) {
 	got, err := r.svc.Get(ctx, f.ID)
 	require.NoError(t, err)
 	require.Equal(t, finds.StateReady, got.State)
+}
+
+// COLD-4: in week one a find the user did not name, and Fill my library, adapts
+// for a mild, familiar dish (unless the user set heat) and Fill searches within
+// the household's cuisines; a named find and later weeks are unchanged.
+func TestPipeline_WeekOneIsMildAndFamiliar(t *testing.T) {
+	t.Parallel()
+	run := func(t *testing.T, trigger finds.Trigger, firstWeek bool, k profile.Kitchen) (search, adapt string) {
+		t.Helper()
+		r := newRig(t, true, lineMatcher{}, k, searchTurn(curryURLs...), adaptTurn(false, fitsKitchen))
+		r.house = finds.Household{Cuisines: []string{"german"}, FirstWeek: firstWeek}
+		f := r.run(t, trigger)
+		require.Equal(t, finds.StateReady, f.State, f.Steps)
+		reqs := r.client.Requests()
+		return reqs[0].Messages[0].Content[0].Text, reqs[len(reqs)-1].Messages[0].Content[0].Text
+	}
+	search, adapt := run(t, finds.TriggerFill, true, kitchen)
+	assert.Contains(t, search, "german")
+	assert.Contains(t, adapt, "Heat tolerance: mild")
+	assert.Contains(t, adapt, "first week")
+
+	search, adapt = run(t, finds.TriggerPlanning, true, kitchen)
+	assert.NotContains(t, search, "german", "only Fill's generic dishes need a cuisine")
+	assert.Contains(t, adapt, "Heat tolerance: mild")
+
+	hot := kitchen
+	hot.Heat = profile.HeatHot
+	_, adapt = run(t, finds.TriggerPlanning, true, hot)
+	assert.Contains(t, adapt, "Heat tolerance: hot", "the user's heat stays")
+
+	for _, c := range []struct {
+		trigger finds.Trigger
+		week    bool
+	}{{finds.TriggerChat, true}, {finds.TriggerFill, false}} {
+		search, adapt = run(t, c.trigger, c.week, kitchen)
+		assert.NotContains(t, search, "german")
+		assert.NotContains(t, adapt, "mild")
+	}
 }

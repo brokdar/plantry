@@ -57,7 +57,7 @@ var foodCols = []string{
 	"notes", "image_path", "favorite",
 	"created_at", "updated_at",
 	"source_url", "description", "keep_days", "freezable", "shop_section",
-	"diet_class", "no_cook", "serving_g", "archived",
+	"diet_class", "no_cook", "serving_g", "archived", "trial", "trial_seen",
 }
 
 // FoodRepo implements food.Repository backed by SQLite.
@@ -501,6 +501,11 @@ func (r *FoodRepo) CountComposedFoods(ctx context.Context) (int64, error) {
 	return r.queriesFor(ctx).CountComposedFoods(ctx)
 }
 
+// HasCookHistory reports whether any plate was ever confirmed.
+func (r *FoodRepo) HasCookHistory(ctx context.Context) (bool, error) {
+	return r.queriesFor(ctx).HasConfirmedPlate(ctx)
+}
+
 // UneatenRecipes returns the recipes not eaten in [since, today] (as
 // History counts eating), by id.
 func (r *FoodRepo) UneatenRecipes(ctx context.Context, since, today time.Time) ([]food.RecipeRole, error) {
@@ -533,7 +538,7 @@ func (r *FoodRepo) History(ctx context.Context, ids []int64, today time.Time) (m
 	}
 	out := make(map[int64]food.History, len(rows))
 	for _, row := range rows {
-		h := food.History{TimesCooked: int(row.TimesCooked)}
+		h := food.History{TimesCooked: int(row.TimesCooked), TrialDone: row.TrialDone != 0}
 		if row.LastEaten != "" {
 			d, err := time.Parse(time.DateOnly, row.LastEaten)
 			if err != nil {
@@ -621,6 +626,16 @@ func (r *FoodRepo) SetFavorite(ctx context.Context, id int64, favorite bool) (*f
 		return nil, err
 	}
 	return &f, nil
+}
+
+// StartTrial puts a recipe on trial with its To try badge (NEW-1).
+func (r *FoodRepo) StartTrial(ctx context.Context, id int64) error {
+	return r.queriesFor(ctx).StartFoodTrial(ctx, id)
+}
+
+// SetTrialSeen clears a trial recipe's To try badge (NEW-3).
+func (r *FoodRepo) SetTrialSeen(ctx context.Context, id int64) error {
+	return r.queriesFor(ctx).SetFoodTrialSeen(ctx, id)
 }
 
 // SetArchived hides a recipe from planning and lists, or restores it.
@@ -996,6 +1011,7 @@ func mapFoodToDomain(row *sqlcgen.Food, f *food.Food) {
 	f.ImagePath = fromNullString(row.ImagePath)
 	f.Favorite = row.Favorite != 0
 	f.Archived = row.Archived != 0
+	f.Trial, f.TrialSeen = row.Trial != 0, row.TrialSeen != 0
 	f.KeepDays = fromNullInt64ToIntPtr(row.KeepDays)
 	if row.Freezable.Valid {
 		v := row.Freezable.Int64 == 1
@@ -1075,7 +1091,7 @@ func scanFoodRow(rows *sql.Rows) (*sqlcgen.Food, error) {
 		&row.Notes, &row.ImagePath, &row.Favorite,
 		&row.CreatedAt, &row.UpdatedAt,
 		&row.SourceUrl, &row.Description, &row.KeepDays, &row.Freezable, &row.ShopSection,
-		&row.DietClass, &row.NoCook, &row.ServingG, &row.Archived,
+		&row.DietClass, &row.NoCook, &row.ServingG, &row.Archived, &row.Trial, &row.TrialSeen,
 	); err != nil {
 		return nil, err
 	}

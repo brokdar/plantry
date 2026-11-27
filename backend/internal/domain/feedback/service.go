@@ -3,7 +3,9 @@ package feedback
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -25,6 +27,19 @@ type Service struct {
 	tags     TagReader
 	profiles ProfileStore
 	taste    Rater
+	trials   TrialArchiver
+}
+
+// TrialArchiver archives the recipes among ids that were on trial on the
+// given day (food.Service.ArchiveDisliked, NEW-4).
+type TrialArchiver interface {
+	ArchiveDisliked(ctx context.Context, ids []int64, day time.Time) ([]food.ArchivedTrial, error)
+}
+
+// WithTrials sets the trial archiver and returns s.
+func (s *Service) WithTrials(t TrialArchiver) *Service {
+	s.trials = t
+	return s
 }
 
 // Rater learns from a plate's rating (taste.Service.Rating); old is the
@@ -78,6 +93,13 @@ func (s *Service) RecordFeedback(ctx context.Context, plateID int64, status Stat
 				return err
 			}
 		}
+		// A disliked first cooking archives a trial recipe: one still on trial
+		// on the plate's day (NEW-4).
+		if status == StatusDisliked && s.trials != nil {
+			if fb.ArchivedTrials, err = s.trials.ArchiveDisliked(ctx, recipeIDs(p), p.Date); err != nil {
+				return err
+			}
+		}
 		if len(tags) == 0 {
 			return nil
 		}
@@ -93,6 +115,17 @@ func (s *Service) RecordFeedback(ctx context.Context, plateID int64, status Stat
 		return nil, err
 	}
 	return fb, nil
+}
+
+// recipeIDs lists the plate's recipes, each once.
+func recipeIDs(p *plate.Plate) []int64 {
+	var out []int64
+	for _, c := range p.Components {
+		if !c.IsLeaf() && !slices.Contains(out, c.FoodID) {
+			out = append(out, c.FoodID)
+		}
+	}
+	return out
 }
 
 // DeleteFeedback removes the feedback row for a plate.

@@ -34,7 +34,18 @@ func (s *Service) List(ctx context.Context, state *State) ([]Find, error) {
 
 // Keep marks the find in the library with the recipe the review saved.
 func (s *Service) Keep(ctx context.Context, id, foodID int64) (*Find, error) {
-	return s.d.Store.Decide(ctx, id, StateInLibrary, nil, &foodID)
+	var out *Find
+	err := s.inTx(ctx, func(ctx context.Context) error {
+		var err error
+		if out, err = s.d.Store.Decide(ctx, id, StateInLibrary, nil, &foodID); err != nil {
+			return err
+		}
+		if s.d.Planning.Library == nil {
+			return nil
+		}
+		return s.d.Planning.Library.StartTrial(ctx, foodID)
+	})
+	return out, err
 }
 
 // Discard is "Not for me" on a ready or needs_check find (NEW-4): the

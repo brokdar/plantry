@@ -253,6 +253,8 @@ type Food struct {
 	NoCook            sql.NullInt64
 	ServingG          sql.NullFloat64
 	Archived          int64
+	Trial             int64
+	TrialSeen         int64
 	KeepDays          sql.NullInt64
 	Freezable         sql.NullInt64
 }

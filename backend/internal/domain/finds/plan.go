@@ -32,6 +32,8 @@ type Library interface {
 	Finalize(ctx context.Context, in importer.FinalizeInput) (*importer.FinalizedFood, error)
 	Create(ctx context.Context, f *food.Food) error
 	Delete(ctx context.Context, id int64) error
+	// StartTrial puts a recipe that entered the library on trial (NEW-1).
+	StartTrial(ctx context.Context, id int64) error
 	// Unplan removes the window's draft plates that eat foodID; a confirmed
 	// one refuses (domain.ErrInUse).
 	Unplan(ctx context.Context, foodID int64, windowStart time.Time) error
@@ -296,6 +298,9 @@ func (s *Service) place(ctx context.Context, f *Find, windowStart time.Time) (in
 		if err := s.d.Planning.Library.Create(ctx, r); err != nil {
 			return fmt.Errorf("create recipe: %w", err)
 		}
+		if err := s.d.Planning.Library.StartTrial(ctx, r.ID); err != nil {
+			return err
+		}
 		if _, err := s.d.Store.Place(ctx, f.ID, r.ID, windowStart); err != nil {
 			return err
 		}
@@ -371,4 +376,64 @@ func (s *Service) recipe(ctx context.Context, f *Find) (*food.Food, error) {
 		r.Instructions = append(r.Instructions, food.Instruction{StepNumber: st.StepNumber, Text: st.Text})
 	}
 	return r, nil
+}
+
+// fillDishes are the ten searches of "Fill my library" (COLD-3), spread
+// across roles and attributes; the pipeline adapts each to the household.
+var fillDishes = []string{
+	"quick weeknight chicken main",
+	"vegetarian main with legumes",
+	"light fish main",
+	"hearty one-pot stew",
+	"pasta main the whole family likes",
+	"simple vegetable side",
+	"side with rice or potatoes",
+	"warming soup",
+	"fresh salad",
+	"mild vegetarian curry",
+}
+
+// FillLibrary starts the ten requested finds of "Fill my library"; each
+// ready one enters the library on trial. The caller checks the Chef is on. Finds
+// still searching from an earlier tap are returned with it; only the dishes
+// without one are started, so a partial failure tops up to ten.
+func (s *Service) FillLibrary(ctx context.Context) ([]Find, error) {
+	searching := StateSearching
+	open, err := s.d.Store.List(ctx, &searching, maxStaged)
+	if err != nil {
+		return nil, err
+	}
+	open = slices.DeleteFunc(open, func(f Find) bool { return f.Trigger != TriggerFill })
+	out := open
+	for _, dish := range fillDishes {
+		if slices.ContainsFunc(open, func(f Find) bool { return f.Dish == clean(dish) }) {
+			continue
+		}
+		f, err := s.Request(ctx, dish, TriggerFill)
+		if err != nil {
+			return out, err
+		}
+		out = append(out, *f)
+	}
+	return out, nil
+}
+
+// addToLibrary writes a ready find as a recipe on trial and marks it in the
+// library, like Keep after the review.
+func (s *Service) addToLibrary(ctx context.Context, f *Find) error {
+	return s.inTx(ctx, func(ctx context.Context) error {
+		r, err := s.recipe(ctx, f)
+		if err != nil {
+			return err
+		}
+		lib := s.d.Planning.Library
+		if err := lib.Create(ctx, r); err != nil {
+			return fmt.Errorf("create recipe: %w", err)
+		}
+		if err := lib.StartTrial(ctx, r.ID); err != nil {
+			return err
+		}
+		_, err = s.d.Store.Decide(ctx, f.ID, StateInLibrary, nil, &r.ID)
+		return err
+	})
 }

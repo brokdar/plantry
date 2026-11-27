@@ -32,3 +32,9 @@ export function getLabellingEstimate(): Promise<LabellingEstimate> {
 export function startLibraryLabelling(): Promise<{ jobs: number }> {
   return apiFetch("/chef/labelling", { method: "POST" })
 }
+
+/** POST /api/chef/fill-library: ten requested finds that enter the library
+ *  on trial (COLD-3). */
+export function fillLibrary(): Promise<{ items: { id: number }[] }> {
+  return apiFetch("/chef/fill-library", { method: "POST" })
+}

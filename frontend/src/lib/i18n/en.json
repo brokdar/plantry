@@ -798,6 +798,13 @@
         "line": "This week: {{names}}. It ends with the week.",
         "empty": "No theme this week.",
         "link": "Open the plan"
+      },
+      "cold": {
+        "title": "What does your household love, and what would it rather skip?",
+        "hint": "One sentence is enough, for example \"we love thai and pasta, but no coriander\".",
+        "placeholder": "We love…, but no…",
+        "submit": "Suggest",
+        "none": "Nothing I could pick out. Try naming a few dishes, cuisines or ingredients."
       }
     }
   },
@@ -2021,6 +2028,7 @@
       "diet_unknown": "The diet of this recipe is unknown.",
       "variety_repeat": "You had this recently, on {{last_eaten}}.",
       "variety_relaxed": "You had this recently, on {{last_eaten}}. There aren't enough other recipes to avoid it.",
+      "trial_repeat": "This recipe is on trial and is already cooked this week.",
       "variety_repeat_week": "Already on this week's plan, on {{last_eaten}}.",
       "kcal_below_floor": "This day is under the minimum Plantry plans: {{kcal}} kcal, at least {{floor_kcal}} kcal are needed.",
       "leftover_before_cook": "Eaten before the batch is cooked.",
@@ -2424,7 +2432,11 @@
       "freezer": "Freezer",
       "defrost": "Take {{name}} out of the freezer tonight",
       "last_day": "Last day",
-      "use_by": "{{slot}} is the last of the {{name}}"
+      "use_by": "{{slot}} is the last of the {{name}}",
+      "tonight": "Tonight",
+      "soak": "Soak the dried legumes for tomorrow's {{name}}",
+      "marinate": "Marinate tonight for tomorrow's {{name}}",
+      "thaw": "Move the frozen ingredients for tomorrow's {{name}} to the fridge"
     },
     "rate": {
       "question": "How was {{weekday}}'s {{name}}?",
@@ -2458,6 +2470,9 @@
       "title": "This week",
       "open": "Open {{day}} in the plan",
       "empty": "Nothing planned"
+    },
+    "rate_reason": {
+      "prompt": "{{name}} is hidden from planning. What put you off?"
     }
   },
   "recipes": {
@@ -2542,6 +2557,12 @@
       "enter_hint": "Values per 100 g for “{{name}}”, from the package or a nutrition table.",
       "save_nutrition": "Save nutrition",
       "remove_in_recipe": "Remove a line in the recipe"
+    },
+    "to_try": "To try",
+    "fill": {
+      "button": "Fill my library",
+      "hint": "Ten recipes that fit your household, added for you to try.",
+      "started": "Looking for ten recipes. They appear in your library as they are ready."
     }
   },
   "substitute": {

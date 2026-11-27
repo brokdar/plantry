@@ -53,3 +53,17 @@ func (h *NotForMeHandler) Post(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]foodevent.Undo{"undo": undo})
 }
+
+// TrialSeen handles POST /api/foods/{id}/trial-seen: opening a trial recipe
+// clears its To try badge, not the trial (NEW-3). 204.
+func (h *NotForMeHandler) TrialSeen(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+	if err := h.foods.MarkTrialSeen(r.Context(), id); err != nil {
+		writeError(w, http.StatusInternalServerError, "error.server")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

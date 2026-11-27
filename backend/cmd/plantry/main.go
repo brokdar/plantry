@@ -285,7 +285,7 @@ func run() error {
 	})
 	foodRestorers[foodevent.KindTasteItem] = tasteSvc
 	plateSvc.WithTaste(tasteSvc)
-	feedbackSvc.WithTaste(tasteSvc)
+	feedbackSvc.WithTaste(tasteSvc).WithTrials(foodSvc)
 	foodSvc.WithFavourites(tasteSvc)
 	// Kitchen: the foods the household never eats keep recipes holding them
 	// out of every auto-placed plate (planning) and out of tips.
@@ -371,7 +371,21 @@ func run() error {
 		Diets:        foodSvc,
 		Light:        planLight,
 		Progress:     planningSvc,
-		Tx:           txRunner,
+		Prep: func(ctx context.Context, ids []int64) (map[int64]*food.Food, error) {
+			if on, err := settingsSvc.ChefEnabled(ctx); err != nil || !on {
+				return nil, err
+			}
+			out := make(map[int64]*food.Food, len(ids))
+			for _, id := range ids {
+				f, err := foodRepo.Get(ctx, id)
+				if err != nil {
+					return nil, err
+				}
+				out[id] = f
+			}
+			return out, nil
+		},
+		Tx: txRunner,
 	})
 
 	// Food resolver depends on llmResolver for optional AI translation
@@ -532,12 +546,13 @@ func run() error {
 	)
 	// Finds (FIND, C2): requested finds run on the chef runner; fetching is
 	// polite (robots, rate limit, backoff) and guarded like discovery.
+	houseCuisines := householdCuisines(profileSvc.Get, lovedCuisines(tasteSvc.View), settingsSvc.DiscoveryCuisines)
 	findSvc = finds.NewService(finds.Deps{
 		Store: sqlite.NewFindRepo(conn), LLM: llmResolver, Runs: runRecorder,
 		Fetcher: httpfetch.NewPolite(httpfetch.New(httpfetch.WithDialGuard(nil, cfg.DevMode)),
 			httpfetch.WithAIGroupsExempt(aiGroupsExempt(settingsSvc.ChefSites))),
 		Extractor: importSvc, Matcher: matcher,
-		Household: findHousehold(profileSvc.Get, sqlite.NewKitchenRepo(conn).NeverItems, tasteSvc.View, foodRepo.LeafNamesByRecipeUse),
+		Household: findHousehold(profileSvc.Get, sqlite.NewKitchenRepo(conn).NeverItems, tasteSvc.View, foodRepo.LeafNamesByRecipeUse, houseCuisines, foodRepo.HasCookHistory),
 		Sites:     settingsSvc.ChefSites,
 		Enqueue: func(ctx context.Context, id int64, requested bool) error {
 			_, err := chefRunner.Enqueue(ctx, airun.KindChefFind, strconv.FormatInt(id, 10), requested)
@@ -554,9 +569,19 @@ func run() error {
 				return settingsdom.NewDishesPerWeek(ctx, settingsSvc)
 			},
 			Dish: func(ctx context.Context, day time.Time) (string, error) {
-				cuisines, err := settingsSvc.DiscoveryCuisines(ctx)
+				// Week one stays within the household's cuisines (COLD-4).
+				cooked, err := foodRepo.HasCookHistory(ctx)
 				if err != nil {
 					return "", err
+				}
+				cuisines, err := houseCuisines(ctx)
+				if err != nil {
+					return "", err
+				}
+				if cooked || len(cuisines) == 0 {
+					if cuisines, err = settingsSvc.DiscoveryCuisines(ctx); err != nil {
+						return "", err
+					}
 				}
 				return discovery.DailyCuisine(cuisines, day), nil
 			},

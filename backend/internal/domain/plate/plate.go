@@ -86,6 +86,8 @@ type PlateComponent struct {
 	FoodRole *string
 	// FoodImagePath is the food's image (nil without one), for board thumbnails.
 	FoodImagePath *string
+	// FoodToTry is the food's To try badge (NEW-3).
+	FoodToTry bool
 }
 
 // IsLeaf reports whether the component carries a leaf-style quantity

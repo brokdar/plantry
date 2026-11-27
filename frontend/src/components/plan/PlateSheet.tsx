@@ -58,6 +58,7 @@ import { AlternativesPanel, type AlternativesTarget } from "./AlternativesPanel"
 import { BatchSection } from "./BatchSection"
 import { CellChoiceDialog, useAlsoChangedConfirm } from "./MealActions"
 import type { PickerTarget } from "./FoodPicker"
+import { ToTryBadge } from "@/components/recipes/ToTryBadge"
 import { QuantityStepper } from "./QuantityStepper"
 import { UnlockDialog } from "./UnlockDialog"
 
@@ -540,6 +541,7 @@ function ComponentRow({
       <div className="flex items-center gap-1">
         <span className="min-w-0 flex-1 font-heading text-h3 text-ink">
           {c.food_name}
+          {c.to_try && <ToTryBadge className="ml-2 align-middle" />}
         </span>
         {!readOnly && (
           <>

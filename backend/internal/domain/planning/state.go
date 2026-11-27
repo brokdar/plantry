@@ -184,6 +184,9 @@ type FoodFacts struct {
 	// Archived: hidden from planning (LIB-4). The food stays in State.Foods
 	// when a plate holds it, but is never a candidate.
 	Archived bool
+	// Trial: an assistant-added recipe on trial (food.OnTrial, NEW-1): no
+	// auto-placing path cooks it in more than one session per window.
+	Trial bool
 	// VariantGroup is the recipe's variant group id (0: none). A group is one
 	// dish for H8 (see State.dish, ShareGroupHistory).
 	VariantGroup int64
@@ -313,4 +316,18 @@ type Target struct {
 	Cells      []plate.CellKey
 	PlateIDs   []int64
 	SessionIDs []int64
+}
+
+// TrialCooked reports whether a cook session of the window cooks food id: a
+// trial recipe takes at most one per window (NEW-1).
+func (s *State) TrialCooked(id int64) bool {
+	if !s.Settings.ChefOn {
+		return false
+	}
+	for _, ss := range s.Sessions {
+		if ss.FoodID == id && s.Window.Contains(ss.CookDate) {
+			return true
+		}
+	}
+	return false
 }

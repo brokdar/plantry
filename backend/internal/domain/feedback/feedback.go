@@ -1,6 +1,10 @@
 package feedback
 
-import "time"
+import (
+	"time"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+)
 
 // Status is how the user rated a plate after it appeared on their plan (D17).
 type Status string
@@ -34,4 +38,7 @@ type PlateFeedback struct {
 	Status  Status
 	Note    *string
 	RatedAt time.Time
+	// ArchivedTrials are the trial recipes this disliked rating archived
+	// (NEW-4); set by RecordFeedback only, never stored.
+	ArchivedTrials []food.ArchivedTrial
 }

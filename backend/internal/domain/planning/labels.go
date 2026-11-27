@@ -32,6 +32,7 @@ var issueTexts = map[string]IssueText{
 	CodeVarietyRepeat:         {"dish variety", "A main was cooked or eaten too recently before."},
 	CodeVarietyRelaxed:        {"dish variety", "A main repeats a recent one, which is allowed because too few recipes exist."},
 	CodeVarietyRepeatWeek:     {"dish repeated this week", "A main is cooked more than once in the same week."},
+	CodeTrialRepeat:           {"recipe on trial", "A recipe on trial is cooked more than once in the same week."},
 	CodeVarietyRepeatNamed:    {"dish repeated", "A dish you named was cooked or eaten recently before; it is in the plan as you asked."},
 	CodeKcalBelowFloor:        {"day energy minimum", "The day is below its minimum energy, which is never acceptable."},
 	CodeKcalBelowBand:         {"day energy", "The day's energy is below its target range."},

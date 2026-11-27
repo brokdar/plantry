@@ -12,6 +12,7 @@ import {
   confirmStatement,
   getTaste,
   makeItemNever,
+  proposeStatements,
   removeItem,
   removeNever,
   setItemPolarity,
@@ -81,6 +82,15 @@ export function useConfirmStatement() {
     mutationFn: (v: { statement: Statement; scope: "always" | "window" }) =>
       confirmStatement(v.statement, v.scope),
     onSuccess: () => refresh(qc),
+    onError: (err) => toastError(err, t),
+  })
+}
+
+/** The statements a free-text answer proposes (COLD-1). */
+export function useProposeStatements() {
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: (text: string) => proposeStatements(text),
     onError: (err) => toastError(err, t),
   })
 }

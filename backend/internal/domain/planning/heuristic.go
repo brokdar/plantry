@@ -915,11 +915,17 @@ func (d dgeState) meat(f FoodFacts) float64 {
 
 // mainCandidate reports whether f may be cooked as the main of c.
 func (h *planner) mainCandidate(f FoodFacts, c plate.CellKey) bool {
-	if !f.Composed() || f.Archived || f.Never || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] || h.exclude[f.ID] || h.slotBlocked(f, c) {
+	if !f.Composed() || f.Archived || f.Never || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] || h.exclude[f.ID] || h.slotBlocked(f, c) || h.trialTaken(f) {
 		return false
 	}
 	// A lunch or dinner takes a main; a standalone recipe is a breakfast.
 	return isMain(f.Role, h.x.mealOf(c.SlotID))
+}
+
+// trialTaken reports whether f is on trial and already cooked in a session
+// of the window, by this run or before it (NEW-1).
+func (h *planner) trialTaken(f FoodFacts) bool {
+	return h.s.Settings.ChefOn && f.Trial && (h.used[f.ID] > 0 || h.s.TrialCooked(f.ID))
 }
 
 func (h *planner) isForced(c plate.CellKey) bool {
@@ -965,7 +971,7 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 	}
 	var cands []candidate
 	for _, f := range h.s.Foods {
-		if !f.Composed() || f.Archived || f.Never || !sideRole(f.Role) || f.ID == exclude || f.ID == main || slices.Contains(others, f.ID) || (fit && h.exclude[f.ID]) || h.s.RatherNot[f.ID] || !h.fits(f) || !h.reachesForced(f, c) || h.slotBlocked(f, c) {
+		if !f.Composed() || f.Archived || f.Never || !sideRole(f.Role) || f.ID == exclude || f.ID == main || slices.Contains(others, f.ID) || (fit && h.exclude[f.ID]) || h.s.RatherNot[f.ID] || !h.fits(f) || !h.reachesForced(f, c) || h.slotBlocked(f, c) || h.trialTaken(f) {
 			continue
 		}
 		last := 0.0

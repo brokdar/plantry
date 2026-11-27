@@ -230,11 +230,13 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 
 		if h.NotForMe != nil {
 			api.Post("/foods/{id}/not-for-me", h.NotForMe.Post)
+			api.Post("/foods/{id}/trial-seen", h.NotForMe.TrialSeen)
 		}
 		if h.Finds != nil {
 			api.Get("/finds", h.Finds.List)
 			api.Post("/finds", h.Finds.Create)
 			api.Get("/finds/{id}", h.Finds.Get)
+			api.Post("/chef/fill-library", h.Finds.FillLibrary)
 			api.Post("/finds/{id}/keep", h.Finds.Keep)
 			api.Post("/finds/{id}/discard", h.Finds.Discard)
 		}
@@ -253,6 +255,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			api.Put("/taste/items/{id}", h.Taste.Put)
 			api.Post("/taste/items/{id}/never", h.Taste.MakeNever)
 			api.Post("/taste/statements/confirm", h.Taste.Confirm)
+			api.Post("/taste/propose", h.Taste.Propose)
 			api.Put("/taste/never/{id}", h.Taste.AddNever)
 			api.Delete("/taste/never/{id}", h.Taste.RemoveNever)
 		}

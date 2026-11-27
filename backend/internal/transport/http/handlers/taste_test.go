@@ -165,3 +165,12 @@ func TestTasteHandler_NeverAndConfirm(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, do(http.MethodPost, "/api/taste/items/"+itoa(items[0].ID)+"/never", "").Code, "no food named coriander")
 	assert.Equal(t, http.StatusBadRequest, do(http.MethodPost, "/api/taste/statements/confirm", `{"kind":"x"}`).Code)
 }
+
+// COLD-1: propose returns the statements for the chips and stores nothing.
+func TestTasteHandler_Propose(t *testing.T) {
+	h := handlers.NewTasteHandler(nil)
+	w := httptest.NewRecorder()
+	h.Propose(w, httptest.NewRequest(http.MethodPost, "/api/taste/propose", strings.NewReader(`{"text":"we love thai, no coriander"}`)))
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `{"statements":[{"kind":"taste","level":"cuisine","key":"thai","polarity":"love"},{"kind":"taste","level":"hero","key":"coriander","polarity":"rather_not"}]}`, w.Body.String())
+}

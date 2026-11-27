@@ -84,6 +84,10 @@ interface FoodBase {
   favorite: boolean
   /** Hidden from planning and lists (LIB-4); readable by id. */
   archived: boolean
+  /** On trial: placed at most once per window until cooked (NEW-1). */
+  trial?: boolean
+  /** The "To try" badge: on trial and not opened yet (NEW-3). */
+  to_try?: boolean
   diet_class: EffectiveDietClass
   diet_class_source: DietClassSource
   /** Effective "needs no cooking" flag; `user` = override, else derived. */
@@ -609,6 +613,11 @@ export function setFoodAttributes(
     method: "PUT",
     body: JSON.stringify(patch),
   })
+}
+
+/** POST /api/foods/{id}/trial-seen: opening a recipe clears its To try badge. */
+export function markTrialSeen(id: number): Promise<void> {
+  return apiFetch(`/foods/${id}/trial-seen`, { method: "POST" })
 }
 
 export type NotForMeReason =

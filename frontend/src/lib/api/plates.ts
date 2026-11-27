@@ -27,6 +27,8 @@ export interface PlateComponent {
   sort_order: number
   /** The component's place on the plate (00048): one main per plate. */
   position?: "main" | "side" | "extra"
+  /** The food carries the To try badge (NEW-3). */
+  to_try?: boolean
 }
 
 /** Draft rows are proposals, confirmed rows are fixed (D1). The state is

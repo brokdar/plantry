@@ -8,6 +8,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
 // Forced tools of the model steps; the fake provider routes by them.
@@ -64,7 +65,14 @@ func adaptTool() llm.Tool {
 func adaptRequest(model string, d *importer.Draft, h Household, flags []Flag) llm.Request {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "User language: %s.\n", h.Lang)
-	fmt.Fprintf(&sb, "Diet: %s. Heat tolerance: %s. Skill: %s.\n", orNone(h.Diet), orNone(string(h.Kitchen.Heat)), orNone(string(h.Kitchen.Skill)))
+	heat := h.Kitchen.Heat
+	if heat == "" && h.FirstWeek {
+		heat = profile.HeatMild
+	}
+	fmt.Fprintf(&sb, "Diet: %s. Heat tolerance: %s. Skill: %s.\n", orNone(h.Diet), orNone(string(heat)), orNone(string(h.Kitchen.Skill)))
+	if h.FirstWeek {
+		sb.WriteString("This is the household's first week: keep the dish mild and familiar.\n")
+	}
 	fmt.Fprintf(&sb, "Never: %s.\nLoves: %s.\nRather not: %s.\nEquipment present: %s.\n",
 		list(h.Never), list(h.Loves), list(h.RatherNot), list(h.Kitchen.Equipment))
 	for _, f := range flags {

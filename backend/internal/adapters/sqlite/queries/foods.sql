@@ -82,12 +82,24 @@ UPDATE foods SET
 WHERE id = ? AND kind = 'composed'
 RETURNING *;
 
+-- name: StartFoodTrial :exec
+-- A recipe the assistant added enters the library on trial (NEW-1).
+UPDATE foods SET trial = 1, trial_seen = 0 WHERE id = ? AND kind = 'composed';
+
+-- name: SetFoodTrialSeen :exec
+-- Opening a trial recipe clears its To try badge, not the trial (NEW-3).
+UPDATE foods SET trial_seen = 1 WHERE id = ? AND trial = 1;
+
 -- name: SetFoodFavorite :one
 UPDATE foods SET
     favorite   = ?,
     updated_at = datetime('now')
 WHERE id = ?
 RETURNING *;
+
+-- name: HasConfirmedPlate :one
+-- Whether any plate was ever confirmed: the household has cook history.
+SELECT EXISTS (SELECT 1 FROM plates WHERE state = 'confirmed');
 
 -- name: CountComposedFoods :one
 SELECT COUNT(*) FROM foods WHERE kind = 'composed' AND archived = 0;
@@ -118,8 +130,10 @@ ORDER BY f.id;
 -- (D26). last_eaten is the latest confirmed plate dated on or before today
 -- that holds the food and is not marked not_eaten (empty when none);
 -- times_cooked counts the food's confirmed sessions cooked on or before today
--- with at least one linked plate not marked not_eaten. A hidden substitution
--- variant's plates and sessions count for its base recipe.
+-- with at least one linked plate not marked not_eaten. trial_done: a trial
+-- recipe was eaten on a confirmed plate at least two days ago that is not
+-- rated disliked or not_eaten (NEW-2). A hidden substitution variant's plates
+-- and sessions count for its base recipe.
 SELECT f.id AS food_id,
        CAST(COALESCE((
            SELECT MAX(p.date)
@@ -141,7 +155,17 @@ SELECT f.id AS food_id,
                          WHERE pc.cook_session_id = cs.id
                            AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
                                            WHERE pf.plate_id = pc.plate_id AND pf.status = 'not_eaten'))
-       ) AS times_cooked
+       ) AS times_cooked,
+       CAST(f.trial = 1 AND EXISTS (
+           SELECT 1
+           FROM plate_components pc
+           JOIN plates p ON p.id = pc.plate_id
+           WHERE (pc.food_id = f.id OR pc.food_id IN (SELECT hv.food_id FROM hidden_variants hv WHERE hv.base_food_id = f.id))
+             AND p.date <= date(sqlc.arg(today), '-2 days')
+             AND p.state = 'confirmed'
+             AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
+                             WHERE pf.plate_id = p.id AND pf.status IN ('disliked', 'not_eaten'))
+       ) AS INTEGER) AS trial_done
 FROM foods f
 WHERE f.id IN (sqlc.slice(ids));
 

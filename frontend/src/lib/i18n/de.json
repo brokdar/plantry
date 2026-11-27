@@ -798,6 +798,13 @@
         "line": "Diese Woche: {{names}}. Es endet mit der Woche.",
         "empty": "Diese Woche gibt es kein Thema.",
         "link": "Zum Plan"
+      },
+      "cold": {
+        "title": "Was mag euer Haushalt besonders, worauf verzichtet er lieber?",
+        "hint": "Ein Satz genügt, zum Beispiel „wir lieben Thai und Pasta, aber kein Koriander“.",
+        "placeholder": "Wir lieben …, aber kein …",
+        "submit": "Vorschlagen",
+        "none": "Ich konnte nichts herauslesen. Nenne ein paar Gerichte, Küchen oder Zutaten."
       }
     }
   },
@@ -2021,6 +2028,7 @@
       "diet_unknown": "Für dieses Rezept ist die Ernährungsform unbekannt.",
       "variety_repeat": "Das gab es zuletzt am {{last_eaten}}.",
       "variety_relaxed": "Das gab es zuletzt am {{last_eaten}}. Es gibt nicht genug andere Rezepte, um es zu vermeiden.",
+      "trial_repeat": "Dieses Rezept ist auf Probe und wird diese Woche schon gekocht.",
       "variety_repeat_week": "Steht diese Woche schon auf dem Plan, am {{last_eaten}}.",
       "kcal_below_floor": "Dieser Tag liegt unter dem Minimum, das Plantry plant: {{kcal}} kcal, nötig sind mindestens {{floor_kcal}} kcal.",
       "leftover_before_cook": "Wird gegessen, bevor vorgekocht ist.",
@@ -2424,7 +2432,11 @@
       "freezer": "Gefrierfach",
       "defrost": "{{name}} heute Abend aus dem Gefrierfach nehmen",
       "last_day": "Letzter Tag",
-      "use_by": "{{slot}}: der letzte Rest {{name}}"
+      "use_by": "{{slot}}: der letzte Rest {{name}}",
+      "tonight": "Heute Abend",
+      "soak": "Hülsenfrüchte für morgen ({{name}}) einweichen",
+      "marinate": "Heute Abend für morgen marinieren: {{name}}",
+      "thaw": "Tiefgekühltes für morgen ({{name}}) in den Kühlschrank legen"
     },
     "rate": {
       "question": "Wie war {{name}} am {{weekday}}?",
@@ -2458,6 +2470,9 @@
       "title": "Diese Woche",
       "open": "{{day}} im Plan öffnen",
       "empty": "Nichts geplant"
+    },
+    "rate_reason": {
+      "prompt": "{{name}} wird nicht mehr eingeplant. Was hat gestört?"
     }
   },
   "recipes": {
@@ -2542,6 +2557,12 @@
       "enter_hint": "Werte pro 100 g für „{{name}}“, von der Verpackung oder aus einer Nährwerttabelle.",
       "save_nutrition": "Nährwerte speichern",
       "remove_in_recipe": "Zeile im Rezept entfernen"
+    },
+    "to_try": "Zum Ausprobieren",
+    "fill": {
+      "button": "Bibliothek füllen",
+      "hint": "Zehn Rezepte, die zu eurem Haushalt passen, zum Ausprobieren.",
+      "started": "Ich suche zehn Rezepte. Sie erscheinen in der Bibliothek, sobald sie fertig sind."
     }
   },
   "substitute": {

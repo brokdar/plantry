@@ -11,6 +11,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
@@ -828,4 +829,46 @@ func TestStartVarietyRepeats_CountsAnInWindowRepeat(t *testing.T) {
 		assert.Equal(t, planning.SeverityWarning, is.Severity, "as a warning only")
 	}
 	assert.Equal(t, len(h8), planning.StartVarietyRepeats(s, tgt), "the run counts it at the start")
+}
+
+// NEW-1: a trial recipe takes one cook per window whatever the variety weeks
+// and the role, with the Chef on; the Chef off judges nothing of it.
+func TestCheck_TrialOncePerWindow(t *testing.T) {
+	const side = rice
+	trialState := func(id int64, weeks int, chefOn bool) planning.State {
+		s := baseState()
+		manyMains(&s, 3)
+		s.Settings.ChefOn, s.Settings.VarietyWeeks = chefOn, weeks
+		f := s.Foods[id]
+		f.Trial = true
+		s.Foods[id] = f
+		return s
+	}
+	repeats := func(s planning.State, p planning.Proposal) int {
+		n := 0
+		for _, is := range only(check(s, windowTarget(s), p), "H8") {
+			if is.Code == planning.CodeTrialRepeat {
+				n++
+			}
+		}
+		return n
+	}
+	twice := func(id int64) planning.Proposal {
+		return planning.Proposal{
+			Sessions: []planning.ProposedSession{session("s1", id, sat, dinner, 1), session("s2", id, tue, dinner, 1)},
+			Plates:   []planning.ProposedPlate{pplate(sat, dinner, onKey(id, "s1")), pplate(tue, dinner, onKey(id, "s2"))},
+		}
+	}
+	once := planning.Proposal{
+		Sessions: []planning.ProposedSession{session("s1", 100, sat, dinner, 1)},
+		Plates:   []planning.ProposedPlate{pplate(sat, dinner, onKey(100, "s1"))},
+	}
+	assert.Equal(t, 1, repeats(trialState(100, 0, true), twice(100)), "a trial main twice, variety weeks 0")
+	assert.Equal(t, 1, repeats(trialState(side, 3, true), twice(side)), "a trial side twice")
+	assert.Zero(t, repeats(trialState(100, 0, true), once), "once is fine")
+	assert.Zero(t, repeats(trialState(100, 0, false), twice(100)), "Chef off: unchanged")
+
+	s := trialState(100, 0, true)
+	s.Sessions = append(s.Sessions, planning.Session{CookSession: plate.CookSession{ID: 900, FoodID: 100, CookDate: day(sun)}, Confirmed: true})
+	assert.Equal(t, 1, repeats(s, once), "a persisted cook of the window counts")
 }

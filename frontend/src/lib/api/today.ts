@@ -32,7 +32,7 @@ export interface TodayMeal {
 }
 
 export interface TodayReminder {
-  kind: "defrost" | "use_by"
+  kind: "defrost" | "use_by" | "soak" | "marinate" | "thaw"
   session_id: number
   food_name: string
   date: string

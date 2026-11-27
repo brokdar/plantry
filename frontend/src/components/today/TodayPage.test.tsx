@@ -27,6 +27,7 @@ vi.mock("@/lib/api/foods", () => ({
       },
     ],
   }),
+  notForMe: vi.fn().mockResolvedValue({ undo: {} }),
 }))
 const toastMock = vi.hoisted(() =>
   Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() })
@@ -34,6 +35,7 @@ const toastMock = vi.hoisted(() =>
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
 import { deleteFeedback, putFeedback } from "@/lib/api/feedback"
+import { notForMe } from "@/lib/api/foods"
 import { getPlan } from "@/lib/api/plan"
 import { getToday } from "@/lib/api/today"
 
@@ -185,6 +187,31 @@ describe("TodayPage", () => {
     expect(message).toBe("Rating saved")
     options.action.onClick()
     await waitFor(() => expect(deleteFeedback).toHaveBeenCalledWith(1))
+  })
+
+  // NEW-4: a disliked first cooking archived the recipe; one tap on a reason
+  // teaches taste.
+  it("asks why after a disliked first cooking archived a trial recipe", async () => {
+    const user = userEvent.setup()
+    vi.mocked(putFeedback).mockResolvedValue({
+      plate_id: 1,
+      status: "disliked",
+      rated_at: "2026-11-02T10:00:00Z",
+      archived_trials: [{ food_id: 77, name: "Lentil dal" }],
+    })
+    renderToday(mockTodayByVerdict.nothing_to_cook)
+
+    const question = await screen.findByTestId("today-rate")
+    await user.click(
+      within(question).getByRole("button", { name: "Not again" })
+    )
+    const sheet = await screen.findByTestId("today-rate-reason")
+    expect(sheet).toHaveTextContent("Lentil dal is hidden from planning")
+    await user.click(within(sheet).getByRole("button", { name: "Ingredients" }))
+    expect(notForMe).toHaveBeenCalledWith(77, "ingredients")
+    await waitFor(() =>
+      expect(screen.queryByTestId("today-rate-reason")).toBeNull()
+    )
   })
 
   // F5-AC4.

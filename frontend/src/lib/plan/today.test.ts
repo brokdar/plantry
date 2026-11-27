@@ -234,6 +234,30 @@ describe("lib/plan/today", () => {
     ])
   })
 
+  // PRO-1: the Chef's prep line for tomorrow's cooking.
+  it("words a soak reminder for tonight", () => {
+    const today: Today = {
+      ...mockTodayByVerdict.nothing_to_cook,
+      reminders: [
+        {
+          kind: "soak",
+          session_id: 9,
+          food_name: "Chana masala",
+          date: "2026-11-03",
+          slot_id: 2,
+        },
+      ],
+    }
+    expect(buildTodayPlan(today, mockPlan, MONDAY, i18n).reminders).toEqual([
+      {
+        key: "soak|9",
+        kind: "soak",
+        label: "Tonight",
+        text: "Soak the dried legumes for tomorrow's Chana masala",
+      },
+    ])
+  })
+
   it("names the slot in a last-day reminder", () => {
     const today: Today = {
       ...mockTodayByVerdict.nothing_to_cook,

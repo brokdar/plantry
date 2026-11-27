@@ -22,6 +22,7 @@ import {
   listVariants,
   refetchFood,
   revertFoodChange,
+  markTrialSeen,
   notForMe,
   type NotForMeReason,
   setDietClass,
@@ -437,5 +438,14 @@ export function useSetFoodAttributes(id: number) {
       }
     },
     onError: (err) => toastError(err, t),
+  })
+}
+
+/** Opening a recipe on trial clears its To try badge (NEW-3). */
+export function useMarkTrialSeen() {
+  return useMutation({
+    mutationFn: (id: number) => markTrialSeen(id),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: foodKeys.lists() }),
   })
 }

@@ -7,6 +7,7 @@ import { imageURL } from "@/lib/image-url"
 import { lastEatenAgo } from "@/lib/recipes/library"
 
 import { DietIcon } from "./DietIcon"
+import { ToTryBadge } from "./ToTryBadge"
 
 type RecipeCardProps = {
   recipe: ComposedFood
@@ -65,6 +66,7 @@ export function RecipeCard({ recipe, today }: RecipeCardProps) {
             {name.trim().charAt(0).toUpperCase()}
           </div>
         )}
+        {recipe.to_try && <ToTryBadge className="absolute top-2 left-2" />}
         {recipe.favorite && (
           <span className="absolute top-2 right-2 flex size-7 items-center justify-center rounded-full bg-panel text-ink">
             <Heart

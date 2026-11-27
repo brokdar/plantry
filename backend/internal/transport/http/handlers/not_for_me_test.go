@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -62,4 +63,41 @@ func TestNotForMeHandler(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, got.Archived)
 	assert.Equal(t, http.StatusNotFound, post(9999, `{"reason":"taste"}`))
+}
+
+// NEW-3: a trial recipe shows To try until it is opened; opening keeps the
+// trial.
+func TestNotForMeHandler_TrialSeen(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	foods := sqlite.NewFoodRepo(db)
+	foodSvc := food.NewService(foods)
+	router := transport.NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), http.NotFoundHandler(), transport.Handlers{
+		Foods:    handlers.NewFoodHandler(foodSvc, food.NewNutritionResolver(foods), nil),
+		NotForMe: handlers.NewNotForMeHandler(foodSvc, nil),
+	})
+	role, portions := food.RoleMain, 2.0
+	recipe := &food.Food{Name: "Dal", Kind: food.KindComposed, Role: &role, ReferencePortions: &portions}
+	require.NoError(t, foods.Create(t.Context(), recipe))
+	require.NoError(t, foodSvc.StartTrial(t.Context(), recipe.ID))
+	get := func() (trial, toTry bool) {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/foods/"+itoa(recipe.ID), nil))
+		require.Equal(t, http.StatusOK, rec.Code)
+		var body struct {
+			Trial bool `json:"trial"`
+			ToTry bool `json:"to_try"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		return body.Trial, body.ToTry
+	}
+	trial, toTry := get()
+	assert.True(t, trial)
+	assert.True(t, toTry)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/foods/"+itoa(recipe.ID)+"/trial-seen", nil))
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	trial, toTry = get()
+	assert.True(t, trial, "opening keeps the trial")
+	assert.False(t, toTry)
 }

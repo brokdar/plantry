@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import type { PlateFeedbackStatus, PutFeedbackInput } from "@/lib/api/feedback"
@@ -45,6 +45,10 @@ export function useRatePlate() {
   // The plate already sent: mutation state updates a tick late, so a double
   // click would otherwise send the answer twice.
   const sent = useRef<number | null>(null)
+  // Trial recipes the rating archived: the reason sheet asks about the first.
+  const [archived, setArchived] = useState<{ food_id: number; name: string }[]>(
+    []
+  )
 
   function rate(plateId: number, status: PlateFeedbackStatus) {
     if (sent.current === plateId) return
@@ -55,7 +59,8 @@ export function useRatePlate() {
         onError: () => {
           sent.current = null
         },
-        onSuccess: () => {
+        onSuccess: (res) => {
+          setArchived(res.archived_trials ?? [])
           toast(t("today.rate.saved"), {
             duration: UNDO_MS,
             action: {
@@ -74,6 +79,8 @@ export function useRatePlate() {
 
   return {
     rate,
+    archived: archived[0] ?? null,
+    dismissArchived: () => setArchived((a) => a.slice(1)),
     answered: record.isError ? null : (record.variables?.plateId ?? null),
   }
 }
