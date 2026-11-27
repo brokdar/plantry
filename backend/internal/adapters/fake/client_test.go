@@ -259,3 +259,14 @@ func TestClient_ServerBlocks(t *testing.T) {
 	assert.Equal(t, llm.ContentTypeServer, b.Type)
 	assert.JSONEq(t, `{"type":"server_tool_use","id":"srv_1","name":"web_search","input":{"query":"fesenjan"}}`, string(b.Raw))
 }
+
+func TestClient_RecordsAllowedDomains(t *testing.T) {
+	t.Parallel()
+
+	c := NewFromScript(endTurnScript(ScriptedUsage{}))
+	stream(t, c, llm.Request{WebSearch: &llm.WebSearch{MaxUses: 2, AllowedDomains: []string{"chefkoch.de"}}})
+
+	reqs := c.Requests()
+	require.Len(t, reqs, 1)
+	assert.Equal(t, []string{"chefkoch.de"}, reqs[0].WebSearch.AllowedDomains)
+}

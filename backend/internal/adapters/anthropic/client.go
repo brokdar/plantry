@@ -383,11 +383,12 @@ type codeExecutionTool struct {
 }
 
 // webSearchTool is the server-side web search tool (D1: the basic version,
-// no domain filters or location).
+// with the allowed domains of FIND-5 when the request names any).
 type webSearchTool struct {
-	Type    string `json:"type"`
-	Name    string `json:"name"`
-	MaxUses int    `json:"max_uses,omitempty"`
+	Type           string   `json:"type"`
+	Name           string   `json:"name"`
+	MaxUses        int      `json:"max_uses,omitempty"`
+	AllowedDomains []string `json:"allowed_domains,omitempty"`
 }
 
 // encodeRequest builds the Messages body from what plan decided to send.
@@ -455,6 +456,7 @@ func encodeRequest(req llm.Request, stream bool, w wire) ([]byte, error) {
 	if w.webSearch {
 		body.Tools = append(body.Tools, webSearchTool{
 			Type: "web_search_20250305", Name: "web_search", MaxUses: req.WebSearch.MaxUses,
+			AllowedDomains: req.WebSearch.AllowedDomains,
 		})
 	}
 	body.Messages = make([]messageBody, len(req.Messages))

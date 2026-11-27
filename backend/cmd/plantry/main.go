@@ -417,13 +417,13 @@ func run() error {
 	importHandler := handlers.NewImportHandler(importSvc)
 
 	// Discovery (D7): research → verify → annotate → store, one run
-	// at a time in the background. LLM-supplied URLs and the images their
-	// pages name pass the public-URL guard (dev mode allows loopback for the
+	// at a time in the background. LLM-supplied URLs
+	// pass the public-URL guard (dev mode allows loopback for the
 	// e2e fixture site). Shutdown waits for the running run (before the
 	// recorder and the database), cancelling it when the wait runs out.
 	suggestionRepo := sqlite.NewRecipeSuggestionRepo(conn)
 	discoveryGuard := func(u string) error { return httpfetch.PublicURL(u, nil, cfg.DevMode) }
-	suggestionStore := &discovery.Store{Repo: suggestionRepo, ImageGuard: discoveryGuard}
+	suggestionStore := &discovery.Store{Repo: suggestionRepo}
 	if imgStore != nil {
 		suggestionStore.Images = imgStore
 	}

@@ -60,7 +60,12 @@ func New(apiKey string, opts ...Option) *Client {
 	return c
 }
 
+// WebSearch implements llm.Capabilities: OpenAI runs no autonomous web
+// search here (FIND-8), so the find pipeline asks and gets false.
+func (c *Client) WebSearch(context.Context, string) (bool, error) { return false, nil }
+
 // EffectiveParams implements llm.ParamsReporter.
+
 func (c *Client) EffectiveParams(req llm.Request) llm.Effective {
 	eff := llm.Effective{MaxTokens: req.MaxTokens}
 	if eff.MaxTokens <= 0 {

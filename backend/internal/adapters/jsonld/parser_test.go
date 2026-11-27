@@ -2,6 +2,7 @@ package jsonld_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -254,5 +255,58 @@ func TestExtractRecipe_OGImageFallback(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.want, rec.Image)
 		})
+	}
+}
+
+// FIND-9 on the recorded find pages: rating mapped onto 1..5 by the site's
+// best and worst rating, counts and publication date.
+func TestExtractRecipe_FindPageRatings(t *testing.T) {
+	tests := []struct {
+		file             string
+		rating           float64
+		ratings, reviews int
+		published        string
+	}{
+		{"en_chicken_curry_1.html", 4.8, 2310, 412, "2021-03-14"},
+		{"en_chicken_curry_2.html", 4.5, 880, 120, "2022-06-02"}, // explicit best 5, worst 1; RFC 3339 date
+		{"en_chicken_curry_3.html", 4.68, 37, 0, "2019-11-20"},   // 92 of 0..100
+		{"en_banana_bread_3.html", 4.44, 61, 9, "2018-09-30"},    // 8.6 of 0..10
+		{"de_linsensuppe_1.html", 4.7, 1840, 260, "2020-10-05"},  // decimal comma
+		{"de_gulasch_3.html", 4.52, 150, 0, "2016-05-17"},        // 88 of 0..100; date-time without zone
+	}
+	for _, tt := range tests {
+		t.Run(tt.file, func(t *testing.T) {
+			rec, err := jsonld.ExtractRecipe(loadFixture(t, filepath.Join("finds", tt.file)))
+			require.NoError(t, err)
+			require.NotNil(t, rec.Rating)
+			require.InDelta(t, tt.rating, *rec.Rating, 1e-9)
+			require.Equal(t, tt.ratings, rec.RatingCount)
+			require.Equal(t, tt.reviews, rec.ReviewCount)
+			require.NotNil(t, rec.DatePublished)
+			require.Equal(t, tt.published, rec.DatePublished.Format("2006-01-02"))
+			require.NotEmpty(t, rec.AuthorName)
+		})
+	}
+}
+
+func TestExtractRecipe_NoRating(t *testing.T) {
+	rec, err := jsonld.ExtractRecipe(loadFixture(t, "chefkoch_knoblauchbrot.html"))
+	require.NoError(t, err)
+	require.Nil(t, rec.Rating)
+	require.Zero(t, rec.RatingCount)
+	require.Nil(t, rec.DatePublished)
+}
+
+// Every dish has three versions per language that extract as recipes.
+func TestFindPages_ThreeVersionsPerDish(t *testing.T) {
+	for _, dish := range []string{"en_chicken_curry", "en_banana_bread", "de_linsensuppe", "de_gulasch"} {
+		names := map[string]bool{}
+		for i := 1; i <= 3; i++ {
+			rec, err := jsonld.ExtractRecipe(loadFixture(t, filepath.Join("finds", fmt.Sprintf("%s_%d.html", dish, i))))
+			require.NoError(t, err)
+			require.NotEmpty(t, rec.RecipeIngredient)
+			names[rec.AuthorName] = true
+		}
+		require.Len(t, names, 3, dish)
 	}
 }

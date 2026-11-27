@@ -1,0 +1,5 @@
+User-agent: Plantry
+Disallow: /
+
+User-agent: *
+Disallow: /admin

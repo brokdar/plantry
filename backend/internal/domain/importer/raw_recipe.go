@@ -1,6 +1,9 @@
 package importer
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // ErrNoRecipe indicates the extractor could not locate a Recipe node in the HTML.
 var ErrNoRecipe = errors.New("no recipe found")
@@ -25,4 +28,12 @@ type RawRecipe struct {
 	// SourceKcalPerServing is the site's own calorie claim (nutrition.calories).
 	// Display/comparison only — never a source for macros.
 	SourceKcalPerServing *float64
+	// Rating is aggregateRating.ratingValue mapped onto 1..5 by the site's
+	// worst and best rating (FIND-9); nil when the page has none.
+	Rating *float64
+	// RatingCount and ReviewCount are the site's vote and review counts.
+	RatingCount int
+	ReviewCount int
+	// DatePublished is the recipe's publication date, nil when absent or unreadable.
+	DatePublished *time.Time
 }

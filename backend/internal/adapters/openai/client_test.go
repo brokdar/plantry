@@ -405,3 +405,11 @@ func TestStream_IgnoresCodeExecutionOptIn(t *testing.T) {
 	assert.NotContains(t, bodies[1], "code_execution")
 	assert.NotContains(t, bodies[1], "allowed_callers")
 }
+
+// FIND-8: OpenAI does no autonomous search; the find pipeline checks this.
+func TestWebSearchCapabilityIsOff(t *testing.T) {
+	var caps llm.Capabilities = openai.New("key")
+	ok, err := caps.WebSearch(context.Background(), "gpt-5")
+	require.NoError(t, err)
+	assert.False(t, ok)
+}

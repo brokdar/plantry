@@ -123,14 +123,8 @@ test("AC-1.1-1.3: the first visit of the day opens the daily idea, and the run i
   const card = sheet.getByTestId("suggestion-card")
   await expect(card.getByRole("heading", { name: "Fesenjan" })).toBeVisible()
 
-  // The downloaded og:image, 16:9, served from the suggestion image path.
-  const photo = card.getByRole("img", { name: "Photo of Fesenjan" })
-  await expect(photo).toHaveAttribute("src", /\/images\/suggestions\/\d+\.jpg$/)
-  await expect
-    .poll(() => photo.evaluate((el) => (el as HTMLImageElement).naturalWidth))
-    .toBeGreaterThan(0)
-  const box = (await photo.boundingBox())!
-  expect(box.width / box.height).toBeCloseTo(16 / 9, 1)
+  // FIND-14: the site's og:image is never copied; the card shows no photo.
+  await expect(card.getByRole("img", { name: "Photo of Fesenjan" })).toHaveCount(0)
 
   await expect(card).toContainText("60 min · 4 portions · Persian")
   await expect(card).toContainText(/\d+ kcal · \d+ g protein per portion/)

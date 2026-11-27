@@ -110,6 +110,17 @@ func New(opts ...Option) *Client {
 // URL after redirects, and an error. On non-2xx status, oversize body, or non-HTML
 // content, the response body is discarded and an appropriate sentinel error is returned.
 func (c *Client) Fetch(ctx context.Context, url string) (string, string, error) {
+	return c.get(ctx, url, true)
+}
+
+// FetchText is Fetch for a text document such as robots.txt: any content type
+// is accepted.
+func (c *Client) FetchText(ctx context.Context, url string) (string, error) {
+	body, _, err := c.get(ctx, url, false)
+	return body, err
+}
+
+func (c *Client) get(ctx context.Context, url string, html bool) (string, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", "", fmt.Errorf("httpfetch: new request: %w", err)
@@ -139,8 +150,10 @@ func (c *Client) Fetch(ctx context.Context, url string) (string, string, error) 
 		return "", "", fmt.Errorf("%w: %w", classifyStatus(resp.StatusCode), &UpstreamStatusError{Status: resp.StatusCode, URL: url})
 	}
 
-	if err := assertHTMLContentType(resp.Header.Get("Content-Type")); err != nil {
-		return "", "", err
+	if html {
+		if err := assertHTMLContentType(resp.Header.Get("Content-Type")); err != nil {
+			return "", "", err
+		}
 	}
 
 	// Read up to maxBytes + 1 so we can detect overflow.
