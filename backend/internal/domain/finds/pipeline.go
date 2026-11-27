@@ -24,7 +24,7 @@ import (
 )
 
 // PromptVersion of the find run's model steps.
-const PromptVersion = "f1"
+const PromptVersion = "f2"
 
 const (
 	// fetchVersions is how many versions are fetched (FIND-11).
@@ -407,6 +407,8 @@ func (s *Service) search(ctx context.Context, client llm.Client, model string, q
 			Text: q.Text() + "\nallowed sites: " + strings.Join(domains, ", "),
 		}}}},
 		Tools: []llm.Tool{searchTool()},
+		// Nothing reuses the search's prefix: a cache write costs 1.25x.
+		NoCache: true,
 	}
 	if web {
 		req.WebSearch = &llm.WebSearch{MaxUses: searchMaxUses, AllowedDomains: domains}

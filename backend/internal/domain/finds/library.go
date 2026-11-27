@@ -48,6 +48,25 @@ func (l library) Create(ctx context.Context, f *food.Food) error { return l.d.Fo
 
 func (l library) Delete(ctx context.Context, id int64) error { return l.d.Foods.Delete(ctx, id) }
 
+// OnDraft reports whether a draft plate of the window eats foodID.
+func (l library) OnDraft(ctx context.Context, foodID int64, windowStart time.Time) (bool, error) {
+	plates, err := l.d.Plates.Range(ctx, windowStart, windowStart.AddDate(0, 0, 6))
+	if err != nil {
+		return false, err
+	}
+	for _, p := range plates {
+		if p.State != plate.StateDraft {
+			continue
+		}
+		for _, c := range p.Components {
+			if c.FoodID == foodID {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // Unplan removes the draft plates of the window that eat foodID.
 func (l library) Unplan(ctx context.Context, foodID int64, windowStart time.Time) error {
 	plates, err := l.d.Plates.Range(ctx, windowStart, windowStart.AddDate(0, 0, 6))
@@ -70,6 +89,6 @@ func (l library) Unplan(ctx context.Context, foodID int64, windowStart time.Time
 	if len(ids) == 0 {
 		return nil
 	}
-	_, err = l.d.Plates.RemoveMeals(ctx, ids)
+	_, err = l.d.Plates.RemoveMeals(plate.WithoutTaste(ctx), ids) // an Undo is no taste
 	return err
 }

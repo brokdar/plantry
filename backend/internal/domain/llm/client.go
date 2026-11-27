@@ -143,6 +143,11 @@ type Request struct {
 	// multi-turn loops that resend the history as a prefix. Leave it false for
 	// one-shot calls: they would pay the cache write and never read it.
 	CacheTail bool
+	// NoCache sends no prompt-cache breakpoint at all (not on the system
+	// prompt or the tools either), for a call whose prefix is never reused:
+	// the find search paid ~50k cache-write tokens per call and never read
+	// them back.
+	NoCache bool
 }
 
 // Usage reports token accounting for a single provider call.

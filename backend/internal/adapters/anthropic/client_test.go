@@ -657,3 +657,31 @@ func TestStream_TailBreakpointSkipsCodeCalledResults(t *testing.T) {
 	m, i := anthropic.TailIndex([]llm.Message{onlyServer})
 	assert.Equal(t, [2]int{-1, -1}, [2]int{m, i})
 }
+
+// NoCache (the find search, whose ~50k-token prefix was written and never
+// read) sends no cache_control anywhere and reports no breakpoint.
+func TestStream_NoCacheSendsNoBreakpoint(t *testing.T) {
+	fixture := serveFixture(t, "testdata/stream_text.sse", "text/event-stream")
+	var body []byte
+	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ = io.ReadAll(r.Body)
+		fixture(w, r)
+	})
+	c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+	req := llm.Request{
+		Model: "claude-sonnet-4-6", MaxTokens: 1024, System: "sys",
+		Tools:    []llm.Tool{{Name: "t", Schema: json.RawMessage(`{"type":"object"}`)}},
+		Messages: []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: "hi"}}}},
+	}
+	send := func(noCache bool) {
+		req.NoCache = noCache
+		out := make(chan llm.Event, 64)
+		_, err := c.Stream(context.Background(), req, out)
+		require.NoError(t, err)
+		_ = drainEvents(out)
+	}
+	send(false)
+	assert.Contains(t, string(body), "cache_control", "default: system and tools are cached")
+	send(true)
+	assert.NotContains(t, string(body), "cache_control")
+}

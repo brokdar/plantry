@@ -430,12 +430,12 @@ func encodeRequest(req llm.Request, stream bool, w wire) ([]byte, error) {
 		}
 	}
 	if system != "" {
-		body.System = []systemBlock{{
-			Type: "text", Text: system,
+		body.System = []systemBlock{{Type: "text", Text: system}}
+		if !req.NoCache {
 			// Cache the (large) system prompt aggressively. Anthropic skips this
 			// automatically for prompts under the minimum, so it's safe to set.
-			CacheControl: &cacheCtrl{Type: "ephemeral", TTL: "5m"},
-		}}
+			body.System[0].CacheControl = &cacheCtrl{Type: "ephemeral", TTL: "5m"}
+		}
 	}
 	if w.codeExecution {
 		body.Container = w.container
@@ -449,7 +449,7 @@ func encodeRequest(req llm.Request, stream bool, w wire) ([]byte, error) {
 			if w.codeExecution {
 				tool.AllowedCallers = t.AllowedCallers
 			}
-			if i == len(req.Tools)-1 {
+			if i == len(req.Tools)-1 && !req.NoCache {
 				// Cache the tail of the tool list so the full tool block counts
 				// as part of the cached prefix on subsequent turns.
 				tool.CacheControl = &cacheCtrl{Type: "ephemeral", TTL: "5m"}
