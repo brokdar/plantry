@@ -172,7 +172,7 @@ func (q *Queries) HasTasteSignal(ctx context.Context, arg HasTasteSignalParams) 
 
 const listStapleFoods = `-- name: ListStapleFoods :many
 SELECT f.id FROM foods f
-WHERE f.kind = 'composed' AND f.archived = 0
+WHERE f.kind = 'composed' AND f.archived = 0 AND f.role = 'main'
   AND (f.favorite = 1 OR (
         (SELECT COUNT(*) FROM cook_sessions cs
           WHERE (cs.food_id = f.id OR cs.food_id IN (SELECT hv.food_id FROM hidden_variants hv WHERE hv.base_food_id = f.id))
@@ -198,7 +198,8 @@ type ListStapleFoodsParams struct {
 // least @min_sessions confirmed cook sessions since @sessions_since (a hidden
 // substitution variant's sessions count for its base recipe, a session counts
 // when a linked plate was not marked not_eaten), a positive signal, and no
-// dislike signal since @dislike_since.
+// dislike signal since @dislike_since. Only a main is a staple: a side, a
+// breakfast or a dessert is not a dish the week is built on.
 func (q *Queries) ListStapleFoods(ctx context.Context, arg ListStapleFoodsParams) ([]int64, error) {
 	rows, err := q.db.QueryContext(ctx, listStapleFoods,
 		arg.SessionsSince,

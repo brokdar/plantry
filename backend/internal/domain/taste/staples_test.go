@@ -84,3 +84,17 @@ func TestConfirmStatement(t *testing.T) {
 	_, ok, _ = r.store.ItemByRef(r.ctx, ref, taste.ScopeWindow, week)
 	assert.True(t, ok, "and restores the window item")
 }
+
+// CP2: only a main is a staple. A side cooked, loved and starred as often
+// as a staple main is not one, by rule or by the star.
+func TestStaples_MainsOnly(t *testing.T) {
+	r := newRig(t, seed(t))
+	for i, date := range []string{"2026-02-23", "2026-02-09", "2026-01-12"} {
+		p := r.plate(r.ctx, 3+i, r.salad)
+		r.cook(r.salad, p.ID, date)
+	}
+	assert.False(t, r.isStaple(r.salad), "three sessions and a positive signal, but a side")
+	_, err := r.foods.SetFavorite(r.ctx, r.salad, true)
+	require.NoError(t, err)
+	assert.False(t, r.isStaple(r.salad), "the star pins no side")
+}

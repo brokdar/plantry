@@ -250,7 +250,8 @@ type Querier interface {
 	// least @min_sessions confirmed cook sessions since @sessions_since (a hidden
 	// substitution variant's sessions count for its base recipe, a session counts
 	// when a linked plate was not marked not_eaten), a positive signal, and no
-	// dislike signal since @dislike_since.
+	// dislike signal since @dislike_since. Only a main is a staple: a side, a
+	// breakfast or a dessert is not a dish the week is built on.
 	ListStapleFoods(ctx context.Context, arg ListStapleFoodsParams) ([]int64, error)
 	// Searching finds no chef_find job is queued or running for (the job failed
 	// at boot recovery or was lost).
