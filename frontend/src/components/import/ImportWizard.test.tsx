@@ -512,6 +512,16 @@ describe("ImportWizard", () => {
     expect(screen.getByRole("button", { name: /save recipe/i })).toBeEnabled()
   })
 
+  it("starts a matched line linked, before any row is opened (phone)", () => {
+    const rows = draftRows(draft)
+    expect(rows[0]).toMatchObject({ foodId: 7, foodName: "Mehl" })
+    const unmatched = draftRows({
+      ...draft,
+      ingredients: [{ ...draft.ingredients[0]!, match: null }],
+    })
+    expect(unmatched[0]!.foodId).toBeNull()
+  })
+
   it("offers no Skip: an unmatched line blocks Save until it is removed (AC-10)", async () => {
     mockLookup([])
     vi.mocked(resolveImport).mockResolvedValue({ food: finalized })
@@ -777,7 +787,12 @@ describe("ImportWizard", () => {
     })
 
     it("keeps Save disabled while a row is unmatched", async () => {
-      renderPrefilled({ initialRows: draftRows(prefilled) })
+      renderPrefilled({
+        initialRows: draftRows({
+          ...prefilled,
+          ingredients: [{ ...prefilled.ingredients[0]!, match: null }],
+        }),
+      })
       expect(
         await screen.findByRole("button", { name: /save recipe/i })
       ).toBeDisabled()

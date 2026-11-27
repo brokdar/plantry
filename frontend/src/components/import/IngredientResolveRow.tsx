@@ -245,25 +245,6 @@ function RowEditor({ ing, state, lang, onChange }: RowProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [portions.data, leafPortion?.grams])
 
-  // Auto-select only the backend's accepted match; anything else stays
-  // pickable but needs a user choice.
-  useEffect(() => {
-    if (state.foodId) return
-    if (!lookup.data) return
-    // Link only what the backend's match accepted (MATCH-2: it checked
-    // nutrition, state and kcal band). A same-name leaf the match rejected
-    // stays a problem for the user.
-    const m = ing.match
-    const picked =
-      m && m.status !== "unmatched" && m.pick >= 0
-        ? m.candidates[m.pick]
-        : undefined
-    if (picked?.existing_id) {
-      onChange(relink(picked.existing_id, picked.name))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lookup.data])
-
   function link(leaf: { id: number; name: string }, resolution: Resolution) {
     onChange({ resolution, ...relink(leaf.id, leaf.name) })
   }

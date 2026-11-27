@@ -2,13 +2,29 @@ import type { Draft, DraftIngredient } from "@/lib/api/import"
 
 import type { RowState } from "./IngredientResolveRow"
 
-/** The review's starting rows for a draft: every line waits for a match
- *  (P3: nothing is skipped; a line is matched or removed). */
+/** The catalogue food the backend's match accepted for a line (MATCH-2: it
+ *  checked nutrition, state and kcal band); null leaves the line for the
+ *  user. Seeded here, not in the row, so a phone's collapsed rows have it
+ *  too. */
+function acceptedFood(ing: DraftIngredient) {
+  const m = ing.match
+  const picked =
+    m && m.status !== "unmatched" && m.pick >= 0
+      ? m.candidates[m.pick]
+      : undefined
+  return picked?.existing_id
+    ? { id: picked.existing_id, name: picked.name }
+    : null
+}
+
+/** The review's starting rows for a draft: a line starts linked to the
+ *  backend's accepted match, otherwise it waits for one (P3: nothing is
+ *  skipped; a line is matched or removed). */
 export function draftRows(d: Draft): RowState[] {
   return d.ingredients.map((ing) => ({
     resolution: "existing",
-    foodId: null,
-    foodName: null,
+    foodId: acceptedFood(ing)?.id ?? null,
+    foodName: acceptedFood(ing)?.name ?? null,
     amount: ing.amount,
     unit: ing.unit || "g",
     countUnit: ing.portion_grams !== null || ing.needs_weight ? ing.unit : null,
