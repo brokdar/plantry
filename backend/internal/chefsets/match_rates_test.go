@@ -313,3 +313,60 @@ func slicesAny[T any](s []T, f func(T) bool) bool {
 	}
 	return false
 }
+
+// TestMatchRates_Holdout measures the no-key rate on lines of recipes the
+// synonym table was not written with (the holdout sets). Nothing is tuned
+// on it; the floor guards regressions. A line whose food is not in the dev
+// catalogue and has no recording counts as a miss, so "coverable" also
+// reports the lines whose expected food is a catalogue leaf.
+func TestMatchRates_Holdout(t *testing.T) {
+	m := loadMatching(t)
+	all := func(CatalogueLeaf) bool { return true }
+	for _, c := range []struct {
+		set   MatchSet
+		floor float64
+	}{{m.DEHoldout, holdoutFloorDE}, {m.ENHoldout, holdoutFloorEN}} {
+		rig := newMatchRig(t, m, all)
+		recipes := recipesOf(c.set)
+		results := rig.decideAll(t, recipes, rig.gatherAll(t, recipes))
+		got := score(recipes, results, matchedTo)
+		logRate(t, c.set.Set, got)
+		perKind := map[string][2]int{}
+		var cov, covOK int
+		for ri, rec := range recipes {
+			at := 0
+			for li, l := range rec.lines {
+				res := results[ri][at : at+len(rec.rows[li])]
+				at += len(rec.rows[li])
+				if len(l.Expect) == 0 {
+					continue
+				}
+				ok := lineOK(l, res, matchedTo)
+				k := perKind[l.Kind]
+				k[1]++
+				if ok {
+					k[0]++
+				}
+				perKind[l.Kind] = k
+				if slicesAny(l.Expect, func(e Expect) bool { return e.Catalogue != "" }) {
+					cov++
+					if ok {
+						covOK++
+					}
+				}
+			}
+		}
+		for kind, k := range perKind {
+			t.Logf("%s %-16s %d of %d", c.set.Set, kind, k[0], k[1])
+		}
+		t.Logf("%s coverable (expected food is a catalogue leaf): %d of %d (%.1f %%)", c.set.Set, covOK, cov, 100*float64(covOK)/float64(cov))
+		assert.GreaterOrEqual(t, got.percent(), c.floor, c.set.Set)
+	}
+}
+
+// Floors of the holdout rates (percent): below the measured rate, set to
+// catch a regression, not to be tuned towards.
+const (
+	holdoutFloorDE = 68.0
+	holdoutFloorEN = 61.0
+)

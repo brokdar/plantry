@@ -80,16 +80,19 @@ type Recorded struct {
 
 // Matching is the DATA-2 test data of the Chef matching core.
 type Matching struct {
-	DE, EN    MatchSet
-	Catalogue []CatalogueLeaf
-	fdc       map[string]Recorded
-	off       map[string]Recorded
+	DE, EN MatchSet
+	// DEHoldout and ENHoldout are lines of recipes outside the sets the
+	// synonym table was written with: measured, never tuned against.
+	DEHoldout, ENHoldout MatchSet
+	Catalogue            []CatalogueLeaf
+	fdc                  map[string]Recorded
+	off                  map[string]Recorded
 }
 
 // LoadMatching reads the embedded matching sets and recorded responses.
 func LoadMatching() (*Matching, error) {
 	m := &Matching{}
-	for name, set := range map[string]*MatchSet{"de": &m.DE, "en": &m.EN} {
+	for name, set := range map[string]*MatchSet{"de": &m.DE, "en": &m.EN, "de_holdout": &m.DEHoldout, "en_holdout": &m.ENHoldout} {
 		var raw struct {
 			Set     string `json:"set"`
 			Recipes []struct {

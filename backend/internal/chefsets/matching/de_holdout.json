@@ -1,0 +1,934 @@
+{
+ "set": "de_holdout",
+ "holdout": true,
+ "recipes": [
+  {
+   "title": "Chefkoch: Rinderrouladen klassisch",
+   "source": "https://www.chefkoch.de/rezepte/2133281343053838/Rinderrouladen-klassisch.html",
+   "lines": [
+    {
+     "id": "dh-001",
+     "raw": "8 Rinderroulade(n)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Rinderroulade",
+     "expect": [
+      {
+       "identity": "beef top round, sliced"
+      }
+     ]
+    },
+    {
+     "id": "dh-002",
+     "raw": "5 Zwiebel(n)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Zwiebel",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion"
+      }
+     ]
+    },
+    {
+     "id": "dh-003",
+     "raw": "4 Gewürzgurke(n)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Gewürzgurke",
+     "expect": [
+      {
+       "identity": "pickled gherkin"
+      }
+     ]
+    },
+    {
+     "id": "dh-004",
+     "raw": "4 EL Senf, mittelscharfer",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Senf",
+     "expect": [
+      {
+       "identity": "mustard",
+       "catalogue": "Mustard"
+      }
+     ]
+    },
+    {
+     "id": "dh-005",
+     "raw": "12 Scheibe/n Frühstücksspeck",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Frühstücksspeck",
+     "expect": [
+      {
+       "identity": "bacon",
+       "catalogue": "Bacon (smoked)"
+      }
+     ]
+    },
+    {
+     "id": "dh-006",
+     "raw": "2 EL Butterschmalz",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Butterschmalz",
+     "expect": [
+      {
+       "identity": "clarified butter",
+       "catalogue": "Ghee"
+      }
+     ]
+    },
+    {
+     "id": "dh-007",
+     "raw": "1 Stück(e) Knollensellerie",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Knollensellerie",
+     "expect": [
+      {
+       "identity": "celeriac, raw"
+      }
+     ]
+    },
+    {
+     "id": "dh-008",
+     "raw": "0.5 Stange/n Lauch",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Lauch",
+     "expect": [
+      {
+       "identity": "leek, raw"
+      }
+     ]
+    },
+    {
+     "id": "dh-009",
+     "raw": "1 Möhre(n)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Möhre",
+     "expect": [
+      {
+       "identity": "carrot, raw",
+       "catalogue": "Carrot"
+      }
+     ]
+    },
+    {
+     "id": "dh-010",
+     "raw": "0.5 Flasche Rotwein (guter, ca. 375 ml)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Rotwein",
+     "expect": [
+      {
+       "identity": "red wine"
+      }
+     ]
+    },
+    {
+     "id": "dh-011",
+     "raw": "Salz und Pfeffer",
+     "lang": "de",
+     "kind": "compound",
+     "name": "Salz und Pfeffer",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt"
+      },
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper"
+      }
+     ]
+    },
+    {
+     "id": "dh-012",
+     "raw": "0.5 Liter Rinderfond (kräftiger)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Rinderfond",
+     "expect": [
+      {
+       "identity": "beef broth",
+       "catalogue": "Beef broth"
+      }
+     ]
+    },
+    {
+     "id": "dh-013",
+     "raw": "1 TL Speisestärke",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Speisestärke",
+     "expect": [
+      {
+       "identity": "cornstarch",
+       "catalogue": "Cornstarch"
+      }
+     ]
+    },
+    {
+     "id": "dh-014",
+     "raw": "1 Schuss Gurkenflüssigkeit",
+     "lang": "de",
+     "kind": "vague_count",
+     "name": "Gurkenflüssigkeit",
+     "expect": []
+    }
+   ]
+  },
+  {
+   "title": "Chefkoch: Rindergulasch",
+   "source": "https://www.chefkoch.de/rezepte/2275401363075693/Rindergulasch.html",
+   "lines": [
+    {
+     "id": "dh-015",
+     "raw": "15 g Butterschmalz",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Butterschmalz",
+     "expect": [
+      {
+       "identity": "clarified butter",
+       "catalogue": "Ghee"
+      }
+     ]
+    },
+    {
+     "id": "dh-016",
+     "raw": "500 g Rindergulasch",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Rindergulasch",
+     "expect": [
+      {
+       "identity": "beef, braising cut",
+       "catalogue": "Beef shoulder"
+      }
+     ]
+    },
+    {
+     "id": "dh-017",
+     "raw": "2 große Zwiebel(n) (gewürfelte)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Zwiebel",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion"
+      }
+     ]
+    },
+    {
+     "id": "dh-018",
+     "raw": "1 Knoblauchzehe(n) (gehackte)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Knoblauch",
+     "expect": [
+      {
+       "identity": "garlic, raw",
+       "catalogue": "Garlic"
+      }
+     ]
+    },
+    {
+     "id": "dh-019",
+     "raw": "2 Karotte(n) (in Scheiben geschnitten)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Karotte",
+     "expect": [
+      {
+       "identity": "carrot, raw",
+       "catalogue": "Carrot"
+      }
+     ]
+    },
+    {
+     "id": "dh-020",
+     "raw": "2 EL Tomatenmark",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Tomatenmark",
+     "expect": [
+      {
+       "identity": "tomato paste",
+       "catalogue": "Tomato paste"
+      }
+     ]
+    },
+    {
+     "id": "dh-021",
+     "raw": "200 ml Rotwein",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Rotwein",
+     "expect": [
+      {
+       "identity": "red wine"
+      }
+     ]
+    },
+    {
+     "id": "dh-022",
+     "raw": "200 ml Rinderbrühe",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Rinderbrühe",
+     "expect": [
+      {
+       "identity": "beef broth",
+       "catalogue": "Beef broth"
+      }
+     ]
+    },
+    {
+     "id": "dh-023",
+     "raw": "300 ml Gemüsebrühe",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Gemüsebrühe",
+     "expect": [
+      {
+       "identity": "vegetable broth",
+       "catalogue": "Vegetable broth"
+      }
+     ]
+    },
+    {
+     "id": "dh-024",
+     "raw": "Salz und Pfeffer",
+     "lang": "de",
+     "kind": "compound",
+     "name": "Salz und Pfeffer",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt"
+      },
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper"
+      }
+     ]
+    },
+    {
+     "id": "dh-025",
+     "raw": "Paprikapulver",
+     "lang": "de",
+     "kind": "to_taste",
+     "name": "Paprikapulver",
+     "expect": [
+      {
+       "identity": "paprika, ground",
+       "catalogue": "Paprika powder"
+      }
+     ]
+    },
+    {
+     "id": "dh-026",
+     "raw": "etwas Saucenbinder (oder kalte Butter)",
+     "lang": "de",
+     "kind": "alternatives",
+     "name": "Saucenbinder",
+     "expect": [
+      {
+       "identity": "sauce thickener"
+      },
+      {
+       "identity": "butter",
+       "catalogue": "Butter"
+      }
+     ],
+     "any_of": true
+    }
+   ]
+  },
+  {
+   "title": "Chefkoch: Schnelle Käsespätzle",
+   "source": "https://www.chefkoch.de/rezepte/1062121211526182/Schnelle-Kaesespaetzle.html",
+   "lines": [
+    {
+     "id": "dh-027",
+     "raw": "1 Zwiebel(n)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Zwiebel",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion"
+      }
+     ]
+    },
+    {
+     "id": "dh-028",
+     "raw": "0.5 Bund Petersilie",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Petersilie",
+     "expect": [
+      {
+       "identity": "parsley, fresh",
+       "catalogue": "Parsley"
+      }
+     ]
+    },
+    {
+     "id": "dh-029",
+     "raw": "200 g Emmentaler (oder Bergkäse am Stück)",
+     "lang": "de",
+     "kind": "alternatives",
+     "name": "Emmentaler",
+     "expect": [
+      {
+       "identity": "emmental",
+       "catalogue": "Emmental"
+      },
+      {
+       "identity": "mountain cheese"
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "dh-030",
+     "raw": "1 EL Butter",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Butter",
+     "expect": [
+      {
+       "identity": "butter",
+       "catalogue": "Butter"
+      }
+     ]
+    },
+    {
+     "id": "dh-031",
+     "raw": "400 ml Sahne",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Sahne",
+     "expect": [
+      {
+       "identity": "cream, whipping 30 %"
+      }
+     ]
+    },
+    {
+     "id": "dh-032",
+     "raw": "Salz und Pfeffer",
+     "lang": "de",
+     "kind": "compound",
+     "name": "Salz und Pfeffer",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt"
+      },
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper"
+      }
+     ]
+    },
+    {
+     "id": "dh-033",
+     "raw": "1 kg Spätzle (frische, aus dem Kühlregal)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Spätzle",
+     "expect": [
+      {
+       "identity": "egg noodles, fresh"
+      }
+     ]
+    },
+    {
+     "id": "dh-034",
+     "raw": "Fett für die Form",
+     "lang": "de",
+     "kind": "vague_count",
+     "name": "Fett",
+     "expect": []
+    }
+   ]
+  },
+  {
+   "title": "Chefkoch: Klassischer Linseneintopf",
+   "source": "https://www.chefkoch.de/rezepte/460321139154334/Klassischer-Linseneintopf.html",
+   "lines": [
+    {
+     "id": "dh-035",
+     "raw": "250 g Tellerlinsen (braune)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Tellerlinsen",
+     "expect": [
+      {
+       "identity": "brown lentils, dry"
+      }
+     ]
+    },
+    {
+     "id": "dh-036",
+     "raw": "300 g Räucherbauch (durchwachsener am Stück)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Räucherbauch",
+     "expect": [
+      {
+       "identity": "smoked pork belly"
+      }
+     ]
+    },
+    {
+     "id": "dh-037",
+     "raw": "1 Zwiebel(n) (klein gewürfelt)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Zwiebel",
+     "expect": [
+      {
+       "identity": "onion, raw",
+       "catalogue": "Onion"
+      }
+     ]
+    },
+    {
+     "id": "dh-038",
+     "raw": "1 Bund Suppengrün (klein gewürfelt)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Suppengrün",
+     "expect": [
+      {
+       "identity": "soup greens, mixed"
+      }
+     ]
+    },
+    {
+     "id": "dh-039",
+     "raw": "1 Möhre(n) (klein gewürfelt)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Möhre",
+     "expect": [
+      {
+       "identity": "carrot, raw",
+       "catalogue": "Carrot"
+      }
+     ]
+    },
+    {
+     "id": "dh-040",
+     "raw": "400 g Kartoffel(n) (klein gewürfelt)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Kartoffel",
+     "expect": [
+      {
+       "identity": "potato, raw",
+       "catalogue": "Potatoes"
+      }
+     ]
+    },
+    {
+     "id": "dh-041",
+     "raw": "Salz und Pfeffer",
+     "lang": "de",
+     "kind": "compound",
+     "name": "Salz und Pfeffer",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt"
+      },
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper"
+      }
+     ]
+    },
+    {
+     "id": "dh-042",
+     "raw": "2 Lorbeerblätter",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Lorbeerblätter",
+     "expect": [
+      {
+       "identity": "bay leaf",
+       "catalogue": "Bay leaf"
+      }
+     ]
+    },
+    {
+     "id": "dh-043",
+     "raw": "etwas Thymian",
+     "lang": "de",
+     "kind": "to_taste",
+     "name": "Thymian",
+     "expect": [
+      {
+       "identity": "thyme, dried",
+       "catalogue": "Thyme (dried)"
+      },
+      {
+       "identity": "thyme, fresh",
+       "catalogue": "Thyme (fresh)"
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "dh-044",
+     "raw": "etwas Majoran",
+     "lang": "de",
+     "kind": "to_taste",
+     "name": "Majoran",
+     "expect": [
+      {
+       "identity": "marjoram, dried",
+       "catalogue": "Marjoram (dried)"
+      }
+     ]
+    },
+    {
+     "id": "dh-045",
+     "raw": "2 Paar Frankfurter Würstchen (oder Wienerle)",
+     "lang": "de",
+     "kind": "alternatives",
+     "name": "Frankfurter Würstchen",
+     "expect": [
+      {
+       "identity": "frankfurter sausage"
+      }
+     ]
+    },
+    {
+     "id": "dh-046",
+     "raw": "etwas Essig",
+     "lang": "de",
+     "kind": "to_taste",
+     "name": "Essig",
+     "expect": [
+      {
+       "identity": "vinegar"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Chefkoch: Supersaftiger Apfelkuchen",
+   "source": "https://www.chefkoch.de/rezepte/1140221220253617/Supersaftiger-Apfelkuchen.html",
+   "lines": [
+    {
+     "id": "dh-047",
+     "raw": "etwas Fett für die Form",
+     "lang": "de",
+     "kind": "vague_count",
+     "name": "Fett",
+     "expect": []
+    },
+    {
+     "id": "dh-048",
+     "raw": "125 g Margarine oder Butter (weiche)",
+     "lang": "de",
+     "kind": "alternatives",
+     "name": "Margarine",
+     "expect": [
+      {
+       "identity": "margarine"
+      },
+      {
+       "identity": "butter",
+       "catalogue": "Butter"
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "dh-049",
+     "raw": "125 g Zucker",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Zucker",
+     "expect": [
+      {
+       "identity": "sugar",
+       "catalogue": "Sugar"
+      }
+     ]
+    },
+    {
+     "id": "dh-050",
+     "raw": "3 Ei(er), Größe M",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Ei",
+     "expect": [
+      {
+       "identity": "egg, whole",
+       "catalogue": "Egg"
+      }
+     ]
+    },
+    {
+     "id": "dh-051",
+     "raw": "0.5 Pck. Backpulver",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Backpulver",
+     "expect": [
+      {
+       "identity": "baking powder",
+       "catalogue": "Baking powder"
+      }
+     ]
+    },
+    {
+     "id": "dh-052",
+     "raw": "250 g Mehl",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Mehl",
+     "expect": [
+      {
+       "identity": "wheat flour",
+       "catalogue": "Wheat flour"
+      }
+     ]
+    },
+    {
+     "id": "dh-053",
+     "raw": "1.5 kg Äpfel (geschält und entkernt)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Äpfel",
+     "expect": [
+      {
+       "identity": "apple, raw",
+       "catalogue": "Apple"
+      }
+     ]
+    },
+    {
+     "id": "dh-054",
+     "raw": "60 g Butter (zum Bestreichen)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Butter",
+     "expect": [
+      {
+       "identity": "butter",
+       "catalogue": "Butter"
+      }
+     ]
+    },
+    {
+     "id": "dh-055",
+     "raw": "50 g Zucker (oder Zimtzucker zum Bestreuen)",
+     "lang": "de",
+     "kind": "alternatives",
+     "name": "Zucker",
+     "expect": [
+      {
+       "identity": "sugar",
+       "catalogue": "Sugar"
+      },
+      {
+       "identity": "cinnamon sugar"
+      }
+     ],
+     "any_of": true
+    }
+   ]
+  },
+  {
+   "title": "Chefkoch: Buntes Ofengemüse",
+   "source": "https://www.chefkoch.de/rezepte/309291111454441/Buntes-Ofengemuese.html",
+   "lines": [
+    {
+     "id": "dh-056",
+     "raw": "8 m.-große Kartoffeln, festkochende",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Kartoffeln",
+     "expect": [
+      {
+       "identity": "potato, raw",
+       "catalogue": "Potatoes"
+      }
+     ]
+    },
+    {
+     "id": "dh-057",
+     "raw": "1 Paprikaschote(n), rote",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Paprikaschote, rot",
+     "expect": [
+      {
+       "identity": "red bell pepper",
+       "catalogue": "Red bell pepper"
+      }
+     ]
+    },
+    {
+     "id": "dh-058",
+     "raw": "1 Paprikaschote(n), gelbe",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Paprikaschote, gelb",
+     "expect": [
+      {
+       "identity": "yellow bell pepper"
+      }
+     ]
+    },
+    {
+     "id": "dh-059",
+     "raw": "2 m.-große Zucchini",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Zucchini",
+     "expect": [
+      {
+       "identity": "zucchini, raw",
+       "catalogue": "Zucchini"
+      }
+     ]
+    },
+    {
+     "id": "dh-060",
+     "raw": "1 m.-große Aubergine(n)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Aubergine",
+     "expect": [
+      {
+       "identity": "eggplant, raw",
+       "catalogue": "Eggplant"
+      }
+     ]
+    },
+    {
+     "id": "dh-061",
+     "raw": "10 Schalotte(n)",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Schalotte",
+     "expect": [
+      {
+       "identity": "shallot, raw"
+      }
+     ]
+    },
+    {
+     "id": "dh-062",
+     "raw": "10 Champignons",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Champignons",
+     "expect": [
+      {
+       "identity": "mushrooms, raw",
+       "catalogue": "Mushrooms"
+      }
+     ]
+    },
+    {
+     "id": "dh-063",
+     "raw": "6 EL Olivenöl",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Olivenöl",
+     "expect": [
+      {
+       "identity": "olive oil",
+       "catalogue": "Olive oil"
+      }
+     ]
+    },
+    {
+     "id": "dh-064",
+     "raw": "1 TL Oregano",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Oregano",
+     "expect": [
+      {
+       "identity": "oregano, dried",
+       "catalogue": "Oregano (dried)"
+      }
+     ]
+    },
+    {
+     "id": "dh-065",
+     "raw": "1 TL Thymian",
+     "lang": "de",
+     "kind": "plain",
+     "name": "Thymian",
+     "expect": [
+      {
+       "identity": "thyme, dried",
+       "catalogue": "Thyme (dried)"
+      },
+      {
+       "identity": "thyme, fresh",
+       "catalogue": "Thyme (fresh)"
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "dh-066",
+     "raw": "1 TL Chilipulver (oder Paprikapulver, rosenscharfes)",
+     "lang": "de",
+     "kind": "alternatives",
+     "name": "Chilipulver",
+     "expect": [
+      {
+       "identity": "chili powder",
+       "catalogue": "Chili powder"
+      },
+      {
+       "identity": "paprika, ground",
+       "catalogue": "Paprika powder"
+      }
+     ],
+     "any_of": true
+    },
+    {
+     "id": "dh-067",
+     "raw": "1 TL Salz und Pfeffer",
+     "lang": "de",
+     "kind": "compound",
+     "name": "Salz und Pfeffer",
+     "expect": [
+      {
+       "identity": "salt",
+       "catalogue": "Salt"
+      },
+      {
+       "identity": "black pepper",
+       "catalogue": "Black pepper"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
