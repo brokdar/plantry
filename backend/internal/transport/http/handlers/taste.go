@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -248,4 +249,21 @@ func (h *TasteHandler) Put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"item": it, "undo": undo})
+}
+
+// Propose handles POST /api/taste/propose {text}: the statements a free-text
+// answer proposes (COLD-1), for the confirm chips. Nothing is stored.
+func (h *TasteHandler) Propose(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 8<<10)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	statements := taste.Propose(req.Text)
+	if statements == nil {
+		statements = []taste.Proposal{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"statements": statements})
 }
