@@ -37,6 +37,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/chef"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
@@ -379,6 +380,7 @@ func run() error {
 	aiRepo := sqlite.NewAIRepo(conn)
 	changeRepo := sqlite.NewAIChangeRepo(conn)
 	changes := agent.NewChanges(changeRepo, plateSvc, availabilitySvc, planLight, txRunner, clock.Now)
+	findRequester := &lazyFinds{}
 	tools, err := agent.NewToolSet(agent.Services{
 		Foods:             foodSvc,
 		NutritionResolver: nutritionResolver,
@@ -400,6 +402,7 @@ func run() error {
 		Undo:    changes,
 		Recipes: agent.RecipeTools{Changes: recipeChangeSvc, Attributes: flavorSvc},
 		Taste:   tasteSvc,
+		Finds:   agent.FindTools{Requester: findRequester, ChefOn: settingsSvc.ChefEnabled},
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
@@ -475,10 +478,12 @@ func run() error {
 	// Attribute labelling (ATTR-2): a chef_attributes job per saved recipe
 	// and the one-time library pass, each a capped run.
 	var labelling *flavor.Labelling
+	var findSvc *finds.Service
 	chefRunner := chef.NewRunner(chef.RunnerConfig{
 		Store: sqlite.NewChefJobRepo(conn), Guard: chefGuard,
 		Handlers: map[airun.Kind]chef.Handler{
 			airun.KindChefAttributes: func(ctx context.Context, job chef.Job) error { return labelling.Handle(ctx, job.Payload) },
+			airun.KindChefFind:       func(ctx context.Context, job chef.Job) error { return findSvc.Handle(ctx, job.Payload) },
 		},
 		Concurrency: chefJobConcurrency, MaxAttempts: chefJobMaxAttempts, Now: time.Now, Logger: logger,
 	})
@@ -498,6 +503,22 @@ func run() error {
 		},
 		chefJobConcurrency,
 	)
+	// Finds (FIND, C2): requested finds run on the chef runner; fetching is
+	// polite (robots, rate limit, backoff) and guarded like discovery.
+	findSvc = finds.NewService(finds.Deps{
+		Store: sqlite.NewFindRepo(conn), LLM: llmResolver, Runs: runRecorder,
+		Fetcher: httpfetch.NewPolite(httpfetch.New(httpfetch.WithDialGuard(nil, cfg.DevMode)),
+			httpfetch.WithAIGroupsExempt(aiGroupsExempt(settingsSvc.ChefSites))),
+		Extractor: importSvc, Matcher: matcher,
+		Household: findHousehold(profileSvc.Get, sqlite.NewKitchenRepo(conn).NeverItems, tasteSvc.View, foodRepo.LeafNamesByRecipeUse),
+		Sites:     settingsSvc.ChefSites,
+		Enqueue: func(ctx context.Context, id int64, requested bool) error {
+			_, err := chefRunner.Enqueue(ctx, airun.KindChefFind, strconv.FormatInt(id, 10), requested)
+			return err
+		},
+		Taste: tasteSvc, Logger: logger,
+	})
+	findRequester.svc = findSvc
 	foodSvc.WithSaved(func(ctx context.Context, id int64) {
 		if err := labelling.Saved(ctx, id); err != nil {
 			logger.WarnContext(ctx, "chef.labelling.queue failed", "food_id", id, "error", err)
@@ -581,6 +602,7 @@ func run() error {
 		Profile:       handlers.NewProfileHandler(profileSvc),
 		Kitchen:       handlers.NewKitchenHandler(profileSvc, kitchenSvc),
 		Taste:         handlers.NewTasteHandler(tasteSvc).WithKitchen(kitchenSvc, foodSvc, profileSvc),
+		Finds:         handlers.NewFindsHandler(findSvc, settingsSvc.ChefEnabled),
 		Presets:       handlers.NewPresetHandler(presetSvc),
 		AI:            aiHandler,
 		AIRuns:        aiRunsHandler,
