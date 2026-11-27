@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 )
@@ -163,6 +164,8 @@ func decodeRecipe(node map[string]any) *importer.RawRecipe {
 	}
 	r.RecipeInstructions = normalizeInstructions(node["recipeInstructions"])
 	r.SourceKcalPerServing = caloriesOf(node["nutrition"])
+	r.Rating, r.RatingCount, r.ReviewCount = ratingOf(node["aggregateRating"])
+	r.DatePublished = dateOf(node["datePublished"])
 
 	decodeEntities(r)
 	return r
@@ -230,6 +233,79 @@ func caloriesOf(v any) *float64 {
 			return nil
 		}
 		return &f
+	}
+	return nil
+}
+
+// ratingOf reads aggregateRating: the value mapped onto 1..5 by worstRating
+// (default 1) and bestRating (default 5), clamped, with the vote and review
+// counts. A missing or unusable block gives nil and zeros.
+func ratingOf(v any) (rating *float64, ratingCount, reviewCount int) {
+	n, ok := v.(map[string]any)
+	if !ok {
+		return nil, 0, 0
+	}
+	ratingCount = intOf(n["ratingCount"])
+	reviewCount = intOf(n["reviewCount"])
+	val, ok := numberOf(n["ratingValue"])
+	if !ok {
+		return nil, ratingCount, reviewCount
+	}
+	best, worst := 5.0, 1.0
+	if b, ok := numberOf(n["bestRating"]); ok {
+		best = b
+	}
+	if w, ok := numberOf(n["worstRating"]); ok {
+		worst = w
+	}
+	if best <= worst {
+		return nil, ratingCount, reviewCount
+	}
+	out := 1 + 4*(val-worst)/(best-worst)
+	out = min(5, max(1, out))
+	return &out, ratingCount, reviewCount
+}
+
+// numberOf reads a JSON number or a numeric string ("4,6" counts as 4.6).
+func numberOf(v any) (float64, bool) {
+	switch t := v.(type) {
+	case float64:
+		return t, true
+	case string:
+		f, err := strconv.ParseFloat(strings.ReplaceAll(strings.TrimSpace(t), ",", "."), 64)
+		return f, err == nil
+	}
+	return 0, false
+}
+
+// intOf reads a count given as a number or a string, ignoring thousands
+// separators ("1.200", "1,200"); 0 when unreadable.
+func intOf(v any) int {
+	switch t := v.(type) {
+	case float64:
+		return int(t)
+	case string:
+		var digits strings.Builder
+		for _, r := range t {
+			if r >= '0' && r <= '9' {
+				digits.WriteRune(r)
+			}
+		}
+		n, _ := strconv.Atoi(digits.String())
+		return n
+	}
+	return 0
+}
+
+// dateLayouts are the datePublished forms seen in the wild.
+var dateLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"}
+
+func dateOf(v any) *time.Time {
+	s := stringOf(v)
+	for _, layout := range dateLayouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return &t
+		}
 	}
 	return nil
 }

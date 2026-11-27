@@ -1,0 +1,8 @@
+User-agent: Claude-User
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: *
+Disallow: /private

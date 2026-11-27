@@ -115,9 +115,8 @@ type ListFilter struct {
 	Limit  int
 }
 
-// Images stores suggestion images. Implemented by imagestore.Store.
+// Images removes suggestion images. Implemented by imagestore.Store.
 type Images interface {
-	SaveFromURL(ctx context.Context, url, category string, id int64) (string, error)
 	Delete(category string, id int64) error
 }
 
@@ -125,12 +124,9 @@ type Images interface {
 // decisions on them.
 type Store struct {
 	Repo Repository
-	// Images is optional (no image path configured): suggestions are then
-	// stored without images.
+	// Images is optional; it only removes the images of suggestions saved
+	// before Discover stopped copying site photos (FIND-14).
 	Images Images
-	// ImageGuard vets the image URL a fetched page names before it is
-	// requested (any error skips the image); nil allows every URL.
-	ImageGuard func(rawURL string) error
 }
 
 // NewSuggestion is what Save stores.
@@ -147,10 +143,8 @@ type NewSuggestion struct {
 // ErrDayTaken: another suggestion is shown on the day Save was given.
 var ErrDayTaken = errors.New("discovery: day already has a suggestion")
 
-// Save stores the suggestion as pending, then downloads its image to
-// suggestions/<id>.jpg (D16). The draft's SourceURL is the row's source_url.
-// An image that is missing, fails to download or whose path cannot be
-// recorded leaves image_path NULL; the row stays stored.
+// Save stores the suggestion as pending. The draft's SourceURL is the row's
+// source_url. The site's photo is never copied (FIND-14).
 func (s *Store) Save(ctx context.Context, in NewSuggestion) (*Suggestion, error) {
 	sug := &Suggestion{
 		Mode: in.Mode, Query: in.Query, SourceURL: in.Draft.SourceURL, Draft: *in.Draft,
@@ -159,40 +153,7 @@ func (s *Store) Save(ctx context.Context, in NewSuggestion) (*Suggestion, error)
 	if err := s.Repo.Create(ctx, sug); err != nil {
 		return nil, fmt.Errorf("save suggestion: %w", err)
 	}
-	if path := s.saveImage(ctx, sug); path != "" {
-		if err := s.Repo.SetImagePath(ctx, sug.ID, &path); err != nil {
-			// The row is stored: keep it without an image rather than fail
-			// a run whose suggestion is already visible.
-			slog.WarnContext(ctx, "discovery.image.path_failed", "suggestion_id", sug.ID, "error", err)
-			if err := s.Images.Delete(ImageCategory, sug.ID); err != nil {
-				slog.WarnContext(ctx, "discovery.image.delete_failed", "suggestion_id", sug.ID, "error", err)
-			}
-			return sug, nil
-		}
-		sug.ImagePath = &path
-	}
 	return sug, nil
-}
-
-func (s *Store) saveImage(ctx context.Context, sug *Suggestion) string {
-	url := sug.Draft.ImageURL
-	if url == "" || s.Images == nil {
-		return ""
-	}
-	if s.ImageGuard != nil {
-		if err := s.ImageGuard(url); err != nil {
-			slog.Warn("discovery.image.blocked", "suggestion_id", sug.ID, "host", host(url), "error", err)
-			return ""
-		}
-		// The download re-checks redirect hops and the dialled address.
-		ctx = importer.WithURLGuard(ctx, s.ImageGuard)
-	}
-	path, err := s.Images.SaveFromURL(ctx, url, ImageCategory, sug.ID)
-	if err != nil {
-		slog.Warn("discovery.image.failed", "suggestion_id", sug.ID, "host", host(url), "error", logCause(err))
-		return ""
-	}
-	return path
 }
 
 // Accept marks the suggestion accepted as the saved food foodID and moves

@@ -103,8 +103,12 @@ type ToolChoice struct {
 
 // WebSearch enables the provider's server-side web search for a request.
 // MaxUses caps the searches the provider may run in one turn.
+//
+// AllowedDomains restricts the search to those sites (FIND-5); empty leaves
+// it unrestricted. A provider without domain filters ignores it.
 type WebSearch struct {
-	MaxUses int `json:"max_uses"`
+	MaxUses        int      `json:"max_uses"`
+	AllowedDomains []string `json:"allowed_domains,omitempty"`
 }
 
 // Request is the provider-neutral prompt sent to a Client. A zero

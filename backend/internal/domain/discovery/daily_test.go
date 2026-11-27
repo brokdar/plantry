@@ -218,7 +218,7 @@ func (h *harness) newRecipe(t *testing.T, image *string) *food.Food {
 // withImage stores an image file for the suggestion.
 func (h *harness) withImage(t *testing.T, id int64) []byte {
 	t.Helper()
-	data := pngBytes(t)
+	data := []byte("x")
 	require.NoError(t, os.MkdirAll(filepath.Join(h.images, discovery.ImageCategory), 0o755))
 	path := filepath.Join(discovery.ImageCategory, fmt.Sprintf("%d.jpg", id))
 	require.NoError(t, os.WriteFile(filepath.Join(h.images, path), data, 0o644))

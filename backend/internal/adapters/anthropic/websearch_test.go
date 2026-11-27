@@ -113,6 +113,19 @@ func TestStream_WebSearchToolEncoding(t *testing.T) {
 		assert.JSONEq(t, `{"type":"web_search_20250305","name":"web_search","max_uses":5}`, string(body.Tools[1]))
 	})
 
+	t.Run("allowed domains go to the server tool", func(t *testing.T) {
+		c, bodies := captureServer(t, "testdata/stream_text.sse")
+		stream(t, c, llm.Request{Model: "claude-opus-5-5", WebSearch: &llm.WebSearch{
+			MaxUses: 3, AllowedDomains: []string{"chefkoch.de", "bbcgoodfood.com"},
+		}})
+		var body struct {
+			Tools []json.RawMessage `json:"tools"`
+		}
+		require.NoError(t, json.Unmarshal(bodies()[0], &body))
+		require.Len(t, body.Tools, 1)
+		assert.JSONEq(t, `{"type":"web_search_20250305","name":"web_search","max_uses":3,"allowed_domains":["chefkoch.de","bbcgoodfood.com"]}`, string(body.Tools[0]))
+	})
+
 	t.Run("search alone sends only the server tool", func(t *testing.T) {
 		c, bodies := captureServer(t, "testdata/stream_text.sse")
 		stream(t, c, llm.Request{Model: "claude-opus-5-5", WebSearch: &llm.WebSearch{MaxUses: 3}})
