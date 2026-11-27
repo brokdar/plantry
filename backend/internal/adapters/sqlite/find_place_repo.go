@@ -89,3 +89,22 @@ func (r *FindRepo) SessionUntil(ctx context.Context) (time.Time, error) {
 	}
 	return t, nil
 }
+
+// BlockSearch skips domains in the find search until until.
+func (r *FindRepo) BlockSearch(ctx context.Context, domains []string, until time.Time) error {
+	for _, d := range domains {
+		if err := r.queriesFor(ctx).BlockSearchDomain(ctx, sqlcgen.BlockSearchDomainParams{Domain: d, BlockedUntil: until.UTC().Format(time.RFC3339)}); err != nil {
+			return fmt.Errorf("block search domain %s: %w", d, err)
+		}
+	}
+	return nil
+}
+
+// SearchBlocked lists the domains the find search skips at now.
+func (r *FindRepo) SearchBlocked(ctx context.Context, now time.Time) ([]string, error) {
+	out, err := r.queriesFor(ctx).ListSearchBlocked(ctx, now.UTC().Format(time.RFC3339))
+	if err != nil {
+		return nil, fmt.Errorf("list search blocks: %w", err)
+	}
+	return out, nil
+}

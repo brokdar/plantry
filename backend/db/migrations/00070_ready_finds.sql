@@ -7,7 +7,14 @@ CREATE TABLE chef_planning_session (
     id    INTEGER PRIMARY KEY CHECK (id = 1),
     until TEXT    NOT NULL
 );
+-- A site whose robots block the provider's search crawler is skipped by
+-- the find search until blocked_until.
+CREATE TABLE find_search_blocks (
+    domain        TEXT PRIMARY KEY,
+    blocked_until TEXT NOT NULL
+);
 
 -- +goose Down
+DROP TABLE find_search_blocks;
 DROP TABLE chef_planning_session;
 ALTER TABLE recipe_suggestions DROP COLUMN placed_on;

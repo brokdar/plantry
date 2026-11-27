@@ -24,6 +24,7 @@ type Querier interface {
 	// the unlock is the boundary.
 	AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams) ([]int64, error)
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
+	BlockSearchDomain(ctx context.Context, arg BlockSearchDomainParams) error
 	ClaimChefJob(ctx context.Context, now string) (ClaimChefJobRow, error)
 	// Frees the session's slot for another variant.
 	ClearHiddenVariantSession(ctx context.Context, sessionID sql.NullInt64) error
@@ -238,6 +239,7 @@ type Querier interface {
 	// Suggestions, optionally of one status and run, last decided (else newest)
 	// first.
 	ListRecipeSuggestions(ctx context.Context, arg ListRecipeSuggestionsParams) ([]RecipeSuggestion, error)
+	ListSearchBlocked(ctx context.Context, now string) ([]string, error)
 	ListSettings(ctx context.Context) ([]AppSetting, error)
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
 	ListSourcePenalties(ctx context.Context) ([]ListSourcePenaltiesRow, error)

@@ -106,3 +106,10 @@ ON CONFLICT (id) DO UPDATE SET until = MAX(until, excluded.until);
 
 -- name: GetPlanningSession :one
 SELECT until FROM chef_planning_session WHERE id = 1;
+
+-- name: BlockSearchDomain :exec
+INSERT INTO find_search_blocks (domain, blocked_until) VALUES (sqlc.arg(domain), sqlc.arg(blocked_until))
+ON CONFLICT (domain) DO UPDATE SET blocked_until = excluded.blocked_until;
+
+-- name: ListSearchBlocked :many
+SELECT domain FROM find_search_blocks WHERE blocked_until > sqlc.arg(now);

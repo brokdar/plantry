@@ -10,6 +10,21 @@ import (
 	"database/sql"
 )
 
+const blockSearchDomain = `-- name: BlockSearchDomain :exec
+INSERT INTO find_search_blocks (domain, blocked_until) VALUES (?1, ?2)
+ON CONFLICT (domain) DO UPDATE SET blocked_until = excluded.blocked_until
+`
+
+type BlockSearchDomainParams struct {
+	Domain       string
+	BlockedUntil string
+}
+
+func (q *Queries) BlockSearchDomain(ctx context.Context, arg BlockSearchDomainParams) error {
+	_, err := q.db.ExecContext(ctx, blockSearchDomain, arg.Domain, arg.BlockedUntil)
+	return err
+}
+
 const countOpenPlanningFinds = `-- name: CountOpenPlanningFinds :one
 SELECT COUNT(*) FROM recipe_suggestions
 WHERE state = 'ready' OR (state = 'searching' AND find_trigger = 'planning')
@@ -352,6 +367,33 @@ func (q *Queries) ListPlacedFinds(ctx context.Context, placedOn sql.NullString) 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSearchBlocked = `-- name: ListSearchBlocked :many
+SELECT domain FROM find_search_blocks WHERE blocked_until > ?1
+`
+
+func (q *Queries) ListSearchBlocked(ctx context.Context, now string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listSearchBlocked, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var domain string
+		if err := rows.Scan(&domain); err != nil {
+			return nil, err
+		}
+		items = append(items, domain)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

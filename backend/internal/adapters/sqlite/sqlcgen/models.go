@@ -195,6 +195,11 @@ type CookSession struct {
 	Reason         sql.NullString
 }
 
+type FindSearchBlock struct {
+	Domain       string
+	BlockedUntil string
+}
+
 type FindSourcePenalty struct {
 	Site      string
 	Count     int64

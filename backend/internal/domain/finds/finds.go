@@ -164,4 +164,8 @@ type Store interface {
 	// SessionUntil is when it closes (zero: never opened).
 	TouchSession(ctx context.Context, until time.Time) error
 	SessionUntil(ctx context.Context) (time.Time, error)
+	// BlockSearch skips domains in the find search until until;
+	// SearchBlocked lists the ones skipped at now.
+	BlockSearch(ctx context.Context, domains []string, until time.Time) error
+	SearchBlocked(ctx context.Context, now time.Time) ([]string, error)
 }

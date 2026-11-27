@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
@@ -213,12 +214,33 @@ func (s *Service) pipeline(ctx context.Context, f *Find) (Outcome, error) {
 	if err != nil {
 		return o, err
 	}
-	o.Steps = append(o.Steps, Step{Key: "searched", Params: map[string]string{"sites": strings.Join(domains, ", ")}})
+	if len(domains) == 0 {
+		o.State, o.Steps = StateFailed, []Step{{Key: "no_sites"}}
+		return o, nil
+	}
 	q := Query{Dish: f.Dish, Diet: h.Diet, Language: h.Lang}
 	urls, err := s.search(ctx, client, model, q, domains, web)
+	var blocked *llm.DomainsBlockedError
+	if errors.As(err, &blocked) {
+		// Sites that block the provider's crawler fail the whole search:
+		// skip them for searchBlockFor and search once more without them.
+		if err := s.d.Store.BlockSearch(ctx, blocked.Domains, s.now().Add(searchBlockFor)); err != nil {
+			return o, err
+		}
+		domains = slices.DeleteFunc(domains, func(d string) bool { return slices.Contains(blocked.Domains, d) })
+		urls, err = nil, nil
+		if len(domains) > 0 {
+			urls, err = s.search(ctx, client, model, q, domains, web)
+		}
+	}
 	if err != nil {
 		return o, err
 	}
+	if len(domains) == 0 {
+		o.State, o.Steps = StateFailed, []Step{{Key: "no_sites"}}
+		return o, nil
+	}
+	o.Steps = append(o.Steps, Step{Key: "searched", Params: map[string]string{"sites": strings.Join(domains, ", ")}})
 	cands, err := s.fetch(ctx, urls, domains)
 	if err != nil {
 		return o, err
@@ -326,16 +348,31 @@ func userFixable(blocks []gates.Finding) bool {
 	})
 }
 
+// searchBlockFor is how long a site that blocks the provider's search
+// crawler is skipped.
+const searchBlockFor = 30 * 24 * time.Hour
+
+func (s *Service) now() time.Time {
+	if s.d.Planning.Now != nil {
+		return s.d.Planning.Now()
+	}
+	return time.Now()
+}
+
 // domains are the enabled sites of the household's language (all enabled
-// sites when none matches).
+// sites when none matches), without the ones the search skips.
 func (s *Service) domains(ctx context.Context, lang string) ([]string, error) {
 	sites, err := s.d.Sites(ctx)
 	if err != nil {
 		return nil, err
 	}
+	blocked, err := s.d.Store.SearchBlocked(ctx, s.now())
+	if err != nil {
+		return nil, err
+	}
 	var same, all []string
 	for _, st := range sites {
-		if !st.Enabled {
+		if !st.Enabled || slices.Contains(blocked, st.Domain) {
 			continue
 		}
 		all = append(all, st.Domain)

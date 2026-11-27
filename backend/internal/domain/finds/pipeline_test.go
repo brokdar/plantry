@@ -105,13 +105,23 @@ type rig struct {
 
 func newRig(t *testing.T, web bool, m lineMatcher, kitchen profile.Kitchen, turns ...fake.Turn) *rig {
 	t.Helper()
+	return newRigWrapped(t, nil, web, m, kitchen, turns...)
+}
+
+// newRigWrapped is newRig with the provider client wrapped (nil: as is).
+func newRigWrapped(t *testing.T, wrap func(*fake.Client) llm.Client, web bool, m lineMatcher, kitchen profile.Kitchen, turns ...fake.Turn) *rig {
+	t.Helper()
 	db := testhelper.NewTestDB(t)
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)
 	client := fake.NewFromScript(&fake.Script{Turns: turns, Capabilities: fake.ScriptedCapabilities{WebSearch: web}})
+	var provider llm.Client = client
+	if wrap != nil {
+		provider = wrap(client)
+	}
 	store := sqlite.NewFindRepo(db)
 	r := &rig{store: store, client: client, db: db}
 	r.svc = finds.NewService(finds.Deps{
-		Store: store, LLM: llm.StaticResolver(rec.Meter(client, "fake"), "fake-model"), Runs: rec,
+		Store: store, LLM: llm.StaticResolver(rec.Meter(provider, "fake"), "fake-model"), Runs: rec,
 		Fetcher: pageFetcher{t}, Extractor: importer.NewService(nil, jsonld.Extractor{}, nil, nil, nil), Matcher: m,
 		Household: func(context.Context) (finds.Household, error) {
 			return finds.Household{Lang: "en", Diet: "vegetarian", Portions: 2, Kitchen: kitchen}, nil

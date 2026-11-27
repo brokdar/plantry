@@ -2284,6 +2284,7 @@
         "matched": "{{lines}} Zutaten zugeordnet, {{unmatched}} nicht gefunden",
         "checks_passed": "Alle Prüfungen bestanden",
         "checks_failed": "Braucht einen Blick: {{codes}}",
+        "no_sites": "Gerade lässt sich keine der aktivierten Rezeptseiten durchsuchen",
         "nothing_found": "Kein brauchbares Rezept gefunden",
         "no_search": "Dieser Anbieter kann nicht selbst im Web suchen",
         "no_provider": "Kein KI-Anbieter eingerichtet",
