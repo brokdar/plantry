@@ -50,3 +50,34 @@ func TestFoodAttributeRepo_RoundTripAndCascade(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, got.Empty())
 }
+
+// FIND-15: the library's cuisines are the stored cuisines of its live
+// recipes; neutral, archived recipes and leaves add none.
+func TestFoodAttributeRepo_LibraryCuisines(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewFoodAttributeRepo(db)
+	label := func(id int64, cuisine string) {
+		require.NoError(t, repo.Put(ctx, flavor.Record{
+			FoodID: id, Version: flavor.Version,
+			Values: flavor.Attributes{Cuisine: cuisine}, Sources: map[flavor.Field]flavor.Source{flavor.FieldCuisine: flavor.SourceAuto},
+		}))
+	}
+	put := func(name string, archived int, cuisine string) {
+		res, err := db.Exec(`INSERT INTO foods (name, kind, role, reference_portions, archived) VALUES (?, 'composed', 'main', 2, ?)`, name, archived)
+		require.NoError(t, err)
+		id, err := res.LastInsertId()
+		require.NoError(t, err)
+		label(id, cuisine)
+	}
+	put("Pasta", 0, "italian")
+	put("Lasagne", 0, "italian")
+	put("Curry", 0, "indian")
+	put("Rice", 0, "neutral")
+	put("Old taco", 1, "mexican")
+	label(createTestLeaf(t, sqlite.NewFoodRepo(db), "Basil"), "thai")
+
+	got, err := repo.LibraryCuisines(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"indian", "italian"}, got)
+}

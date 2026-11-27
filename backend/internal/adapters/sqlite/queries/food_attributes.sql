@@ -25,3 +25,13 @@ WHERE f.kind = 'composed' AND f.archived = 0
       SELECT 1 FROM food_attributes a
       WHERE a.food_id = f.id AND a.sources_json LIKE '%"auto"%')
 ORDER BY f.id;
+
+-- name: ListLibraryCuisines :many
+-- The cuisines the library's recipes carry (FIND-15), neutral left out.
+SELECT DISTINCT CAST(json_extract(a.values_json, '$.cuisine') AS TEXT) AS cuisine
+FROM food_attributes a
+JOIN foods f ON f.id = a.food_id
+WHERE f.kind = 'composed' AND f.archived = 0
+  AND json_extract(a.values_json, '$.cuisine') IS NOT NULL
+  AND json_extract(a.values_json, '$.cuisine') <> 'neutral'
+ORDER BY cuisine;

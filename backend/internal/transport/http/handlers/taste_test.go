@@ -174,3 +174,43 @@ func TestTasteHandler_Propose(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.JSONEq(t, `{"statements":[{"kind":"taste","level":"cuisine","key":"thai","polarity":"love"},{"kind":"taste","level":"hero","key":"coriander","polarity":"rather_not"}]}`, w.Body.String())
 }
+
+// TASTE-11 (CP2 judges): GET /api/taste leaves out the items that say
+// nothing about a household (a plated dish, boiled, simmered); they still
+// exist and score. Other format and technique items stay.
+func TestTasteHandler_HidesTrivialItems(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	events := foodevent.NewService(sqlite.NewTxRunner(db), sqlite.NewFoodEventRepo(db), map[foodevent.Kind]foodevent.Restorer{}, nil)
+	svc := taste.NewService(taste.Deps{
+		Store: sqlite.NewTasteRepo(db), Foods: sqlite.NewFoodRepo(db), Events: events,
+		History: sqlite.NewFoodEventRepo(db), Attributes: noAttrs{},
+	})
+	for _, ref := range []taste.Ref{
+		{Level: taste.LevelFormat, Key: "plate"},
+		{Level: taste.LevelTechnique, Key: "boil"},
+		{Level: taste.LevelTechnique, Key: "simmer"},
+		{Level: taste.LevelFormat, Key: "one_pot"},
+		{Level: taste.LevelTechnique, Key: "raw"},
+	} {
+		_, _, err := svc.State(ctx, ref, taste.Love, taste.ScopeAlways, time.Time{})
+		require.NoError(t, err)
+	}
+	all, err := svc.View(ctx, time.Time{})
+	require.NoError(t, err)
+	require.Len(t, all.Items, 5, "the domain keeps them")
+
+	w := httptest.NewRecorder()
+	handlers.NewTasteHandler(svc).Get(w, httptest.NewRequest(http.MethodGet, "/api/taste", nil))
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var v taste.View
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&v))
+	var keys []string
+	for _, it := range v.Items {
+		keys = append(keys, it.Key)
+	}
+	assert.ElementsMatch(t, []string{"one_pot", "raw"}, keys)
+	for _, r := range v.Recent {
+		assert.False(t, taste.Trivial(r.Item.Level, r.Item.Key), r.Item.Key)
+	}
+}

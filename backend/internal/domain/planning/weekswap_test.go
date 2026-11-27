@@ -284,3 +284,72 @@ func TestGuardWeek_SwapsWholeBatchesAndKeepsCookingDays(t *testing.T) {
 	assert.LessOrEqual(t, cookDaysOf(s, got), daysBefore, "no cooking day is added")
 	assert.True(t, slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, "batch") }), "%v", notes)
 }
+
+// newDishWeek is meatyWeek with a meaty new dish (101, explore-tagged, never
+// eaten) cooked for three meals and an older meaty batch (102) for two; the
+// rest eats mains without meat. The new dish's batch holds the most meat,
+// yet swapping the other one alone brings the week within its budget.
+func newDishWeek(t *testing.T) (planning.State, planning.Proposal) {
+	t.Helper()
+	s := meatyWeek()
+	withGroups(s, 101, planning.FoodGroups{MeatG: 100})
+	withGroups(s, 102, planning.FoodGroups{MeatG: 120})
+	f := s.Foods[101]
+	f.ExploreTag, f.LastEaten = true, nil
+	s.Foods[101] = f
+	require.True(t, s.Foods[101].Explore())
+	type cell struct {
+		date string
+		slot int64
+	}
+	var cells []cell
+	for _, c := range s.Cells {
+		if c.SlotID != breakfast {
+			cells = append(cells, cell{c.Date.Format("2006-01-02"), c.SlotID})
+		}
+	}
+	var prop planning.Proposal
+	groups := [][]int{{0, 1, 2}, {3, 4}, {5, 6, 7}, {8, 9, 10}, {11, 12, 13}}
+	foods := []int64{101, 102, 108, 110, 111}
+	for gi, g := range groups {
+		key := string(rune('a' + gi))
+		first := cells[g[0]]
+		prop.Sessions = append(prop.Sessions, session(key, foods[gi], first.date, first.slot, float64(len(g))))
+		for _, ci := range g {
+			prop.Plates = append(prop.Plates, planning.ProposedPlate{
+				Date: day(cells[ci].date), SlotID: cells[ci].slot, Eaters: 1,
+				Components: []planning.ProposedComponent{{FoodID: foods[gi], Portions: 1, SessionKey: key}},
+			})
+		}
+	}
+	for _, c := range s.Cells {
+		if c.SlotID == breakfast && !slices.ContainsFunc(s.Plates, func(p planning.Plate) bool { return p.Date.Equal(c.Date) && p.SlotID == breakfast }) {
+			prop.Plates = append(prop.Plates, planning.ProposedPlate{Date: c.Date, SlotID: breakfast, Eaters: 1, Components: []planning.ProposedComponent{{FoodID: oats, Portions: 1}}})
+		}
+	}
+	return s, prop
+}
+
+// FIND-3 (CP3 dry run): the meat guard swaps an older meaty dish before the
+// week's new dish, so a ready find the planner placed stays on the plan.
+func TestGuardWeek_KeepsTheNewDish(t *testing.T) {
+	s, prop := newDishWeek(t)
+	target := windowTarget(s)
+	require.Greater(t, meatOf(s, prop), 300.0)
+	got, notes := planning.GuardWeek(s, target, prop, nil, "")
+	assert.LessOrEqual(t, meatOf(s, got), 300.0+1e-9)
+	assert.True(t, slices.ContainsFunc(got.Sessions, func(ss planning.ProposedSession) bool { return ss.FoodID == 101 }), "the new dish stays: %v", notes)
+}
+
+// FIND-3 (CP3 dry run): a new dish that alone holds more meat than the
+// weekly guideline stays; the guard swaps no other dish for it either.
+func TestGuardWeek_NewDishOverTheMeatGuidelineStays(t *testing.T) {
+	s, prop := newDishWeek(t)
+	withGroups(s, 101, planning.FoodGroups{MeatG: 150})
+	withGroups(s, 102, planning.FoodGroups{})
+	target := windowTarget(s)
+	require.Greater(t, meatOf(s, prop), 300.0)
+	got, notes := planning.GuardWeek(s, target, prop, nil, "")
+	assert.True(t, slices.ContainsFunc(got.Sessions, func(ss planning.ProposedSession) bool { return ss.FoodID == 101 }), "the new dish stays: %v", notes)
+	assert.False(t, slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, "Weekly meat") }), "%v", notes)
+}

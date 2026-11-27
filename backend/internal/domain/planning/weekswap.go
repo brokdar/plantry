@@ -272,6 +272,16 @@ func (x *index) swapPlates(counted map[string]bool, mode swapMode, proposedOnly 
 	return out
 }
 
+// newDish reports whether food id is one of the week's new dishes (an
+// untried explore recipe, a placed ready find among them): the week guard
+// never swaps it out (FIND-3). The weekly meat and fish rules are soft and
+// the household asked for the dish; the hard rules already held when the
+// planner placed it.
+func (x *index) newDish(id int64) bool {
+	f, ok := x.s.Foods[id]
+	return ok && f.Explore()
+}
+
 // mainIndex is the index of the plate's composed main component, -1 without.
 func (x *index) mainIndex(p Plate) int {
 	for i := range p.Components {
@@ -518,9 +528,9 @@ func (x *index) weekFix(ev Evaluation, t Target, is *Issue, mode swapMode) {
 // and the whole plan re-evaluated: it is kept only when it adds no hard or
 // soft issue, lowers the week's meat (or adds the fish meal) and keeps the
 // weekly protein at 90 % of its target or no lower than it was. Only the
-// proposal's own plates change. skip are foods the target may not hold.
-// repick (plate fit on) re-picks the side of a swapped main (PLATE-5). One
-// plain-words note per change.
+// proposal's own plates change, and never a new dish (newDish). skip are
+// foods the target may not hold. repick (plate fit on) re-picks the side of a
+// swapped main (PLATE-5). One plain-words note per change.
 func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instruction string, repick sidePicker) (Proposal, []string) {
 	out := in
 	var notes []string
@@ -540,6 +550,9 @@ func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instructi
 			return true
 		}
 		for _, pi := range x.swapPlates(weekCounted(ev), mode, true) {
+			if p := x.s.Plates[pi]; x.newDish(p.Components[x.mainIndex(p)].FoodID) {
+				continue
+			}
 			tries := 0
 			for _, sw := range x.swapsFor(t, ev, []int{pi}, mode, skip) {
 				if tries++; tries > maxGuardTries {
@@ -595,7 +608,7 @@ func (x *index) swapBatch(base State, t Target, in Proposal, before Evaluation, 
 	var batches []batch
 	for si, ss := range in.Sessions {
 		of := x.s.Foods[ss.FoodID]
-		if mode == swapMeat && of.Groups.MeatG <= 0 {
+		if (mode == swapMeat && of.Groups.MeatG <= 0) || x.newDish(ss.FoodID) {
 			continue
 		}
 		b := batch{si: si}

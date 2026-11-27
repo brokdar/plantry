@@ -107,3 +107,32 @@ func TestChefPlanHandler(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &list))
 	assert.Empty(t, list.Items)
 }
+
+// FIND-15: POST /api/plan/opened on the next window of a household with no
+// cuisine in scope (no discovery.cuisines, the default) answers 204, never
+// 400, and starts no find (CP3 dry run).
+func TestChefPlan_OpenedWithoutCuisines(t *testing.T) {
+	store := sqlite.NewFindRepo(testhelper.NewTestDB(t))
+	chefOn := func(context.Context) (bool, error) { return true, nil }
+	now := time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC)
+	svc := finds.NewService(finds.Deps{
+		Store: store,
+		Enqueue: func(context.Context, int64, bool) error {
+			t.Fatal("no cuisine in scope queues no find")
+			return nil
+		},
+		Planning: finds.Planning{
+			ChefOn: chefOn, Now: func() time.Time { return now },
+			NewDishes: func(context.Context) (int, error) { return 1, nil },
+			Dish:      func(context.Context, time.Time) (string, error) { return "", nil },
+		},
+	})
+	h := handlers.NewChefPlanHandler(handlers.ChefPlanDeps{
+		Finds: svc, ChefOn: chefOn, Plates: noPlates{},
+		ShoppingDay: func(context.Context) (int, error) { return 5, nil },
+		Now:         func() time.Time { return now },
+	})
+	w := httptest.NewRecorder()
+	h.Opened(w, httptest.NewRequest(http.MethodPost, "/api/plan/opened", strings.NewReader(`{"start":"2026-11-07","today":"2026-11-02"}`)))
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+}

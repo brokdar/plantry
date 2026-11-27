@@ -793,6 +793,24 @@
         "bitter": "bitter dishes",
         "umami": "savoury dishes"
       },
+      "technique": {
+        "braise": "braised dishes",
+        "roast": "roasted dishes",
+        "fry": "fried dishes",
+        "saute": "pan-fried dishes",
+        "grill": "grilled dishes",
+        "bake": "oven-baked dishes",
+        "raw": "raw dishes",
+        "steam": "steamed dishes"
+      },
+      "format": {
+        "bowl": "bowls",
+        "one_pot": "one-pot dishes",
+        "casserole": "casseroles and bakes",
+        "wrap": "wraps",
+        "soup": "soups",
+        "salad": "salads"
+      },
       "theme": {
         "title": "Theme",
         "line": "This week: {{names}}. It ends with the week.",

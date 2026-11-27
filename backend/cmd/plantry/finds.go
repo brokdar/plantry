@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/gates"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/kitchen"
@@ -87,23 +88,23 @@ func findHousehold(
 }
 
 // householdCuisines lists the cuisines the household eats (FIND-15): the ones
-// it loves (the cold-start answer included), Cuisines to explore, and the
-// locale's home cuisine. Library recipes carry no cuisine, so they add none.
+// its library's recipes carry, the ones it loves (the cold-start answer
+// included), Cuisines to explore, and the locale's home cuisine.
 func householdCuisines(
 	prof func(context.Context) (*profile.Profile, error),
+	library func(context.Context) ([]string, error),
 	loved func(context.Context) ([]string, error),
 	explore func(context.Context) ([]string, error),
 ) func(context.Context) ([]string, error) {
 	return func(ctx context.Context) ([]string, error) {
-		out, err := loved(ctx)
-		if err != nil {
-			return nil, err
+		var out []string
+		for _, src := range []func(context.Context) ([]string, error){library, loved, explore} {
+			more, err := src(ctx)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, more...)
 		}
-		more, err := explore(ctx)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, more...)
 		p, err := prof(ctx)
 		if err != nil {
 			return nil, err
@@ -113,6 +114,35 @@ func householdCuisines(
 		}
 		slices.Sort(out)
 		return slices.Compact(out), nil
+	}
+}
+
+// planningDish picks the cuisine a planning find searches for on day: once
+// the household has cooked, today's of Cuisines to explore; in week one
+// (COLD-4) or without any, today's of the household's cuisines (FIND-15).
+// An empty scope gives "", and the find service then starts none.
+func planningDish(
+	history func(context.Context) (bool, error),
+	house func(context.Context) ([]string, error),
+	explore func(context.Context) ([]string, error),
+) func(context.Context, time.Time) (string, error) {
+	return func(ctx context.Context, day time.Time) (string, error) {
+		cooked, err := history(ctx)
+		if err != nil {
+			return "", err
+		}
+		var cuisines []string
+		if cooked {
+			if cuisines, err = explore(ctx); err != nil {
+				return "", err
+			}
+		}
+		if len(cuisines) == 0 {
+			if cuisines, err = house(ctx); err != nil {
+				return "", err
+			}
+		}
+		return discovery.DailyCuisine(cuisines, day), nil
 	}
 }
 

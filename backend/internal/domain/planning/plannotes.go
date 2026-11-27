@@ -42,7 +42,60 @@ func savedPlanNotes(in ChooseInput, orig, final Proposal) []string {
 	add(sidesLine(merged, orig, final))
 	add(dayGapLines(in, ev, final)...)
 	add(sameDishLines(x, merged)...)
+	add(newDishLines(in, merged)...)
 	add(floorNote(merged, in.Target), mealNote(merged, in.Target), proteinNote(merged, in.Target))
+	return out
+}
+
+// newDishWhy says in kitchen words why a recipe the chooser never saw is out
+// (excludedFood reasons).
+var newDishWhy = map[string]string{
+	excludeNever:    "it holds something you never eat",
+	excludeDiet:     "it does not suit your diet",
+	excludeReplaced: "you asked for something else in its place",
+	excludeSlotTime: "it takes longer than any meal this week has time for",
+	excludeTrial:    "you already cook it on trial",
+}
+
+// newDishLines name the week's new dishes (untried explore recipes, placed
+// ready finds among them) the plan merged leaves out while it holds fewer
+// than New dishes (FIND-3), newest first, each with why it did not fit.
+func newDishLines(in ChooseInput, merged State) []string {
+	if in.ExploreQuota <= 0 {
+		return nil
+	}
+	onPlan := map[int64]bool{}
+	for _, p := range merged.Plates {
+		if merged.Window.Contains(p.Date) {
+			for _, c := range p.Components {
+				onPlan[c.FoodID] = true
+			}
+		}
+	}
+	placed := 0
+	var left []FoodFacts
+	for _, f := range in.State.Foods {
+		switch {
+		case !f.Composed() || f.Archived || !f.Explore():
+		case onPlan[f.ID]:
+			placed++
+		default:
+			left = append(left, f)
+		}
+	}
+	if placed >= in.ExploreQuota || len(left) == 0 {
+		return nil
+	}
+	slices.SortFunc(left, func(a, b FoodFacts) int { return cmp.Compare(b.ID, a.ID) })
+	_, excluded := candidateSplit(in)
+	var out []string
+	for _, f := range left[:min(len(left), in.ExploreQuota-placed)] {
+		why := "no meal this week had room for it"
+		if i := slices.IndexFunc(excluded, func(e excludedFood) bool { return e.ID == f.ID }); i >= 0 && newDishWhy[excluded[i].Reason] != "" {
+			why = newDishWhy[excluded[i].Reason]
+		}
+		out = append(out, fmt.Sprintf("The new dish %s did not fit this week: %s.", f.Name, why))
+	}
 	return out
 }
 
