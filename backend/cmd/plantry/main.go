@@ -22,6 +22,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fdc"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/fdclocal"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/httpfetch"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/jsonld"
@@ -140,7 +141,7 @@ func run() error {
 
 	// FDC provider is always constructed — it reads the key from settings
 	// per-request and gracefully returns empty results when no key is set.
-	fdcProvider := fdc.NewDynamicProvider(settingsSvc)
+	fdcProvider := fdc.NewDynamicProvider(settingsSvc).WithFallback(fdclocal.New())
 
 	foodRepo := sqlite.NewFoodRepo(conn)
 	foodSvc := food.NewService(foodRepo).WithPortionProvider(fdcProvider)

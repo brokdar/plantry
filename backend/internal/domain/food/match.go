@@ -325,7 +325,7 @@ func (m *Matcher) gatherName(ctx context.Context, req MatchRequest, leaves []cat
 		}
 		fillMissingKcal(cs)
 		enrichExistingIDs(leaves, cs)
-		if i, r := lm.add(rankExternal(cs, q, preferOf(e), lm.state)); i >= 0 {
+		if i, r := lm.add(rankExternal(cs, q, preferOf(e), lm.state, ownWords(e, keys))); i >= 0 {
 			lm.best = i
 			return lm
 		} else if r != "" && reason == ReasonNoCandidate {
@@ -350,7 +350,7 @@ func (m *Matcher) gatherName(ctx context.Context, req MatchRequest, leaves []cat
 			lm.Tried[len(lm.Tried)-1] += " (failed)"
 		}
 		fillMissingKcal(cs)
-		if i, r := lm.add(rankExternal(cs, matchKey(q), "", lm.state)); i >= 0 {
+		if i, r := lm.add(rankExternal(cs, matchKey(q), "", lm.state, nil)); i >= 0 {
 			lm.best = i
 			return lm
 		} else if r != "" && reason == ReasonNoCandidate {
@@ -583,6 +583,21 @@ func fdcQuery(e *Synonym, keys []string, lang string) string {
 	return ""
 }
 
+// ownWords are the line's distinguishing words (not state words) a strict
+// entry's result must also name; nil for any other entry.
+func ownWords(e *Synonym, keys []string) []string {
+	if e == nil || !e.Strict || len(keys) == 0 {
+		return nil
+	}
+	var out []string
+	for _, w := range strings.Fields(keys[0]) {
+		if _, isState := stateWords[w]; !isState {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
 func preferOf(e *Synonym) string {
 	if e == nil {
 		return ""
@@ -600,9 +615,9 @@ type rankedCandidate struct {
 var externalPenalty = []string{"industrial", "babyfood", "fast foods", "restaurant", "snack", "kit", "pudding", "sandwich"}
 
 // rankExternal orders FDC or OFF results: those naming every query word (or
-// the preferred fragment) first, then generic over branded, the line's
+// the preferred fragment) and every own word first, then generic over branded, the line's
 // state, fewer extra words.
-func rankExternal(cs []Candidate, query, prefer, state string) []rankedCandidate {
+func rankExternal(cs []Candidate, query, prefer, state string, own []string) []rankedCandidate {
 	qWords := strings.Fields(matchKey(query))
 	out := make([]rankedCandidate, 0, len(cs))
 	for _, c := range cs {
@@ -616,6 +631,11 @@ func rankExternal(cs []Candidate, query, prefer, state string) []rankedCandidate
 			if _, isState := stateWords[w]; isState {
 				continue
 			}
+			if !strings.Contains(dk, " "+strings.TrimSuffix(w, "s")) {
+				rc.identity = false
+			}
+		}
+		for _, w := range own {
 			if !strings.Contains(dk, " "+strings.TrimSuffix(w, "s")) {
 				rc.identity = false
 			}
