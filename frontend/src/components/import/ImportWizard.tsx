@@ -24,9 +24,10 @@ import { FOOD_ROLES } from "@/lib/schemas/food"
 import { ApiError } from "@/lib/api/client"
 import { toast } from "@/lib/toast"
 
-import { draftRows } from "./draft-rows"
+import { draftOrder, draftRows, rowProblem } from "./draft-rows"
 import { IngredientResolveRow, type RowState } from "./IngredientResolveRow"
 import { ImportNutritionSummary } from "./ImportNutritionSummary"
+import { StepsEditor } from "./StepsEditor"
 
 export interface ImportWizardProps {
   /** Opens straight at the review with this draft (D18: a discovery
@@ -58,6 +59,18 @@ export function ImportWizard({
   const [showHtml, setShowHtml] = useState(false)
   const [rows, setRows] = useState<RowState[]>(
     () => initialRows ?? (initialDraft ? draftRows(initialDraft) : [])
+  )
+  const [order, setOrder] = useState<number[]>(() =>
+    initialDraft ? draftOrder(initialDraft) : []
+  )
+  const [steps, setSteps] = useState<string[]>(
+    () => initialDraft?.instructions ?? []
+  )
+  const [prepMinutes, setPrepMinutes] = useState<number | null>(
+    initialDraft?.prep_minutes ?? null
+  )
+  const [cookMinutes, setCookMinutes] = useState<number | null>(
+    initialDraft?.cook_minutes ?? null
   )
   const [recipeName, setRecipeName] = useState(initialDraft?.name ?? "")
   const [role, setRole] = useState<(typeof FOOD_ROLES)[number]>("main")
@@ -92,6 +105,10 @@ export function ImportWizard({
       setPortionsInput(String(d.reference_portions || 1))
       setPortionsError(false)
       setRows(draftRows(d))
+      setOrder(draftOrder(d))
+      setSteps(d.instructions)
+      setPrepMinutes(d.prep_minutes)
+      setCookMinutes(d.cook_minutes)
       setStep(2)
     } catch (err) {
       if (err instanceof ApiError)
@@ -111,24 +128,27 @@ export function ImportWizard({
         name: recipeName,
         role,
         reference_portions: referencePortions,
-        prep_minutes: draft.prep_minutes,
-        cook_minutes: draft.cook_minutes,
+        prep_minutes: prepMinutes,
+        cook_minutes: cookMinutes,
         notes: null,
         tags: [...new Set([...draft.tags, ...extraTags])],
-        instructions: draft.instructions.map((text, i) => ({
-          step_number: i + 1,
-          text,
-        })),
-        children: rows.map((row) => ({
-          resolution: row.resolution,
-          food_id: row.foodId ?? 0,
-          amount: row.amount,
-          unit: row.unit,
-          portion_grams:
-            row.portionEdited && row.unit === row.countUnit
-              ? row.portionGrams
-              : null,
-        })),
+        instructions: steps
+          .map((text) => text.trim())
+          .filter((text) => text !== "")
+          .map((text, i) => ({ step_number: i + 1, text })),
+        children: rows
+          .filter((row) => !row.removed)
+          .map((row) => ({
+            resolution: row.resolution,
+            food_id: row.foodId ?? 0,
+            amount: row.amount,
+            unit: row.unit,
+            to_taste: row.toTaste,
+            portion_grams:
+              row.portionEdited && row.unit === row.countUnit
+                ? row.portionGrams
+                : null,
+          })),
       })
       const resolved = resolveRes.food
       const created = await createComp.mutateAsync({
@@ -159,20 +179,15 @@ export function ImportWizard({
     }
   }
 
-  // Skipped rows (including quantity-less lines like "Salz und Pfeffer")
-  // count as resolved.
-  const unresolvedCount = rows.filter(
-    (r) => r.resolution === "existing" && !r.foodId
-  ).length
-  // A linked count row also needs a positive weight per unit.
-  const missingWeightCount = rows.filter(
-    (r) =>
-      r.resolution === "existing" &&
-      r.foodId &&
-      r.unit === r.countUnit &&
-      !((r.portionGrams ?? 0) > 0)
-  ).length
-  const blocked = unresolvedCount > 0 || missingWeightCount > 0
+  // P3: every kept line needs a food, and an amount unless it is to taste.
+  const problems = rows.map(rowProblem)
+  const count = (p: string) => problems.filter((x) => x === p).length
+  const unresolvedCount = count("match")
+  const missingAmountCount = count("amount")
+  const missingWeightCount = count("weight")
+  const noLines = rows.every((r) => r.removed)
+  const blocked =
+    unresolvedCount + missingAmountCount + missingWeightCount > 0 || noLines
   const saving = resolve.isPending || createComp.isPending
 
   return (
@@ -345,15 +360,30 @@ export function ImportWizard({
             />
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <MinutesInput
+              id="import-prep"
+              label={t("import.review.prep_label")}
+              value={prepMinutes}
+              onChange={setPrepMinutes}
+            />
+            <MinutesInput
+              id="import-cook"
+              label={t("import.review.cook_label")}
+              value={cookMinutes}
+              onChange={setCookMinutes}
+            />
+          </div>
+
           <Separator />
 
           <div className="space-y-2">
             <Label>{t("import.step2.ingredient_col")}</Label>
             <div className="space-y-2">
-              {draft.ingredients.map((ing, idx) => (
+              {order.map((idx) => (
                 <IngredientResolveRow
                   key={idx}
-                  ing={ing}
+                  ing={draft.ingredients[idx]}
                   state={rows[idx]}
                   lang={draft.language === "en" ? "en" : "de"}
                   onChange={(patch) =>
@@ -364,6 +394,13 @@ export function ImportWizard({
                 />
               ))}
             </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-2">
+            <Label>{t("import.steps.title")}</Label>
+            <StepsEditor steps={steps} onChange={setSteps} />
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -383,9 +420,15 @@ export function ImportWizard({
                     ? t("import.review.needs_choice", {
                         count: unresolvedCount,
                       })
-                    : t("import.review.needs_weight", {
-                        count: missingWeightCount,
-                      })}
+                    : missingAmountCount > 0
+                      ? t("import.review.needs_amount", {
+                          count: missingAmountCount,
+                        })
+                      : missingWeightCount > 0
+                        ? t("import.review.needs_weight", {
+                            count: missingWeightCount,
+                          })
+                        : t("import.review.no_lines")}
                 </p>
               )}
               <Button
@@ -399,6 +442,36 @@ export function ImportWizard({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function MinutesInput({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: number | null
+  onChange: (v: number | null) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        type="number"
+        inputMode="numeric"
+        min={0}
+        value={value ?? ""}
+        onChange={(e) =>
+          onChange(
+            e.target.value === "" ? null : Math.max(0, Number(e.target.value))
+          )
+        }
+      />
     </div>
   )
 }

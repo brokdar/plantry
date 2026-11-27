@@ -55,6 +55,8 @@ type resolveChildRequest struct {
 	// PortionGrams is the reviewed grams per count unit; null keeps the
 	// leaf's portion or the units.CountGrams estimate.
 	PortionGrams *float64 `json:"portion_grams"`
+	// ToTaste: a to-taste seasoning line, saved without an amount.
+	ToTaste bool `json:"to_taste"`
 }
 
 type resolveInstructionRequest struct {
@@ -171,12 +173,17 @@ func (h *ImportHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	for _, ch := range req.Children {
 		input.Children = append(input.Children, importer.FinalizedChild{
 			Resolution: ch.Resolution, FoodID: ch.FoodID,
-			Amount: ch.Amount, Unit: ch.Unit, PortionGrams: ch.PortionGrams,
+			Amount: ch.Amount, Unit: ch.Unit, PortionGrams: ch.PortionGrams, ToTaste: ch.ToTaste,
 		})
 	}
 	out, err := h.svc.Finalize(r.Context(), input)
 	if err != nil {
 		status, key := toHTTP(err)
+		var le *importer.LineError
+		if errors.As(err, &le) {
+			writeErrorParams(w, status, key, map[string]string{"food": le.Food})
+			return
+		}
 		writeError(w, status, key)
 		return
 	}

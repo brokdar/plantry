@@ -33,6 +33,8 @@ type ScaledIngredient struct {
 	Grams   float64
 	Display units.Quantity
 	Buy     *units.Quantity
+	// ToTaste: shown "to taste", Amount and Display are nominal.
+	ToTaste bool
 	// DietClass is the child's effective diet class; set by Service.Scaled.
 	DietClass diet.Class
 }
@@ -70,8 +72,9 @@ func Scale(f *Food, portions float64) (*Scaled, error) {
 			Unit:    ch.Unit,
 			Grams:   ch.Grams * factor,
 			Display: units.Display(amount, ch.Unit),
+			ToTaste: ch.ToTaste,
 		}
-		if buy, ok := units.Buy(amount, ch.Unit); ok {
+		if buy, ok := units.Buy(amount, ch.Unit); ok && !ch.ToTaste {
 			line.Buy = &buy
 		}
 		out.Ingredients = append(out.Ingredients, line)

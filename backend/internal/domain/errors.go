@@ -67,6 +67,11 @@ var (
 	ErrImportNoRecipe          = errors.New("import no recipe found")
 	ErrImportLLMFailed         = errors.New("import llm extraction failed")
 	ErrImportInvalidResolution = errors.New("import invalid resolution")
+	// ErrImportUnmatchedLine: a reviewed line has no food (P3, MATCH-5).
+	ErrImportUnmatchedLine = errors.New("import line not matched")
+	// ErrImportNoNutrition: a line's food is not a leaf with nutrition per
+	// 100 g and the line is not "to taste" (P3).
+	ErrImportNoNutrition = errors.New("import food without nutrition")
 
 	// Profile planning preference errors.
 	ErrInvalidDietType          = errors.New("invalid diet type")
@@ -218,6 +223,8 @@ var messageKeys = []struct {
 	{ErrImportNoRecipeNoAI, "error.import.no_recipe_no_ai"},
 	{ErrImportLLMFailed, "error.import.llm_failed"},
 	{ErrImportInvalidResolution, "error.import.invalid_resolution"},
+	{ErrImportUnmatchedLine, "error.import.unmatched_line"},
+	{ErrImportNoNutrition, "error.import.no_nutrition"},
 	{ErrInvalidDietType, "error.profile.invalid_diet_type"},
 	{ErrInvalidMeatDays, "error.profile.invalid_meat_days"},
 	{ErrInvalidHouseholdPortions, "error.profile.invalid_household_portions"},

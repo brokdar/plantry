@@ -194,3 +194,21 @@ var groupDensity = map[string]float64{
 // seasoningGroups may use the closest same-kind food when immaterial
 // (research section 3.2 "Materiality").
 var seasoningGroups = map[string]bool{"spice": true, "herb": true}
+
+// LineGroup returns the bundled table's food group of a line ("spice",
+// "fat", ...), or "" when the table does not know the food.
+func LineGroup(name, note string) string {
+	keys := lineKeys(name, note)
+	e := synonyms.lookup(keys)
+	if e == nil && len(keys) > 0 {
+		e = synonyms.suffix(keys[0])
+	}
+	if e == nil {
+		return ""
+	}
+	return e.Group
+}
+
+// IsToTasteGroup reports whether a group may be "to taste" (MATCH-6: salt,
+// pepper, dried spices, fresh herbs).
+func IsToTasteGroup(group string) bool { return seasoningGroups[group] }

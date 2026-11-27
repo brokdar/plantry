@@ -42,6 +42,8 @@ export interface ShoppingListItem {
   /** Count units only: what to buy (ceil). */
   buy: Quantity | null
   used_in: ShoppingUsedIn[]
+  /** Only to-taste lines need it: listed without an amount. */
+  to_taste?: boolean
 }
 
 export interface ShoppingSection {

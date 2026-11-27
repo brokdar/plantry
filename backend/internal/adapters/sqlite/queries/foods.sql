@@ -168,14 +168,14 @@ WHERE kind = 'composed' AND archived = 0 AND variant_group_id = ? AND id != ?
 ORDER BY name;
 
 -- name: CreateFoodComponent :exec
-INSERT INTO food_components (parent_id, child_id, amount, unit, grams, sort_order)
-VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO food_components (parent_id, child_id, amount, unit, grams, sort_order, to_taste)
+VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- name: DeleteFoodComponents :exec
 DELETE FROM food_components WHERE parent_id = ?;
 
 -- name: ListFoodComponents :many
-SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order,
+SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order, fc.to_taste,
        f.name AS child_name, f.kind AS child_kind
 FROM food_components fc
 JOIN foods f ON f.id = fc.child_id
@@ -219,7 +219,7 @@ ON CONFLICT (food_id, unit) DO UPDATE SET grams = excluded.grams;
 DELETE FROM food_portions WHERE food_id = ? AND unit = ?;
 
 -- name: ListChildrenByParents :many
-SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order,
+SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order, fc.to_taste,
        f.name AS child_name, f.kind AS child_kind
 FROM food_components fc
 JOIN foods f ON f.id = fc.child_id

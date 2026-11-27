@@ -17,6 +17,7 @@ import (
 )
 
 type finalizeEnv struct {
+	repo     *sqlite.FoodRepo
 	foods    *food.Service
 	importer *importer.Service
 }
@@ -24,8 +25,10 @@ type finalizeEnv struct {
 func newFinalizeEnv(t *testing.T) finalizeEnv {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
-	foods := food.NewService(sqlite.NewFoodRepo(db))
+	repo := sqlite.NewFoodRepo(db)
+	foods := food.NewService(repo)
 	return finalizeEnv{
+		repo:     repo,
 		foods:    foods,
 		importer: importer.NewService(nil, jsonld.Extractor{}, nil, nil, foods),
 	}
@@ -34,7 +37,10 @@ func newFinalizeEnv(t *testing.T) finalizeEnv {
 func (e finalizeEnv) leaf(t *testing.T, name string) int64 {
 	t.Helper()
 	src := food.SourceManual
-	f := &food.Food{Kind: food.KindLeaf, Name: name, Source: &src}
+	f := &food.Food{
+		Kind: food.KindLeaf, Name: name, Source: &src,
+		Kcal100g: ptr(100.0), Protein100g: ptr(5.0), Fat100g: ptr(1.0), Carbs100g: ptr(10.0),
+	}
 	require.NoError(t, e.foods.Create(context.Background(), f))
 	return f.ID
 }
@@ -229,4 +235,80 @@ func TestFinalize_MassAndVolumeUnchanged(t *testing.T) {
 	assert.Equal(t, food.GramsSourceFallback, out.Children[1].GramsSource)
 	assert.Empty(t, env.portions(t, flour))
 	assert.Empty(t, env.portions(t, milk))
+}
+
+// AC-10 (P3): a recipe with an unmatched line or a food without nutrition is
+// not saved; a to-taste seasoning saves without an amount or nutrition.
+func TestFinalize_P3RejectsUnmatchedAndNutritionlessLines(t *testing.T) {
+	env := newFinalizeEnv(t)
+	ctx := context.Background()
+	rice := env.leaf(t, "Reis")
+	src := food.SourceManual
+	bare := &food.Food{Kind: food.KindLeaf, Name: "Mystery", Source: &src}
+	require.NoError(t, env.foods.Create(ctx, bare))
+	saltLeaf := &food.Food{Kind: food.KindLeaf, Name: "Salz", Source: &src}
+	require.NoError(t, env.foods.Create(ctx, saltLeaf))
+	role := food.RoleMain
+	refs := 1.0
+	dish := &food.Food{
+		Kind: food.KindComposed, Name: "Dish", Role: &role, ReferencePortions: &refs,
+		Children: []food.FoodComponent{{ChildID: rice, Amount: 100, Unit: "g"}},
+	}
+	require.NoError(t, env.foods.Create(ctx, dish))
+
+	ok := importer.FinalizedChild{Resolution: importer.ResolutionExisting, FoodID: rice, Amount: 200, Unit: "g"}
+	tests := []struct {
+		name string
+		row  importer.FinalizedChild
+		want error
+	}{
+		{"skip is gone", importer.FinalizedChild{Resolution: "skip", Amount: 1, Unit: "g"}, domain.ErrImportUnmatchedLine},
+		{"no food", importer.FinalizedChild{Resolution: importer.ResolutionExisting, Amount: 1, Unit: "g"}, domain.ErrImportUnmatchedLine},
+		{"new leaf without nutrition", importer.FinalizedChild{Resolution: importer.ResolutionNew, FoodID: bare.ID, Amount: 1, Unit: "g"}, domain.ErrImportNoNutrition},
+		{"recipe as a line", importer.FinalizedChild{Resolution: importer.ResolutionExisting, FoodID: dish.ID, Amount: 1, Unit: "g"}, domain.ErrImportNoNutrition},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := env.importer.Finalize(ctx, importer.FinalizeInput{
+				Name: "R", Role: "main", ReferencePortions: 2, Children: []importer.FinalizedChild{ok, tt.row},
+			})
+			require.ErrorIs(t, err, tt.want)
+		})
+	}
+
+	t.Run("to taste is refused on a non-seasoning", func(t *testing.T) {
+		chicken := &food.Food{Kind: food.KindLeaf, Name: "Chicken breast", Source: &src}
+		require.NoError(t, env.foods.Create(ctx, chicken))
+		_, err := env.importer.Finalize(ctx, importer.FinalizeInput{
+			Name: "R", Role: "main", ReferencePortions: 2,
+			Children: []importer.FinalizedChild{ok, {Resolution: importer.ResolutionExisting, FoodID: chicken.ID, ToTaste: true}},
+		})
+		require.ErrorIs(t, err, domain.ErrImportInvalidResolution)
+	})
+
+	t.Run("to taste saves without an amount and counts nothing", func(t *testing.T) {
+		salt := importer.FinalizedChild{Resolution: importer.ResolutionExisting, FoodID: saltLeaf.ID, ToTaste: true}
+		out, err := env.importer.Finalize(ctx, importer.FinalizeInput{
+			Name: "R", Role: "main", ReferencePortions: 2, Children: []importer.FinalizedChild{ok, salt},
+		})
+		require.NoError(t, err)
+		require.Len(t, out.Children, 2)
+		assert.Equal(t, importer.FinalizedFoodChild{
+			ChildID: saltLeaf.ID, Amount: 1, Unit: "g", Grams: 1,
+			GramsSource: food.GramsSourceDirect, SortOrder: 1, ToTaste: true,
+		}, out.Children[1])
+
+		f := &food.Food{Kind: food.KindComposed, Name: out.Name, ReferencePortions: &out.ReferencePortions, Role: &role}
+		for _, ch := range out.Children {
+			f.Children = append(f.Children, food.FoodComponent{ChildID: ch.ChildID, Amount: ch.Amount, Unit: ch.Unit, Grams: ch.Grams, ToTaste: ch.ToTaste})
+		}
+		require.NoError(t, env.foods.Create(ctx, f))
+		got, err := env.foods.Get(ctx, f.ID)
+		require.NoError(t, err)
+		assert.True(t, got.Children[1].ToTaste, "the flag round-trips through the store")
+		d, err := food.NewNutritionResolver(env.repo).PerPortionDetailed(ctx, f.ID)
+		require.NoError(t, err)
+		assert.True(t, d.Complete, "the bare to-taste leaf is not missing nutrition")
+		assert.InDelta(t, 100, d.Macros.Kcal, 1e-9, "200 g rice at 100 kcal / 100 g over 2 portions")
+	})
 }

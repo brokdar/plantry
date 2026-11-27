@@ -203,8 +203,8 @@ func (q *Queries) CreateFood(ctx context.Context, arg CreateFoodParams) (Food, e
 }
 
 const createFoodComponent = `-- name: CreateFoodComponent :exec
-INSERT INTO food_components (parent_id, child_id, amount, unit, grams, sort_order)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO food_components (parent_id, child_id, amount, unit, grams, sort_order, to_taste)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateFoodComponentParams struct {
@@ -214,6 +214,7 @@ type CreateFoodComponentParams struct {
 	Unit      string
 	Grams     float64
 	SortOrder int64
+	ToTaste   int64
 }
 
 func (q *Queries) CreateFoodComponent(ctx context.Context, arg CreateFoodComponentParams) error {
@@ -224,6 +225,7 @@ func (q *Queries) CreateFoodComponent(ctx context.Context, arg CreateFoodCompone
 		arg.Unit,
 		arg.Grams,
 		arg.SortOrder,
+		arg.ToTaste,
 	)
 	return err
 }
@@ -519,7 +521,7 @@ func (q *Queries) LeafIDsUsedInRecipes(ctx context.Context, ids []int64) ([]int6
 }
 
 const listChildrenByParents = `-- name: ListChildrenByParents :many
-SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order,
+SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order, fc.to_taste,
        f.name AS child_name, f.kind AS child_kind
 FROM food_components fc
 JOIN foods f ON f.id = fc.child_id
@@ -535,6 +537,7 @@ type ListChildrenByParentsRow struct {
 	Unit      string
 	Grams     float64
 	SortOrder int64
+	ToTaste   int64
 	ChildName string
 	ChildKind string
 }
@@ -566,6 +569,7 @@ func (q *Queries) ListChildrenByParents(ctx context.Context, parentIds []int64) 
 			&i.Unit,
 			&i.Grams,
 			&i.SortOrder,
+			&i.ToTaste,
 			&i.ChildName,
 			&i.ChildKind,
 		); err != nil {
@@ -583,7 +587,7 @@ func (q *Queries) ListChildrenByParents(ctx context.Context, parentIds []int64) 
 }
 
 const listFoodComponents = `-- name: ListFoodComponents :many
-SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order,
+SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order, fc.to_taste,
        f.name AS child_name, f.kind AS child_kind
 FROM food_components fc
 JOIN foods f ON f.id = fc.child_id
@@ -599,6 +603,7 @@ type ListFoodComponentsRow struct {
 	Unit      string
 	Grams     float64
 	SortOrder int64
+	ToTaste   int64
 	ChildName string
 	ChildKind string
 }
@@ -620,6 +625,7 @@ func (q *Queries) ListFoodComponents(ctx context.Context, parentID int64) ([]Lis
 			&i.Unit,
 			&i.Grams,
 			&i.SortOrder,
+			&i.ToTaste,
 			&i.ChildName,
 			&i.ChildKind,
 		); err != nil {

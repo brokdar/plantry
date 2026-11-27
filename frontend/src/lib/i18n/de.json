@@ -32,30 +32,48 @@
       "amount": "Menge",
       "unit": "Einheit",
       "resolved_label": "Verknüpft",
-      "res_existing": "Mit Bibliothek verknüpfen",
-      "res_skip": "Überspringen",
       "pick_match": "Passende Zutat auswählen",
       "searching": "Suche…",
       "no_match": "Keine Zutat in der Bibliothek gefunden.",
-      "create_new": "Als neue Zutat anlegen",
       "change": "Ändern",
-      "unparsed_warning": "Nicht geparst — bitte prüfen",
       "llm_warning": "Mit KI extrahiert — bitte jede Zeile prüfen.",
       "source_local": "In der Bibliothek",
       "source_fdc": "USDA",
       "source_off": "Open Food Facts",
       "kcal_100g": "{{kcal}} kcal/100 g",
-      "optional_skipped": "Optional, übersprungen",
       "amount_for": "Menge für {{name}}",
       "unit_for": "Einheit für {{name}}",
-      "resolution_for": "Verwendung von {{name}}",
       "portion_estimate": "1 {{unit}} ≈",
       "portion_grams_for": "Gramm pro {{unit}} {{name}}",
       "portion_estimated": "geschätzt",
       "portion_saved": "für diese Zutat hinterlegt",
       "warning_suspicious_unit": "Einheit prüfen: mg sieht hier nach einem Tippfehler aus.",
       "lookup_not_configured": "Kein Treffer in der Bibliothek. Für die Nährwertsuche fehlt ein FoodData-Central-Schlüssel in den Einstellungen.",
-      "lookup_sources_unavailable": "Kein Treffer in der Bibliothek. Die Nährwertquellen haben nicht geantwortet. Versuche es später noch einmal."
+      "lookup_sources_unavailable": "Kein Treffer in der Bibliothek. Die Nährwertquellen haben nicht geantwortet. Versuche es später noch einmal.",
+      "undo_remove": "Rückgängig",
+      "edit_line": "{{name}} bearbeiten",
+      "done": "Fertig",
+      "problem_match": "Zutat fehlt",
+      "problem_amount": "Menge fehlt",
+      "problem_weight": "Gewicht fehlt",
+      "tried": "Gesucht in: {{list}}",
+      "reason_no_candidate": "Nichts gefunden.",
+      "reason_state_mismatch": "Nur in anderer Form gefunden (trocken, gekocht, aus der Dose).",
+      "reason_implausible_kcal": "Die Treffer hatten unplausible Kalorien.",
+      "reason_no_grams": "Die Menge lässt sich nicht in Gramm umrechnen.",
+      "reason_no_nutrition": "Die Treffer hatten keine Nährwerte.",
+      "search_for": "Suchbegriff für {{name}}",
+      "search": "Suchen",
+      "create_with_nutrition": "Mit Nährwerten pro 100 g anlegen",
+      "new_leaf_hint": "Neue Zutat „{{name}}“: Trag die Werte pro 100 g von der Packung oder aus einer Nährwerttabelle ein.",
+      "new_kcal_100g": "kcal",
+      "new_protein_100g": "Eiweiß (g)",
+      "new_fat_100g": "Fett (g)",
+      "new_carbs_100g": "Kohlenhydrate (g)",
+      "create_leaf": "Zutat anlegen",
+      "enter_amount": "Menge eintragen",
+      "proposed": "Vorschlag",
+      "remove_line": "{{name}} aus dem Rezept entfernen"
     },
     "step3": {
       "role_label": "Rolle",
@@ -73,7 +91,12 @@
       "kcal_pending": "kcal pro Portion erscheinen, sobald jede Zutat gewählt ist.",
       "source_kcal": "Quelle: {{kcal}} kcal",
       "image_download_failed": "Rezept gespeichert, aber das Foto konnte nicht geladen werden.",
-      "portions_invalid": "Gib mindestens 1 Portion ein."
+      "portions_invalid": "Gib mindestens 1 Portion ein.",
+      "needs_amount_one": "Menge für {{count}} Zutat eintragen",
+      "needs_amount_other": "Menge für {{count}} Zutaten eintragen",
+      "no_lines": "Behalte mindestens eine Zutat",
+      "prep_label": "Vorbereitung (Min.)",
+      "cook_label": "Kochen (Min.)"
     },
     "status": {
       "extracting": "Extrahiere…",
@@ -84,6 +107,14 @@
     "warning": {
       "redirected_other_recipe": "Die Seite hat auf eine andere Adresse weitergeleitet als dein Link. Prüfe, ob es das gewünschte Rezept ist.",
       "times_from_steps": "Die Seite nennt keine Zeiten. Die Kochzeit ist die Summe der Zeiten aus den Schritten."
+    },
+    "steps": {
+      "title": "Zubereitung",
+      "step_n": "Schritt {{n}}",
+      "move_up": "Schritt {{n}} nach oben",
+      "move_down": "Schritt {{n}} nach unten",
+      "delete": "Schritt {{n}} löschen",
+      "add": "Schritt hinzufügen"
     }
   },
   "plate": {
@@ -753,7 +784,8 @@
     },
     "role": "Rolle",
     "role_auto": "Keine",
-    "role_hint": "Gilt, wenn diese Zutat als Beilage geplant wird. Bei „Keine“ folgt sie der Einkaufsabteilung."
+    "role_hint": "Gilt, wenn diese Zutat als Beilage geplant wird. Bei „Keine“ folgt sie der Einkaufsabteilung.",
+    "to_taste": "nach Geschmack"
   },
   "component": {
     "edit_eyebrow": "Editor",
@@ -1249,7 +1281,9 @@
       "blocked": "{{host}} konnte nicht geladen werden (von der Seite blockiert). Füge stattdessen den Rezepttext ein.",
       "timeout": "{{host}} hat nicht rechtzeitig geantwortet. Versuche es noch einmal oder füge den Rezepttext ein.",
       "unreachable": "{{host}} ist nicht erreichbar. Prüfe die Adresse und deine Verbindung oder füge den Rezepttext ein.",
-      "no_recipe_no_ai": "Auf dieser Seite steht kein Rezept. Füge den Rezepttext ein oder richte den Assistenten ein."
+      "no_recipe_no_ai": "Auf dieser Seite steht kein Rezept. Füge den Rezepttext ein oder richte den Assistenten ein.",
+      "unmatched_line": "Jede Zutat braucht einen Treffer, bevor das Rezept gespeichert werden kann.",
+      "no_nutrition": "„{{food}}“ hat keine Nährwerte pro 100 g. Wähle dafür einen anderen Treffer oder trag die Werte ein."
     },
     "food": {
       "invalid_portions": "Die Portionen müssen größer als 0 und höchstens 100 sein.",

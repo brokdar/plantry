@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event"
 import { renderWithRouter } from "@/test/render"
 import { mockLookupCandidate } from "@/test/fixtures"
 import { ApiError } from "@/lib/api/client"
-import type { Draft, FinalizedFood } from "@/lib/api/import"
+import type { Draft, DraftIngredient, FinalizedFood } from "@/lib/api/import"
 import type {
   ComposedFood,
   FoodNutritionDetail,
@@ -41,6 +41,15 @@ import { toast } from "sonner"
 import { draftRows } from "./draft-rows"
 import { ImportWizard } from "./ImportWizard"
 
+const localMehl: LookupCandidate = {
+  ...mockLookupCandidate,
+  name: "Mehl",
+  source: "local",
+  fdc_id: null,
+  existing_id: 7,
+  exact: true,
+}
+
 const draft: Draft = {
   name: "Zwiebelkuchen",
   description: "Ein herbstlicher Klassiker.",
@@ -64,19 +73,14 @@ const draft: Draft = {
       diet_class: "vegan",
       needs_weight: false,
       warning: "",
-    },
-    {
-      raw_text: "Salz und Pfeffer",
-      amount: 0,
-      unit: "",
-      original_unit: "",
-      name: "Salz und Pfeffer",
-      note: "",
-      confidence: "unparsed",
-      portion_grams: null,
-      diet_class: "unknown",
-      needs_weight: false,
-      warning: "",
+      match: {
+        status: "matched",
+        tried: ["catalogue"],
+        candidates: [localMehl],
+        pick: 0,
+        grams: 200,
+        name: "Mehl",
+      },
     },
   ],
   tags: [],
@@ -84,15 +88,6 @@ const draft: Draft = {
   extract_method: "jsonld",
   warnings: [],
   source_kcal_per_serving: 520,
-}
-
-const localMehl: LookupCandidate = {
-  ...mockLookupCandidate,
-  name: "Mehl",
-  source: "local",
-  fdc_id: null,
-  existing_id: 7,
-  exact: true,
 }
 
 const prefixLocal: LookupCandidate = {
@@ -169,10 +164,64 @@ const finalized: FinalizedFood = {
 }
 
 function mockLookup(candidates: LookupCandidate[]) {
-  vi.mocked(lookupImportLine).mockImplementation(async (query) => ({
-    results: query === "Mehl" ? candidates : [],
-    recommended_index: query === "Mehl" && candidates.length > 0 ? 0 : -1,
-  }))
+  vi.mocked(lookupImportLine).mockImplementation(async (query) => {
+    const results =
+      query === "Mehl"
+        ? candidates
+        : query === "Salz"
+          ? [{ ...localMehl, name: "Salz", existing_id: 9 }]
+          : query === "Olivenöl"
+            ? [{ ...localMehl, name: "Olivenöl", existing_id: 10 }]
+            : []
+    return { results, recommended_index: results.length > 0 ? 0 : -1 }
+  })
+}
+
+const saltLine: DraftIngredient = {
+  ...draft.ingredients[0]!,
+  raw_text: "Salz",
+  amount: 0,
+  unit: "",
+  original_unit: "",
+  name: "Salz",
+  to_taste: true,
+  match: {
+    status: "matched",
+    tried: ["catalogue"],
+    candidates: [{ ...localMehl, name: "Salz", existing_id: 9 }],
+    pick: 0,
+    grams: null,
+    name: "Salz",
+  },
+}
+
+const oilLine: DraftIngredient = {
+  ...draft.ingredients[0]!,
+  raw_text: "Olivenöl",
+  amount: 1,
+  unit: "tbsp",
+  original_unit: "",
+  name: "Olivenöl",
+  proposed: true,
+  match: {
+    status: "matched",
+    tried: ["catalogue"],
+    candidates: [{ ...localMehl, name: "Olivenöl", existing_id: 10 }],
+    pick: 0,
+    grams: 15,
+    name: "Olivenöl",
+  },
+}
+
+/** The draft's "Mehl" line with no accepted match: the review leaves it
+ *  for the user to pick. */
+function useUnmatchedMehl() {
+  vi.mocked(extractRecipe).mockResolvedValue({
+    draft: {
+      ...draft,
+      ingredients: [{ ...draft.ingredients[0]!, match: null }],
+    },
+  })
 }
 
 async function openReview() {
@@ -196,6 +245,7 @@ describe("ImportWizard", () => {
   })
 
   it("creates a leaf with the nutrition of a candidate that is not in the library", async () => {
+    useUnmatchedMehl()
     mockLookup([externalMehl])
     vi.mocked(createFood).mockResolvedValue(createdLeaf)
     const user = await openReview()
@@ -225,6 +275,7 @@ describe("ImportWizard", () => {
   })
 
   it("reuses the existing leaf when the create hits a duplicate name", async () => {
+    useUnmatchedMehl()
     mockLookup([externalMehl])
     vi.mocked(createFood).mockRejectedValue(
       new ApiError(409, "error.food.duplicate_name", 42)
@@ -247,24 +298,34 @@ describe("ImportWizard", () => {
     await user.click(save)
     await waitFor(() => expect(resolveImport).toHaveBeenCalled())
     expect(vi.mocked(resolveImport).mock.calls[0][0].children[0]).toMatchObject(
-      { resolution: "existing", food_id: 42 }
+      { resolution: "new", food_id: 42 }
     )
   })
 
   it("shows a toast when creating the ingredient fails", async () => {
+    useUnmatchedMehl()
     mockLookup([])
     vi.mocked(createFood).mockRejectedValue(new ApiError(500, "error.server"))
     const user = await openReview()
 
     await user.click(
-      await screen.findByRole("button", { name: /create as new ingredient/i })
+      await screen.findByRole("button", { name: /create with nutrition/i })
     )
+    for (const [label, v] of [
+      ["kcal", "364"],
+      ["Protein (g)", "10"],
+      ["Fat (g)", "1"],
+      ["Carbs (g)", "76"],
+    ])
+      await user.type(screen.getByLabelText(label), v)
+    await user.click(screen.getByRole("button", { name: "Create ingredient" }))
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
     expect(screen.getByText("1 ingredient needs a choice")).toBeInTheDocument()
   })
 
   it("disables save while rows are unresolved and says how many", async () => {
+    useUnmatchedMehl()
     mockLookup([])
     await openReview()
 
@@ -280,10 +341,6 @@ describe("ImportWizard", () => {
 
     const mehl = (await screen.findByText("200g Mehl")).parentElement!
     expect(mehl).toHaveTextContent("Vegan")
-    expect(
-      screen.getByText("Salz und Pfeffer", { selector: "div.text-xs" })
-        .parentElement
-    ).toHaveTextContent("Unknown")
   })
 
   it("auto-links an exact catalogue match", async () => {
@@ -297,6 +354,7 @@ describe("ImportWizard", () => {
   })
 
   it("does not auto-link a catalogue match that only starts with the name", async () => {
+    useUnmatchedMehl()
     mockLookup([prefixLocal])
     await openReview()
 
@@ -370,24 +428,197 @@ describe("ImportWizard", () => {
     expect(link).toHaveAccessibleName(/^Mehl\s*\(opens in a new tab\)$/)
   })
 
-  it("creates a manual ingredient with null macros", async () => {
+  it("creates a new ingredient only with nutrition per 100 g (P3)", async () => {
+    useUnmatchedMehl()
     mockLookup([])
     vi.mocked(createFood).mockResolvedValue(createdLeaf)
     const user = await openReview()
 
     await user.click(
-      await screen.findByRole("button", { name: /create as new ingredient/i })
+      await screen.findByRole("button", { name: /create with nutrition/i })
     )
+    const create = screen.getByRole("button", { name: "Create ingredient" })
+    await user.type(screen.getByLabelText("kcal"), "364")
+    expect(create).toBeDisabled()
+    await user.type(screen.getByLabelText("Protein (g)"), "10")
+    await user.type(screen.getByLabelText("Fat (g)"), "1")
+    await user.type(screen.getByLabelText("Carbs (g)"), "76")
+    await user.click(create)
 
     await waitFor(() => expect(createFood).toHaveBeenCalledTimes(1))
     expect(vi.mocked(createFood).mock.calls[0][0]).toMatchObject({
       kind: "leaf",
       name: "Mehl",
       source: "manual",
-      kcal_100g: null,
-      protein_100g: null,
-      fat_100g: null,
-      carbs_100g: null,
+      kcal_100g: 364,
+      protein_100g: 10,
+      fat_100g: 1,
+      carbs_100g: 76,
+    })
+    expect(await screen.findByText(/linked/i)).toBeInTheDocument()
+  })
+
+  it("does not link a same-name leaf the backend's match rejected (P3)", async () => {
+    // "Mehl" has a catalogue leaf of that name, but the match found it
+    // unusable (no nutrition): the row stays a problem, Save stays disabled.
+    mockLookup([localMehl])
+    vi.mocked(extractRecipe).mockResolvedValue({
+      draft: {
+        ...draft,
+        ingredients: [
+          {
+            ...draft.ingredients[0]!,
+            match: {
+              status: "unmatched",
+              reason: "no_nutrition",
+              tried: ["catalogue"],
+              candidates: [],
+              pick: -1,
+              grams: null,
+              name: "Mehl",
+            },
+          },
+        ],
+      },
+    })
+    await openReview()
+    await waitFor(() => expect(lookupImportLine).toHaveBeenCalled())
+    expect(screen.getByRole("button", { name: /save recipe/i })).toBeDisabled()
+    expect(screen.queryByText(/linked/i)).toBeNull()
+  })
+
+  it("links the candidate the backend's match picked", async () => {
+    mockLookup([prefixLocal])
+    vi.mocked(extractRecipe).mockResolvedValue({
+      draft: {
+        ...draft,
+        ingredients: [
+          {
+            ...draft.ingredients[0]!,
+            match: {
+              status: "matched",
+              tried: ["catalogue"],
+              candidates: [prefixLocal],
+              pick: 0,
+              grams: 200,
+              name: "Mehl",
+            },
+          },
+        ],
+      },
+    })
+    await openReview()
+    expect(await screen.findByText(/linked/i)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /save recipe/i })).toBeEnabled()
+  })
+
+  it("starts a matched line linked, before any row is opened (phone)", () => {
+    const rows = draftRows(draft)
+    expect(rows[0]).toMatchObject({ foodId: 7, foodName: "Mehl" })
+    const unmatched = draftRows({
+      ...draft,
+      ingredients: [{ ...draft.ingredients[0]!, match: null }],
+    })
+    expect(unmatched[0]!.foodId).toBeNull()
+  })
+
+  it("offers no Skip: an unmatched line blocks Save until it is removed (AC-10)", async () => {
+    mockLookup([])
+    vi.mocked(resolveImport).mockResolvedValue({ food: finalized })
+    vi.mocked(extractRecipe).mockResolvedValue({
+      draft: {
+        ...draft,
+        ingredients: [
+          {
+            ...draft.ingredients[0]!,
+            match: {
+              status: "unmatched",
+              reason: "no_candidate",
+              tried: ["catalogue", "fdc:flour"],
+              candidates: [],
+              pick: -1,
+              grams: null,
+              name: "Mehl",
+            },
+          },
+          saltLine,
+          oilLine,
+        ],
+      },
+    })
+    const user = await openReview()
+
+    const save = screen.getByRole("button", { name: /save recipe/i })
+    expect(save).toBeDisabled()
+    expect(screen.queryByText(/skip/i)).toBeNull()
+    expect(screen.getByText(/Tried: In library · USDA “flour”/)).toBeVisible()
+    await user.click(
+      screen.getByRole("button", { name: "Remove Mehl from the recipe" })
+    )
+    await waitFor(() => expect(save).toBeEnabled())
+    await user.click(save)
+
+    await waitFor(() => expect(resolveImport).toHaveBeenCalled())
+    expect(vi.mocked(resolveImport).mock.calls[0][0].children).toEqual([
+      expect.objectContaining({ food_id: 9, to_taste: true }),
+      expect.objectContaining({
+        food_id: 10,
+        amount: 1,
+        unit: "tbsp",
+        to_taste: false,
+      }),
+    ])
+  })
+
+  it("shows a to-taste seasoning without an amount and a proposed amount as proposed", async () => {
+    mockLookup([])
+    vi.mocked(extractRecipe).mockResolvedValue({
+      draft: { ...draft, ingredients: [saltLine, oilLine] },
+    })
+    const user = await openReview()
+
+    expect(await screen.findByText("to taste")).toBeVisible()
+    expect(screen.queryByLabelText("Amount for Salz")).toBeNull()
+    expect(screen.getByText("proposed")).toBeVisible()
+    await user.type(screen.getByLabelText("Amount for Olivenöl"), "2")
+    expect(screen.queryByText("proposed")).toBeNull()
+  })
+
+  it("lists problem lines first and edits, adds, reorders and deletes steps", async () => {
+    mockLookup([])
+    vi.mocked(resolveImport).mockResolvedValue({ food: finalized })
+    vi.mocked(extractRecipe).mockResolvedValue({
+      // Mehl without an amount is a problem line: it moves up.
+      draft: {
+        ...draft,
+        ingredients: [saltLine, { ...draft.ingredients[0]!, amount: 0 }],
+      },
+    })
+    const user = await openReview()
+
+    const lines = screen.getAllByText(/^(200g Mehl|Salz)$/, {
+      selector: "div.text-xs",
+    })
+    expect(lines.map((l) => l.textContent)).toEqual(["200g Mehl", "Salz"])
+
+    await user.click(screen.getByRole("button", { name: "Move step 2 up" }))
+    await user.click(screen.getByRole("button", { name: "Add a step" }))
+    await user.type(screen.getByLabelText("Step 3"), "Servieren.")
+    await user.click(screen.getByRole("button", { name: "Delete step 1" }))
+    await user.clear(screen.getByLabelText("Prep (min)"))
+    await user.type(screen.getByLabelText("Prep (min)"), "15")
+    await user.click(
+      screen.getByRole("button", { name: "Remove Mehl from the recipe" })
+    )
+    await user.click(screen.getByRole("button", { name: /save recipe/i }))
+
+    await waitFor(() => expect(resolveImport).toHaveBeenCalled())
+    expect(vi.mocked(resolveImport).mock.calls[0][0]).toMatchObject({
+      prep_minutes: 15,
+      instructions: [
+        { step_number: 1, text: "Teig kneten." },
+        { step_number: 2, text: "Servieren." },
+      ],
     })
   })
 
@@ -429,6 +660,14 @@ describe("ImportWizard", () => {
             needs_weight: true,
             warning: "",
             diet_class: "vegan",
+            match: {
+              status: "matched",
+              tried: ["catalogue"],
+              candidates: [localMehl],
+              pick: 0,
+              grams: null,
+              name: "Mehl",
+            },
           },
         ],
       },
@@ -437,53 +676,6 @@ describe("ImportWizard", () => {
 
     await screen.findByText(/enter a weight per unit/i)
     expect(screen.getByRole("button", { name: /save recipe/i })).toBeDisabled()
-  })
-
-  it("marks a skipped quantity-less line as optional, not as a parse error", async () => {
-    mockLookup([localMehl])
-    vi.mocked(extractRecipe).mockResolvedValue({
-      draft: {
-        ...draft,
-        ingredients: [
-          draft.ingredients[0]!,
-          // Quantity-less and unparsed: skipped, so it reads as optional.
-          {
-            raw_text: "Petersilie zum Garnieren",
-            amount: 0,
-            unit: "",
-            original_unit: "",
-            name: "Petersilie",
-            note: "zum Garnieren",
-            confidence: "unparsed",
-            portion_grams: null,
-            diet_class: "unknown",
-            needs_weight: false,
-            warning: "",
-          },
-          // Unparsed but with an amount: still a parse error to review.
-          {
-            raw_text: "2 Handvoll Kräuter",
-            amount: 2,
-            unit: "",
-            original_unit: "Handvoll",
-            name: "Kräuter",
-            note: "",
-            confidence: "unparsed",
-            portion_grams: null,
-            diet_class: "unknown",
-            needs_weight: false,
-            warning: "",
-          },
-        ],
-      },
-    })
-    await openReview()
-
-    expect(await screen.findAllByText("Optional, skipped")).toHaveLength(1)
-    // Only the line with an amount still asks for a review.
-    expect(screen.getAllByText("Could not parse — please review")).toHaveLength(
-      1
-    )
   })
 
   it("labels each row's controls with the ingredient name", async () => {
@@ -495,9 +687,6 @@ describe("ImportWizard", () => {
     ).toHaveValue(200)
     expect(
       screen.getByRole("combobox", { name: "Unit for Mehl" })
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole("combobox", { name: "How to use Salz und Pfeffer" })
     ).toBeInTheDocument()
   })
 
@@ -598,7 +787,12 @@ describe("ImportWizard", () => {
     })
 
     it("keeps Save disabled while a row is unmatched", async () => {
-      renderPrefilled({ initialRows: draftRows(prefilled) })
+      renderPrefilled({
+        initialRows: draftRows({
+          ...prefilled,
+          ingredients: [{ ...prefilled.ingredients[0]!, match: null }],
+        }),
+      })
       expect(
         await screen.findByRole("button", { name: /save recipe/i })
       ).toBeDisabled()
@@ -614,10 +808,7 @@ describe("ImportWizard", () => {
       await waitFor(() => expect(onSaved).toHaveBeenCalledWith(77))
       expect(vi.mocked(resolveImport).mock.calls[0][0]).toMatchObject({
         tags: ["herbst", "explore"],
-        children: [
-          { resolution: "existing", food_id: 7 },
-          { resolution: "skip" },
-        ],
+        children: [{ resolution: "existing", food_id: 7 }],
       })
       const payload = vi.mocked(createFood).mock.calls[0][0]
       expect(payload).toMatchObject({ source_url: prefilled.source_url })
@@ -654,6 +845,14 @@ describe("ImportWizard", () => {
           diet_class: "vegan",
           needs_weight: false,
           warning: "",
+          match: {
+            status: "matched",
+            tried: ["catalogue"],
+            candidates: [zwiebel],
+            pick: 0,
+            grams: 240,
+            name: "Zwiebel",
+          },
         },
       ],
     }

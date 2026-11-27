@@ -222,3 +222,19 @@ func TestList_Empty(t *testing.T) {
 	assert.NotNil(t, l.Sections)
 	assert.Zero(t, l.Count)
 }
+
+func TestList_ToTasteLineListedWithoutAmount(t *testing.T) {
+	foods := ac1Foods()
+	// Apple as a to-taste line of the chili: listed, no amount, no grams.
+	foods.children[chiliID] = append(foods.children[chiliID],
+		food.FoodComponent{ChildID: appleID, ChildKind: food.KindLeaf, Amount: 1, Unit: "g", Grams: 1, ToTaste: true})
+	src := &fakeSource{sessions: []plate.CookSession{chiliSession(7, 6)}}
+	l, err := newSvc(src, foods).List(context.Background(), day("2026-10-31"), day("2026-11-06"), false)
+	require.NoError(t, err)
+	_, apple := findItem(t, l, appleID)
+	assert.True(t, apple.ToTaste)
+	assert.Zero(t, apple.Display)
+	assert.Zero(t, apple.TotalGrams)
+	assert.Nil(t, apple.Buy)
+	require.Len(t, apple.UsedIn, 1)
+}

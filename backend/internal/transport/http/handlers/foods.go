@@ -48,6 +48,7 @@ type foodChildRequest struct {
 	Unit      string  `json:"unit"`
 	Grams     float64 `json:"grams"`
 	SortOrder int     `json:"sort_order"`
+	ToTaste   bool    `json:"to_taste"`
 }
 
 type foodInstructionRequest struct {
@@ -117,6 +118,7 @@ type foodChildResponse struct {
 	Grams       float64 `json:"grams"`
 	GramsSource string  `json:"grams_source,omitempty"`
 	SortOrder   int     `json:"sort_order"`
+	ToTaste     bool    `json:"to_taste"`
 }
 
 type foodInstructionResponse struct {
@@ -338,6 +340,7 @@ func requestToFood(req *foodRequest) *food.Food {
 			Unit:      ch.Unit,
 			Grams:     ch.Grams,
 			SortOrder: ch.SortOrder,
+			ToTaste:   ch.ToTaste,
 		}
 	}
 	f.Instructions = make([]food.Instruction, len(req.Instructions))
@@ -445,7 +448,7 @@ func toFoodResponse(f *food.Food) foodResponse {
 			ID: ch.ID, ParentID: ch.ParentID, ChildID: ch.ChildID,
 			ChildName: ch.ChildName, ChildKind: string(ch.ChildKind),
 			Amount: ch.Amount, Unit: ch.Unit, Grams: ch.Grams,
-			GramsSource: ch.GramsSource, SortOrder: ch.SortOrder,
+			GramsSource: ch.GramsSource, SortOrder: ch.SortOrder, ToTaste: ch.ToTaste,
 		}
 	}
 	resp.Instructions = make([]foodInstructionResponse, len(f.Instructions))
@@ -1139,6 +1142,7 @@ type scaledIngredientResponse struct {
 	Display   units.Quantity  `json:"display"`
 	Buy       *units.Quantity `json:"buy"`
 	DietClass string          `json:"diet_class"`
+	ToTaste   bool            `json:"to_taste"`
 }
 
 type scaledResponse struct {
@@ -1178,7 +1182,7 @@ func (h *FoodHandler) Scaled(w http.ResponseWriter, r *http.Request) {
 		resp.Ingredients[i] = scaledIngredientResponse{
 			ChildID: in.ChildID, Name: in.Name, Kind: string(in.Kind),
 			Amount: in.Amount, Unit: in.Unit, Grams: in.Grams,
-			Display: in.Display, Buy: in.Buy, DietClass: string(in.DietClass),
+			Display: in.Display, Buy: in.Buy, DietClass: string(in.DietClass), ToTaste: in.ToTaste,
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)

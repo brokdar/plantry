@@ -52,6 +52,8 @@ var sentinelStatus = map[error]int{
 	domain.ErrImportNoRecipeNoAI:        http.StatusUnprocessableEntity,
 	domain.ErrImportLLMFailed:           http.StatusBadGateway,
 	domain.ErrImportInvalidResolution:   http.StatusUnprocessableEntity,
+	domain.ErrImportUnmatchedLine:       http.StatusUnprocessableEntity,
+	domain.ErrImportNoNutrition:         http.StatusUnprocessableEntity,
 	domain.ErrInvalidDietType:           http.StatusBadRequest,
 	domain.ErrInvalidMeatDays:           http.StatusBadRequest,
 	domain.ErrInvalidHouseholdPortions:  http.StatusBadRequest,

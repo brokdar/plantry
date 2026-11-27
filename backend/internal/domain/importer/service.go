@@ -240,20 +240,27 @@ type FinalizeInput struct {
 	Children          []FinalizedChild
 }
 
-// ResolutionExisting / ResolutionSkip / ResolutionNew classify a per-row decision.
+// ResolutionExisting / ResolutionNew classify a per-row decision. There is
+// no skip (MATCH-5): a line is matched, or the review removes it.
 const (
 	ResolutionExisting = "existing"
-	ResolutionSkip     = "skip"
 	ResolutionNew      = "new"
 )
 
-// FinalizedChild is one resolved ingredient row: pick an existing food,
-// create a new one before POSTing, or skip the row entirely.
+// toTasteAmount is the nominal amount of a to-taste line (1 g): it keeps the
+// positive-amount checks and counts in no sum.
+const toTasteAmount = 1
+
+// FinalizedChild is one resolved ingredient row: an existing food, or one the
+// review created before (with nutrition per 100 g).
 type FinalizedChild struct {
 	Resolution string
 	FoodID     int64
-	Amount     float64
-	Unit       string
+	// ToTaste: a to-taste seasoning line; Amount and Unit are ignored and
+	// stored as the nominal 1 g.
+	ToTaste bool
+	Amount  float64
+	Unit    string
 	// PortionGrams is the grams per count unit the user confirmed in the
 	// review ("1 piece ≈ 120 g"). nil keeps the leaf's portion, or seeds a
 	// missing one from units.EstimateCountGrams. Ignored for mass and volume.
@@ -289,6 +296,7 @@ type FinalizedFoodChild struct {
 	Grams       float64 `json:"grams"`
 	GramsSource string  `json:"grams_source"`
 	SortOrder   int     `json:"sort_order"`
+	ToTaste     bool    `json:"to_taste"`
 }
 
 // FinalizedFoodStep is one reviewed instruction step.
@@ -325,18 +333,19 @@ func (s *Service) Finalize(ctx context.Context, in FinalizeInput) (*FinalizedFoo
 
 	sort := 0
 	for _, row := range in.Children {
-		switch row.Resolution {
-		case ResolutionSkip:
+		if err := s.checkHonest(ctx, row); err != nil {
+			return nil, err
+		}
+		if row.ToTaste {
+			out.Children = append(out.Children, FinalizedFoodChild{
+				ChildID: row.FoodID, Amount: toTasteAmount, Unit: "g", Grams: toTasteAmount,
+				GramsSource: food.GramsSourceDirect, SortOrder: sort, ToTaste: true,
+			})
+			sort++
 			continue
-		case ResolutionExisting, ResolutionNew:
-			if row.FoodID == 0 {
-				return nil, fmt.Errorf("%w: missing food_id for %s row", domain.ErrImportInvalidResolution, row.Resolution)
-			}
-			if row.Amount <= 0 {
-				return nil, fmt.Errorf("%w: amount must be > 0", domain.ErrImportInvalidResolution)
-			}
-		default:
-			return nil, fmt.Errorf("%w: unknown resolution %q", domain.ErrImportInvalidResolution, row.Resolution)
+		}
+		if row.Amount <= 0 {
+			return nil, fmt.Errorf("%w: amount must be > 0", domain.ErrImportInvalidResolution)
 		}
 		normalizedUnit := units.Normalize(row.Unit)
 		if normalizedUnit == "" {
@@ -366,6 +375,47 @@ func (s *Service) Finalize(ctx context.Context, in FinalizeInput) (*FinalizedFoo
 		return nil, fmt.Errorf("%w: at least one child food required", domain.ErrInvalidInput)
 	}
 	return out, nil
+}
+
+// LineError names the food of the line a P3 refusal is about, so the
+// transport can point at it. It unwraps to the domain error.
+type LineError struct {
+	Err  error
+	Food string
+}
+
+func (e *LineError) Error() string { return fmt.Sprintf("%v: %s", e.Err, e.Food) }
+func (e *LineError) Unwrap() error { return e.Err }
+
+// checkHonest enforces P3 on one row: it names a food, the food is a leaf,
+// and the leaf has nutrition per 100 g unless the line is to taste (only a
+// seasoning may be, MATCH-6). /api/import/resolve is the P3 gate; POST
+// /api/foods stays permissive for manual recipes.
+func (s *Service) checkHonest(ctx context.Context, row FinalizedChild) error {
+	switch row.Resolution {
+	case ResolutionExisting, ResolutionNew:
+	default:
+		return fmt.Errorf("%w: resolution %q", domain.ErrImportUnmatchedLine, row.Resolution)
+	}
+	if row.FoodID == 0 {
+		return fmt.Errorf("%w: missing food_id", domain.ErrImportUnmatchedLine)
+	}
+	f, err := s.portions.Get(ctx, row.FoodID)
+	if err != nil {
+		return fmt.Errorf("load food %d: %w", row.FoodID, err)
+	}
+	if f.Kind != food.KindLeaf {
+		return &LineError{Err: domain.ErrImportNoNutrition, Food: f.Name}
+	}
+	// A leaf of a known non-seasoning group ("chicken") cannot be to taste;
+	// an unknown name is let through, the line's own name proposed it.
+	if g := food.LineGroup(f.Name, ""); row.ToTaste && g != "" && !food.IsToTasteGroup(g) {
+		return &LineError{Err: domain.ErrImportInvalidResolution, Food: f.Name}
+	}
+	if !row.ToTaste && (f.Kcal100g == nil || f.Protein100g == nil || f.Fat100g == nil || f.Carbs100g == nil) {
+		return &LineError{Err: domain.ErrImportNoNutrition, Food: f.Name}
+	}
+	return nil
 }
 
 // ensurePortion makes sure leaf foodID has a portion for the count unit. An

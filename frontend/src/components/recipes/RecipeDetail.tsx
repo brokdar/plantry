@@ -469,7 +469,9 @@ export function RecipeDetail({
 
 function IngredientLine({ ing, f }: { ing: ScaledIngredient; f: Formatter }) {
   const { t } = useTranslation()
-  const shown = formatQuantity(ing.display.amount, ing.display.unit, f)
+  const shown = ing.to_taste
+    ? t("ingredient.to_taste")
+    : formatQuantity(ing.display.amount, ing.display.unit, f)
   const buy =
     ing.buy &&
     (ing.buy.amount !== ing.display.amount || ing.buy.unit !== ing.display.unit)

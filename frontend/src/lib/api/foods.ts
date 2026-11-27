@@ -54,6 +54,8 @@ export interface FoodChild {
   grams: number
   grams_source?: string
   sort_order: number
+  /** A to-taste seasoning line: amount is nominal, shown "to taste". */
+  to_taste?: boolean
 }
 
 export interface FoodInstruction {
@@ -173,6 +175,7 @@ export interface FoodChildInput {
   unit: string
   grams: number
   sort_order: number
+  to_taste?: boolean
 }
 
 export interface FoodInstructionInput {
@@ -424,6 +427,8 @@ export interface ScaledIngredient {
   /** Count units only: what to buy (ceil). */
   buy: Quantity | null
   diet_class: EffectiveDietClass
+  /** Shown "to taste"; amount and display are nominal. */
+  to_taste?: boolean
 }
 
 export interface ScaledRecipe {
