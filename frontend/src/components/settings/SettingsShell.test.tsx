@@ -5,9 +5,23 @@ import {
   createRootRoute,
   createRouter,
 } from "@tanstack/react-router"
-import { render, screen, waitFor, within } from "@testing-library/react"
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest"
 
 import { ThemeProvider } from "@/components/theme-provider"
 import "@/lib/i18n"
@@ -95,9 +109,7 @@ function setViewport(phone: boolean) {
 }
 
 describe("Settings routes and shell", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    setViewport(false)
+  function mockApis() {
     vi.mocked(getProfile).mockResolvedValue(mockProfile)
     vi.mocked(listSettings).mockResolvedValue({
       ...mockSettingsList(),
@@ -112,6 +124,24 @@ describe("Settings routes and shell", () => {
       items: mockAvailabilityDefaults,
     })
     vi.mocked(getPresets).mockResolvedValue({ items: [], total: 0 } as never)
+  }
+
+  // The first render of the routed shell pays a one-off cold cost (JIT of
+  // the whole section tree, ~1 s under load) that exceeds findBy's 1000 ms
+  // default; pay it here instead of inside the first test.
+  beforeAll(async () => {
+    setViewport(false)
+    mockApis()
+    renderAt("/settings/household")
+    await screen.findByRole("heading", { level: 1, name: "Settings" })
+    cleanup()
+    vi.unstubAllGlobals()
+  }, 30_000)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setViewport(false)
+    mockApis()
   })
 
   afterEach(() => vi.unstubAllGlobals())
