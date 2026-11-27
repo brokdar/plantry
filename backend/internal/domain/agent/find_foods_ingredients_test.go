@@ -5,6 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
 // E017b-3: "what is in it?" needs a recipe's ingredients. They come with the
@@ -45,4 +47,18 @@ func TestFindFoods_Ingredients(t *testing.T) {
 		assert.NotContains(t, name, "\n")
 		assert.NotContains(t, name, "SYSTEM:")
 	})
+}
+
+// An archived recipe (LIB-4) is no search result: a list search asks the
+// repository for the active foods only; asking by id still finds it.
+func TestFindFoods_ArchivedOnlyByID(t *testing.T) {
+	t.Parallel()
+	ts, repo := newPayloadToolSet(t)
+	repo.foods[3].Archived = true
+
+	execJSON(t, ts, "find_foods", `{"kinds":["composed"]}`)
+	assert.Equal(t, food.ArchiveActive, repo.lastList.Archive)
+
+	items := execJSON(t, ts, "find_foods", `{"ids":[3]}`)["items"].([]any)
+	require.Len(t, items, 1)
 }

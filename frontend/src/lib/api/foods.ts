@@ -80,6 +80,8 @@ interface FoodBase {
   description?: string | null
   image_path: string | null
   favorite: boolean
+  /** Hidden from planning and lists (LIB-4); readable by id. */
+  archived: boolean
   diet_class: EffectiveDietClass
   diet_class_source: DietClassSource
   /** Effective "needs no cooking" flag; `user` = override, else derived. */
@@ -277,6 +279,8 @@ export interface FoodListParams {
   role?: FoodRole
   tag?: string
   favorite?: 0 | 1
+  /** 1: only the recipes hidden from planning. */
+  archived?: 0 | 1
   /** Prep + cook minutes at most. */
   max_minutes?: number
   /** Only recipes not eaten within this many weeks. */
@@ -381,6 +385,16 @@ export function setFoodFavorite(id: number, favorite: boolean): Promise<Food> {
     method: "POST",
     body: JSON.stringify({ favorite }),
   })
+}
+
+/** POST /api/foods/{id}/archive: hides a recipe from planning and lists. */
+export function archiveFood(id: number): Promise<Food> {
+  return apiFetch(`/foods/${id}/archive`, { method: "POST" })
+}
+
+/** POST /api/foods/{id}/restore: back into planning and lists. */
+export function restoreFood(id: number): Promise<Food> {
+  return apiFetch(`/foods/${id}/restore`, { method: "POST" })
 }
 
 export interface VariantListResponse {

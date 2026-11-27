@@ -27,10 +27,12 @@ import {
 import { deleteFeedback, putFeedback } from "./feedback"
 import { getLabellingEstimate, startLibraryLabelling } from "./chef"
 import {
+  archiveFood,
   getFood,
   getFoodAttributes,
   getScaled,
   listFoods,
+  restoreFood,
   revertFoodChange,
   setDietClass,
   setFoodAttributes,
@@ -339,6 +341,18 @@ const cases: Case[] = [
     method: "PUT",
     path: "/foods/42/attributes",
     body: { cuisine: "thai", colour: null },
+  },
+  {
+    name: "archiveFood",
+    call: () => archiveFood(50),
+    method: "POST",
+    path: "/foods/50/archive",
+  },
+  {
+    name: "restoreFood",
+    call: () => restoreFood(50),
+    method: "POST",
+    path: "/foods/50/restore",
   },
   {
     name: "revertFoodChange",

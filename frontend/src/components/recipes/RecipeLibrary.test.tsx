@@ -10,6 +10,7 @@ import { RecipeLibrary } from "./RecipeLibrary"
 
 vi.mock("@/lib/api/foods", () => ({
   listFoods: vi.fn(),
+  restoreFood: vi.fn(),
 }))
 
 vi.mock("@/lib/api/setup", () => ({
@@ -30,7 +31,7 @@ vi.mock("@/lib/dates", async (importOriginal) => ({
 }))
 
 import { listSuggestions } from "@/lib/api/discovery"
-import { listFoods } from "@/lib/api/foods"
+import { listFoods, restoreFood } from "@/lib/api/foods"
 import { listSettings } from "@/lib/api/settings"
 import { getSetupStatus } from "@/lib/api/setup"
 import { mockSettingsList, mockSuggestion } from "@/test/fixtures"
@@ -101,6 +102,36 @@ describe("RecipeLibrary", () => {
       "href",
       `/recipes/${mockChickenCurry.id}`
     )
+  })
+
+  it("lists the hidden recipes under the filter, each with Restore", async () => {
+    vi.mocked(listFoods).mockResolvedValue({
+      items: [{ ...mockTofuBowl, archived: true }],
+      total: 1,
+    })
+    vi.mocked(restoreFood).mockResolvedValue(mockTofuBowl)
+    const user = userEvent.setup()
+
+    renderLibrary({ hidden: true })
+
+    await user.click(
+      await screen.findByTestId(`recipe-restore-${mockTofuBowl.id}`)
+    )
+    expect(vi.mocked(listFoods).mock.calls[0][0]).toMatchObject({ archived: 1 })
+    expect(restoreFood).toHaveBeenCalledWith(mockTofuBowl.id)
+    expect(screen.getByTestId("recipes-filter-hidden")).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    )
+  })
+
+  it("shows no Restore button in the normal list", async () => {
+    vi.mocked(listFoods).mockResolvedValue({ items: [mockTofuBowl], total: 1 })
+
+    renderLibrary()
+
+    await screen.findByTestId(`recipe-card-${mockTofuBowl.id}`)
+    expect(screen.queryByTestId(`recipe-restore-${mockTofuBowl.id}`)).toBeNull()
   })
 
   it("draws the initial as the placeholder when there is no photo", async () => {

@@ -6,6 +6,8 @@ import {
   CalendarPlus,
   CookingPot,
   ExternalLink,
+  Eye,
+  EyeOff,
   GitBranch,
   Heart,
   PencilLine,
@@ -24,6 +26,7 @@ import {
   useCreateVariant,
   useFoodNutrition,
   useScaled,
+  useSetFoodArchived,
   useSetFoodFavorite,
 } from "@/lib/queries/foods"
 import { lastEatenAgo, rememberedLibrarySearch } from "@/lib/recipes/library"
@@ -58,6 +61,7 @@ export function RecipeDetail({
   const navigate = useNavigate()
   const { data: nutrition } = useFoodNutrition(recipe.id)
   const setFavorite = useSetFoodFavorite()
+  const setArchived = useSetFoodArchived()
   const createVariant = useCreateVariant()
   const defaultKeep = useSettingField("plan.default_keep_days", "3")
   const [today] = useState(todayISO)
@@ -127,6 +131,27 @@ export function RecipeDetail({
             />
             <span className="max-md:sr-only">
               {t("recipe_detail.favorite")}
+            </span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={setArchived.isPending}
+            onClick={() =>
+              setArchived.mutate({ id: recipe.id, archived: !recipe.archived })
+            }
+            className="max-md:size-11"
+            data-testid="recipe-archive"
+          >
+            {recipe.archived ? (
+              <Eye data-icon="inline-start" strokeWidth={1.5} aria-hidden />
+            ) : (
+              <EyeOff data-icon="inline-start" strokeWidth={1.5} aria-hidden />
+            )}
+            <span className="max-md:sr-only">
+              {recipe.archived
+                ? t("recipe_detail.restore")
+                : t("recipe_detail.hide")}
             </span>
           </Button>
           <Button
@@ -220,6 +245,14 @@ export function RecipeDetail({
           <h1 className="font-heading text-h1 leading-tight font-semibold text-balance">
             {recipe.name}
           </h1>
+          {recipe.archived && (
+            <p
+              className="text-small text-ink-muted"
+              data-testid="recipe-hidden-note"
+            >
+              {t("recipe_detail.hidden_note")}
+            </p>
+          )}
           {source && (
             <a
               href={source.href}

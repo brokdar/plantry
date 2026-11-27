@@ -1452,6 +1452,9 @@
   },
   "recipe_detail": {
     "favorite": "Favorite",
+    "hide": "Hide from planning",
+    "restore": "Restore",
+    "hidden_note": "Hidden from planning. It stays in your history and can still be added by hand.",
     "source": "From {{host}}",
     "portions": "Portions",
     "kcal_per_portion": "kcal per portion",
@@ -2206,6 +2209,8 @@
       "stale": "Not eaten lately",
       "favorites": "Favorites",
       "new": "New",
+      "hidden": "Hidden from planning",
+      "restore": "Restore",
       "sort": "Sort",
       "sort_name": "Name",
       "sort_last_eaten": "Last eaten",

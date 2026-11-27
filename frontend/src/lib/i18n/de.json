@@ -1452,6 +1452,9 @@
   },
   "recipe_detail": {
     "favorite": "Favorit",
+    "hide": "Nicht mehr planen",
+    "restore": "Wieder planen",
+    "hidden_note": "Wird nicht mehr geplant. Bleibt im Verlauf und lässt sich weiter von Hand einplanen.",
     "source": "Von {{host}}",
     "portions": "Portionen",
     "kcal_per_portion": "kcal pro Portion",
@@ -2206,6 +2209,8 @@
       "stale": "Länger nicht gegessen",
       "favorites": "Favoriten",
       "new": "Neu",
+      "hidden": "Nicht mehr geplant",
+      "restore": "Wieder planen",
       "sort": "Sortieren",
       "sort_name": "Name",
       "sort_last_eaten": "Zuletzt gegessen",

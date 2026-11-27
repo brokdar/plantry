@@ -406,6 +406,8 @@ func run() error {
 	// Food change log (VAR-5): each producer registers its Restorer here.
 	foodRestorers := map[foodevent.Kind]foodevent.Restorer{}
 	foodEventSvc := foodevent.NewService(sqlite.NewTxRunner(conn), sqlite.NewFoodEventRepo(conn), foodRestorers, clock.Now)
+	foodSvc.WithEvents(foodEventSvc)
+	foodRestorers[foodevent.KindRecipe] = foodSvc
 	// Recipe attributes (ATTR): derived on read, user edits logged as
 	// attribute food events.
 	flavorSvc := flavor.NewService(foodAttributeRepo, foodRepo, nutritionResolver, foodEventSvc)

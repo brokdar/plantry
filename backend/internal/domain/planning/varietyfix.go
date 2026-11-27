@@ -94,7 +94,7 @@ func variantFor(in ChooseInput, merged State, prop Proposal, is Issue, skip map[
 	}
 	var cands []FoodFacts
 	for id, f := range merged.Foods {
-		if id == oldID || merged.tooSlow(f, cell) || skip[id] || inPlan[id] || !f.Composed() || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 ||
+		if id == oldID || merged.tooSlow(f, cell) || skip[id] || inPlan[id] || !f.Composed() || f.Archived || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 ||
 			!f.NutritionComplete || (DietRestricts(household) && !fitsDiet(f.DietClass, diet.Class(household))) {
 			continue
 		}
@@ -204,7 +204,7 @@ func varietyHints(in ChooseInput, merged State, ev Evaluation) []string {
 		}
 		var cands []FoodFacts
 		for id, f := range merged.Foods {
-			if used[id] || !f.Composed() || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 || !f.NutritionComplete ||
+			if used[id] || !f.Composed() || f.Archived || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 || !f.NutritionComplete ||
 				(DietRestricts(merged.Profile.DietType) && !fitsDiet(f.DietClass, diet.Class(merged.Profile.DietType))) ||
 				(f.LastEaten != nil && !f.LastEaten.Before(VarietySince(merged.Window.Start, merged.Settings.VarietyWeeks))) || span <= 0 {
 				continue

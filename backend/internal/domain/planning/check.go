@@ -660,7 +660,7 @@ func (x *index) eligibleRecipes(weeks int) int {
 		light = light || (c.Mode == availability.ModePlan && x.mealOf(c.SlotID) == mealLight)
 	}
 	for _, f := range x.s.Foods {
-		if !f.Composed() || !varietyRole(f.Role) || routine[f.ID] || (!light && !isMain(f.Role, mealFull)) {
+		if !f.Composed() || f.Archived || !varietyRole(f.Role) || routine[f.ID] || (!light && !isMain(f.Role, mealFull)) {
 			continue
 		}
 		// An unknown class is only a warning (H5), so it stays eligible.

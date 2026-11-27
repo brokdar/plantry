@@ -411,7 +411,7 @@ func (s *Service) load(ctx context.Context, date time.Time) (*run, error) {
 		// (State.RatherNot) is never suggested.
 		// A picky household (refusing several side dishes) gets no side
 		// swap, garnish only; a single refused side is only never suggested.
-		if !picky && f.Composed() && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] && !y.st.RatherNot[id] {
+		if !picky && f.Composed() && !f.Archived && slices.Contains(sideRoles, f.Role) && f.NutritionComplete && !y.never[id] && !y.st.RatherNot[id] {
 			y.sides = append(y.sides, componentOf(f))
 		}
 	}

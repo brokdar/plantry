@@ -56,7 +56,7 @@ var foodCols = []string{
 	"notes", "image_path", "favorite",
 	"created_at", "updated_at",
 	"source_url", "description", "keep_days", "freezable", "shop_section",
-	"diet_class", "no_cook", "serving_g",
+	"diet_class", "no_cook", "serving_g", "archived",
 }
 
 // FoodRepo implements food.Repository backed by SQLite.
@@ -219,6 +219,14 @@ func (r *FoodRepo) List(ctx context.Context, q food.ListQuery) (*food.ListResult
 	}
 	countBuilder := sq.Select("COUNT(*)").From("foods")
 
+	switch q.Archive {
+	case food.ArchiveActive:
+		builder = builder.Where("archived = 0")
+		countBuilder = countBuilder.Where("archived = 0")
+	case food.ArchiveOnly:
+		builder = builder.Where("archived = 1")
+		countBuilder = countBuilder.Where("archived = 1")
+	}
 	if q.Kind != "" {
 		builder = builder.Where("kind = ?", string(q.Kind))
 		countBuilder = countBuilder.Where("kind = ?", string(q.Kind))
@@ -620,6 +628,27 @@ func (r *FoodRepo) SetFavorite(ctx context.Context, id int64, favorite bool) (*f
 	return &f, nil
 }
 
+// SetArchived hides a recipe from planning and lists, or restores it.
+func (r *FoodRepo) SetArchived(ctx context.Context, id int64, archived bool) (*food.Food, error) {
+	v := int64(0)
+	if archived {
+		v = 1
+	}
+	row, err := r.queriesFor(ctx).SetFoodArchived(ctx, sqlcgen.SetFoodArchivedParams{ID: id, Archived: v})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: recipe id %d", domain.ErrNotFound, id)
+		}
+		return nil, err
+	}
+	var f food.Food
+	mapFoodToDomain(&row, &f)
+	if err := r.loadComposed(ctx, r.queriesFor(ctx), &f); err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
 // SetShopSection writes a leaf's store section override; nil clears it.
 func (r *FoodRepo) SetShopSection(ctx context.Context, id int64, section *food.ShopSection) (*food.Food, error) {
 	var ns sql.NullString
@@ -969,6 +998,7 @@ func mapFoodToDomain(row *sqlcgen.Food, f *food.Food) {
 	f.Description = fromNullString(row.Description)
 	f.ImagePath = fromNullString(row.ImagePath)
 	f.Favorite = row.Favorite != 0
+	f.Archived = row.Archived != 0
 	f.KeepDays = fromNullInt64ToIntPtr(row.KeepDays)
 	if row.Freezable.Valid {
 		v := row.Freezable.Int64 == 1
@@ -1048,7 +1078,7 @@ func scanFoodRow(rows *sql.Rows) (*sqlcgen.Food, error) {
 		&row.Notes, &row.ImagePath, &row.Favorite,
 		&row.CreatedAt, &row.UpdatedAt,
 		&row.SourceUrl, &row.Description, &row.KeepDays, &row.Freezable, &row.ShopSection,
-		&row.DietClass, &row.NoCook, &row.ServingG,
+		&row.DietClass, &row.NoCook, &row.ServingG, &row.Archived,
 	); err != nil {
 		return nil, err
 	}
