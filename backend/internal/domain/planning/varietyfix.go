@@ -83,8 +83,8 @@ func variantFor(in ChooseInput, merged State, prop Proposal, is Issue, skip map[
 		}
 	}
 	household := merged.Profile.DietType
-	// A wish's time limit holds for the swap: a batch is judged where it
-	// cooks, a single meal where it is eaten.
+	// A wish's time limit and GATE-2 hold for the swap: a batch is judged
+	// where it cooks, a single meal where it is eaten.
 	cell := plate.CellKey{Date: cookDate}
 	if is.SlotID != nil {
 		cell.SlotID = *is.SlotID
@@ -94,7 +94,7 @@ func variantFor(in ChooseInput, merged State, prop Proposal, is Issue, skip map[
 	}
 	var cands []FoodFacts
 	for id, f := range merged.Foods {
-		if id == oldID || merged.tooSlow(f, cell) || skip[id] || inPlan[merged.dish(id)] || !f.Composed() || f.Archived || f.Never || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 ||
+		if id == oldID || merged.tooSlow(f, cell) || merged.slotBlocked(f, cell, merged.householdPlates(f)) || skip[id] || inPlan[merged.dish(id)] || !f.Composed() || f.Archived || f.Never || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 ||
 			!f.NutritionComplete || (DietRestricts(household) && !fitsDiet(f.DietClass, diet.Class(household))) {
 			continue
 		}

@@ -801,7 +801,21 @@ func (s State) overAllowance(f FoodFacts, c plate.CellKey, plates int) bool {
 // allowance is ineligible for that slot. Equipment is not stored on recipes
 // (the find pipeline checks it at keep), so only time applies here.
 func (h *planner) slotBlocked(f FoodFacts, c plate.CellKey) bool {
-	return h.s.Settings.ChefOn && h.overAllowance(f, c)
+	return h.s.slotBlocked(f, c, h.batchPlates(f, c))
+}
+
+// slotBlocked is the planner-free form of GATE-2: plates as in overAllowance.
+func (s State) slotBlocked(f FoodFacts, c plate.CellKey, plates int) bool {
+	return s.Settings.ChefOn && s.overAllowance(f, c, plates)
+}
+
+// householdPlates is the plates a cook of f feeds at the household's portions
+// (1 without batch cooking): batchPlates for code without a planner.
+func (s State) householdPlates(f FoodFacts) int {
+	if !s.Settings.BatchCooking || s.Profile.HouseholdPortions <= 0 {
+		return 1
+	}
+	return int((f.ReferencePortions + epsilon) / s.Profile.HouseholdPortions)
 }
 
 // batchDayPlates is the plates a session must feed to count as a batch cook

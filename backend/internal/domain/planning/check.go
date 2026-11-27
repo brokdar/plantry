@@ -642,7 +642,9 @@ func VarietyNeedsDiet(p Profile) bool {
 // that fit the diet and were neither eaten nor cooked (a draft of an earlier
 // week, which H8 counts as a repeat too) within the variety weeks before its
 // start. Omnivore recipes count only up to what the meat-day limit lets the
-// window cook (meatCookCap).
+// window cook (meatCookCap). With the Chef on, a recipe GATE-2 blocks on
+// weekdays (over the weekday time allowance) is a choice only for the
+// window's weekend cooks (weekendCookCap).
 func (x *index) eligibleRecipes(weeks int) int {
 	since := VarietySince(x.s.Window.Start, weeks)
 	t := diet.Class(x.s.Profile.DietType)
@@ -661,6 +663,8 @@ func (x *index) eligibleRecipes(weeks int) int {
 		light = light || (c.Mode == availability.ModePlan && x.mealOf(c.SlotID) == mealLight)
 	}
 	counted := map[int64]bool{} // a variant group counts once
+	weekday, weekend := x.planCell(false), x.planCell(true)
+	slow, slowMeat := 0, 0
 	for _, id := range slices.Sorted(maps.Keys(x.s.Foods)) {
 		f := x.s.Foods[id]
 		if !f.Composed() || f.Archived || f.Never || !varietyRole(f.Role) || routine[f.ID] || (!light && !isMain(f.Role, mealFull)) {
@@ -670,16 +674,63 @@ func (x *index) eligibleRecipes(weeks int) int {
 		if DietRestricts(x.s.Profile.DietType) && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t) {
 			continue
 		}
+		blocked := weekday != nil && x.s.slotBlocked(f, *weekday, x.s.householdPlates(f))
+		if blocked && (weekend == nil || x.s.slotBlocked(f, *weekend, x.s.householdPlates(f))) {
+			continue // GATE-2 blocks it in every cell
+		}
 		if (f.LastEaten == nil || f.LastEaten.Before(since)) && !cookedBefore[x.s.dish(f.ID)] && !counted[x.s.dish(f.ID)] {
 			counted[x.s.dish(f.ID)] = true
-			if f.DietClass == diet.Omnivore {
+			switch {
+			case blocked && f.DietClass == diet.Omnivore:
+				slowMeat++
+			case blocked:
+				slow++
+			case f.DietClass == diet.Omnivore:
 				meat++
-			} else {
+			default:
 				n++
 			}
 		}
 	}
-	return n + min(meat, x.meatCookCap())
+	slots := x.weekendCookCap()
+	slow = min(slow, slots)
+	slowMeat = min(slowMeat, slots-slow)
+	return n + slow + min(meat+slowMeat, x.meatCookCap())
+}
+
+// planCell is a plan cell of the window on a weekend day (or a weekday), nil
+// without one: where GATE-2 applies that day's time allowance.
+func (x *index) planCell(weekend bool) *plate.CellKey {
+	for _, c := range x.s.Cells {
+		if c.Mode == availability.ModePlan && x.s.Window.Contains(c.Date) && isWeekend(c.Date) == weekend {
+			return &plate.CellKey{Date: c.Date, SlotID: c.SlotID}
+		}
+	}
+	return nil
+}
+
+func isWeekend(d time.Time) bool {
+	return d.Weekday() == time.Saturday || d.Weekday() == time.Sunday
+}
+
+// weekendCookCap is the most cooks the window's Saturday and Sunday can hold:
+// per day its lunch and dinner plan cells, at most max_cook_occasions_per_day.
+func (x *index) weekendCookCap() int {
+	perDay := map[time.Time]int{}
+	for _, c := range x.s.Cells {
+		if c.Mode == availability.ModePlan && x.s.Window.Contains(c.Date) && isWeekend(c.Date) && x.mealOf(c.SlotID) == mealFull {
+			perDay[c.Date]++
+		}
+	}
+	limit := x.s.Settings.MaxCookOccasionsPerDay
+	total := 0
+	for _, n := range perDay {
+		if limit > 0 {
+			n = min(n, limit)
+		}
+		total += n
+	}
+	return total
 }
 
 // meatCookCap is the most cooks of omnivore recipes the window can hold
