@@ -115,17 +115,25 @@ func PlanningDeps(db *sql.DB) planning.Deps {
 	foods := sqlite.NewFoodRepo(db)
 	set := Settings(db)
 	return planning.Deps{
-		Builder: planning.NewBuilder(planning.BuilderDeps{
-			Foods: food.NewService(foods), FoodRows: foods, Nutrition: food.NewNutritionResolver(foods),
-			Cells: avail, Plates: sqlite.NewPlateRepo(db), Sessions: sqlite.NewCookSessionRepo(db),
-			Presets: sqlite.NewPresetRepo(db), Slots: sqlite.NewSlotRepo(db), Settings: set,
-			Profile: profile.NewService(sqlite.NewProfileRepo(db)), Corrections: sqlite.NewPlateEventRepo(db),
-			Light: sqlite.NewPlanLightRepo(db), Attributes: sqlite.NewFoodAttributeRepo(db), Version: sqlite.NewDataVersion(db),
-		}),
-		Light:  sqlite.NewPlanLightRepo(db),
-		Plates: plates, PlateRows: sqlite.NewPlateRepo(db), Sessions: sqlite.NewCookSessionRepo(db), Cells: avail, Overrides: avail, FoodRows: foods, Settings: set,
+		Builder: planning.NewBuilder(BuilderDeps(db, avail)),
+		Light:   sqlite.NewPlanLightRepo(db),
+		Plates:  plates, PlateRows: sqlite.NewPlateRepo(db), Sessions: sqlite.NewCookSessionRepo(db), Cells: avail, Overrides: avail, FoodRows: foods, Settings: set,
 		Tx: sqlite.NewTxRunner(db), Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: planning.Heuristic{}},
+	}
+}
+
+// BuilderDeps returns the planning state builder's dependencies over db and
+// avail (Plan's), wired like main.go except the taste profile (nil: no
+// taste scores; tests that need one set Taste).
+func BuilderDeps(db *sql.DB, avail *availability.Service) planning.BuilderDeps {
+	foods := sqlite.NewFoodRepo(db)
+	return planning.BuilderDeps{
+		Foods: food.NewService(foods), FoodRows: foods, Nutrition: food.NewNutritionResolver(foods),
+		Cells: avail, Plates: sqlite.NewPlateRepo(db), Sessions: sqlite.NewCookSessionRepo(db),
+		Presets: sqlite.NewPresetRepo(db), Slots: sqlite.NewSlotRepo(db), Settings: Settings(db),
+		Profile: profile.NewService(sqlite.NewProfileRepo(db)), Corrections: sqlite.NewPlateEventRepo(db),
+		Light: sqlite.NewPlanLightRepo(db), Attributes: sqlite.NewFoodAttributeRepo(db), Version: sqlite.NewDataVersion(db),
 	}
 }
 

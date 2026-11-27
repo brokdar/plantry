@@ -388,7 +388,7 @@ func (s *Service) State(ctx context.Context, ref Ref, polarity Polarity, scope S
 		it.Evidence = cur.Evidence.Faded(now.Sub(cur.UpdatedAt))
 		it.UpdatedAt = now
 		it.Source, it.Polarity = SourceStatement, polarity
-		return s.write(ctx, cur, it, ok)
+		return s.write(ctx, cur, &it, ok)
 	})
 	return it, undo, err
 }
@@ -410,7 +410,7 @@ func (s *Service) SetPolarity(ctx context.Context, id int64, polarity Polarity) 
 		it.Evidence = cur.Evidence.Faded(now.Sub(cur.UpdatedAt))
 		it.UpdatedAt = now
 		it.Source, it.Polarity = SourceUser, polarity
-		return s.write(ctx, cur, it, true)
+		return s.write(ctx, cur, &it, true)
 	})
 	if err != nil {
 		return ItemView{}, foodevent.Undo{}, err
@@ -437,8 +437,8 @@ func (s *Service) Remove(ctx context.Context, id int64) (foodevent.Undo, error) 
 }
 
 // write saves next over cur (existed: cur is a stored row) and records it.
-func (s *Service) write(ctx context.Context, cur, next Item, existed bool) error {
-	if err := s.d.Store.SaveItem(ctx, &next); err != nil {
+func (s *Service) write(ctx context.Context, cur Item, next *Item, existed bool) error {
+	if err := s.d.Store.SaveItem(ctx, next); err != nil {
 		return err
 	}
 	e := foodevent.Event{Kind: foodevent.KindTasteItem, SubjectID: next.ID, Action: foodevent.ActionCreate}
@@ -449,7 +449,7 @@ func (s *Service) write(ctx context.Context, cur, next Item, existed bool) error
 			return err
 		}
 	}
-	if e.After, err = snapshot(next); err != nil {
+	if e.After, err = snapshot(*next); err != nil {
 		return err
 	}
 	return s.d.Events.Record(ctx, e)

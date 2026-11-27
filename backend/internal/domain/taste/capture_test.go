@@ -16,8 +16,10 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/taste"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
@@ -374,4 +376,27 @@ func TestSimulatedWeeks_StatementFlipRemove(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, chicken.ID, back.ID)
 	assert.InDelta(t, chicken.Evidence.Pos, back.Evidence.Pos, 1e-9)
+}
+
+// The planner reads the learned taste: the builder scores every recipe from
+// the items that lean (the loved curry up, the disliked salmon bake down).
+func TestSimulatedWeeks_PlannerReadsTaste(t *testing.T) {
+	r, _ := simulatedDB(t)
+	for id, values := range map[int64]string{
+		r.curry:  `{"heroes":["Chicken"],"cuisine":"thai","format":"bowl"}`,
+		r.salmon: `{"heroes":["Salmon"],"cuisine":"french","format":"plate"}`,
+	} {
+		_, err := r.db.Exec(`INSERT INTO food_attributes (food_id, version, values_json, sources_json) VALUES (?, 1, ?, '{"heroes":"user","cuisine":"user","format":"user"}')`, id, values)
+		require.NoError(t, err)
+	}
+	_, avail := testsvc.Plan(r.db)
+	deps := testsvc.BuilderDeps(r.db, avail)
+	deps.Taste = r.svc
+	start := time.Date(2026, 4, 25, 0, 0, 0, 0, time.UTC)
+	w := window.Window{Start: start, End: start.AddDate(0, 0, 6)}
+	s, err := planning.NewBuilder(deps).Build(r.ctx, w, start, w.Start, w.End)
+	require.NoError(t, err)
+	assert.Greater(t, s.Foods[r.curry].Taste, 0.0)
+	assert.Less(t, s.Foods[r.salmon].Taste, 0.0)
+	assert.Zero(t, s.Foods[r.salad].Taste, "no stored attributes: nothing to score")
 }
