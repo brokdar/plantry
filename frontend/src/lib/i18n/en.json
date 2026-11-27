@@ -2471,8 +2471,7 @@
       "empty": "Nothing planned"
     },
     "rate_reason": {
-      "prompt": "{{name}} is hidden from planning. What put you off?",
-      "done": "Thanks, noted."
+      "prompt": "{{name}} is hidden from planning. What put you off?"
     }
   },
   "recipes": {

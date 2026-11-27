@@ -2471,8 +2471,7 @@
       "empty": "Nichts geplant"
     },
     "rate_reason": {
-      "prompt": "{{name}} wird nicht mehr eingeplant. Was hat gestört?",
-      "done": "Danke, notiert."
+      "prompt": "{{name}} wird nicht mehr eingeplant. Was hat gestört?"
     }
   },
   "recipes": {

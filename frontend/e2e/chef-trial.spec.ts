@@ -96,10 +96,11 @@ test("Fill my library: recipes arrive on trial with the badge until opened", asy
         async () => {
           const res = await ctx.get("/api/finds?state=in_library")
           const { items } = (await res.json()) as {
-            items: { food_id: number }[]
+            items: { food_id: number; trigger: string }[]
           }
-          foodIds.splice(0, foodIds.length, ...items.map((f) => f.food_id))
-          return items.length
+          const fills = items.filter((f) => f.trigger === "fill")
+          foodIds.splice(0, foodIds.length, ...fills.map((f) => f.food_id))
+          return fills.length
         },
         { timeout: 90_000 }
       )
