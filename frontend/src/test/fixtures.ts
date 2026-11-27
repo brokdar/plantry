@@ -366,7 +366,7 @@ export const mockSettingDefaults: Record<string, string> = {
   "plan.freezing_enabled": "false",
   "plan.freezer_keep_days": "90",
   "plan.variety_weeks": "3",
-  "plan.explore_per_week": "0",
+  "chef.new_dishes_per_week": "1",
   "discovery.daily_enabled": "true",
   "discovery.cuisines": "[]",
   "ai.run_retention_days": "180",

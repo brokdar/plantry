@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -167,4 +168,9 @@ func LanguageLine(code string) string {
 		return languageLine(langDE)
 	}
 	return languageLine(langEN)
+}
+
+// WithWindowForTest carries a chat window starting on start to the tools.
+func WithWindowForTest(ctx context.Context, start time.Time) context.Context {
+	return withWindow(ctx, window.Window{Start: start, End: start.AddDate(0, 0, 6)})
 }

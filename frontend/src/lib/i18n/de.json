@@ -393,7 +393,11 @@
       "anchor_effect": {
         "today": "Die Planungsansicht öffnet die Woche, in der heute liegt.",
         "next_shopping_day": "Die Planungsansicht beginnt an deinem nächsten Einkaufstag."
-      }
+      },
+      "new_dishes_label": "Neue Gerichte pro Woche",
+      "new_dishes_effect_zero": "Der Assistent plant nur aus deinen Rezepten.",
+      "new_dishes_effect_one": "Der Assistent bringt {{count}} neues Gericht pro Woche mit.",
+      "new_dishes_effect_other": "Der Assistent bringt {{count}} neue Gerichte pro Woche mit."
     },
     "assistant": {
       "connection_group": "Verbindung",
@@ -432,7 +436,7 @@
       "prices_incomplete": "Wird gespeichert, sobald Modell-ID sowie Eingabe- und Ausgabepreis (0 oder mehr) eingetragen sind.",
       "prices_duplicate": "Für dieses Modell gibt es schon eine Zeile. Pro Modell-ID wird nur ein Preis gespeichert.",
       "prices_error": "Der Preis für dieses Modell konnte nicht geladen werden.",
-      "cuisines_label": "Küchen zum Entdecken",
+      "cuisines_label": "Küchen zum Ausprobieren",
       "cuisines_effect": "Die Idee des Tages wechselt reihum durch diese Küchen. Ohne Auswahl nimmt Plantry eine, die du noch nicht gekocht hast.",
       "cuisines_placeholder": "Zum Beispiel: persisch",
       "cuisines_add": "Hinzufügen",
@@ -788,6 +792,12 @@
         "salt": "salzige Gerichte",
         "bitter": "bittere Gerichte",
         "umami": "herzhafte Gerichte"
+      },
+      "theme": {
+        "title": "Thema",
+        "line": "Diese Woche: {{names}}. Es endet mit der Woche.",
+        "empty": "Diese Woche gibt es kein Thema.",
+        "link": "Zum Plan"
       }
     }
   },
@@ -1422,6 +1432,9 @@
     },
     "find": {
       "not_found": "Diesen Fund gibt es nicht mehr."
+    },
+    "theme": {
+      "limit": "Eine Woche hat höchstens zwei Themen."
     }
   },
   "common": {
@@ -2197,6 +2210,35 @@
       "change_side_of": "{{name}} ändern",
       "add": "Beilage, Snack oder Dessert hinzufügen",
       "something_else": "Etwas anderes"
+    },
+    "themes": {
+      "title": "Thema",
+      "add": "Thema hinzufügen",
+      "add_submit": "Hinzufügen",
+      "kind_label": "Art des Themas",
+      "value_label": "Thema",
+      "kind": {
+        "cuisine": "Küche",
+        "ingredient": "Zutat oder Saison",
+        "mood": "Stimmung oder Form"
+      },
+      "placeholder": {
+        "cuisine": "Zum Beispiel: japanisch",
+        "ingredient": "Zum Beispiel: Kürbis",
+        "mood": "Zum Beispiel: Eintopf"
+      },
+      "remove": "Thema {{name}} entfernen",
+      "whole_week": "ganze Woche",
+      "last_week": "Letzte Woche: {{names}}.",
+      "again": "Nochmal?",
+      "suggestion": "Wie wäre es diese Woche mit {{name}}?",
+      "accept": "Ja, gerne",
+      "decline": "Nein danke",
+      "set": "{{name}} ist das Thema dieser Woche.",
+      "finding_none_one": "Noch keine Rezepte für {{name}}. Ich suche {{count}}.",
+      "finding_none_other": "Noch keine Rezepte für {{name}}. Ich suche {{count}}.",
+      "finding_some_one": "{{name}}: {{library}} in deiner Sammlung. Ich suche noch {{count}}.",
+      "finding_some_other": "{{name}}: {{library}} in deiner Sammlung. Ich suche noch {{count}}."
     }
   },
   "batch": {

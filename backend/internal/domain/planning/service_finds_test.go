@@ -29,7 +29,7 @@ type findsEnv struct {
 func newFindsEnv(t *testing.T, chefOn bool) *findsEnv {
 	t.Helper()
 	e := &findsEnv{svcEnv: newSvcEnv(t)}
-	require.NoError(t, testsvc.Settings(e.db).Set(e.ctx, "plan.explore_per_week", "1"))
+	require.NoError(t, testsvc.Settings(e.db).Set(e.ctx, "chef.new_dishes_per_week", "1"))
 	e.lentil = e.insert(`INSERT INTO foods (name, kind, source, kcal_100g, protein_100g, fat_100g, carbs_100g) VALUES ('Linsen', 'leaf', 'manual', 116, 9, 0.4, 20)`)
 	foods := sqlite.NewFoodRepo(e.db)
 	e.store = sqlite.NewFindRepo(e.db)

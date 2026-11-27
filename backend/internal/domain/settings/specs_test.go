@@ -65,7 +65,7 @@ func TestSettingsSpec_Phase1Defaults(t *testing.T) {
 		settings.KeyPlanFreezingEnabled:        "false",
 		settings.KeyPlanFreezerKeepDays:        "90",
 		settings.KeyPlanVarietyWeeks:           "3",
-		settings.KeyPlanExplorePerWeek:         "0",
+		settings.KeyChefNewDishesPerWeek:       "1",
 		settings.KeyPlanMaxDishMealsPerWeek:    "3",
 		settings.KeyDiscoveryDailyEnabled:      "true",
 		settings.KeyAIRunRetentionDays:         "180",
@@ -93,7 +93,7 @@ func TestSettingsSpec_Phase1IntRanges(t *testing.T) {
 		{settings.KeyPlanDefaultKeepDays, []string{"1", "7"}, []string{"0", "8"}},
 		{settings.KeyPlanFreezerKeepDays, []string{"1", "365"}, []string{"0", "366"}},
 		{settings.KeyPlanVarietyWeeks, []string{"0", "8"}, []string{"-1", "9"}},
-		{settings.KeyPlanExplorePerWeek, []string{"0", "3"}, []string{"-1", "4"}},
+		{settings.KeyChefNewDishesPerWeek, []string{"0", "3"}, []string{"-1", "4"}},
 		{settings.KeyPlanMaxDishMealsPerWeek, []string{"1", "14"}, []string{"0", "15"}},
 		{settings.KeyAIRunRetentionDays, []string{"7", "3650"}, []string{"6", "3651"}},
 	}
@@ -245,4 +245,24 @@ func TestSettingsSpec_Chef(t *testing.T) {
 		assert.ErrorIsf(t, svc.Set(ctx, settings.KeyChefSites, bad), settings.ErrInvalidKind, "sites %s", bad)
 	}
 	require.NoError(t, svc.Set(ctx, settings.KeyChefSites, `[{"domain":"example.com","lang":"en","enabled":true,"ai_groups_exempt":false}]`))
+}
+
+// THEME-6: New dishes per week defaults to 1 with the Chef on and keeps the
+// explore quota's 0 with it off; a stored value holds either way.
+func TestNewDishesPerWeek(t *testing.T) {
+	svc := newSpecTestService(t)
+	ctx := context.Background()
+	get := func() int {
+		t.Helper()
+		n, err := settings.NewDishesPerWeek(ctx, svc)
+		require.NoError(t, err)
+		return n
+	}
+	assert.Equal(t, 0, get(), "Chef off, unset: today's explore default")
+	require.NoError(t, svc.Set(ctx, settings.KeyChefEnabled, "true"))
+	assert.Equal(t, 1, get(), "Chef on, unset: 1")
+	require.NoError(t, svc.Set(ctx, settings.KeyChefNewDishesPerWeek, "3"))
+	assert.Equal(t, 3, get())
+	require.NoError(t, svc.Set(ctx, settings.KeyChefEnabled, "false"))
+	assert.Equal(t, 3, get(), "a stored value keeps its meaning with the Chef off")
 }

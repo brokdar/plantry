@@ -56,6 +56,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/substitution"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/taste"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/theme"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/tips"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
@@ -301,19 +302,37 @@ func run() error {
 		}
 		return out, nil
 	}
+	var themeSvc *theme.Service // needs the builder
 	planBuilder := planning.NewBuilder(planning.BuilderDeps{
 		Light: planLight, Attributes: foodAttributeRepo,
 		Foods: foodSvc, FoodRows: foodRepo, Nutrition: nutritionResolver, Cells: availabilitySvc,
 		Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
 		Settings: settingsSvc, Profile: profileSvc, Corrections: sqlite.NewPlateEventRepo(conn),
 		Version: sqlite.NewDataVersion(conn), Taste: tasteSvc, Never: neverFoods,
+		Themes: func(ctx context.Context, start time.Time) ([]theme.Theme, error) {
+			return themeSvc.Themes(ctx, start)
+		},
 	})
 	readyFinds := &lazyFinds{}
+	var findSvc *finds.Service // built after the planner
+	themeSvc = theme.NewService(theme.Deps{
+		Store: sqlite.NewThemeRepo(conn), ChefOn: settingsSvc.ChefEnabled,
+		Library: func(ctx context.Context, t theme.Theme) (int, error) {
+			return planBuilder.ThemeLibrary(ctx, t, clock.Now())
+		},
+		Find: func(ctx context.Context, t string, n int) error {
+			return findSvc.ThemeSet(ctx, t, n)
+		},
+		Cuisines: settingsSvc.DiscoveryCuisines,
+		Loves:    lovedCuisines(tasteSvc.View),
+		Now:      clock.Now,
+	})
 	planningSvc := planning.NewService(planning.Deps{
-		Builder: planBuilder,
-		Finds:   readyFinds,
-		Light:   planLight,
-		Plates:  plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: availabilitySvc, Overrides: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
+		Builder:     planBuilder,
+		Finds:       readyFinds,
+		ThemeDishes: themeSvc.NewDishes,
+		Light:       planLight,
+		Plates:      plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: availabilitySvc, Overrides: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
 		RunLog: planning.RecorderLog{Recorder: runRecorder}, Runs: aiRunRepo, Tx: txRunner,
 		Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{
@@ -405,6 +424,7 @@ func run() error {
 		Recipes: agent.RecipeTools{Changes: recipeChangeSvc, Attributes: flavorSvc},
 		Taste:   tasteSvc,
 		Finds:   agent.FindTools{Requester: findRequester, ChefOn: settingsSvc.ChefEnabled},
+		Themes:  agent.ThemeTools{Setter: themeSvc, ChefOn: settingsSvc.ChefEnabled},
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
@@ -481,7 +501,6 @@ func run() error {
 	// Attribute labelling (ATTR-2): a chef_attributes job per saved recipe
 	// and the one-time library pass, each a capped run.
 	var labelling *flavor.Labelling
-	var findSvc *finds.Service
 	chefRunner := chef.NewRunner(chef.RunnerConfig{
 		Store: sqlite.NewChefJobRepo(conn), Guard: chefGuard,
 		Handlers: map[airun.Kind]chef.Handler{
@@ -532,7 +551,7 @@ func run() error {
 			}),
 			ChefOn: settingsSvc.ChefEnabled,
 			NewDishes: func(ctx context.Context) (int, error) {
-				return plate.IntSetting(ctx, settingsSvc, settingsdom.KeyPlanExplorePerWeek)
+				return settingsdom.NewDishesPerWeek(ctx, settingsSvc)
 			},
 			Dish: func(ctx context.Context, day time.Time) (string, error) {
 				cuisines, err := settingsSvc.DiscoveryCuisines(ctx)
@@ -632,6 +651,7 @@ func run() error {
 		Profile:      handlers.NewProfileHandler(profileSvc),
 		Kitchen:      handlers.NewKitchenHandler(profileSvc, kitchenSvc),
 		Taste:        handlers.NewTasteHandler(tasteSvc).WithKitchen(kitchenSvc, foodSvc, profileSvc),
+		Themes:       handlers.NewThemeHandler(themeSvc),
 		Finds:        handlers.NewFindsHandler(findSvc, settingsSvc.ChefEnabled),
 		ChefPlan: handlers.NewChefPlanHandler(handlers.ChefPlanDeps{
 			Finds: findSvc, ChefOn: settingsSvc.ChefEnabled, Plates: plateSvc,
@@ -641,6 +661,10 @@ func run() error {
 			LiveTips: func(ctx context.Context, start time.Time) (int, error) {
 				v, err := tipSvc.Sync(ctx, start)
 				return len(v.Tips), err
+			},
+			Suggested: func(ctx context.Context, start time.Time) (bool, error) {
+				v, err := themeSvc.Window(ctx, start)
+				return v.Suggestion != nil, err
 			},
 		}),
 		NotForMe:      handlers.NewNotForMeHandler(foodSvc, tasteSvc),
@@ -765,4 +789,22 @@ func appVersion() string {
 		return version + "+" + commit
 	}
 	return airun.BuildVersion()
+}
+
+// lovedCuisines lists the cuisines the household loves (theme suggestions,
+// THEME-4).
+func lovedCuisines(view func(context.Context, time.Time) (taste.View, error)) func(context.Context) ([]string, error) {
+	return func(ctx context.Context) ([]string, error) {
+		v, err := view(ctx, time.Time{})
+		if err != nil {
+			return nil, err
+		}
+		var out []string
+		for _, it := range v.Items {
+			if it.Level == taste.LevelCuisine && it.Polarity == taste.Love {
+				out = append(out, it.Key)
+			}
+		}
+		return out, nil
+	}
 }

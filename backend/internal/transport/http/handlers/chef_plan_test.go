@@ -51,7 +51,7 @@ func TestChefPlanHandler(t *testing.T) {
 		_, err = store.Place(ctx, f.ID, foodID, start)
 		require.NoError(t, err)
 	}
-	on := true
+	on, suggested := true, false
 	chefOn := func(context.Context) (bool, error) { return on, nil }
 	now := time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC)
 	svc := finds.NewService(finds.Deps{Store: store, Planning: finds.Planning{
@@ -63,6 +63,7 @@ func TestChefPlanHandler(t *testing.T) {
 		Finds: svc, ChefOn: chefOn, Plates: noPlates{},
 		ShoppingDay: func(context.Context) (int, error) { return 5, nil }, // Saturday
 		LiveTips:    func(context.Context, time.Time) (int, error) { return 3, nil },
+		Suggested:   func(context.Context, time.Time) (bool, error) { return suggested, nil },
 		Now:         func() time.Time { return now },
 	})
 	r := chi.NewRouter()
@@ -83,6 +84,11 @@ func TestChefPlanHandler(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &list))
 	assert.Len(t, list.Items, 2, "3 tips + 2 lines = the budget of 5")
 	assert.Equal(t, 2, list.More)
+	suggested = true // THEME-4: a theme suggestion counts in the budget
+	w = do(http.MethodGet, "/api/plan/assistant?start=2026-11-07", "")
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &list))
+	assert.Len(t, list.Items, 1, "3 tips + a suggestion + 1 line")
+	assert.Equal(t, 3, list.More)
 
 	// Today Mon 11-02: the next window starts Sat 11-07.
 	w = do(http.MethodPost, "/api/plan/opened", `{"start":"2026-10-31","today":"2026-11-02"}`)

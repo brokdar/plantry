@@ -77,6 +77,7 @@ type Querier interface {
 	DecideFind(ctx context.Context, arg DecideFindParams) (RecipeSuggestion, error)
 	// Accept or reject a pending suggestion; no row when it is decided already.
 	DecideRecipeSuggestion(ctx context.Context, arg DecideRecipeSuggestionParams) (RecipeSuggestion, error)
+	DecideThemeSuggestion(ctx context.Context, arg DecideThemeSuggestionParams) (int64, error)
 	DeleteActiveSlotAvailabilityDefaults(ctx context.Context) error
 	DeleteAvailabilityOverride(ctx context.Context, arg DeleteAvailabilityOverrideParams) error
 	DeleteConversation(ctx context.Context, id int64) (sql.Result, error)
@@ -104,6 +105,7 @@ type Querier interface {
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTasteItem(ctx context.Context, id int64) error
 	DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, error)
+	DeleteWeekTheme(ctx context.Context, arg DeleteWeekThemeParams) (int64, error)
 	// B7: per discovery run with an id in [min_id, max_id], the suggestions it
 	// stored and how many of them the user accepted.
 	DiscoverySuggestionCounts(ctx context.Context, arg DiscoverySuggestionCountsParams) ([]DiscoverySuggestionCountsRow, error)
@@ -155,11 +157,14 @@ type Querier interface {
 	GetShownSuggestion(ctx context.Context, shownOn sql.NullString) (RecipeSuggestion, error)
 	GetTasteItem(ctx context.Context, id int64) (TasteItem, error)
 	GetTasteItemByRef(ctx context.Context, arg GetTasteItemByRefParams) (TasteItem, error)
+	GetThemeSuggestion(ctx context.Context, windowStart string) (WeekThemeSuggestion, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
 	HasQueuedChefJob(ctx context.Context, arg HasQueuedChefJobParams) (bool, error)
 	HasTasteSignal(ctx context.Context, arg HasTasteSignalParams) (int64, error)
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
 	InsertFoodOrigin(ctx context.Context, arg InsertFoodOriginParams) error
+	InsertThemeSuggestion(ctx context.Context, arg InsertThemeSuggestionParams) error
+	InsertWeekTheme(ctx context.Context, arg InsertWeekThemeParams) (WeekTheme, error)
 	LastFoodEventID(ctx context.Context) (int64, error)
 	LastPlateEventID(ctx context.Context) (int64, error)
 	// Which of the given leaves at least one active (not archived) composed
@@ -273,6 +278,7 @@ type Querier interface {
 	// Scans plate_events without a date/actor index: fine for a single-user audit
 	// table. Newest first so the cap drops the oldest rows.
 	ListUserPlateUpdates(ctx context.Context, arg ListUserPlateUpdatesParams) ([]ListUserPlateUpdatesRow, error)
+	ListWeekThemes(ctx context.Context, windowStart string) ([]WeekTheme, error)
 	MarkAIChangeUndone(ctx context.Context, arg MarkAIChangeUndoneParams) (sql.Result, error)
 	// KIT-2/3: a question is asked once.
 	MarkKitchenQuestionAsked(ctx context.Context, question string) error
@@ -289,6 +295,8 @@ type Querier interface {
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
 	PutFoodChanges(ctx context.Context, arg PutFoodChangesParams) error
 	PutTasteItem(ctx context.Context, arg PutTasteItemParams) error
+	RecentThemeDecisions(ctx context.Context) ([]RecentThemeDecisionsRow, error)
+	RecentThemeValues(ctx context.Context, since string) ([]string, error)
 	RecoverChefJobs(ctx context.Context, arg RecoverChefJobsParams) (int64, error)
 	ReinsertPlate(ctx context.Context, arg ReinsertPlateParams) error
 	RemoveBasicAtHome(ctx context.Context, foodID int64) error

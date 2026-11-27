@@ -51,6 +51,9 @@ var (
 	// now, so undo would rewrite a decision (Z1).
 	ErrAIChangeConfirmed = errors.New("the change's rows are confirmed")
 
+	// ErrThemeLimit: a window holds at most two week themes (THEME-2).
+	ErrThemeLimit = errors.New("a window holds at most two themes")
+
 	// Plate feedback errors.
 	ErrInvalidFeedbackStatus = errors.New("invalid feedback status")
 
@@ -188,6 +191,7 @@ var messageKeys = []struct {
 	{ErrInvalidServing, "error.food.invalid_serving"},
 	{ErrServingLeafOnly, "error.food.serving_leaf_only"},
 	{ErrInvalidPortions, "error.food.invalid_portions"},
+	{ErrThemeLimit, "error.theme.limit"},
 	{ErrNotFound, "error.not_found"},
 	{ErrDuplicateName, "error.{resource}.duplicate_name"},
 	{ErrInUse, "error.{resource}.in_use"},

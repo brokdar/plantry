@@ -29,6 +29,7 @@ type Handlers struct {
 	Profile       *handlers.ProfileHandler
 	Kitchen       *handlers.KitchenHandler
 	Taste         *handlers.TasteHandler
+	Themes        *handlers.ThemeHandler
 	Finds         *handlers.FindsHandler
 	ChefPlan      *handlers.ChefPlanHandler
 	NotForMe      *handlers.NotForMeHandler
@@ -236,6 +237,15 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			api.Get("/finds/{id}", h.Finds.Get)
 			api.Post("/finds/{id}/keep", h.Finds.Keep)
 			api.Post("/finds/{id}/discard", h.Finds.Discard)
+		}
+		if h.Themes != nil {
+			api.Route("/windows/{start}/themes", func(r chi.Router) {
+				r.Get("/", h.Themes.Get)
+				r.Post("/", h.Themes.Post)
+				r.Delete("/{id}", h.Themes.Delete)
+				r.Post("/suggestion/accept", h.Themes.Accept)
+				r.Post("/suggestion/decline", h.Themes.Decline)
+			})
 		}
 		if h.Taste != nil {
 			api.Get("/taste", h.Taste.Get)

@@ -393,7 +393,11 @@
       "anchor_effect": {
         "today": "The plan view opens on the week that includes today.",
         "next_shopping_day": "The plan view starts on your next shopping day."
-      }
+      },
+      "new_dishes_label": "New dishes per week",
+      "new_dishes_effect_zero": "The assistant plans only from your recipes.",
+      "new_dishes_effect_one": "The assistant brings {{count}} new dish a week.",
+      "new_dishes_effect_other": "The assistant brings {{count}} new dishes a week."
     },
     "assistant": {
       "connection_group": "Connection",
@@ -432,7 +436,7 @@
       "prices_incomplete": "Needs a model id and input and output prices of 0 or more before it saves.",
       "prices_duplicate": "Another row already prices this model. Only one price per model id saves.",
       "prices_error": "Couldn't load the price for this model.",
-      "cuisines_label": "Cuisines to discover",
+      "cuisines_label": "Cuisines to explore",
       "cuisines_effect": "Daily ideas take turns through these cuisines. Without any, Plantry picks one you haven't cooked yet.",
       "cuisines_placeholder": "For example: persian",
       "cuisines_add": "Add",
@@ -788,6 +792,12 @@
         "salt": "salty dishes",
         "bitter": "bitter dishes",
         "umami": "savoury dishes"
+      },
+      "theme": {
+        "title": "Theme",
+        "line": "This week: {{names}}. It ends with the week.",
+        "empty": "No theme this week.",
+        "link": "Open the plan"
       }
     }
   },
@@ -1395,6 +1405,9 @@
     },
     "find": {
       "not_found": "That find no longer exists."
+    },
+    "theme": {
+      "limit": "A week holds at most two themes."
     }
   },
   "nutrition": {
@@ -2197,6 +2210,35 @@
       "change_side_of": "Change {{name}}",
       "add": "Add side, snack or dessert",
       "something_else": "Something else"
+    },
+    "themes": {
+      "title": "Theme",
+      "add": "Add theme",
+      "add_submit": "Add",
+      "kind_label": "Kind of theme",
+      "value_label": "Theme",
+      "kind": {
+        "cuisine": "Cuisine",
+        "ingredient": "Ingredient or season",
+        "mood": "Mood or format"
+      },
+      "placeholder": {
+        "cuisine": "For example: Japanese",
+        "ingredient": "For example: pumpkin",
+        "mood": "For example: one-pot"
+      },
+      "remove": "Remove theme {{name}}",
+      "whole_week": "whole week",
+      "last_week": "Last week: {{names}}.",
+      "again": "Again?",
+      "suggestion": "How about {{name}} this week?",
+      "accept": "Yes, do it",
+      "decline": "No thanks",
+      "set": "{{name}} is this week's theme.",
+      "finding_none_one": "No {{name}} recipes yet. I'll find {{count}}.",
+      "finding_none_other": "No {{name}} recipes yet. I'll find {{count}}.",
+      "finding_some_one": "{{name}}: {{library}} in your library. I'll find {{count}} more.",
+      "finding_some_other": "{{name}}: {{library}} in your library. I'll find {{count}} more."
     }
   },
   "batch": {

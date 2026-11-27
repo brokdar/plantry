@@ -23,7 +23,10 @@ type ChefPlanDeps struct {
 	// LiveTips counts the tips shown on the window starting on start: they
 	// share the PRO-4 noise budget with the assistant's list.
 	LiveTips func(ctx context.Context, start time.Time) (int, error)
-	Now      func() time.Time
+	// Suggested reports an open theme suggestion on the window: it counts
+	// in the same budget (THEME-4); nil counts none.
+	Suggested func(ctx context.Context, start time.Time) (bool, error)
+	Now       func() time.Time
 }
 
 // ChefPlanHandler serves the plan page's planning session and the "What the
@@ -97,7 +100,7 @@ func writeErrorOrNoContent(w http.ResponseWriter, err error) {
 
 // Assistant handles GET /api/plan/assistant?start=: {items, more}, the
 // window's "What the assistant did" list within the noise budget left
-// after its tips (PRO-4); empty with the Chef off.
+// after its tips and theme suggestion (PRO-4); empty with the Chef off.
 func (h *ChefPlanHandler) Assistant(w http.ResponseWriter, r *http.Request) {
 	start, err := time.Parse(time.DateOnly, r.URL.Query().Get("start"))
 	if err != nil {
@@ -122,6 +125,16 @@ func (h *ChefPlanHandler) Assistant(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "error.server")
 		return
+	}
+	if h.d.Suggested != nil {
+		sg, err := h.d.Suggested(ctx, start)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "error.server")
+			return
+		}
+		if sg {
+			shown++
+		}
 	}
 	resp.Items, resp.More, err = h.d.Finds.Activities(ctx, start, tips.NoiseBudget-shown)
 	if err != nil {

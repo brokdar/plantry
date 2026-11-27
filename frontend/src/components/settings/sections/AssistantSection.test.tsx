@@ -273,7 +273,7 @@ describe("AssistantSection", () => {
     const user = userEvent.setup()
     renderSection()
 
-    const input = await screen.findByLabelText("Cuisines to discover")
+    const input = await screen.findByLabelText("Cuisines to explore")
     expect(screen.getByText("persian")).toBeVisible()
     await user.type(input, "  Thai {Enter}")
     await waitFor(() =>
@@ -305,7 +305,7 @@ describe("AssistantSection", () => {
     renderSection()
 
     expect(await screen.findByText("Up to 10 cuisines.")).toBeVisible()
-    expect(screen.getByLabelText("Cuisines to discover")).toBeDisabled()
+    expect(screen.getByLabelText("Cuisines to explore")).toBeDisabled()
     expect(screen.getByRole("button", { name: "Add" })).toBeDisabled()
   })
 

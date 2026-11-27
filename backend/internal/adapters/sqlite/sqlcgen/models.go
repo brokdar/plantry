@@ -539,3 +539,20 @@ type VariantGroup struct {
 	Name      string
 	CreatedAt string
 }
+
+type WeekTheme struct {
+	ID          int64
+	WindowStart string
+	Kind        string
+	Value       string
+	Source      string
+	WholeWeek   int64
+}
+
+type WeekThemeSuggestion struct {
+	WindowStart string
+	Kind        string
+	Value       string
+	State       string
+	DecidedAt   sql.NullString
+}

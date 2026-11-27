@@ -22,6 +22,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/taste"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/theme"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -60,6 +61,9 @@ type BuilderDeps struct {
 	// Taste reads the household's taste profile (taste.Service.Profile);
 	// nil: every food's taste score is 0.
 	Taste TasteReader
+	// Themes reads the window's week themes (theme.Service.Themes); nil:
+	// none.
+	Themes func(ctx context.Context, start time.Time) ([]theme.Theme, error)
 	// Never lists the foods the household never eats (the kitchen's never
 	// items); nil: none.
 	Never func(ctx context.Context) (map[int64]bool, error)
@@ -183,6 +187,11 @@ func (b *Builder) build(ctx context.Context, w window.Window, today, from, to ti
 	s.SlotShare = slot.Shares(bands)
 	if s.Light, err = b.d.Light.List(ctx, w.Start, w.End); err != nil {
 		return State{}, fmt.Errorf("read light requests: %w", err)
+	}
+	if b.d.Themes != nil {
+		if s.Themes, err = b.d.Themes(ctx, w.Start); err != nil {
+			return State{}, fmt.Errorf("read week themes: %w", err)
+		}
 	}
 
 	recipes, err := b.d.Foods.List(ctx, food.ListQuery{Kind: food.KindComposed, Limit: maxFoods, Today: today})
@@ -374,6 +383,7 @@ func (b *Builder) addFoods(ctx context.Context, s *State, foods map[int64]*food.
 			ff.Protein = proteinOf(ff.Attrs)
 			ff.Taste = tp.Recipe(ff.Attrs)
 			ff.Staple = staples[id] || (foods[id].HiddenBaseID != 0 && staples[foods[id].HiddenBaseID])
+			ff.Theme = slices.ContainsFunc(s.Themes, func(t theme.Theme) bool { return t.Matches(ff.Attrs, ff.Tags) })
 		}
 		ff.Never = holdsNever(id, ff.Leaves, never)
 		s.Foods[id] = ff
@@ -737,4 +747,21 @@ func holdsNever(id int64, leaves map[int64]float64, never map[int64]bool) bool {
 		}
 	}
 	return false
+}
+
+// ThemeLibrary counts the library recipes that fit t (theme.Deps.Library):
+// the composed foods of t's window state at today.
+func (b *Builder) ThemeLibrary(ctx context.Context, t theme.Theme, today time.Time) (int, error) {
+	w := window.Window{Start: t.WindowStart, End: t.WindowStart.AddDate(0, 0, window.Length-1)}
+	s, err := b.Build(ctx, w, today, w.Start, w.End)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, f := range s.Foods {
+		if f.Composed() && !f.Never && t.Matches(f.Attrs, f.Tags) {
+			n++
+		}
+	}
+	return n, nil
 }

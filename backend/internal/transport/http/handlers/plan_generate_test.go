@@ -240,7 +240,7 @@ func TestPlanGenerateHTTP_IncludeNewRecipeMapsToQuota(t *testing.T) {
 	}
 	assert.Contains(t, scope(`{"start":"2026-11-07","include_new_recipe":true}`), `"explore_quota":1`, "on with setting 0")
 	assert.NotContains(t, scope(`{"start":"2026-11-07","include_new_recipe":false}`), "explore_quota", "off")
-	require.NoError(t, testsvc.Settings(a.db).Set(context.Background(), "plan.explore_per_week", "2"))
+	require.NoError(t, testsvc.Settings(a.db).Set(context.Background(), "chef.new_dishes_per_week", "2"))
 	assert.Contains(t, scope(`{"start":"2026-11-07","include_new_recipe":true}`), `"explore_quota":2`, "on with setting 2")
 	assert.NotContains(t, scope(`{"start":"2026-11-07","include_new_recipe":false}`), "explore_quota", "off beats the setting")
 	assert.Contains(t, scope(`{"start":"2026-11-07"}`), `"explore_quota":2`, "absent follows the setting")

@@ -116,9 +116,12 @@ var registry = []Spec{
 		Max:      14,
 	},
 	{
-		Key:      KeyPlanExplorePerWeek,
+		// THEME-6: New dishes per week, replacing plan.explore_per_week
+		// (00072 moved its value). The default applies with the Chef on;
+		// with it off an unset value means 0 (NewDishesPerWeek).
+		Key:      KeyChefNewDishesPerWeek,
 		Kind:     KindInt,
-		Default:  "0",
+		Default:  "1",
 		HasRange: true,
 		Min:      0,
 		Max:      3,

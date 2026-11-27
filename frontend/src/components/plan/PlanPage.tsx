@@ -9,6 +9,7 @@ import { AssistantPanel } from "@/components/assistant/AssistantPanel"
 import { CopyFromWeekDialog } from "@/components/plan/CopyFromWeekDialog"
 import { Button } from "@/components/ui/button"
 import type { Plan, ReplanCell } from "@/lib/api/plan"
+import { chefPlanning } from "@/lib/chef-settings"
 import { buildBoard, type BoardCell } from "@/lib/plan/board"
 import {
   isAcceptShortcut,
@@ -45,6 +46,7 @@ import { PlanSheet, type SheetState } from "./PlanSheet"
 import { PlanToolbar } from "./PlanToolbar"
 import { ReplanSheet } from "./ReplanSheet"
 import { ShortcutsDialog } from "./ShortcutsDialog"
+import { ThemeBar } from "./ThemeBar"
 import { useIsPhone, useIsWide } from "./use-is-phone"
 import { WeekLedger } from "./WeekLedger"
 
@@ -488,6 +490,10 @@ function PlanView({
                 />
               )
             }
+          />
+          <ThemeBar
+            start={win.start}
+            enabled={chefPlanning(settings.data) && !board.readOnly}
           />
           <AssistantDid start={win.start} enabled={chefOn} />
           {plan.week && <WeekLedger week={plan.week} soft={plan.soft} />}

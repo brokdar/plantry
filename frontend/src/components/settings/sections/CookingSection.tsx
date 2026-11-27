@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { chefPlanning, newDishesPerWeek } from "@/lib/chef-settings"
 import { useSettingItems } from "@/lib/queries/settings"
 
 import { NumberField, SettingsGroup, Stepper, Switch } from "../controls"
@@ -47,7 +48,10 @@ function CookingFields() {
   const freezing = useSettingField("plan.freezing_enabled", "false")
   const freezerKeep = useSettingField("plan.freezer_keep_days", "90")
   const variety = useSettingField("plan.variety_weeks", "3")
-  const explore = useSettingField("plan.explore_per_week", "0")
+  const exploreField = useSettingField("chef.new_dishes_per_week", "1")
+  const { data: items } = useSettingItems()
+  const explore = { ...exploreField, value: String(newDishesPerWeek(items)) }
+  const chef = chefPlanning(items)
   const shopping = useSettingField("plan.shopping_day", "0")
   const anchor = useSettingField("plan.anchor", "next_shopping_day")
 
@@ -201,8 +205,16 @@ function CookingFields() {
         />
         <StepperRow
           field={explore}
-          label={t("settings_page.cooking.explore_label")}
-          effectKey="settings_page.cooking.explore_effect"
+          label={t(
+            chef
+              ? "settings_page.cooking.new_dishes_label"
+              : "settings_page.cooking.explore_label"
+          )}
+          effectKey={
+            chef
+              ? "settings_page.cooking.new_dishes_effect"
+              : "settings_page.cooking.explore_effect"
+          }
           min={0}
           max={3}
         />

@@ -4,6 +4,7 @@ import { gridValueToDefaults } from "@/lib/availability-grid"
 import { useSetAvailabilityDefaults } from "@/lib/queries/availability"
 import { useKitchen, usePatchKitchen } from "@/lib/queries/kitchen"
 import { usePatchProfile, useProfile } from "@/lib/queries/profile"
+import { newDishesPerWeek } from "@/lib/chef-settings"
 import { useSetSetting, useSettingItems } from "@/lib/queries/settings"
 import type { Kitchen, KitchenSettings } from "@/lib/api/kitchen"
 import type { TimeSlot } from "@/lib/api/slots"
@@ -44,11 +45,16 @@ export function useWizardSave() {
   const patchKitchen = usePatchKitchen()
 
   // Only values that differ from the stored ones are written, so accepting
-  // a default doesn't turn it into a database override.
+  // a default doesn't turn it into a database override. New dishes per week
+  // compares with what the planner reads (its default depends on the Chef).
+  const current = (key: string) =>
+    key === SETTING_KEYS.explorePerWeek
+      ? String(newDishesPerWeek(stored))
+      : stored?.[key]?.value
   const settings = (pairs: [string, string][]) =>
     Promise.all(
       pairs
-        .filter(([key, value]) => stored?.[key]?.value !== value)
+        .filter(([key, value]) => current(key) !== value)
         .map(([key, value]) => setSetting.mutateAsync({ key, value }))
     )
 

@@ -6,6 +6,7 @@ import type { AvailabilityDefault } from "@/lib/api/availability"
 import type { Heat, Kitchen } from "@/lib/api/kitchen"
 import type { DietType, Profile } from "@/lib/api/profile"
 import type { SettingItem } from "@/lib/api/settings"
+import { newDishesPerWeek } from "@/lib/chef-settings"
 import type { SlotKind, TimeSlot } from "@/lib/api/slots"
 import {
   NUTRITION_PRESETS,
@@ -116,7 +117,7 @@ export const SETTING_KEYS = {
   freezing: "plan.freezing_enabled",
   varietyWeeks: "plan.variety_weeks",
   shoppingDay: "plan.shopping_day",
-  explorePerWeek: "plan.explore_per_week",
+  explorePerWeek: "chef.new_dishes_per_week",
   daily: "discovery.daily_enabled",
 } as const
 
@@ -214,10 +215,7 @@ export function buildDraft({
         shopping?.source === "db" || shopping?.source === "env"
           ? Number(shopping.value)
           : WIZARD_SHOPPING_DAY,
-      explorePerWeek: num(
-        SETTING_KEYS.explorePerWeek,
-        VARIETY_DEFAULTS.explorePerWeek
-      ),
+      explorePerWeek: newDishesPerWeek(settings),
     },
     assistant: {
       notes: profile.system_prompt ?? "",
