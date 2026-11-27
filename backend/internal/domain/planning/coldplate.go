@@ -94,7 +94,7 @@ func (s State) composeColdPlate(exclude map[int64]bool, aimKcal, dayTarget float
 	var protein []coldProtein
 	for _, id := range s.NoCook {
 		f := s.Foods[id]
-		if f.Composed() || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet || exclude[id] || !fitsDiet(f.DietClass, household) {
+		if f.Composed() || f.Never || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet || exclude[id] || !fitsDiet(f.DietClass, household) {
 			continue
 		}
 		switch {

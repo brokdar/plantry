@@ -285,12 +285,27 @@ func run() error {
 	plateSvc.WithTaste(tasteSvc)
 	feedbackSvc.WithTaste(tasteSvc)
 	foodSvc.WithFavourites(tasteSvc)
+	// Kitchen: the foods the household never eats keep recipes holding them
+	// out of every auto-placed plate (planning) and out of tips.
+	kitchenRepo := sqlite.NewKitchenRepo(conn)
+	kitchenSvc := kitchen.NewService(kitchenRepo)
+	neverFoods := func(ctx context.Context) (map[int64]bool, error) {
+		items, err := kitchenSvc.NeverItems(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make(map[int64]bool, len(items))
+		for _, f := range items {
+			out[f.ID] = true
+		}
+		return out, nil
+	}
 	planBuilder := planning.NewBuilder(planning.BuilderDeps{
 		Light: planLight, Attributes: foodAttributeRepo,
 		Foods: foodSvc, FoodRows: foodRepo, Nutrition: nutritionResolver, Cells: availabilitySvc,
 		Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
 		Settings: settingsSvc, Profile: profileSvc, Corrections: sqlite.NewPlateEventRepo(conn),
-		Version: sqlite.NewDataVersion(conn), Taste: tasteSvc,
+		Version: sqlite.NewDataVersion(conn), Taste: tasteSvc, Never: neverFoods,
 	})
 	planningSvc := planning.NewService(planning.Deps{
 		Builder: planBuilder,
@@ -501,7 +516,6 @@ func run() error {
 
 	// Chef tips (TIP): computed by rules on read of a window, applied as a
 	// normal plate change with the plate Undo token.
-	kitchenRepo := sqlite.NewKitchenRepo(conn)
 	tipSvc := tips.NewService(tips.Deps{
 		Store: sqlite.NewChefTipRepo(conn), Plates: plateSvc, Taste: tasteSvc,
 		State: func(ctx context.Context, w window.Window, today time.Time) (planning.State, error) {
@@ -511,17 +525,7 @@ func run() error {
 		ShoppingDay: func(ctx context.Context) (int, error) {
 			return plate.IntSetting(ctx, settingsSvc, settingsdom.KeyPlanShoppingDay)
 		},
-		Never: func(ctx context.Context) (map[int64]bool, error) {
-			items, err := kitchenRepo.NeverItems(ctx)
-			if err != nil {
-				return nil, err
-			}
-			out := make(map[int64]bool, len(items))
-			for _, f := range items {
-				out[f.ID] = true
-			}
-			return out, nil
-		},
+		Never: neverFoods,
 		Equipment: func(ctx context.Context) ([]string, error) {
 			p, err := profileSvc.Get(ctx)
 			if err != nil {
@@ -575,8 +579,8 @@ func run() error {
 		PlanGenerate:  handlers.NewPlanGenerateHandler(planningSvc).WithClock(clock.Now),
 		Today:         handlers.NewTodayHandler(planViewSvc).WithClock(clock.Now),
 		Profile:       handlers.NewProfileHandler(profileSvc),
-		Kitchen:       handlers.NewKitchenHandler(profileSvc, kitchen.NewService(kitchenRepo)),
-		Taste:         handlers.NewTasteHandler(tasteSvc),
+		Kitchen:       handlers.NewKitchenHandler(profileSvc, kitchenSvc),
+		Taste:         handlers.NewTasteHandler(tasteSvc).WithKitchen(kitchenSvc, foodSvc, profileSvc),
 		Presets:       handlers.NewPresetHandler(presetSvc),
 		AI:            aiHandler,
 		AIRuns:        aiRunsHandler,

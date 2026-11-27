@@ -45,6 +45,20 @@ func (r *TasteRepo) HasSignal(ctx context.Context, kind taste.SignalKind, foodID
 	return n == 1, nil
 }
 
+// StapleFoods lists the recipes that are staples (taste.StapleRule).
+func (r *TasteRepo) StapleFoods(ctx context.Context, now time.Time, rule taste.StapleRule) ([]int64, error) {
+	ids, err := r.queriesFor(ctx).ListStapleFoods(ctx, sqlcgen.ListStapleFoodsParams{
+		SessionsSince: now.AddDate(0, 0, -7*rule.Weeks).Format(dateLayout),
+		Today:         now.Format(dateLayout),
+		MinSessions:   int64(rule.Sessions),
+		DislikeSince:  formatTime(now.AddDate(0, 0, -7*rule.DislikeFreeWeeks)),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list staple foods: %w", err)
+	}
+	return ids, nil
+}
+
 // Items lists every item.
 func (r *TasteRepo) Items(ctx context.Context) ([]taste.Item, error) {
 	rows, err := r.queriesFor(ctx).ListTasteItems(ctx)

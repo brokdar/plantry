@@ -489,7 +489,7 @@ func (x *index) candidates(day time.Time, want float64) []optCand {
 	dietType := diet.Class(x.s.Profile.DietType)
 	for _, id := range x.s.NoCook {
 		f, ok := x.s.Foods[id]
-		if !ok || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet {
+		if !ok || f.Never || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet {
 			continue
 		}
 		if dietType != "" && (!diet.Valid(f.DietClass) || !diet.Compatible(f.DietClass, dietType)) {

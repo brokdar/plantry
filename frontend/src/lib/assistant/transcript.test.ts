@@ -17,6 +17,30 @@ const change = (id: number, tool: string) => ({
 })
 
 describe("buildTranscript", () => {
+  it("lists the statement a record_preference call proposed (TASTE-8)", () => {
+    const statement = { kind: "health", word: "peanuts" }
+    const { turns } = buildTranscript(
+      [
+        msg(2, "assistant", [
+          {
+            type: "tool_use",
+            tool_use_id: "p",
+            tool_use_name: "record_preference",
+          },
+        ]),
+        msg(3, "tool", [
+          {
+            type: "tool_result",
+            tool_result_id: "p",
+            tool_result_content: JSON.stringify({ recorded: false, statement }),
+          },
+        ]),
+      ],
+      []
+    )
+    expect(turns[0].statements).toEqual([{ id: "p", statement }])
+  })
+
   it("lists a saved recipe change with its undo token (HELP-5)", () => {
     const undo = { first_event_id: 3, last_event_id: 4 }
     const { turns } = buildTranscript(

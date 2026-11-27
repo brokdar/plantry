@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 
 import { ChangeLine } from "./ChangeLine"
 import { RecipeChangeLine } from "./RecipeChangeLine"
+import { StatementChips } from "./StatementChips"
 
 interface MessageProps {
   role: "user" | "assistant" | "error"
@@ -105,7 +106,14 @@ export function MessageList({
   return (
     <>
       {transcript.turns.map(
-        ({ message: m, text, changes, failures: fails, recipeChanges }) => (
+        ({
+          message: m,
+          text,
+          changes,
+          failures: fails,
+          recipeChanges,
+          statements,
+        }) => (
           <div key={m.id} className="space-y-2">
             {text !== "" && (
               <Message
@@ -131,6 +139,9 @@ export function MessageList({
               )}
             {recipeChanges.map((c) => (
               <RecipeChangeLine key={c.id} change={c} />
+            ))}
+            {statements.map((s) => (
+              <StatementChips key={s.id} statement={s.statement} />
             ))}
             {failures(fails)}
           </div>

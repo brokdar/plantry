@@ -60,6 +60,9 @@ type BuilderDeps struct {
 	// Taste reads the household's taste profile (taste.Service.Profile);
 	// nil: every food's taste score is 0.
 	Taste TasteReader
+	// Never lists the foods the household never eats (the kitchen's never
+	// items); nil: none.
+	Never func(ctx context.Context) (map[int64]bool, error)
 	// Version, when set, lets Build reuse the State it built last for the
 	// same arguments while the data has not changed (see Versioner).
 	Version Versioner
@@ -69,6 +72,8 @@ type BuilderDeps struct {
 // window.
 type TasteReader interface {
 	Profile(ctx context.Context, now, window time.Time) (taste.Profile, error)
+	// Staples are the recipes that count as staples at now (THEME-1).
+	Staples(ctx context.Context, now time.Time) (map[int64]bool, error)
 }
 
 // Versioner reports a token that changes whenever the rows a State is built
@@ -346,9 +351,18 @@ func (b *Builder) addFoods(ctx context.Context, s *State, foods map[int64]*food.
 		}
 	}
 	var tp taste.Profile
+	var staples, never map[int64]bool
 	if b.d.Taste != nil {
 		if tp, err = b.d.Taste.Profile(ctx, s.Today, s.Window.Start); err != nil {
 			return fmt.Errorf("taste: %w", err)
+		}
+		if staples, err = b.d.Taste.Staples(ctx, s.Today); err != nil {
+			return fmt.Errorf("staples: %w", err)
+		}
+	}
+	if b.d.Never != nil {
+		if never, err = b.d.Never(ctx); err != nil {
+			return fmt.Errorf("never items: %w", err)
 		}
 	}
 	likes := stringSet(prof.Preferences[profile.PreferenceKeyLikes])
@@ -359,7 +373,9 @@ func (b *Builder) addFoods(ctx context.Context, s *State, foods map[int64]*food.
 		if ff.Composed() {
 			ff.Protein = proteinOf(ff.Attrs)
 			ff.Taste = tp.Recipe(ff.Attrs)
+			ff.Staple = staples[id] || (foods[id].HiddenBaseID != 0 && staples[foods[id].HiddenBaseID])
 		}
+		ff.Never = holdsNever(id, ff.Leaves, never)
 		s.Foods[id] = ff
 	}
 	ShareGroupHistory(s.Foods)
@@ -699,4 +715,18 @@ var driedRe = regexp.MustCompile(`(?i)getrocknet|dried|gemahlen|ground|pulver|po
 
 func freshHerbLeaf(name string) bool {
 	return freshHerbRe.MatchString(name) && !driedRe.MatchString(name)
+}
+
+// holdsNever reports whether the food is a never item or a recipe with one
+// among its leaves.
+func holdsNever(id int64, leaves map[int64]float64, never map[int64]bool) bool {
+	if never[id] {
+		return true
+	}
+	for leaf := range leaves {
+		if never[leaf] {
+			return true
+		}
+	}
+	return false
 }

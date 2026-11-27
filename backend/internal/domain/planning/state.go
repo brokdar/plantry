@@ -223,6 +223,15 @@ type FoodFacts struct {
 	// Taste is the recipe's taste score from the household's taste items
 	// (taste.Profile.Recipe, -1..1; 0 without items). Set by the Builder.
 	Taste float64
+	// Never: the recipe holds a food the household never eats (the
+	// kitchen's never items): no auto-placing path picks it. Set by the
+	// Builder.
+	Never bool
+	// Staple: a recipe the household has made its own (THEME-1): learned
+	// from its cook sessions and signals, or pinned by the favourite star.
+	// It ranks first among equals and no soft rule holds it back. Set by
+	// the Builder.
+	Staple bool
 	// Fresh and Starch are plate fit's inputs derived from the name and
 	// ingredients (freshStarch); nil is unknown.
 	Fresh, Starch *bool

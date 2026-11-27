@@ -148,6 +148,7 @@ describe("Settings routes and shell", () => {
       expect.stringContaining("Meals & week"),
       expect.stringContaining("Cooking & variety"),
       expect.stringContaining("Kitchen"),
+      expect.stringContaining("Taste"),
       expect.stringContaining("Assistant"),
       expect.stringContaining("Data & system"),
     ])

@@ -709,7 +709,7 @@ type candidate struct {
 // (H8), not replaced, complete nutrition (a day with unknown kcal is never
 // lifted), an explore recipe (newest first) while the explore
 // quota is open, then never-eaten ones to fill a shortfall; never-eaten
-// recipes last otherwise; known diet class, fewest monotony caps passed
+// recipes last otherwise; known diet class, staples (THEME-1), fewest monotony caps passed
 // (TASTE-9), best taste score (TASTE, soft: learned items never exclude),
 // least recently eaten, favorite, liked, closest to the meal's kcal share,
 // food id. Diet-incompatible recipes never
@@ -757,7 +757,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		atCap := h.x.mealOf(c.SlotID) == mealFull && h.dishFull(f.ID)
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
 			b2f(h.s.tooSlow(f, c)), b2f(h.overAllowance(f, c)), b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.usedDish[h.s.dish(f.ID)]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(!f.NutritionComplete), b2f(f.Role != food.RoleMain),
-			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), float64(overMonotony(f, expo)), -tasteKey(f), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
+			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), b2f(!f.Staple), float64(overMonotony(f, expo)), -tasteKey(f), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
 	return best(cands)
@@ -861,7 +861,7 @@ func (d dgeState) meat(f FoodFacts) float64 {
 
 // mainCandidate reports whether f may be cooked as the main of c.
 func (h *planner) mainCandidate(f FoodFacts, c plate.CellKey) bool {
-	if !f.Composed() || f.Archived || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] || h.exclude[f.ID] {
+	if !f.Composed() || f.Archived || f.Never || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] || h.exclude[f.ID] {
 		return false
 	}
 	// A lunch or dinner takes a main; a standalone recipe is a breakfast.
@@ -911,7 +911,7 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 	}
 	var cands []candidate
 	for _, f := range h.s.Foods {
-		if !f.Composed() || f.Archived || !sideRole(f.Role) || f.ID == exclude || f.ID == main || slices.Contains(others, f.ID) || (fit && h.exclude[f.ID]) || h.s.RatherNot[f.ID] || !h.fits(f) || !h.reachesForced(f, c) {
+		if !f.Composed() || f.Archived || f.Never || !sideRole(f.Role) || f.ID == exclude || f.ID == main || slices.Contains(others, f.ID) || (fit && h.exclude[f.ID]) || h.s.RatherNot[f.ID] || !h.fits(f) || !h.reachesForced(f, c) {
 			continue
 		}
 		last := 0.0

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -35,6 +37,8 @@ type Store interface {
 	// HasSignal reports whether a signal of kind about food exists.
 	HasSignal(ctx context.Context, kind SignalKind, foodID int64) (bool, error)
 	Items(ctx context.Context) ([]Item, error)
+	// StapleFoods lists the recipes that are staples as of now under rule.
+	StapleFoods(ctx context.Context, now time.Time, rule StapleRule) ([]int64, error)
 	// Item returns one item, domain.ErrNotFound when missing.
 	Item(ctx context.Context, id int64) (Item, error)
 	// ItemByRef returns the item of ref in scope and window (zero for an
@@ -390,6 +394,38 @@ func (s *Service) State(ctx context.Context, ref Ref, polarity Polarity, scope S
 	return it, undo, err
 }
 
+// ConfirmStatement is the user's tap on a statement chip (TASTE-8): scope
+// always makes the statement permanent (and takes the window item the chat
+// applied for the window instead); scope window keeps it for the window
+// starting at window. The Undo covers both.
+func (s *Service) ConfirmStatement(ctx context.Context, ref Ref, polarity Polarity, scope Scope, window time.Time) (Item, foodevent.Undo, error) {
+	var it Item
+	undo, err := s.d.Events.Recorded(ctx, func(ctx context.Context) error {
+		if scope == ScopeAlways && !window.IsZero() {
+			cur, ok, err := s.d.Store.ItemByRef(ctx, ref, ScopeWindow, window)
+			if err != nil {
+				return err
+			}
+			if ok {
+				if err := s.d.Store.DeleteItem(ctx, cur.ID); err != nil {
+					return err
+				}
+				before, err := snapshot(cur)
+				if err != nil {
+					return err
+				}
+				if err := s.d.Events.Record(ctx, foodevent.Event{Kind: foodevent.KindTasteItem, SubjectID: cur.ID, Action: foodevent.ActionDelete, Before: before}); err != nil {
+					return err
+				}
+			}
+		}
+		var err error
+		it, _, err = s.State(ctx, ref, polarity, scope, window)
+		return err
+	})
+	return it, undo, err
+}
+
 // SetPolarity sets an item's polarity by the user (flip): it outranks
 // learned evidence like a statement does.
 func (s *Service) SetPolarity(ctx context.Context, id int64, polarity Polarity) (ItemView, foodevent.Undo, error) {
@@ -601,6 +637,52 @@ func (s *Service) View(ctx context.Context, window time.Time) (View, error) {
 			break
 		}
 	}
+	return out, nil
+}
+
+// Item returns one item, domain.ErrNotFound when missing.
+func (s *Service) Item(ctx context.Context, id int64) (Item, error) { return s.d.Store.Item(ctx, id) }
+
+// Staples are the recipes that count as staples as of now (THEME-1).
+func (s *Service) Staples(ctx context.Context, now time.Time) (map[int64]bool, error) {
+	ids, err := s.d.Store.StapleFoods(ctx, now, Staples)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, nil
+}
+
+// Staple is a recipe on the Taste page.
+type Staple struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// StapleList lists the staples by name.
+func (s *Service) StapleList(ctx context.Context) ([]Staple, error) {
+	set, err := s.Staples(ctx, s.d.Now())
+	if err != nil {
+		return nil, err
+	}
+	ids := slices.Sorted(maps.Keys(set))
+	out := make([]Staple, 0, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	foods, err := s.d.Foods.LookupByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		if f := foods[id]; f != nil {
+			out = append(out, Staple{ID: id, Name: f.Name})
+		}
+	}
+	slices.SortFunc(out, func(a, b Staple) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
 	return out, nil
 }
 

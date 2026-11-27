@@ -15,7 +15,10 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/kitchen"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/taste"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
@@ -98,4 +101,67 @@ type noAttrs struct{}
 
 func (noAttrs) Get(_ context.Context, id int64) (flavor.View, error) {
 	return flavor.View{FoodID: id}, nil
+}
+
+// TASTE-8, TASTE-11: the Taste page lists the never items, a chip tap
+// confirms a statement (taste: permanent; health: a never item, or a
+// restriction chip without a food of that name), and "Never" on a hero item
+// makes its food a never item.
+func TestTasteHandler_NeverAndConfirm(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	restorers := map[foodevent.Kind]foodevent.Restorer{}
+	events := foodevent.NewService(sqlite.NewTxRunner(db), sqlite.NewFoodEventRepo(db), restorers, nil)
+	svc := taste.NewService(taste.Deps{
+		Store: sqlite.NewTasteRepo(db), Foods: sqlite.NewFoodRepo(db), Events: events,
+		History: sqlite.NewFoodEventRepo(db), Attributes: noAttrs{},
+	})
+	foods := food.NewService(sqlite.NewFoodRepo(db))
+	peanuts := &food.Food{Name: "peanuts", Kind: food.KindLeaf}
+	require.NoError(t, foods.Create(ctx, peanuts))
+	h := handlers.NewTasteHandler(svc).WithKitchen(kitchen.NewService(sqlite.NewKitchenRepo(db)), foods, profile.NewService(sqlite.NewProfileRepo(db)))
+	r := chi.NewRouter()
+	r.Get("/api/taste", h.Get)
+	r.Post("/api/taste/items/{id}/never", h.MakeNever)
+	r.Post("/api/taste/statements/confirm", h.Confirm)
+	r.Delete("/api/taste/never/{id}", h.RemoveNever)
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(method, path, strings.NewReader(body)))
+		return w
+	}
+	get := func() struct {
+		Never []struct {
+			Name string `json:"name"`
+		} `json:"never"`
+		Items []taste.ItemView `json:"items"`
+	} {
+		var v struct {
+			Never []struct {
+				Name string `json:"name"`
+			} `json:"never"`
+			Items []taste.ItemView `json:"items"`
+		}
+		require.NoError(t, json.NewDecoder(do(http.MethodGet, "/api/taste", "").Body).Decode(&v))
+		return v
+	}
+
+	week := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+	_, _, err := svc.State(ctx, taste.Ref{Level: taste.LevelHero, Key: "coriander"}, taste.RatherNot, taste.ScopeWindow, week)
+	require.NoError(t, err)
+	body := `{"kind":"taste","level":"hero","key":"coriander","polarity":"rather_not","scope":"always","window_start":"2026-03-02"}`
+	require.Equal(t, http.StatusOK, do(http.MethodPost, "/api/taste/statements/confirm", body).Code)
+	items := get().Items
+	require.Len(t, items, 1)
+	assert.Equal(t, taste.ScopeAlways, items[0].Scope, "permanent now")
+
+	require.Equal(t, http.StatusNoContent, do(http.MethodPost, "/api/taste/statements/confirm", `{"kind":"health","word":"peanuts"}`).Code)
+	require.Len(t, get().Never, 1)
+	assert.Equal(t, "peanuts", get().Never[0].Name)
+	require.Equal(t, http.StatusNoContent, do(http.MethodDelete, "/api/taste/never/"+itoa(peanuts.ID), "").Code)
+	assert.Empty(t, get().Never)
+
+	assert.Equal(t, http.StatusNoContent, do(http.MethodPost, "/api/taste/statements/confirm", `{"kind":"health","word":"shellfish"}`).Code, "no such food: a restriction chip")
+	assert.Equal(t, http.StatusNotFound, do(http.MethodPost, "/api/taste/items/"+itoa(items[0].ID)+"/never", "").Code, "no food named coriander")
+	assert.Equal(t, http.StatusBadRequest, do(http.MethodPost, "/api/taste/statements/confirm", `{"kind":"x"}`).Code)
 }

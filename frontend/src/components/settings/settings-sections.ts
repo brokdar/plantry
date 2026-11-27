@@ -4,6 +4,7 @@ export const SETTINGS_SECTIONS = [
   "meals",
   "cooking",
   "kitchen",
+  "taste",
   "assistant",
   "system",
 ] as const

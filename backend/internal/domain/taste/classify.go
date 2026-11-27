@@ -39,6 +39,31 @@ func Classify(word string) Ref {
 	return Ref{LevelHero, k}
 }
 
+// healthPrefixes are the record_preference key prefixes that state a health
+// matter ("allergic_peanuts", "intolerant_lactose"); the rest of the key is
+// the food.
+var healthPrefixes = []string{"allergic_to_", "allergic_", "allergy_to_", "allergy_", "intolerant_to_", "intolerant_", "intolerance_to_", "intolerance_"}
+
+// HealthStatement reads a record_preference key/value as a health statement
+// (allergic, celiac, intolerant) with the value true, and returns the food
+// word it names ("celiac" names gluten). Such a statement is never stored
+// without the user's tap (TASTE-8).
+func HealthStatement(key string, value any) (string, bool) {
+	if v, isBool := value.(bool); !isBool || !v {
+		return "", false
+	}
+	k := strings.ToLower(key)
+	if k == "celiac" || k == "coeliac" || k == "has_celiac_disease" || k == "celiac_disease" {
+		return "gluten", true
+	}
+	for _, p := range healthPrefixes {
+		if rest, found := strings.CutPrefix(k, p); found && rest != "" {
+			return strings.ReplaceAll(rest, "_", " "), true
+		}
+	}
+	return "", false
+}
+
 // preferencePrefixes are the record_preference key prefixes that state a
 // taste ("likes_spicy", "hates_coriander").
 var preferencePrefixes = []struct {

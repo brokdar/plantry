@@ -170,6 +170,63 @@ func (q *Queries) HasTasteSignal(ctx context.Context, arg HasTasteSignalParams) 
 	return column_1, err
 }
 
+const listStapleFoods = `-- name: ListStapleFoods :many
+SELECT f.id FROM foods f
+WHERE f.kind = 'composed' AND f.archived = 0
+  AND (f.favorite = 1 OR (
+        (SELECT COUNT(*) FROM cook_sessions cs
+          WHERE (cs.food_id = f.id OR cs.food_id IN (SELECT hv.food_id FROM hidden_variants hv WHERE hv.base_food_id = f.id))
+            AND cs.state = 'confirmed' AND cs.cook_date >= ?1 AND cs.cook_date <= ?2
+            AND EXISTS (SELECT 1 FROM plate_components pc
+                        WHERE pc.cook_session_id = cs.id
+                          AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
+                                          WHERE pf.plate_id = pc.plate_id AND pf.status = 'not_eaten'))
+        ) >= ?3
+        AND EXISTS (SELECT 1 FROM taste_signals ts WHERE ts.food_id = f.id AND ts.kind IN ('loved', 'favourite', 'plate_added'))
+        AND NOT EXISTS (SELECT 1 FROM taste_signals ts WHERE ts.food_id = f.id AND ts.kind IN ('disliked', 'not_for_me') AND ts.at >= ?4)))
+ORDER BY f.id
+`
+
+type ListStapleFoodsParams struct {
+	SessionsSince string
+	Today         string
+	MinSessions   int64
+	DislikeSince  string
+}
+
+// Recipes that are staples (THEME-1): pinned by the favourite star, or at
+// least @min_sessions confirmed cook sessions since @sessions_since (a hidden
+// substitution variant's sessions count for its base recipe, a session counts
+// when a linked plate was not marked not_eaten), a positive signal, and no
+// dislike signal since @dislike_since.
+func (q *Queries) ListStapleFoods(ctx context.Context, arg ListStapleFoodsParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listStapleFoods,
+		arg.SessionsSince,
+		arg.Today,
+		arg.MinSessions,
+		arg.DislikeSince,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTasteItems = `-- name: ListTasteItems :many
 SELECT id, level, key, scope, window_start, source, polarity, pos_evidence, pos_n, neg_evidence, neg_n, created_at, updated_at
 FROM taste_items ORDER BY id

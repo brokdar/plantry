@@ -227,6 +227,12 @@ type Querier interface {
 	// Every food's and suggestion's (any status) source_url, for the
 	// normalized duplicate check.
 	ListSourceURLs(ctx context.Context) ([]string, error)
+	// Recipes that are staples (THEME-1): pinned by the favourite star, or at
+	// least @min_sessions confirmed cook sessions since @sessions_since (a hidden
+	// substitution variant's sessions count for its base recipe, a session counts
+	// when a linked plate was not marked not_eaten), a positive signal, and no
+	// dislike signal since @dislike_since.
+	ListStapleFoods(ctx context.Context, arg ListStapleFoodsParams) ([]int64, error)
 	ListTasteItems(ctx context.Context) ([]TasteItem, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	ListUndoneAIChangesAfter(ctx context.Context, firstEventID sql.NullInt64) ([]AiChange, error)

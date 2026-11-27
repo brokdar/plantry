@@ -115,6 +115,14 @@ const (
 	Threshold = 0.2
 )
 
+// StapleRule is when a recipe becomes a staple (THEME-1): at least Sessions
+// cook sessions in the last Weeks, a positive signal, and no dislike in the
+// last DislikeFreeWeeks. The favourite star pins a staple on its own.
+type StapleRule struct{ Sessions, Weeks, DislikeFreeWeeks int }
+
+// Staples is the rule in force (tunable).
+var Staples = StapleRule{Sessions: 3, Weeks: 16, DislikeFreeWeeks: 8}
+
 // Evidence is an item's learned evidence: likes and dislikes apart, since
 // they fade at different speeds. N counts signals fractionally (TASTE-3).
 type Evidence struct {
