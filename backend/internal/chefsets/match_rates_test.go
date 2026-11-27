@@ -294,7 +294,7 @@ func TestMatchRates_ScriptedKey(t *testing.T) {
 		runs := sqlite.NewAIRunRepo(rig.db)
 		rec := airun.NewRecorder(runs, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
 		rig.matcher.WithPicker(llm.StaticResolver(rec.Meter(fake.NewFromScript(&fake.Script{Turns: turns}), "fake"), "fake-model"), rec,
-			func(context.Context, bool) (bool, bool, error) { return true, false, nil })
+			func(context.Context, bool) (food.MatchPermit, error) { return food.MatchPermit{Run: true}, nil })
 		keyed := score(recipes, rig.decideAll(t, recipes, gathered), matchedTo)
 		logRate(t, set.Set+" scripted key", keyed)
 		rec.Wait()

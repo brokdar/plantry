@@ -100,9 +100,18 @@ type MatchResult struct {
 	CapWarning bool
 }
 
-// MatchGuard is the Chef cap guard for one chef_match run: run reports
-// whether the call may run, warn that it runs at the cap.
-type MatchGuard func(ctx context.Context, requested bool) (run, warn bool, err error)
+// MatchPermit is the answer of a MatchGuard for one recipe's AI work.
+type MatchPermit struct {
+	// Run: the capped chef_match run may run; Warn: it runs at the cap.
+	Run, Warn bool
+	// Uncapped: the Chef is off but a provider is set, so the recipe gets
+	// the uncapped lookup run kind (AI translation and pick) it had before
+	// the Chef existed.
+	Uncapped bool
+}
+
+// MatchGuard is the Chef cap guard for one recipe's AI work.
+type MatchGuard func(ctx context.Context, requested bool) (MatchPermit, error)
 
 // LangSearcher searches Open Food Facts by name in a language.
 type LangSearcher interface {
@@ -168,21 +177,24 @@ func (m *Matcher) Gather(ctx context.Context, req MatchRequest) ([]LineMatch, er
 // the ladder's; then the materiality rule for seasoning lines.
 func (m *Matcher) Decide(ctx context.Context, req MatchRequest, lines []LineMatch) (*MatchResult, error) {
 	res := &MatchResult{Lines: lines}
-	for i := range lines {
-		lines[i].Pick = lines[i].best
-	}
-	if !req.LocalOnly && m.guard != nil && m.llm != nil && hasCandidates(lines) {
-		run, warn, err := m.guard(ctx, req.Requested)
+	var picks []int
+	if !req.LocalOnly && m.guard != nil && m.llm != nil {
+		permit, err := m.guard(ctx, req.Requested)
 		if err != nil {
 			return nil, fmt.Errorf("match: cap guard: %w", err)
 		}
-		if run {
-			res.CapWarning = warn
-			for i, p := range m.pick(ctx, req, lines) {
-				if p >= 0 && p < len(lines[i].Candidates) && lines[i].check(lines[i].Candidates[p]) == "" {
-					lines[i].Pick = p
-				}
-			}
+		switch {
+		case permit.Run:
+			res.CapWarning = permit.Warn
+			picks = m.aiPass(ctx, req, lines, airun.KindChefMatch)
+		case permit.Uncapped:
+			picks = m.aiPass(ctx, req, lines, airun.KindLookup)
+		}
+	}
+	for i := range lines {
+		lines[i].Pick = lines[i].best
+		if i < len(picks) && picks[i] >= 0 && picks[i] < len(lines[i].Candidates) && lines[i].check(lines[i].Candidates[picks[i]]) == "" {
+			lines[i].Pick = picks[i]
 		}
 	}
 	recipeKcal := 0.0
@@ -220,7 +232,7 @@ func (m *Matcher) gatherLine(ctx context.Context, req MatchRequest, leaves []cat
 	names := append([]string{l.Name}, l.Alternatives...)
 	var all []LineMatch
 	for _, name := range names {
-		lm := m.gatherName(ctx, req, leaves, l, name)
+		lm := m.gatherName(ctx, req, leaves, l, name, "")
 		all = append(all, lm)
 		if lm.best >= 0 {
 			break
@@ -249,7 +261,7 @@ func (m *Matcher) gatherLine(ctx context.Context, req MatchRequest, leaves []cat
 }
 
 // gatherName runs catalogue -> FDC -> OFF for one name of a line.
-func (m *Matcher) gatherName(ctx context.Context, req MatchRequest, leaves []catalogueLeaf, l MatchLine, name string) LineMatch {
+func (m *Matcher) gatherName(ctx context.Context, req MatchRequest, leaves []catalogueLeaf, l MatchLine, name, term string) LineMatch {
 	keys := lineKeys(name, l.Note)
 	e := synonyms.lookup(keys)
 	if e == nil && len(keys) > 0 {
@@ -298,8 +310,13 @@ func (m *Matcher) gatherName(ctx context.Context, req MatchRequest, leaves []cat
 		return lm
 	}
 
-	// 2. FDC with the entry's English term, or the name of an English line.
-	if q := fdcQuery(e, keys, req.Lang); q != "" && m.fdcUsable(ctx) {
+	// 2. FDC with the entry's English term, the name of an English line, or
+	// the provider's translation of a line the table does not know.
+	q := fdcQuery(e, keys, req.Lang)
+	if q == "" && e == nil {
+		q = term
+	}
+	if q != "" && m.fdcUsable(ctx) {
 		lm.Tried = append(lm.Tried, "fdc:"+q)
 		cs, err := m.fdc.SearchByName(ctx, q, matchSearchLimit)
 		if err != nil {
@@ -383,7 +400,7 @@ func (lm *LineMatch) check(c Candidate) string {
 		return ReasonState
 	}
 	if lm.entry != nil {
-		if band, ok := kcalBands[lm.entry.Group]; ok && (*c.Kcal100g < band[0] || *c.Kcal100g > band[1]) {
+		if !plausibleKcal(lm.entry, c.Kcal100g) {
 			return ReasonKcal
 		}
 	}
@@ -391,6 +408,16 @@ func (lm *LineMatch) check(c Candidate) string {
 		return ReasonGrams
 	}
 	return ""
+}
+
+// plausibleKcal reports whether kcal per 100 g fits the entry's food group
+// (true when the entry, its band or the value is unknown).
+func plausibleKcal(e *Synonym, kcal *float64) bool {
+	if e == nil || kcal == nil {
+		return true
+	}
+	band, ok := kcalBands[e.Group]
+	return !ok || (*kcal >= band[0] && *kcal <= band[1])
 }
 
 // closest applies the materiality rule to an unmatched seasoning line: under

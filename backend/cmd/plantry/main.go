@@ -325,9 +325,11 @@ func run() error {
 		offSearcher = ls
 	}
 	matcher := food.NewMatcher(foodRepo, fdcProvider, offSearcher).WithPicker(llmResolver, runRecorder,
-		func(ctx context.Context, requested bool) (bool, bool, error) {
+		func(ctx context.Context, requested bool) (food.MatchPermit, error) {
 			d, err := matchGuard.Check(ctx, airun.KindChefMatch, requested)
-			return d.Run, d.Warn, err
+			// Chef off with a provider set: AI translation and pick stay on
+			// as the uncapped lookup run kind, as before the Chef existed.
+			return food.MatchPermit{Run: d.Run, Warn: d.Warn, Uncapped: d.Reason == chef.ReasonOff}, err
 		})
 
 	aiRepo := sqlite.NewAIRepo(conn)

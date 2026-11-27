@@ -169,10 +169,10 @@ func TestMatch_OneChefMatchRunPerRecipe(t *testing.T) {
 	rec := airun.NewRecorder(runs, slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
 	guarded := 0
 	m := food.NewMatcher(repo, fdc, nil).WithPicker(llm.StaticResolver(rec.Meter(client, "fake"), "fake-model"), rec,
-		func(_ context.Context, requested bool) (bool, bool, error) {
+		func(_ context.Context, requested bool) (food.MatchPermit, error) {
 			guarded++
 			assert.True(t, requested)
-			return true, true, nil
+			return food.MatchPermit{Run: true, Warn: true}, nil
 		})
 
 	res, err := m.Match(ctx, food.MatchRequest{Lang: "de", Requested: true, Lines: []food.MatchLine{
@@ -196,4 +196,95 @@ func TestMatch_OneChefMatchRunPerRecipe(t *testing.T) {
 	assert.Equal(t, airun.StatusOK, rows[0].Status)
 	assert.Equal(t, food.MatchVersion, rows[0].PromptVersion)
 	assert.Equal(t, int64(900), rows[0].Tokens.Input, "the run carries its metered usage (its cost)")
+}
+
+// queryFDC answers only the queries it knows and records every query.
+type queryFDC struct {
+	known   map[string][]food.Candidate
+	queries *[]string
+}
+
+func (s queryFDC) SearchByName(_ context.Context, q string, _ int) ([]food.Candidate, error) {
+	*s.queries = append(*s.queries, q)
+	return append([]food.Candidate(nil), s.known[q]...), nil
+}
+
+func translateTurn(input string) fake.Turn {
+	return fake.Turn{
+		ForTool: food.TranslateTool, StopReason: "tool_use",
+		Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{{
+			Type: "tool_use", ToolUseID: "toolu_t", ToolName: food.TranslateTool, ToolInput: json.RawMessage(input),
+		}}},
+		Usage: fake.ScriptedUsage{InputTokens: 200, OutputTokens: 20},
+	}
+}
+
+// TestMatch_TranslatesLinesOutsideTheTable: a German line the synonym table
+// does not know gets its English FDC term from one batched call per recipe
+// (inside the chef_match run with the Chef on, as the uncapped lookup run
+// with the Chef off); the candidates still come from FDC.
+func TestMatch_TranslatesLinesOutsideTheTable(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		permit food.MatchPermit
+		kind   airun.Kind
+	}{
+		{"chef on", food.MatchPermit{Run: true}, airun.KindChefMatch},
+		{"chef off, provider set", food.MatchPermit{Uncapped: true}, airun.KindLookup},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			db := testhelper.NewTestDB(t)
+			repo := sqlite.NewFoodRepo(db)
+			var queries []string
+			fdc := queryFDC{queries: &queries, known: map[string][]food.Candidate{
+				"sumac":               {{Name: "Spices, sumac", Source: food.SourceFDC, FdcID: 1, Kcal100g: kcal(239)}},
+				"jerusalem artichoke": {{Name: "Kale, raw", Source: food.SourceFDC, FdcID: 2, Kcal100g: kcal(35)}},
+			}}
+			client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{
+				translateTurn(`{"terms":[{"key":"l1","term":"sumac"},{"key":"l2","term":"jerusalem artichoke"}]}`),
+				{
+					ForTool: food.MatchTool, StopReason: "tool_use",
+					Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{{
+						Type: "tool_use", ToolUseID: "toolu_1", ToolName: food.MatchTool,
+						ToolInput: json.RawMessage(`{"lines":[{"key":"l1","pick":0},{"key":"l2","pick":0}]}`),
+					}}},
+				},
+			}})
+			rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
+			m := food.NewMatcher(repo, fdc, nil).WithPicker(llm.StaticResolver(rec.Meter(client, "fake"), "fake-model"), rec,
+				func(context.Context, bool) (food.MatchPermit, error) { return tc.permit, nil })
+			lines := []food.MatchLine{{Name: "Sumach", Amount: 5, Unit: "g"}, {Name: "Topinambur", Amount: 200, Unit: "g"}, {Name: "Salz", ToTaste: true}}
+
+			res, err := m.Match(ctx, food.MatchRequest{Lang: "de", Requested: true, Lines: lines})
+			require.NoError(t, err)
+			rec.Wait()
+			assert.Contains(t, queries, "sumac")
+			assert.Contains(t, queries, "jerusalem artichoke")
+			for i, want := range []int{1, 2} {
+				got := res.Lines[i]
+				require.Equal(t, food.MatchMatched, got.Status, got.Name)
+				assert.Equal(t, want, got.Candidates[got.Pick].FdcID)
+			}
+			rows, err := sqlite.NewAIRunRepo(db).ListRuns(ctx, airun.RunQuery{Kind: tc.kind, Limit: 10})
+			require.NoError(t, err)
+			require.Len(t, rows, 1, "one AI run per recipe, translation inside it")
+			assert.Equal(t, int64(200), rows[0].Tokens.Input)
+		})
+	}
+}
+
+// TestEnsureLeaf_ImplausibleLeafIsNotADuplicate: a catalogue leaf of the
+// same name whose kcal is far outside the food's band does not swallow the
+// FDC candidate.
+func TestEnsureLeaf_ImplausibleLeafIsNotADuplicate(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewFoodRepo(db)
+	bad := addLeaf(t, repo, "Zwiebel", 900)
+	o := food.Origin{Kind: food.OriginImport, Ref: "https://example.org/x"}
+	id, created, err := food.EnsureLeaf(ctx, repo, sqlite.NewFoodOriginRepo(db), food.Candidate{Name: "Onions, raw", Source: food.SourceFDC, FdcID: 170000, Kcal100g: kcal(40)}, o)
+	require.NoError(t, err)
+	assert.True(t, created)
+	assert.NotEqual(t, bad, id)
 }

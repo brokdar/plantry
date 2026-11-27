@@ -78,7 +78,7 @@ func duplicateLeaf(leaves []catalogueLeaf, c Candidate) *Food {
 		case c.FdcID != 0 && f.FdcID != nil && *f.FdcID == strconv.Itoa(c.FdcID),
 			c.Barcode != "" && f.Barcode != nil && *f.Barcode == c.Barcode:
 			return f
-		case catalogueIdentityName(f.Name, e, keys) && !statesConflict(state, stateOf(f.Name)):
+		case catalogueIdentityName(f.Name, e, keys) && !statesConflict(state, stateOf(f.Name)) && plausibleKcal(e, f.Kcal100g):
 			return f
 		}
 	}
