@@ -1460,6 +1460,11 @@
       "body": "The assistant needs your yes before it changes them.",
       "row": "{{day}} {{slot}} ({{names}})",
       "confirm": "Yes, unlock"
+    },
+    "recipe_change": {
+      "create_variant": "Saved a variant of the recipe",
+      "edit_recipe": "Changed the recipe",
+      "set_recipe_attributes": "Updated the recipe's attributes"
     }
   },
   "validation": {
@@ -2731,6 +2736,37 @@
         "proportions": "balance (two starches or mains)",
         "richness": "lightness (two rich parts)"
       }
+    }
+  },
+  "recipe_chat": {
+    "title": "Ask about this recipe",
+    "chip_variant": "Make a variant",
+    "chip_check": "Check this recipe",
+    "placeholder": "Ask for a change or a question",
+    "send": "Ask",
+    "working": "Working on it…",
+    "variant_request": "Make a variant of this recipe.",
+    "variant_saved": "Variant saved",
+    "open_variant": "Open the variant",
+    "edit_saved": "Recipe changed",
+    "edit_title": "Change this recipe",
+    "edit_save": "Save the change",
+    "ingredients": "Ingredients",
+    "steps": "Steps",
+    "confirmed_warning": "This recipe is on confirmed plates ({{dates}}). Saving changes what you shop for.",
+    "blocked": "Not saved. The change breaks a rule:",
+    "unmatched": "No food found for \"{{line}}\".",
+    "check_ok": "Nothing to flag. Every line is matched and no rule is broken.",
+    "changes_title": "What changed",
+    "gate": {
+      "unmatched_ingredient": "{{name}} is not matched to a food.",
+      "allergen": "{{name}} contains {{allergen}}.",
+      "diet_conflict": "{{name}} does not fit the diet.",
+      "never_item": "{{name}} is on the never list.",
+      "missing_ingredients": "The recipe has no ingredients.",
+      "missing_steps": "The recipe has no steps.",
+      "missing_name": "The recipe has no name.",
+      "missing_yield": "The recipe does not say how many portions it makes."
     }
   }
 }

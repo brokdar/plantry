@@ -1460,6 +1460,11 @@
       "body": "Der Assistent braucht dein Ja, bevor er sie ändert.",
       "row": "{{day}} {{slot}} ({{names}})",
       "confirm": "Ja, entsperren"
+    },
+    "recipe_change": {
+      "create_variant": "Variante des Rezepts gespeichert",
+      "edit_recipe": "Rezept geändert",
+      "set_recipe_attributes": "Merkmale des Rezepts aktualisiert"
     }
   },
   "validation": {
@@ -2731,6 +2736,37 @@
         "proportions": "Ausgewogenheit (zwei Sättigungsbeilagen oder Hauptgerichte)",
         "richness": "Leichtigkeit (zwei gehaltvolle Teile)"
       }
+    }
+  },
+  "recipe_chat": {
+    "title": "Frag zu diesem Rezept",
+    "chip_variant": "Variante machen",
+    "chip_check": "Rezept prüfen",
+    "placeholder": "Wunsch oder Frage zum Rezept",
+    "send": "Fragen",
+    "working": "Ich arbeite daran …",
+    "variant_request": "Mach eine Variante dieses Rezepts.",
+    "variant_saved": "Variante gespeichert",
+    "open_variant": "Variante öffnen",
+    "edit_saved": "Rezept geändert",
+    "edit_title": "Dieses Rezept ändern",
+    "edit_save": "Änderung speichern",
+    "ingredients": "Zutaten",
+    "steps": "Schritte",
+    "confirmed_warning": "Das Rezept steckt in bestätigten Mahlzeiten ({{dates}}). Speichern ändert, was du einkaufst.",
+    "blocked": "Nicht gespeichert. Die Änderung verletzt eine Regel:",
+    "unmatched": "Kein Lebensmittel für „{{line}}“ gefunden.",
+    "check_ok": "Nichts zu beanstanden. Jede Zeile ist zugeordnet, keine Regel ist verletzt.",
+    "changes_title": "Was sich geändert hat",
+    "gate": {
+      "unmatched_ingredient": "{{name}} ist keinem Lebensmittel zugeordnet.",
+      "allergen": "{{name}} enthält {{allergen}}.",
+      "diet_conflict": "{{name}} passt nicht zur Ernährungsweise.",
+      "never_item": "{{name}} steht auf der Nie-Liste.",
+      "missing_ingredients": "Das Rezept hat keine Zutaten.",
+      "missing_steps": "Das Rezept hat keine Schritte.",
+      "missing_name": "Das Rezept hat keinen Namen.",
+      "missing_yield": "Das Rezept nennt keine Portionenzahl."
     }
   }
 }

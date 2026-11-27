@@ -30,6 +30,7 @@ process.env.E2E_SITE_PORT = String(SITE_PORT)
 const AI_SERIAL_SPECS = [
   "assistant-panel.spec.ts",
   "assistant-move.spec.ts",
+  "recipe-chat.spec.ts",
   "discovery.spec.ts",
   "settings-ai.spec.ts",
   "keyboard-shortcuts.spec.ts",

@@ -46,11 +46,11 @@ type Household struct {
 
 // Finding is one block or flag.
 type Finding struct {
-	Code       string
-	Ingredient int // index into Recipe.Ingredients, or -1
-	Step       int // index into Recipe.Steps, or -1
-	Params     map[string]string
-	Reason     string
+	Code       string            `json:"code"`
+	Ingredient int               `json:"ingredient"` // index into Recipe.Ingredients, or -1
+	Step       int               `json:"step"`       // index into Recipe.Steps, or -1
+	Params     map[string]string `json:"params,omitempty"`
+	Reason     string            `json:"reason"`
 }
 
 // Result holds the findings in a deterministic order.

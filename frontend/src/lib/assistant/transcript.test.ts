@@ -17,6 +17,43 @@ const change = (id: number, tool: string) => ({
 })
 
 describe("buildTranscript", () => {
+  it("lists a saved recipe change with its undo token (HELP-5)", () => {
+    const undo = { first_event_id: 3, last_event_id: 4 }
+    const { turns } = buildTranscript(
+      [
+        msg(2, "assistant", [
+          {
+            type: "tool_use",
+            tool_use_id: "v",
+            tool_use_name: "create_variant",
+          },
+          { type: "tool_use", tool_use_id: "e", tool_use_name: "edit_recipe" },
+        ]),
+        msg(3, "tool", [
+          {
+            type: "tool_result",
+            tool_result_id: "v",
+            tool_result_content: JSON.stringify({
+              saved: true,
+              recipe_id: 9,
+              undo,
+            }),
+          },
+          {
+            type: "tool_result",
+            tool_result_id: "e",
+            tool_result_content: JSON.stringify({ saved: false }),
+          },
+        ]),
+      ],
+      []
+    )
+    expect(turns).toHaveLength(1)
+    expect(turns[0].recipeChanges).toEqual([
+      { id: "v", tool: "create_variant", recipeId: 9, undo },
+    ])
+  })
+
   it("shows prose only and puts change lines after the turn that made them", () => {
     const { turns, rest } = buildTranscript(
       [

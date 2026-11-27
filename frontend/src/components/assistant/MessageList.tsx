@@ -9,6 +9,7 @@ import type { ChangeLineState } from "@/lib/stores/assistant-stream"
 import { cn } from "@/lib/utils"
 
 import { ChangeLine } from "./ChangeLine"
+import { RecipeChangeLine } from "./RecipeChangeLine"
 
 interface MessageProps {
   role: "user" | "assistant" | "error"
@@ -104,7 +105,7 @@ export function MessageList({
   return (
     <>
       {transcript.turns.map(
-        ({ message: m, text, changes, failures: fails }) => (
+        ({ message: m, text, changes, failures: fails, recipeChanges }) => (
           <div key={m.id} className="space-y-2">
             {text !== "" && (
               <Message
@@ -128,6 +129,9 @@ export function MessageList({
                   {t("assistant.undone")}
                 </p>
               )}
+            {recipeChanges.map((c) => (
+              <RecipeChangeLine key={c.id} change={c} />
+            ))}
             {failures(fails)}
           </div>
         )
