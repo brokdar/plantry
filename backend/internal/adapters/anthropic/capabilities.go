@@ -441,10 +441,10 @@ func (w wire) effective(req llm.Request) llm.Effective {
 	}
 	e.Effort = w.effort
 	e.CodeExecution, e.CodeTools, e.Container = w.codeExecution, w.codeTools, w.container
-	if req.System != "" || req.ToolChoice != nil && !w.forcedTool {
+	if !req.NoCache && (req.System != "" || req.ToolChoice != nil && !w.forcedTool) {
 		e.CacheBreakpoints = append(e.CacheBreakpoints, "system")
 	}
-	if len(req.Tools) > 0 {
+	if len(req.Tools) > 0 && !req.NoCache {
 		e.CacheBreakpoints = append(e.CacheBreakpoints, "tools")
 	}
 	if tailCacheable(req) {

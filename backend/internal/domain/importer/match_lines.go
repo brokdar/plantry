@@ -30,7 +30,12 @@ var (
 	noteMetricRE  = regexp.MustCompile(`(?i)(?:^|[\s(;,])(\d+(?:[.,]\d+)?)\s*(g|ml)\b`)
 	orSplitRE     = regexp.MustCompile(`(?i)\s+(?:or|oder)\s+`)
 	andSplitRE    = regexp.MustCompile(`(?i)\s*(?:,|\s&\s|\sand\s|\sund\s)\s*`)
-	residueRE     = regexp.MustCompile(`^[\s)(*\-–,;]+|[\s)(*\-–,;]+$`)
+	// priceRE is a price a recipe site adds to a line: "($0.32)", "(1,20 €)".
+	priceRE = regexp.MustCompile(`(?i)\s*\(\s*(?:[$€£]\s?\d[\d.,]*|\d[\d.,]*\s?(?:[$€£]|usd|eur|euro))\s*\)`)
+	// looseSeasoningRE is a seasoning measured in no unit: "a tiny pinch
+	// cayenne", "a few turns of black pepper", "eine Prise Salz".
+	looseSeasoningRE = regexp.MustCompile(`(?i)^(?:(?:an?|ein|eine)\s+)?(?:(?:tiny|small|little|big|kleine?|winzige)\s+)?(?:(?:pinch|dash|splash|sprinkle|prise|spritzer|hauch)|(?:few|ein paar)\s+(?:turns|grinds|twists|dashes|umdrehungen))(?:\s+(?:of|von))?\s+(\S.*)$`)
+	residueRE        = regexp.MustCompile(`^[\s)(*\-–,;]+|[\s)(*\-–,;]+$`)
 )
 
 // spoonCupUnits are volume units whose line may also state metric weight
@@ -46,7 +51,11 @@ var headNouns = setOf("oil", "broth", "stock", "bread", "chillies", "chilies", "
 // doubled parentheses and note references, a range as its midpoint,
 // "juice of 1/2 lime", "1/2 cup / 125 ml" (metric wins), cut words.
 func prepareLine(raw string) string {
-	s := doubleOpenRE.ReplaceAllString(raw, "(")
+	s := raw
+	if m := looseSeasoningRE.FindStringSubmatch(s); m != nil {
+		s = m[1] + ", to taste"
+	}
+	s = doubleOpenRE.ReplaceAllString(s, "(")
 	s = doubleCloseRE.ReplaceAllString(s, ")")
 	s = noteRefRE.ReplaceAllString(s, "")
 	s = strings.ReplaceAll(s, "*", "")
@@ -65,6 +74,11 @@ func prepareLine(raw string) string {
 	return s
 }
 
+// StripPrice removes a price annotation such as "($0.32)" from a line.
+func StripPrice(s string) string {
+	return strings.TrimSpace(priceRE.ReplaceAllString(s, ""))
+}
+
 // ParseLines parses and cleans a recipe's ingredient lines (MATCH-1): one
 // draft row per food, so "Salz und Pfeffer" and "1 tsp EACH paprika and
 // cumin" become two rows; alternatives ("Ghee (oder Butterschmalz)") keep
@@ -79,6 +93,7 @@ func ParseLines(raw []string, lang string) []DraftIngredient {
 
 // ParseLine parses and cleans one ingredient line into one row per food.
 func ParseLine(raw, lang string) []DraftIngredient {
+	raw = StripPrice(raw)
 	prepared := prepareLine(raw)
 	var p DraftIngredient
 	if lang == "en" {

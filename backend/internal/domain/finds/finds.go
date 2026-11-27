@@ -78,7 +78,7 @@ type Flag struct {
 
 // Change is one adaptation and why (FIND-12, REV-1 "what changed and why").
 type Change struct {
-	Kind   string `json:"kind"` // swap | protein_swap | portions
+	Kind   string `json:"kind"` // swap | protein_swap
 	From   string `json:"from,omitempty"`
 	To     string `json:"to,omitempty"`
 	Reason string `json:"reason,omitempty"`

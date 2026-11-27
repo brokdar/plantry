@@ -1,0 +1,82 @@
+package finds_test
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
+)
+
+func adaptJSON(swaps string) string {
+	return `{"name":"Mild curry","portions":1,"steps":["Fry the onion until soft, about 5 minutes.","Simmer 20 minutes."],` +
+		`"swaps":` + swaps + `,"requirements":` + fitsKitchen + `}`
+}
+
+// C2b 1 and 2 (canary 2026-11-27): a model that rescales the recipe to one
+// portion and reports amount changes as swaps changes nothing: the find
+// keeps the source's yield and amounts (the planner scales), has no change
+// and is a light adaptation.
+func TestAdapt_RescalingIsNotAnAdaptation(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...), toolTurn(finds.AdaptTool, adaptJSON(
+		`[{"line":0,"to":"150 g chicken thigh","reason":"scaled to 1 portion"},{"line":3,"to":"100 ml coconut milk ($0.50)","reason":"scaled"},{"line":2,"to":"0.5 tbsp curry paste","reason":"scaled"}]`)))
+	f := r.run(t, finds.TriggerPlanning)
+	require.Equal(t, finds.StateReady, f.State, f.Steps)
+	assert.Empty(t, f.Changes)
+	assert.Equal(t, finds.OriginAdaptedLight, *f.Origin)
+	assert.InDelta(t, 4, f.Draft.ReferencePortions, 0)
+	assert.InDelta(t, 600, f.Draft.Ingredients[0].Amount, 0)
+	assert.InDelta(t, 400, f.Draft.Ingredients[3].Amount, 0)
+}
+
+// C2b 2 and 3: two real swaps stay "Adapted from" light, and a price the
+// model repeats never reaches a change or a line.
+func TestAdapt_TwoSwapsAreLightAndPricesAreStripped(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...), toolTurn(finds.AdaptTool, adaptJSON(
+		`[{"line":1,"to":"1 shallot ($0.32)","reason":"milder"},{"line":2,"to":"2 tbsp mild curry paste","reason":"heat"},{"line":3,"to":"100 ml coconut milk","reason":"scaled"}]`)))
+	f := r.run(t, finds.TriggerPlanning)
+	require.Equal(t, finds.StateReady, f.State, f.Steps)
+	require.Len(t, f.Changes, 2)
+	assert.Equal(t, "1 shallot", f.Changes[0].To)
+	assert.Equal(t, finds.OriginAdaptedLight, *f.Origin)
+	assert.Equal(t, "shallot", f.Draft.Ingredients[1].Name)
+	assert.InDelta(t, 4, f.Draft.ReferencePortions, 0)
+}
+
+// C2b 4: a seasoning measured in no unit becomes a clean to-taste line the
+// matcher can find.
+func TestAdapt_LooseSeasoningIsToTaste(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...), toolTurn(finds.AdaptTool, adaptJSON(
+		`[{"line":1,"to":"a few turns of black pepper","reason":"seasoning"}]`)))
+	f := r.run(t, finds.TriggerPlanning)
+	require.Equal(t, finds.StateReady, f.State, f.Steps)
+	line := f.Draft.Ingredients[1]
+	assert.Equal(t, "black pepper", line.Name)
+	assert.True(t, line.ToTaste)
+}
+
+// C2b 5: the draft keeps the steps under "instructions", where the review
+// card reads them (the canary script looked for "steps"). C2b 6: the search
+// request carries no cache marker request.
+func TestAdapt_DraftJSONHasInstructionsAndSearchIsNotCached(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...), adaptTurn(false, fitsKitchen))
+	f := r.run(t, finds.TriggerPlanning)
+	require.Equal(t, finds.StateReady, f.State, f.Steps)
+	raw, err := json.Marshal(f)
+	require.NoError(t, err)
+	var got struct {
+		Draft map[string]json.RawMessage `json:"draft"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &got))
+	assert.Contains(t, string(got.Draft["instructions"]), "Fry the onion")
+
+	reqs := r.client.Requests()
+	assert.True(t, reqs[0].NoCache, "search")
+	assert.NotContains(t, reqs[1].Messages[0].Content[0].Text, "Household portions")
+}

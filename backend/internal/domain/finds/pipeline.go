@@ -407,6 +407,8 @@ func (s *Service) search(ctx context.Context, client llm.Client, model string, q
 			Text: q.Text() + "\nallowed sites: " + strings.Join(domains, ", "),
 		}}}},
 		Tools: []llm.Tool{searchTool()},
+		// Nothing reuses the search's prefix: a cache write costs 1.25x.
+		NoCache: true,
 	}
 	if web {
 		req.WebSearch = &llm.WebSearch{MaxUses: searchMaxUses, AllowedDomains: domains}
