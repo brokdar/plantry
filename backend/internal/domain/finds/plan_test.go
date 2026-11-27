@@ -19,12 +19,13 @@ type sessionRig struct {
 	svc    *finds.Service
 	store  *sqlite.FindRepo
 	now    time.Time
+	dish   string
 	queued []string
 }
 
 func newSessionRig(t *testing.T, chefOn bool, newDishes int) *sessionRig {
 	t.Helper()
-	r := &sessionRig{store: sqlite.NewFindRepo(testhelper.NewTestDB(t)), now: time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC)}
+	r := &sessionRig{store: sqlite.NewFindRepo(testhelper.NewTestDB(t)), now: time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC), dish: "thai"}
 	r.svc = finds.NewService(finds.Deps{
 		Store: r.store,
 		Enqueue: func(_ context.Context, id int64, requested bool) error {
@@ -37,7 +38,7 @@ func newSessionRig(t *testing.T, chefOn bool, newDishes int) *sessionRig {
 		Planning: finds.Planning{
 			ChefOn:    func(context.Context) (bool, error) { return chefOn, nil },
 			NewDishes: func(context.Context) (int, error) { return newDishes, nil },
-			Dish:      func(context.Context, time.Time) (string, error) { return "thai", nil },
+			Dish:      func(context.Context, time.Time) (string, error) { return r.dish, nil },
 			Now:       func() time.Time { return r.now },
 		},
 	})
@@ -91,6 +92,16 @@ func TestPlanningSession_NextWindowPrefetches(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, open)
 	assert.Len(t, r.queued, 1)
+}
+
+// FIND-15: a household with no cuisine in scope (no library cuisine, no
+// love, no Cuisines to explore, no home cuisine for its locale) has nothing
+// to search for: opening the next window starts no find and fails nothing.
+func TestPlanningSession_NoCuisineInScopeStartsNoFind(t *testing.T) {
+	r := newSessionRig(t, true, 1)
+	r.dish = ""
+	require.NoError(t, r.svc.Opened(context.Background(), nextWindow, false, true))
+	assert.Empty(t, r.queued)
 }
 
 // FIND-1d: a theme starts finds outside a session; with the Chef off

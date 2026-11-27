@@ -92,6 +92,16 @@ func (r *FoodAttributeRepo) UnlabelledRecipes(ctx context.Context) ([]int64, err
 	return ids, nil
 }
 
+// LibraryCuisines returns the distinct cuisines stored on the library's
+// recipes, neutral left out (FIND-15).
+func (r *FoodAttributeRepo) LibraryCuisines(ctx context.Context) ([]string, error) {
+	out, err := r.queriesFor(ctx).ListLibraryCuisines(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list library cuisines: %w", err)
+	}
+	return out, nil
+}
+
 func attributeRecord(row sqlcgen.FoodAttribute) (flavor.Record, error) {
 	rec := flavor.Record{FoodID: row.FoodID, Version: int(row.Version)}
 	if err := json.Unmarshal([]byte(row.ValuesJson), &rec.Values); err != nil {

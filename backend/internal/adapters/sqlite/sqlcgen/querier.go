@@ -219,6 +219,8 @@ type Querier interface {
 	// Leaf components on plates dated in [from_date, to_date] with their plate's
 	// cell, eaters and state: the ingredient sources of a shopping list.
 	ListLeafPlateComponentsInRange(ctx context.Context, arg ListLeafPlateComponentsInRangeParams) ([]ListLeafPlateComponentsInRangeRow, error)
+	// The cuisines the library's recipes carry (FIND-15), neutral left out.
+	ListLibraryCuisines(ctx context.Context) ([]string, error)
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	// Recipe lines whose leaf lacks a core macro (legacy data, B2b). A to-taste
 	// line counts no nutrition, so it is not a problem.

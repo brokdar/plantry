@@ -121,6 +121,10 @@ func (s *Service) Prefetch(ctx context.Context, windowStart time.Time) error {
 	if err != nil {
 		return err
 	}
+	if clean(dish) == "" {
+		// No cuisine in the household's scope (FIND-15): nothing to search.
+		return nil
+	}
 	return s.request(ctx, dish, want-have)
 }
 
