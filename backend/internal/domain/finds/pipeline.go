@@ -24,7 +24,7 @@ import (
 )
 
 // PromptVersion of the find run's model steps.
-const PromptVersion = "f1"
+const PromptVersion = "f2"
 
 const (
 	// fetchVersions is how many versions are fetched (FIND-11).
