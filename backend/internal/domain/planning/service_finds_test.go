@@ -2,6 +2,7 @@ package planning_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -192,9 +193,45 @@ func TestGenerate_ReadyFindWithAPieceLineWithoutWeightIsPlaced(t *testing.T) {
 	assert.InDelta(t, 250, recipe.Children[0].Grams, 0.01, "5 pieces of 50 g")
 }
 
+// CP3 round 2: a leaf that already stores a piece weight keeps it when a find
+// with a count line on that leaf is placed; the recipe uses the stored 90 g.
+func TestGenerate_ReadyFindKeepsAStoredPieceWeight(t *testing.T) {
+	e := newFindsEnv(t, true)
+	wurst := e.insert(`INSERT INTO foods (name, kind, source, kcal_100g, protein_100g, fat_100g, carbs_100g) VALUES ('Frankfurter, beef, unheated', 'leaf', 'fdc', 314, 11, 29, 3)`)
+	e.insert(`INSERT INTO food_portions (food_id, unit, grams) VALUES (` + strconv.FormatInt(wurst, 10) + `, 'piece', 90)`)
+	grams := 250.0 // what the matcher guessed from the catalogue piece weight
+	piece := 50.0
+	d := &importer.Draft{
+		Name: "Roasted Bratwurst with Peppers and Onions", ReferencePortions: 5, Instructions: []string{"Roast."},
+		Ingredients: []importer.DraftIngredient{{
+			RawText: "5 bratwurst links", Name: "bratwurst links", Amount: 5, Unit: "piece", PortionGrams: &piece,
+			Match: &food.LineMatch{
+				Status: food.MatchMatched, Pick: 0, Grams: &grams, PortionGrams: &piece,
+				Candidates: []food.Candidate{{Name: "Frankfurter, beef, unheated", ExistingID: &wurst}},
+			},
+		}},
+	}
+	f, err := e.store.Create(e.ctx, "german oven bake main", finds.TriggerPlanning)
+	require.NoError(t, err)
+	_, err = e.store.Finish(e.ctx, f.ID, finds.Outcome{State: finds.StateReady, Draft: d, SourceURL: "https://example.org/brats"})
+	require.NoError(t, err)
+
+	e.generate(e.req())
+
+	placed := e.find(f.ID)
+	require.Equal(t, finds.StateInLibrary, placed.State)
+	var stored float64
+	require.NoError(t, e.db.QueryRow(`SELECT grams FROM food_portions WHERE food_id = ? AND unit = 'piece'`, wurst).Scan(&stored))
+	assert.InDelta(t, 90, stored, 0.01, "the leaf's piece weight is untouched")
+	recipe, err := sqlite.NewFoodRepo(e.db).Get(e.ctx, *placed.FoodID)
+	require.NoError(t, err)
+	require.Len(t, recipe.Children, 1)
+	assert.InDelta(t, 450, recipe.Children[0].Grams, 0.01, "5 pieces of 90 g")
+}
+
 // CP3 run 3 item 5: a ready find a generation could not use is passed over
 // for the window: it stays ready, the note says why, and the next
-// generation does not offer it again.
+// generation does not offer it again in that window, a later window does.
 func TestGenerate_UnusableReadyFindIsPassedOver(t *testing.T) {
 	e := newFindsEnv(t, true)
 	d := &importer.Draft{
@@ -215,7 +252,14 @@ func TestGenerate_UnusableReadyFindIsPassedOver(t *testing.T) {
 	assert.Contains(t, e.runs.end(id).Notes, "The ready new dish Mystery stew waits for a later week: it could not be added as a recipe.")
 
 	again := e.generate(e.req())
-	assert.NotContains(t, e.runs.end(again).Notes, "Mystery stew", "a passed find is not offered again")
+	assert.NotContains(t, e.runs.end(again).Notes, "Mystery stew", "a passed find is not offered again in the same window")
+
+	next := e.req()
+	next.Start = e.start.AddDate(0, 0, 7)
+	later := e.generate(next)
+	assert.Contains(t, e.runs.end(later).Notes, "Mystery stew waits for a later week", "a later window offers it anew")
+	require.NotNil(t, e.find(f.ID).PassedOn)
+	assert.Equal(t, next.Start.Format(time.DateOnly), *e.find(f.ID).PassedOn)
 }
 
 // CP3b item 3: of two ready finds from one source page (normalised URL)

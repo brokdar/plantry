@@ -41,6 +41,8 @@ type Library interface {
 	Unplan(ctx context.Context, foodID int64, windowStart time.Time) error
 	// OnDraft reports whether a draft plate of the window eats foodID.
 	OnDraft(ctx context.Context, foodID int64, windowStart time.Time) (bool, error)
+	// HasPortion reports whether leaf foodID stores a portion for the unit.
+	HasPortion(ctx context.Context, foodID int64, unit string) (bool, error)
 }
 
 // Planning is what the planning side of finds reads (C3).
@@ -208,8 +210,9 @@ func (s *Service) request(ctx context.Context, dishes []string) error {
 // (FIND-3). It returns their food ids (Settle returns the unused ones) and a
 // note per ready find left for a later week because it cannot fill a lunch
 // or dinner main or cannot be added as a recipe; those are passed over (they
-// stay ready but no longer count toward New dishes), and finds passed over
-// before are not offered again. Of two ready finds from one source page only
+// stay ready but no longer count toward New dishes), and a find passed over in
+// this window is not offered again in it (a later window offers it anew). Of
+// two ready finds from one source page only
 // the first is placed.
 func (s *Service) Stage(ctx context.Context, n int, windowStart time.Time) ([]int64, []string, error) {
 	if n <= 0 {
@@ -243,8 +246,8 @@ func (s *Service) Stage(ctx context.Context, n int, windowStart time.Time) ([]in
 	}
 	for i := range ready {
 		f := &ready[i]
-		if f.PassedOn != nil {
-			continue
+		if f.PassedOn != nil && *f.PassedOn == windowStart.Format(time.DateOnly) {
+			continue // passed over in this window: no re-offer on a regenerate
 		}
 		if why := cellUnfit(f.Draft, k); why != "" {
 			if err := pass(f, why); err != nil {
@@ -452,6 +455,17 @@ func (s *Service) recipe(ctx context.Context, f *Find) (*food.Food, error) {
 			// matched grams give it, as the review would (CP3 run 3).
 			w := *m.Grams / row.Amount
 			row.PortionGrams = &w
+		}
+		if row.PortionGrams != nil {
+			// A stored piece weight is the user's: never overwritten, it
+			// changes every recipe using the leaf.
+			has, err := lib.HasPortion(ctx, leaf, row.Unit)
+			if err != nil {
+				return nil, err
+			}
+			if has {
+				row.PortionGrams = nil
+			}
 		}
 		in.Children = append(in.Children, row)
 	}

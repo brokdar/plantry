@@ -631,6 +631,9 @@ func (s *Service) match(ctx context.Context, d *importer.Draft, requested bool) 
 	for i := range d.Ingredients {
 		m := res.Lines[i]
 		d.Ingredients[i].Match = &m
+		if in := &d.Ingredients[i]; in.NeedsWeight && m.PortionGrams != nil {
+			in.PortionGrams, in.NeedsWeight = m.PortionGrams, false
+		}
 		if m.Status != food.MatchMatched {
 			unmatched++
 		}

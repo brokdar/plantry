@@ -3,12 +3,14 @@ package finds
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
 
 // LibraryDeps wire the Library of the app (food service, catalogue, import
@@ -51,6 +53,16 @@ func (l library) Delete(ctx context.Context, id int64) error { return l.d.Foods.
 
 func (l library) StartTrial(ctx context.Context, id int64) error {
 	return l.d.Foods.StartTrial(ctx, id)
+}
+
+// HasPortion reports whether leaf foodID stores a portion for the unit.
+func (l library) HasPortion(ctx context.Context, foodID int64, unit string) (bool, error) {
+	ps, err := l.d.Catalogue.ListPortions(ctx, foodID)
+	if err != nil {
+		return false, err
+	}
+	u := units.Normalize(unit)
+	return slices.ContainsFunc(ps, func(p food.Portion) bool { return units.Normalize(p.Unit) == u }), nil
 }
 
 // OnDraft reports whether a draft plate of the window eats foodID.
