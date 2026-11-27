@@ -75,6 +75,30 @@
       "proposed": "Vorschlag",
       "remove_line": "{{name}} aus dem Rezept entfernen"
     },
+    "check": {
+      "title": "Import-Prüfung",
+      "prefix": "Geprüft: {{parts}}",
+      "changes_one": "{{count}} Änderung",
+      "changes_other": "{{count}} Änderungen",
+      "look_one": "{{count}} zum Anschauen",
+      "look_other": "{{count}} zum Anschauen",
+      "undone": "Rückgängig gemacht",
+      "cap_warning": "Das Assistenten-Budget dieses Monats ist aufgebraucht; die Prüfung lief, weil du den Import angefordert hast.",
+      "step_changed": "Dieser Schritt wurde seit der Prüfung geändert, deshalb bleibt er beim Rückgängigmachen unverändert.",
+      "touch": "Ein letzter Schliff, den du ergänzen kannst",
+      "touch_add": "Als letzten Schritt hinzufügen",
+      "kind": {
+        "time": "Zeit ergänzt",
+        "unit": "In Gramm angegeben",
+        "keep": "Haltbarkeit und Einfrieren ergänzt",
+        "safety_cue": "Kerntemperatur bei einem Schritt ergänzt",
+        "clarity": "Ein Schritt verständlicher gemacht",
+        "lead_time": "Vorlaufzeit bei einem Schritt ergänzt",
+        "role": "Rolle gesetzt",
+        "amount": "Menge vorgeschlagen",
+        "translate": "In deine Sprache übersetzt"
+      }
+    },
     "step3": {
       "role_label": "Rolle",
       "portions_label": "Referenzportionen"
@@ -2138,6 +2162,7 @@
       "failed": "Die Suche hat nicht geklappt. Versuch es noch einmal."
     },
     "review": {
+      "checking": "Rezept wird geprüft ...",
       "gone": "Diese Idee ist nicht mehr verfügbar.",
       "failed": "Diese Idee konnte nicht geöffnet werden. Versuch es noch einmal.",
       "accept_failed": "Rezept gespeichert, aber die Idee konnte nicht als hinzugefügt markiert werden."

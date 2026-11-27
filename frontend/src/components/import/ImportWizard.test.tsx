@@ -244,6 +244,128 @@ describe("ImportWizard", () => {
     vi.mocked(listPortions).mockResolvedValue({ items: [] })
   })
 
+  it("shows the import check's one line, undoes a change and saves what is kept (IMP-5)", async () => {
+    vi.mocked(extractRecipe).mockResolvedValue({
+      draft: {
+        ...draft,
+        role: "main",
+        keep_days: 3,
+        freezable: true,
+        instructions: ["Teig kneten.", "Backen bis 74 °C im Kern."],
+      },
+      check: {
+        ran: true,
+        changes: [
+          {
+            id: "c1",
+            kind: "keep",
+            reason: "cooked dish",
+            edits: [
+              { field: "keep_days", index: -1, before: null, after: 3 },
+              { field: "freezable", index: -1, before: null, after: true },
+            ],
+          },
+          {
+            id: "c2",
+            kind: "safety_cue",
+            reason: "core temperature",
+            edits: [
+              {
+                field: "step",
+                index: 1,
+                before: "Backen.",
+                after: "Backen bis 74 °C im Kern.",
+              },
+            ],
+          },
+        ],
+        flags: [
+          { ingredient: 0, step: -1, text: "200 g Mehl looks like a lot" },
+        ],
+        finishing_touch: "Mit Petersilie bestreuen.",
+      },
+    })
+    vi.mocked(resolveImport).mockResolvedValue({ food: finalized })
+    vi.mocked(createFood).mockResolvedValue({ id: 5 } as ComposedFood)
+    const user = await openReview()
+
+    expect(screen.getByText("Checked: 2 changes, 2 to look at")).toBeVisible()
+    expect(screen.getByText("200 g Mehl looks like a lot")).toBeVisible()
+    const undo = screen.getAllByRole("button", { name: "Undo" })
+    await user.click(undo[1]!)
+    expect(screen.getByDisplayValue("Backen.")).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "Add as last step" }))
+    expect(screen.getByDisplayValue("Mit Petersilie bestreuen.")).toBeVisible()
+
+    await user.click(screen.getByRole("button", { name: /save recipe/i }))
+    await waitFor(() => expect(createFood).toHaveBeenCalled())
+    expect(vi.mocked(createFood).mock.calls[0]![0]).toMatchObject({
+      keep_days: 3,
+      freezable: true,
+    })
+    expect(vi.mocked(resolveImport).mock.calls[0]![0].instructions).toEqual([
+      { step_number: 1, text: "Teig kneten." },
+      { step_number: 2, text: "Backen." },
+      { step_number: 3, text: "Mit Petersilie bestreuen." },
+    ])
+  })
+
+  function stepCheck(instructions: string[]) {
+    vi.mocked(extractRecipe).mockResolvedValue({
+      draft: { ...draft, instructions },
+      check: {
+        ran: true,
+        changes: [
+          {
+            id: "c1",
+            kind: "safety_cue",
+            reason: "core temperature",
+            edits: [
+              {
+                field: "step",
+                index: 2,
+                before: "Backen.",
+                after: "Backen bis 74 °C im Kern.",
+              },
+            ],
+          },
+        ],
+        flags: [],
+      },
+    })
+  }
+
+  it("undoes a step cue on the step that still has it after a delete", async () => {
+    stepCheck(["Teig kneten.", "Ruhen.", "Backen bis 74 °C im Kern."])
+    const user = await openReview()
+    await user.click(screen.getByRole("button", { name: "Delete step 1" }))
+    await user.click(screen.getByRole("button", { name: "Undo" }))
+    expect(screen.getByDisplayValue("Backen.")).toBeVisible()
+    expect(screen.getByDisplayValue("Ruhen.")).toBeVisible()
+    expect(screen.queryByDisplayValue("Teig kneten.")).toBeNull()
+  })
+
+  it("does not overwrite a step the user edited since the check", async () => {
+    stepCheck(["Teig kneten.", "Ruhen.", "Backen bis 74 °C im Kern."])
+    const user = await openReview()
+    const box = screen.getByDisplayValue("Backen bis 74 °C im Kern.")
+    await user.type(box, " Danach ruhen.")
+    await user.click(screen.getByRole("button", { name: "Undo" }))
+    expect(
+      screen.getByDisplayValue("Backen bis 74 °C im Kern. Danach ruhen.")
+    ).toBeVisible()
+    expect(screen.queryByText("Undone")).toBeNull()
+  })
+
+  it("shows nothing for a clean recipe (IMP-5)", async () => {
+    vi.mocked(extractRecipe).mockResolvedValue({
+      draft,
+      check: { ran: true, changes: [], flags: [] },
+    })
+    await openReview()
+    expect(screen.queryByTestId("import-check")).toBeNull()
+  })
+
   it("creates a leaf with the nutrition of a candidate that is not in the library", async () => {
     useUnmatchedMehl()
     mockLookup([externalMehl])

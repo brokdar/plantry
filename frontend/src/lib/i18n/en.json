@@ -75,6 +75,30 @@
       "proposed": "proposed",
       "remove_line": "Remove {{name}} from the recipe"
     },
+    "check": {
+      "title": "Import check",
+      "prefix": "Checked: {{parts}}",
+      "changes_one": "{{count}} change",
+      "changes_other": "{{count}} changes",
+      "look_one": "{{count}} to look at",
+      "look_other": "{{count}} to look at",
+      "undone": "Undone",
+      "cap_warning": "This month's assistant budget is used up; this check ran because you asked for the import.",
+      "step_changed": "That step was changed since the check, so Undo left it as it is.",
+      "touch": "A finishing touch you could add",
+      "touch_add": "Add as last step",
+      "kind": {
+        "time": "Cooking time added",
+        "unit": "Written in grams",
+        "keep": "Keeping time and freezing added",
+        "safety_cue": "Core temperature added to a step",
+        "clarity": "A step made clearer",
+        "lead_time": "Prep-ahead time added to a step",
+        "role": "Role set",
+        "amount": "Amount proposed",
+        "translate": "Translated into your language"
+      }
+    },
     "step3": {
       "role_label": "Role",
       "portions_label": "Reference portions"
@@ -2138,6 +2162,7 @@
       "failed": "The search didn't work. Try again."
     },
     "review": {
+      "checking": "Checking the recipe...",
       "gone": "This idea is no longer available.",
       "failed": "Couldn't open this idea. Try again.",
       "accept_failed": "Recipe saved, but the idea couldn't be marked as added."

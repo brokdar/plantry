@@ -126,6 +126,8 @@ export const importKeys = {
   all: ["import"] as const,
   lineLookup: (query: string) =>
     [...importKeys.all, "line-lookup", query] as const,
+  check: (url: string, lang: string) =>
+    [...importKeys.all, "check", url, lang] as const,
 }
 
 // Generation runs (`/api/plan/runs/{id}`, polled) and the run log

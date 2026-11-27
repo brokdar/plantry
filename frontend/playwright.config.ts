@@ -46,6 +46,7 @@ const AI_SERIAL_SPECS = [
 const GLOBAL_SETTINGS_SPECS = [
   "assistant-drafts.spec.ts",
   "chef-tips.spec.ts",
+  "import-check.spec.ts",
   "discovery-explore-plan.spec.ts",
   "plan-anchor-settings.spec.ts",
   "plan-generate-heuristic.spec.ts",

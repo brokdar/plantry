@@ -48,6 +48,7 @@ type Service struct {
 	matcher     Matcher // may be nil: drafts are then not matched
 	portions    PortionStore
 	recorder    *airun.Recorder // may be nil: the LLM fallback is then not recorded
+	checker     *Checker        // may be nil: no import check
 }
 
 // NewService builds an import Service. llmResolver may be nil; when set, it

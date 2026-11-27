@@ -66,17 +66,101 @@ export interface Draft {
   warnings: string[]
   /** kcal per serving from the page's JSON-LD, for comparison only. */
   source_kcal_per_serving: number | null
+  /** Set only by the import check (IMP-2). */
+  role?: string
+  keep_days?: number
+  freezable?: boolean
+}
+
+export type ImportEditField =
+  | "prep_minutes"
+  | "cook_minutes"
+  | "keep_days"
+  | "freezable"
+  | "role"
+  | "name"
+  | "description"
+  | "step"
+  | "ingredient"
+
+/** One field the import check changed; Undo puts `before` back. `index` is
+ *  the step or ingredient, -1 otherwise. */
+export interface ImportEdit {
+  field: ImportEditField
+  index: number
+  before: unknown
+  after: unknown
+}
+
+/** An ingredient edit's before and after. */
+export interface IngredientEditValue {
+  amount: number
+  unit: string
+  proposed: boolean
+}
+
+export type ImportChangeKind =
+  | "time"
+  | "unit"
+  | "keep"
+  | "safety_cue"
+  | "clarity"
+  | "lead_time"
+  | "role"
+  | "amount"
+  | "translate"
+
+export interface ImportChange {
+  id: string
+  kind: ImportChangeKind
+  reason: string
+  edits: ImportEdit[]
+}
+
+/** Something to look at; never changed (IMP-3). */
+export interface ImportFlag {
+  ingredient: number
+  step: number
+  text: string
+}
+
+/** The import check (IMP): its changes are already in the draft. `ran` is
+ *  false with the Chef off or no key. */
+export interface ImportCheck {
+  ran: boolean
+  changes: ImportChange[]
+  flags: ImportFlag[]
+  finishing_touch?: string
+  cap_warning?: boolean
 }
 
 export interface ExtractRequest {
   url?: string
   html?: string
+  /** The user's language; the import check translates into it. */
+  lang?: string
 }
 
-export function extractRecipe(req: ExtractRequest): Promise<{ draft: Draft }> {
+export interface ExtractResponse {
+  draft: Draft
+  check?: ImportCheck
+}
+
+export function extractRecipe(req: ExtractRequest): Promise<ExtractResponse> {
   return apiFetch(`/import/extract`, {
     method: "POST",
     body: JSON.stringify(req),
+  })
+}
+
+/** The import check over a draft the client holds (a Discover add). */
+export function checkImportDraft(
+  draft: Draft,
+  lang: string
+): Promise<ExtractResponse> {
+  return apiFetch(`/import/check`, {
+    method: "POST",
+    body: JSON.stringify({ draft, lang }),
   })
 }
 

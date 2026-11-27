@@ -378,7 +378,11 @@ func run() error {
 		devHandler = handlers.NewDevHandler(clock)
 	}
 	importFetcher := httpfetch.New(httpfetch.WithDialGuard(nil, cfg.DevMode))
-	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver, foodSvc).WithRecorder(runRecorder).WithMatcher(matcher)
+	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver, foodSvc).WithRecorder(runRecorder).WithMatcher(matcher).
+		WithChecker(importer.NewChecker(llmResolver, runRecorder, func(ctx context.Context, requested bool) (importer.CheckPermit, error) {
+			d, err := matchGuard.Check(ctx, airun.KindChefImportCheck, requested)
+			return importer.CheckPermit{Run: d.Run, Warn: d.Warn}, err
+		}))
 	importHandler := handlers.NewImportHandler(importSvc)
 
 	// Discovery (D7): research → verify → annotate → store, one run
