@@ -457,7 +457,7 @@ func toolRecordPreference(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "record_preference",
-		Description: "Persist a single preference key/value into the user's profile (e.g. 'likes_spicy'=true, 'prefers_quick_meals'=true). Overwrites existing key. Returns JSON {recorded:true, key}.",
+		Description: "Persist a single preference key/value into the user's profile (e.g. 'prefers_quick_meals'=true). Overwrites existing key. Returns JSON {recorded:true, key}. A taste statement (likes_thai, hates_coriander = true) applies to this week only and a health statement (allergic_peanuts, celiac, intolerant_lactose = true) is not stored: the user's tap on the chip the app shows makes either permanent. Say it is noted and that the chip lets them keep it.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -470,6 +470,33 @@ func toolRecordPreference(svc Services) Tool {
 			if reservedPreference(in.Key) {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %s is kept by plate feedback", domain.ErrAIPreferenceReserved, in.Key)
 			}
+			var v any
+			if err := json.Unmarshal(in.Value, &v); err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: value: %v", domain.ErrInvalidInput, err)
+			}
+			// A health statement is stored only with the user's tap, as a
+			// never item (TASTE-8); the chip carries it.
+			if word, ok := taste.HealthStatement(in.Key, v); ok {
+				return mustJSON(map[string]any{
+					"recorded": false, "key": in.Key, "waiting_for_tap": true,
+					"statement": map[string]any{"kind": "health", "word": word},
+				}), ToolEffectNone, nil
+			}
+			// A taste statement applies to the current window until the
+			// user taps [Always] (TASTE-8, TASTE-10).
+			if ref, polarity, ok := taste.PreferenceStatement(in.Key, v); ok && svc.Taste != nil {
+				start := todayFrom(ctx)
+				if w, found := windowFrom(ctx); found {
+					start = w.Start
+				}
+				if _, _, err := svc.Taste.State(ctx, ref, polarity, taste.ScopeWindow, start); err != nil {
+					return nil, ToolEffectNone, err
+				}
+				return mustJSON(map[string]any{
+					"recorded": true, "key": in.Key, "this_window_only": true,
+					"statement": map[string]any{"kind": "taste", "level": ref.Level, "key": ref.Key, "polarity": polarity, "window_start": start.Format(time.DateOnly)},
+				}), ToolEffectNone, nil
+			}
 			p, err := svc.Profile.Get(ctx)
 			if err != nil {
 				return nil, ToolEffectNone, err
@@ -477,23 +504,10 @@ func toolRecordPreference(svc Services) Tool {
 			if p.Preferences == nil {
 				p.Preferences = map[string]any{}
 			}
-			var v any
-			if err := json.Unmarshal(in.Value, &v); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: value: %v", domain.ErrInvalidInput, err)
-			}
 			p.Preferences[in.Key] = v
 			write := func(ctx context.Context) error {
-				if _, err := svc.Profile.Update(ctx, p); err != nil {
-					return err
-				}
-				// A likes_/dislikes_ preference is also a taste statement that
-				// outranks learned evidence (TASTE-10); D2 adds the chips.
-				if ref, polarity, ok := taste.PreferenceStatement(in.Key, v); ok && svc.Taste != nil {
-					if _, _, err := svc.Taste.State(ctx, ref, polarity, taste.ScopeAlways, time.Time{}); err != nil {
-						return err
-					}
-				}
-				return nil
+				_, err := svc.Profile.Update(ctx, p)
+				return err
 			}
 			if svc.Tx != nil {
 				err = svc.Tx.InTx(ctx, write)

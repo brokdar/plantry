@@ -1,4 +1,5 @@
 import type { FoodEventUndo } from "@/lib/api/foods"
+import type { Statement } from "@/lib/api/taste"
 import type {
   ConversationChange,
   ConversationMessage,
@@ -31,6 +32,16 @@ export interface TranscriptTurn {
   /** Recipe changes the tool calls of this turn saved, each with its Undo
    *  token (create_variant, edit_recipe, set_recipe_attributes). */
   recipeChanges: RecipeChange[]
+  /** Taste or health statements the turn's record_preference calls
+   *  proposed; each shows [Always] / [Just this week] chips (TASTE-8). */
+  statements: StatementProposal[]
+}
+
+/** A statement waiting for the user's tap. */
+export interface StatementProposal {
+  /** The tool call's id. */
+  id: string
+  statement: Statement
 }
 
 const RECIPE_TOOLS = ["create_variant", "edit_recipe", "set_recipe_attributes"]
@@ -131,6 +142,7 @@ export function buildTranscript(
   const failed = new Set<string>()
   const recipeUndo = new Map<string, FoodEventUndo>()
   const recipeIdOf = new Map<string, number>()
+  const statementOf = new Map<string, Statement>()
   let pendingUnlock: UnlockRequestPayload | null = null
   let n = 0
   for (const m of messages) {
@@ -160,6 +172,9 @@ export function buildTranscript(
         if (typeof result?.recipe_id === "number")
           recipeIdOf.set(key, result.recipe_id)
       }
+      const proposed = result?.statement as Statement | undefined
+      if (proposed?.kind && !b.tool_result_is_error)
+        statementOf.set(key, proposed)
       const preview = previewRows(b)
       if (preview) {
         noChange.add(key)
@@ -192,6 +207,7 @@ export function buildTranscript(
     const own: ConversationChange[] = []
     const failures: ToolFailure[] = []
     const recipeChanges: RecipeChange[] = []
+    const statements: StatementProposal[] = []
     if (m.role === "assistant") {
       for (const b of blocks) {
         if (b.type !== "tool_use") continue
@@ -205,6 +221,8 @@ export function buildTranscript(
             undo,
           })
         }
+        const statement = statementOf.get(key)
+        if (statement) statements.push({ id: b.tool_use_id ?? "", statement })
         if (failed.has(key)) {
           failures.push({
             id: b.tool_use_id ?? "",
@@ -226,10 +244,18 @@ export function buildTranscript(
       text === "" &&
       own.length === 0 &&
       failures.length === 0 &&
-      recipeChanges.length === 0
+      recipeChanges.length === 0 &&
+      statements.length === 0
     )
       continue
-    turns.push({ message: m, text, changes: own, failures, recipeChanges })
+    turns.push({
+      message: m,
+      text,
+      changes: own,
+      failures,
+      recipeChanges,
+      statements,
+    })
   }
   // Named by a result whose call is not in the conversation: shown last.
   for (const c of changes) {

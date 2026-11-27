@@ -107,6 +107,9 @@ func (h *planner) exposureAt(c plate.CellKey) map[string]int {
 // overMonotony counts the soft caps one more plate of f would pass.
 func overMonotony(f FoodFacts, counts map[string]int) int {
 	n := 0
+	if f.Staple { // a staple is never held back by a soft cap (THEME-1)
+		return n
+	}
 	for _, k := range monotonyKeys(f) {
 		kind, _, _ := strings.Cut(k, ":")
 		if counts[k]+1 > monotonyCaps[kind] {

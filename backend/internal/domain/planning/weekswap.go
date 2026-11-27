@@ -629,7 +629,7 @@ func (x *index) swapBatch(base State, t Target, in Proposal, before Evaluation, 
 		var cands []FoodFacts
 		for _, id := range ids {
 			f := x.s.Foods[id]
-			if id == ss.FoodID || skip[id] || !f.Composed() || f.Archived || f.Macros.Kcal <= 0 || !isMain(f.Role, mealFull) || !fitsDiet(f.DietClass, household) {
+			if id == ss.FoodID || skip[id] || !f.Composed() || f.Archived || f.Never || f.Macros.Kcal <= 0 || !isMain(f.Role, mealFull) || !fitsDiet(f.DietClass, household) {
 				continue
 			}
 			switch {

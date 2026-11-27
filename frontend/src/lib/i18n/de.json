@@ -248,6 +248,10 @@
       "kitchen": {
         "title": "Küche",
         "summary": "Kochzeit, Können, Ausstattung und Vorräte zu Hause"
+      },
+      "taste": {
+        "title": "Geschmack",
+        "summary": "Was ihr liebt, lieber nicht mögt und nie esst"
       }
     },
     "household": {
@@ -714,6 +718,77 @@
       "basics_search_placeholder": "In deinen Zutaten suchen",
       "basics_add": "{{name}} zu den Vorräten hinzufügen",
       "basics_no_match": "Keine Zutat gefunden."
+    },
+    "taste": {
+      "never": {
+        "title": "Nie",
+        "effect": "Diese Zutaten kommen in keinen Plan, egal was sonst gilt.",
+        "empty": "Auf der Liste steht nichts.",
+        "line": "Ihr esst nie {{name}}."
+      },
+      "love": {
+        "title": "Das liebt ihr",
+        "effect": "Der Plan wählt das öfter.",
+        "empty": "Noch nichts. Sagt dem Assistenten, was ihr liebt, oder dreht unten eine Neigung um."
+      },
+      "rather_not": {
+        "title": "Lieber nicht",
+        "effect": "Der Plan stellt das weiter nach hinten. Ausgeschlossen wird nur, was bei „Nie“ steht.",
+        "empty": "Noch nichts."
+      },
+      "leanings": {
+        "title": "Neigungen",
+        "effect": "Was Plantry aus Bewertungen, Tauschen und Favoriten bemerkt hat. Ein einzelnes Signal ändert nichts; entfernt oder dreht, was nicht stimmt.",
+        "empty": "Noch nichts bemerkt. Nach ein paar Wochen Bewertungen und Tauschen zeigt sich hier etwas."
+      },
+      "staples": {
+        "title": "Klassiker",
+        "effect": "Rezepte, zu denen ihr immer wieder zurückkommt. Der Plan nimmt sie bevorzugt, soweit die Abwechslungsregeln es erlauben.",
+        "empty": "Noch keine Klassiker. Ein Rezept wird dazu nach dreimal Kochen und einem guten Zeichen, oder wenn ihr es mit einem Stern markiert."
+      },
+      "cuisines": {
+        "title": "Küchen",
+        "effect": "Welche Küchen ihr mögt oder eher meidet.",
+        "empty": "Noch keine Küche sticht heraus."
+      },
+      "kitchen": {
+        "title": "Küche",
+        "line": "Kochzeit, Können, Ausstattung und was immer da ist, stehen in einem eigenen Bereich.",
+        "link": "Küche öffnen"
+      },
+      "recent": {
+        "title": "Zuletzt gelernt",
+        "effect": "Was sich in den letzten zwei Wochen geändert hat. „Rückgängig“ stellt es wieder her.",
+        "empty": "In den letzten zwei Wochen ist nichts Neues dazugekommen."
+      },
+      "sentence": {
+        "love": "Ihr liebt {{name}}.",
+        "rather_not": "Ihr mögt {{name}} lieber nicht.",
+        "leans_love": "Ihr mögt {{name}} offenbar.",
+        "leans_rather_not": "Ihr mögt {{name}} offenbar weniger."
+      },
+      "source": {
+        "learned": "Aus euren Mahlzeiten bemerkt",
+        "statement": "Ihr habt es gesagt",
+        "user": "Von euch eingestellt"
+      },
+      "flip_to": {
+        "love": "Zu „liebt ihr“ machen",
+        "rather_not": "Zu „lieber nicht“ machen"
+      },
+      "make_never": "Nie",
+      "remove": "Entfernen",
+      "remove_label": "{{name}} entfernen",
+      "removed": "Aus eurem Geschmack entfernt",
+      "flipped": "Geschmack geändert",
+      "flavour": {
+        "heat": "scharfe Gerichte",
+        "acid": "saure Gerichte",
+        "sweet": "süße Gerichte",
+        "salt": "salzige Gerichte",
+        "bitter": "bittere Gerichte",
+        "umami": "herzhafte Gerichte"
+      }
     }
   },
   "settings": {
@@ -1465,6 +1540,15 @@
       "create_variant": "Variante des Rezepts gespeichert",
       "edit_recipe": "Rezept geändert",
       "set_recipe_attributes": "Merkmale des Rezepts aktualisiert"
+    },
+    "statement": {
+      "love": "Notiert: Ihr mögt {{name}}. Das gilt für diese Woche.",
+      "rather_not": "Notiert: Ihr mögt {{name}} lieber nicht. Das gilt für diese Woche.",
+      "health": "Notiert: {{name}}. Als etwas behalten, das ihr nie esst?",
+      "always": "Immer",
+      "week": "Nur diese Woche",
+      "done_always": "Dauerhaft gemerkt.",
+      "done_window": "Für diese Woche gemerkt."
     }
   },
   "validation": {

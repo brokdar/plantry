@@ -223,6 +223,10 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			api.Get("/taste", h.Taste.Get)
 			api.Delete("/taste/items/{id}", h.Taste.Delete)
 			api.Put("/taste/items/{id}", h.Taste.Put)
+			api.Post("/taste/items/{id}/never", h.Taste.MakeNever)
+			api.Post("/taste/statements/confirm", h.Taste.Confirm)
+			api.Put("/taste/never/{id}", h.Taste.AddNever)
+			api.Delete("/taste/never/{id}", h.Taste.RemoveNever)
 		}
 		if h.Kitchen != nil {
 			api.Route("/kitchen", func(r chi.Router) {

@@ -80,6 +80,10 @@ export const profileKeys = {
   detail: ["profile"] as const,
 }
 
+export const tasteKeys = {
+  all: ["taste"] as const,
+}
+
 export const kitchenKeys = {
   detail: ["kitchen"] as const,
 }

@@ -1359,7 +1359,7 @@ func (w *waySearch) addCands(s State, p Plate, want float64, protein bool) []add
 	var out []addCand
 	for _, id := range s.NoCook {
 		f, ok := s.Foods[id]
-		if !ok || onPlate[id] || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet || (protein && !proteinFood(f)) || (w.goal == GoalHeartier && !heartierFood(f)) || !fitsDiet(f.DietClass, w.household) || (f.Composed() && f.Role == food.RoleStandalone) || (!f.Composed() && !s.addOnFits(p, f, slotName(s, p.SlotID))) {
+		if !ok || onPlate[id] || f.Never || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet || (protein && !proteinFood(f)) || (w.goal == GoalHeartier && !heartierFood(f)) || !fitsDiet(f.DietClass, w.household) || (f.Composed() && f.Role == food.RoleStandalone) || (!f.Composed() && !s.addOnFits(p, f, slotName(s, p.SlotID))) {
 			continue
 		}
 		var best *addCand
@@ -1757,7 +1757,7 @@ func (w *waySearch) breadCands(s State, p Plate, want float64, ev Evaluation) []
 	}
 	var out []addCand
 	for id, f := range s.Foods {
-		if onPlate[id] || f.Composed() || !f.NoCook || f.LeafRole != food.RoleSideStarch || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet ||
+		if onPlate[id] || f.Never || f.Composed() || !f.NoCook || f.LeafRole != food.RoleSideStarch || !f.NutritionComplete || f.Macros.Kcal <= 0 || f.Sweet ||
 			!fitsDiet(f.DietClass, w.household) || !s.addOnFits(p, f, slotName(s, p.SlotID)) {
 			continue
 		}

@@ -248,6 +248,10 @@
       "kitchen": {
         "title": "Kitchen",
         "summary": "Cooking time, skill, equipment and basics at home"
+      },
+      "taste": {
+        "title": "Taste",
+        "summary": "What you love, would rather not have and never eat"
       }
     },
     "household": {
@@ -714,6 +718,77 @@
       "basics_search_placeholder": "Search your ingredients",
       "basics_add": "Add {{name}} to the basics",
       "basics_no_match": "No ingredient found."
+    },
+    "taste": {
+      "never": {
+        "title": "Never",
+        "effect": "These foods never end up in a plan, whatever else is going on.",
+        "empty": "Nothing is on the never list.",
+        "line": "You never eat {{name}}."
+      },
+      "love": {
+        "title": "You love",
+        "effect": "The plan picks these more often.",
+        "empty": "Nothing yet. Say what you love in the assistant, or flip a leaning below."
+      },
+      "rather_not": {
+        "title": "You'd rather not",
+        "effect": "The plan ranks these later. Nothing is ruled out except by Never.",
+        "empty": "Nothing yet."
+      },
+      "leanings": {
+        "title": "Leanings",
+        "effect": "What Plantry noticed from your ratings, swaps and favourites. One signal never changes it; remove or flip anything that is wrong.",
+        "empty": "Nothing noticed yet. A few weeks of ratings and swaps will show here."
+      },
+      "staples": {
+        "title": "Staples",
+        "effect": "Recipes you keep coming back to. The plan favours them when the variety rules allow.",
+        "empty": "No staples yet. A recipe becomes one after three cooks and a good sign, or when you star it."
+      },
+      "cuisines": {
+        "title": "Cuisines",
+        "effect": "Which kitchens you lean towards or away from.",
+        "empty": "No cuisine stands out yet."
+      },
+      "kitchen": {
+        "title": "Kitchen",
+        "line": "Cooking time, skill, equipment and what is always at home live in their own section.",
+        "link": "Open Kitchen"
+      },
+      "recent": {
+        "title": "Recently learned",
+        "effect": "What changed in the last two weeks. Undo puts it back.",
+        "empty": "Nothing new in the last two weeks."
+      },
+      "sentence": {
+        "love": "You love {{name}}.",
+        "rather_not": "You'd rather not have {{name}}.",
+        "leans_love": "You seem to like {{name}}.",
+        "leans_rather_not": "You seem to like {{name}} less."
+      },
+      "source": {
+        "learned": "Noticed from your meals",
+        "statement": "You said so",
+        "user": "You set this"
+      },
+      "flip_to": {
+        "love": "Make it a love",
+        "rather_not": "Make it rather not"
+      },
+      "make_never": "Never",
+      "remove": "Remove",
+      "remove_label": "Remove {{name}}",
+      "removed": "Removed from your taste",
+      "flipped": "Taste changed",
+      "flavour": {
+        "heat": "spicy dishes",
+        "acid": "sour dishes",
+        "sweet": "sweet dishes",
+        "salt": "salty dishes",
+        "bitter": "bitter dishes",
+        "umami": "savoury dishes"
+      }
     }
   },
   "settings": {
@@ -1465,6 +1540,15 @@
       "create_variant": "Saved a variant of the recipe",
       "edit_recipe": "Changed the recipe",
       "set_recipe_attributes": "Updated the recipe's attributes"
+    },
+    "statement": {
+      "love": "Noted: you like {{name}}. This holds for this week.",
+      "rather_not": "Noted: you'd rather not have {{name}}. This holds for this week.",
+      "health": "Noted: {{name}}. Keep it as something you never eat?",
+      "always": "Always",
+      "week": "Just this week",
+      "done_always": "Kept for good.",
+      "done_window": "Kept for this week."
     }
   },
   "validation": {

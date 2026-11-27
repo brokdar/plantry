@@ -46,6 +46,19 @@ func (s *Service) RemoveBasic(ctx context.Context, foodID int64) error {
 	return s.repo.RemoveBasic(ctx, foodID)
 }
 
+// NeverItems lists the foods the household never eats, by name.
+func (s *Service) NeverItems(ctx context.Context) ([]Food, error) { return s.repo.NeverItems(ctx) }
+
+// AddNeverItem makes a food a never item.
+func (s *Service) AddNeverItem(ctx context.Context, foodID int64) error {
+	return s.repo.AddNeverItem(ctx, foodID)
+}
+
+// RemoveNeverItem takes a food off the never list.
+func (s *Service) RemoveNeverItem(ctx context.Context, foodID int64) error {
+	return s.repo.RemoveNeverItem(ctx, foodID)
+}
+
 // basicNames are the foods a kitchen has at home (KIT-4): salt, pepper, oil,
 // sugar, flour and common dried spices, in English and German. Migration
 // 00059 backfills the same list for foods that already exist.

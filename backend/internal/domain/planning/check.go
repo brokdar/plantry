@@ -663,7 +663,7 @@ func (x *index) eligibleRecipes(weeks int) int {
 	counted := map[int64]bool{} // a variant group counts once
 	for _, id := range slices.Sorted(maps.Keys(x.s.Foods)) {
 		f := x.s.Foods[id]
-		if !f.Composed() || f.Archived || !varietyRole(f.Role) || routine[f.ID] || (!light && !isMain(f.Role, mealFull)) {
+		if !f.Composed() || f.Archived || f.Never || !varietyRole(f.Role) || routine[f.ID] || (!light && !isMain(f.Role, mealFull)) {
 			continue
 		}
 		// An unknown class is only a warning (H5), so it stays eligible.

@@ -34,6 +34,7 @@ const AI_SERIAL_SPECS = [
   "discovery.spec.ts",
   "settings-ai.spec.ts",
   "keyboard-shortcuts.spec.ts",
+  "taste-page.spec.ts",
   "settings-insights.spec.ts",
 ]
 

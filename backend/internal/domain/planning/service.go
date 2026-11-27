@@ -27,7 +27,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h33" // h33: taste score and monotony soft caps (Chef D1)
+const HeuristicVersion = "h34" // h34: staples first, never items excluded (Chef D2); h33: taste score and monotony soft caps (Chef D1)
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.

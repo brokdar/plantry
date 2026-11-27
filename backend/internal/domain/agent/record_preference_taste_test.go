@@ -33,30 +33,49 @@ func (s *statements) State(_ context.Context, ref taste.Ref, p taste.Polarity, s
 	return taste.Item{}, foodevent.Undo{}, nil
 }
 
-// TASTE-10: record_preference writes a likes_/dislikes_ preference as a
-// taste statement (source statement, scope always) besides the profile; any
-// other key writes the profile only.
-func TestTool_RecordPreference_WritesTasteItems(t *testing.T) {
+// TASTE-8, TASTE-10: a likes_/dislikes_ preference is a taste statement that
+// applies to the current window until the user taps [Always]; the result
+// carries the chip's data. A health statement is stored nowhere without the
+// tap. Any other key writes the profile.
+func TestTool_RecordPreference_ProposesStatements(t *testing.T) {
 	t.Parallel()
 	db := testhelper.NewTestDB(t)
 	var got statements
+	profiles := profile.NewService(sqlite.NewProfileRepo(db))
 	ts, err := agent.NewToolSet(agent.Services{
 		Foods: food.NewService(sqlite.NewFoodRepo(db)), Plates: testsvc.Plates(db),
-		Profile: profile.NewService(sqlite.NewProfileRepo(db)), Slots: slot.NewService(sqlite.NewSlotRepo(db)),
+		Profile: profiles, Slots: slot.NewService(sqlite.NewSlotRepo(db)),
 		Tx: sqlite.NewTxRunner(db), Taste: &got,
 	})
 	require.NoError(t, err)
-	for _, in := range []string{
-		`{"key":"likes_thai","value":true}`,
-		`{"key":"hates_coriander","value":true}`,
-		`{"key":"likes_spicy","value":false}`,
-		`{"key":"prefers_quick_meals","value":true}`,
-	} {
-		_, _, _, err := ts.Execute(context.Background(), "record_preference", json.RawMessage(in))
+	run := func(in string) map[string]any {
+		out, _, _, err := ts.Execute(context.Background(), "record_preference", json.RawMessage(in))
 		require.NoError(t, err, in)
+		var m map[string]any
+		require.NoError(t, json.Unmarshal(out, &m))
+		return m
 	}
-	assert.Equal(t, statements{
-		{taste.Ref{Level: taste.LevelCuisine, Key: "thai"}, taste.Love, taste.ScopeAlways},
-		{taste.Ref{Level: taste.LevelHero, Key: "coriander"}, taste.RatherNot, taste.ScopeAlways},
-	}, got)
+	thai := run(`{"key":"likes_thai","value":true}`)
+	run(`{"key":"hates_coriander","value":true}`)
+	run(`{"key":"likes_spicy","value":false}`)
+	for _, in := range []string{`{"key":"allergic_peanuts","value":true}`, `{"key":"celiac","value":true}`, `{"key":"intolerant_to_lactose","value":true}`} {
+		m := run(in)
+		assert.Equal(t, true, m["waiting_for_tap"], in)
+		assert.Equal(t, "health", m["statement"].(map[string]any)["kind"], in)
+	}
+	run(`{"key":"prefers_quick_meals","value":true}`)
+
+	assert.Len(t, got, 2, "taste statements only")
+	for _, s := range got {
+		assert.Equal(t, taste.ScopeWindow, s.scope, "no tap: this window only")
+	}
+	assert.Equal(t, taste.Ref{Level: taste.LevelCuisine, Key: "thai"}, got[0].ref)
+	assert.Equal(t, taste.Ref{Level: taste.LevelHero, Key: "coriander"}, got[1].ref)
+	assert.Equal(t, map[string]any{"kind": "taste", "level": "cuisine", "key": "thai", "polarity": "love", "window_start": "0001-01-01"}, thai["statement"])
+
+	p, err := profiles.Get(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, true, p.Preferences["prefers_quick_meals"])
+	assert.NotContains(t, p.Preferences, "allergic_peanuts", "a health statement is stored only with the tap")
+	assert.NotContains(t, p.Preferences, "likes_thai")
 }

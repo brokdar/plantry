@@ -6,6 +6,7 @@ import {
   CookingPot,
   Database,
   Refrigerator,
+  Heart,
   MessageSquareText,
   Users,
   type LucideIcon,
@@ -21,6 +22,7 @@ import { HouseholdSection } from "./sections/HouseholdSection"
 import { KitchenSection } from "./sections/KitchenSection"
 import { MealsSection } from "./sections/MealsSection"
 import { SystemSection } from "./sections/SystemSection"
+import { TasteSection } from "./sections/TasteSection"
 import {
   DEFAULT_SETTINGS_SECTION,
   SETTINGS_SECTIONS,
@@ -32,6 +34,7 @@ const ICONS: Record<SettingsSection, LucideIcon> = {
   meals: CalendarDays,
   cooking: CookingPot,
   kitchen: Refrigerator,
+  taste: Heart,
   assistant: MessageSquareText,
   system: Database,
 }
@@ -41,6 +44,7 @@ const CONTENT: Record<SettingsSection, () => React.ReactNode> = {
   meals: MealsSection,
   cooking: CookingSection,
   kitchen: KitchenSection,
+  taste: TasteSection,
   assistant: AssistantSection,
   system: SystemSection,
 }

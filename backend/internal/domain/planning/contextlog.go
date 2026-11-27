@@ -22,6 +22,7 @@ const (
 const (
 	excludeReplaced    = "replaced_by_target"
 	excludeDiet        = "diet_incompatible"
+	excludeNever       = "never_item"
 	excludeSideRole    = "side_swap_other_role"
 	excludeTokenBudget = "token_budget"
 )
