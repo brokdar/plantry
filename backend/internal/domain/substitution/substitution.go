@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -58,7 +59,7 @@ type Store interface {
 // Recipes is the recipe-change side the permanent saves use
 // (recipechange.Service).
 type Recipes interface {
-	ReplaceLines(ctx context.Context, id int64, children []food.FoodComponent, change string) error
+	ReplaceLines(ctx context.Context, id int64, children []food.FoodComponent, changes []string) error
 	PutChanges(ctx context.Context, id int64, changes []string) error
 	ConfirmedDates(ctx context.Context, id int64) ([]string, error)
 }
@@ -257,23 +258,12 @@ func (s *Service) hiddenOf(ctx context.Context, sessionID int64) (HiddenVariant,
 	return h, nil
 }
 
-// Always makes the swap permanent in the recipe itself ("Always in this
-// recipe"): the base recipe is edited in place, the session points back at it
-// and the hidden variant is left unused. One undo token covers the edit and
-// the re-pointing.
-func (s *Service) Always(ctx context.Context, sessionID, fromID, toID int64) (foodevent.Undo, error) {
-	to, err := s.leaf(ctx, toID)
-	if err != nil {
-		return foodevent.Undo{}, err
-	}
-	from, err := s.leaf(ctx, fromID)
-	if err != nil {
-		return foodevent.Undo{}, err
-	}
-	ratio, ok := tableRatio(from.Name, to.Name)
-	if !ok || !hasNutrition(to) {
-		return foodevent.Undo{}, fmt.Errorf("%w: %s is not a substitute for %s", domain.ErrInvalidInput, to.Name, from.Name)
-	}
+// Always makes the batch's swaps permanent in the recipe itself ("Always in
+// this recipe"): the base recipe is edited in place to the hidden variant's
+// lines (it may hold several stacked swaps), the session points back at it and
+// the hidden variant is left unused. One undo token covers the edit and the
+// re-pointing.
+func (s *Service) Always(ctx context.Context, sessionID int64) (foodevent.Undo, error) {
 	return s.events.Recorded(ctx, func(ctx context.Context) error {
 		h, err := s.hiddenOf(ctx, sessionID)
 		if err != nil {
@@ -283,14 +273,24 @@ func (s *Service) Always(ctx context.Context, sessionID, fromID, toID int64) (fo
 		if err != nil {
 			return err
 		}
-		if !slices.ContainsFunc(base.Children, func(c food.FoodComponent) bool { return c.ChildID == fromID }) {
-			return fmt.Errorf("%w: %s is not an ingredient of %s", domain.ErrInvalidInput, from.Name, base.Name)
+		v, err := s.foods.Get(ctx, h.FoodID)
+		if err != nil {
+			return err
+		}
+		changes, _ := diffSwaps(base.Children, v.Children)
+		if len(changes) == 0 {
+			return fmt.Errorf("%w: the batch has no swap to keep", domain.ErrInvalidInput)
 		}
 		before, err := s.snapshot(ctx, h.FoodID)
 		if err != nil {
 			return err
 		}
-		if err := s.recipes.ReplaceLines(ctx, base.ID, swapLine(base.Children, fromID, to, ratio), changeLine(from, to)); err != nil {
+		children := make([]food.FoodComponent, len(v.Children))
+		for i, c := range v.Children {
+			c.ID, c.ParentID = 0, 0
+			children[i] = c
+		}
+		if err := s.recipes.ReplaceLines(ctx, base.ID, children, changes); err != nil {
 			return err
 		}
 		if err := s.store.ClearSession(ctx, sessionID); err != nil {
@@ -315,17 +315,9 @@ type Saved struct {
 
 // SaveVariant turns the session's hidden variant into a visible variant of
 // its recipe ("Save as variant"): the hidden-variant row goes, it is
-// unarchived and named "<recipe> with <substitute>", and its changes list
-// names the swap. The session keeps cooking it.
-func (s *Service) SaveVariant(ctx context.Context, sessionID, fromID, toID int64) (Saved, error) {
-	to, err := s.leaf(ctx, toID)
-	if err != nil {
-		return Saved{}, err
-	}
-	from, err := s.leaf(ctx, fromID)
-	if err != nil {
-		return Saved{}, err
-	}
+// unarchived and named "<recipe> with <substitutes>", and its changes list
+// names every swap. The session keeps cooking it.
+func (s *Service) SaveVariant(ctx context.Context, sessionID int64) (Saved, error) {
 	var out Saved
 	undo, err := s.events.Recorded(ctx, func(ctx context.Context) error {
 		h, err := s.hiddenOf(ctx, sessionID)
@@ -340,18 +332,22 @@ func (s *Service) SaveVariant(ctx context.Context, sessionID, fromID, toID int64
 		if err != nil {
 			return err
 		}
+		changes, targets := diffSwaps(base.Children, v.Children)
+		if len(changes) == 0 {
+			return fmt.Errorf("%w: the batch has no swap to keep", domain.ErrInvalidInput)
+		}
 		before := snap{FoodID: v.ID, Variant: &variantSnap{BaseFoodID: h.BaseFoodID, Name: v.Name}}
 		if err := s.store.DeleteHidden(ctx, v.ID); err != nil {
 			return err
 		}
-		v.Name = base.Name + " with " + to.Name
+		v.Name = base.Name + " with " + strings.Join(targets, " and ")
 		if err := s.foods.Update(ctx, v); err != nil {
 			return fmt.Errorf("name variant: %w", err)
 		}
 		if _, err := s.foods.SetArchived(ctx, v.ID, false); err != nil {
 			return fmt.Errorf("unarchive variant: %w", err)
 		}
-		if err := s.recipes.PutChanges(ctx, v.ID, []string{changeLine(from, to)}); err != nil {
+		if err := s.recipes.PutChanges(ctx, v.ID, changes); err != nil {
 			return err
 		}
 		out.FoodID, out.Name = v.ID, v.Name
@@ -364,9 +360,40 @@ func (s *Service) SaveVariant(ctx context.Context, sessionID, fromID, toID int64
 	return out, nil
 }
 
-// changeLine is the changes-list entry of a swap.
-func changeLine(from, to *food.Food) string {
-	return from.Name + " \u2192 " + to.Name
+// diffSwaps lists the swaps that turn base lines into variant lines, one
+// "<from> \u2192 <to>" entry each, and the names of the substitutes. Removed
+// base lines pair in order with the variant's new or grown lines, so stacked
+// swaps (A to B, then B to C) read as one swap (A to C).
+func diffSwaps(base, variant []food.FoodComponent) (changes, targets []string) {
+	baseGrams := map[int64]float64{}
+	for _, c := range base {
+		baseGrams[c.ChildID] = c.Grams
+	}
+	varIDs := map[int64]bool{}
+	var to []string
+	for _, c := range variant {
+		varIDs[c.ChildID] = true
+		if g, ok := baseGrams[c.ChildID]; !ok || g != c.Grams {
+			to = append(to, c.ChildName)
+		}
+	}
+	i := 0
+	for _, c := range base {
+		if varIDs[c.ChildID] {
+			continue
+		}
+		if len(to) == 0 {
+			changes = append(changes, c.ChildName+" removed")
+			continue
+		}
+		t := to[min(i, len(to)-1)]
+		i++
+		changes = append(changes, c.ChildName+" \u2192 "+t)
+		if !slices.Contains(targets, t) {
+			targets = append(targets, t)
+		}
+	}
+	return changes, targets
 }
 
 // guardPast refuses a session that is already cooked ("Done cooking") or has a

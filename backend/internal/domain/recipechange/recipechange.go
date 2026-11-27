@@ -82,6 +82,8 @@ type Preview struct {
 	// hold the recipe: their shopping changes (VAR-2).
 	ConfirmedDates []string `json:"confirmed_dates"`
 	Check          Check    `json:"check"`
+	// plan is the matching the preview ran, for EditPreviewed.
+	plan planned
 }
 
 // Matcher is the matching path (food.Matcher).
@@ -172,7 +174,10 @@ func (s *Service) Variant(ctx context.Context, baseID int64, p Proposal) (Result
 			return err
 		}
 		out = &v
-		after, _ := json.Marshal(Content{Name: v.Name})
+		after, err := s.snapshot(ctx, &v)
+		if err != nil {
+			return err
+		}
 		return s.events.Record(ctx, foodevent.Event{
 			Kind: foodevent.KindRecipeContent, SubjectID: v.ID, Action: foodevent.ActionCreate, After: after,
 		})
@@ -206,6 +211,7 @@ func (s *Service) PreviewEdit(ctx context.Context, id int64, p Proposal) (Previe
 		After:          Content{Name: strings.TrimSpace(p.Name), Ingredients: p.Ingredients, Steps: p.Steps},
 		ConfirmedDates: dates,
 		Check:          pl.check,
+		plan:           pl,
 	}, nil
 }
 
@@ -217,8 +223,27 @@ func (s *Service) Edit(ctx context.Context, id int64, p Proposal) (Result, error
 		return Result{}, err
 	}
 	pl, err := s.plan(ctx, base, p)
-	if err != nil || pl.check.Blocked() {
-		return Result{Check: pl.check}, err
+	if err != nil {
+		return Result{}, err
+	}
+	return s.edit(ctx, base, p, pl)
+}
+
+// EditPreviewed saves the edit PreviewEdit returned pv for, with the same
+// matching, so the saved lines are the ones previewed and nothing is matched
+// twice.
+func (s *Service) EditPreviewed(ctx context.Context, id int64, p Proposal, pv Preview) (Result, error) {
+	base, err := s.recipe(ctx, id)
+	if err != nil {
+		return Result{}, err
+	}
+	return s.edit(ctx, base, p, pv.plan)
+}
+
+func (s *Service) edit(ctx context.Context, base *food.Food, p Proposal, pl planned) (Result, error) {
+	id := base.ID
+	if pl.check.Blocked() {
+		return Result{Check: pl.check}, nil
 	}
 	var out *food.Food
 	undo, err := s.events.Recorded(ctx, func(ctx context.Context) error {
@@ -256,10 +281,10 @@ func (s *Service) Edit(ctx context.Context, id int64, p Proposal) (Result, error
 }
 
 // ReplaceLines swaps the ingredient lines of recipe id in place and adds
-// change to its changes list: one recipe_content food event, so Undo puts the
+// add to its changes list: one recipe_content food event, so Undo puts the
 // recipe back (the substitution's "Always in this recipe", HELP-7). The lines
 // are stored foods already, so no matching or gate runs.
-func (s *Service) ReplaceLines(ctx context.Context, id int64, children []food.FoodComponent, change string) error {
+func (s *Service) ReplaceLines(ctx context.Context, id int64, children []food.FoodComponent, add []string) error {
 	base, err := s.recipe(ctx, id)
 	if err != nil {
 		return err
@@ -277,7 +302,7 @@ func (s *Service) ReplaceLines(ctx context.Context, id int64, children []food.Fo
 	if err := s.foods.Update(ctx, &next); err != nil {
 		return fmt.Errorf("edit recipe: %w", err)
 	}
-	if err := s.store.PutChanges(ctx, id, append(changes, change)); err != nil {
+	if err := s.store.PutChanges(ctx, id, append(changes, add...)); err != nil {
 		return err
 	}
 	after, err := s.snapshot(ctx, &next)
@@ -366,6 +391,32 @@ func (s *Service) Restore(ctx context.Context, id int64, before json.RawMessage)
 		return err
 	}
 	return s.store.PutChanges(ctx, id, snap.Changes)
+}
+
+// Verify refuses an undo when recipe id's name, lines or steps are no longer
+// what the change wrote (foodevent.Verifier): a manual edit since then must
+// not be lost.
+func (s *Service) Verify(ctx context.Context, id int64, after json.RawMessage) error {
+	var want contentSnap
+	if err := json.Unmarshal(after, &want); err != nil {
+		return fmt.Errorf("recipe content snapshot of food %d: %w", id, err)
+	}
+	f, err := s.foods.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("%w: the recipe of the change is gone", domain.ErrPlanChangeStale)
+	}
+	if want.Name != f.Name || !slices.Equal(want.Steps, stepTexts(f.Instructions)) ||
+		!slices.EqualFunc(want.Children, f.Children, sameLine) {
+		return fmt.Errorf("%w: the recipe was changed after the change", domain.ErrPlanChangeStale)
+	}
+	return nil
+}
+
+// sameLine compares what a manual edit changes of a line; the stored line
+// also carries names and a grams source the snapshot leaves out.
+func sameLine(a, b food.FoodComponent) bool {
+	return a.ChildID == b.ChildID && a.Amount == b.Amount && a.Unit == b.Unit && a.Grams == b.Grams &&
+		a.SortOrder == b.SortOrder && a.ToTaste == b.ToTaste
 }
 
 // contentSnap is the recipe_content kind's food event JSON of an edit.

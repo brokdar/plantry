@@ -226,3 +226,48 @@ func TestRecipeChange_CheckNeedsNoModel(t *testing.T) {
 	}
 	assert.Empty(t, out["blocks"])
 }
+
+const editTurn = `{"kind":"edit","recipe":{"name":"Curry","ingredients":["400 g chickpeas","400 g tomato"],"steps":["Simmer everything for 25 minutes."],"changes":["More tomato for a saucier curry."]}}`
+
+// Undo of an in-place edit refuses once the recipe was edited by hand.
+func TestRecipeChange_UndoRefusedAfterManualEdit(t *testing.T) {
+	t.Parallel()
+	e := newRCEnv(t, askTurn(editTurn))
+	ctx := context.Background()
+	code, out := e.do(t, http.MethodPost, e.path(e.curry.ID, "/ask"), map[string]string{"request": "change the recipe itself: more tomato"})
+	require.Equal(t, http.StatusOK, code, out)
+	code, res := e.do(t, http.MethodPost, e.path(e.curry.ID, "/edit"), out["proposal"])
+	require.Equal(t, http.StatusOK, code, res)
+
+	got, err := e.foods.Get(ctx, e.curry.ID)
+	require.NoError(t, err)
+	got.Instructions[0].Text = "Simmer for 30 minutes."
+	require.NoError(t, e.foods.Update(ctx, got))
+
+	code, body := e.do(t, http.MethodPost, "/api/food-events/revert", res["undo"])
+	assert.Equal(t, http.StatusConflict, code, body)
+	got, err = e.foods.Get(ctx, e.curry.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Simmer for 30 minutes.", got.Instructions[0].Text, "the manual edit stays")
+}
+
+// Undo of a variant refuses to delete it once it was edited by hand.
+func TestRecipeChange_UndoVariantRefusedAfterManualEdit(t *testing.T) {
+	t.Parallel()
+	e := newRCEnv(t, askTurn(spicyVariant))
+	ctx := context.Background()
+	code, out := e.do(t, http.MethodPost, e.path(e.curry.ID, "/ask"), map[string]string{"request": "spicier, with coconut yoghurt"})
+	require.Equal(t, http.StatusOK, code, out)
+	v := out["variant"].(map[string]any)
+	id := int64(v["food_id"].(float64))
+
+	got, err := e.foods.Get(ctx, id)
+	require.NoError(t, err)
+	got.Name = "My spicy curry"
+	require.NoError(t, e.foods.Update(ctx, got))
+
+	code, body := e.do(t, http.MethodPost, "/api/food-events/revert", v["undo"])
+	assert.Equal(t, http.StatusConflict, code, body)
+	_, err = e.foods.Get(ctx, id)
+	require.NoError(t, err, "the edited variant stays")
+}

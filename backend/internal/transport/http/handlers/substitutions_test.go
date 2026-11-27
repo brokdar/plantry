@@ -459,3 +459,71 @@ func TestSubstitution_ApplyReportsConfirmedDates(t *testing.T) {
 	out := e.swap(t, e.b)
 	assert.NotNil(t, out["confirmed_dates"])
 }
+
+// swapOf applies one swap of from for to on the session.
+func (e *subEnv) swapOf(t *testing.T, session, from, to int64) {
+	t.Helper()
+	code, out := e.do(t, http.MethodPost, "/api/cook-sessions/"+strconv.FormatInt(session, 10)+"/overrides",
+		map[string]int64{"from_food_id": from, "to_food_id": to})
+	require.Equal(t, http.StatusOK, code, out)
+}
+
+// stackedSwaps puts two swaps on batch b (onion for shallot, then kidney beans
+// for black beans) and returns the black beans.
+func (e *subEnv) stackedSwaps(t *testing.T) *food.Food {
+	t.Helper()
+	src := food.SourceManual
+	kcal, p, f, c := 90.0, 6.0, 0.5, 16.0
+	black := &food.Food{Name: "Black beans", Kind: food.KindLeaf, Source: &src, Kcal100g: &kcal, Protein100g: &p, Fat100g: &f, Carbs100g: &c}
+	require.NoError(t, e.foods.Create(context.Background(), black))
+	kb := e.beans
+	kb.Kcal100g, kb.Protein100g, kb.Fat100g, kb.Carbs100g = &kcal, &p, &f, &c
+	require.NoError(t, e.foods.Update(context.Background(), kb))
+	e.swap(t, e.b)
+	e.swapOf(t, e.b, e.beans.ID, black.ID)
+	return black
+}
+
+// A batch with two stacked swaps: "Always in this recipe" keeps both.
+func TestSubstitution_AlwaysKeepsEveryStackedSwap(t *testing.T) {
+	e := newSubEnv(t)
+	ctx := context.Background()
+	black := e.stackedSwaps(t)
+
+	code, out := e.keep(t, e.b, "recipe")
+	require.Equal(t, http.StatusOK, code, out)
+	base, err := e.foods.Get(ctx, e.chili.ID)
+	require.NoError(t, err)
+	ids := []int64{}
+	for _, c := range base.Children {
+		ids = append(ids, c.ChildID)
+	}
+	assert.ElementsMatch(t, []int64{e.shallot.ID, black.ID}, ids)
+	changes, err := sqlite.NewRecipeChangeRepo(e.db).Changes(ctx, e.chili.ID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Kidneybohnen (Dose) → Black beans", "Zwiebel → Schalotte"}, changes)
+}
+
+// "Save as variant" after two swaps names both in its changes list.
+func TestSubstitution_SaveVariantListsEveryStackedSwap(t *testing.T) {
+	e := newSubEnv(t)
+	e.stackedSwaps(t)
+
+	code, out := e.keep(t, e.b, "variant")
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, e.chili.Name+" with Black beans and Schalotte", out["name"])
+	changes, err := sqlite.NewRecipeChangeRepo(e.db).Changes(context.Background(), e.foodOf(t, e.b))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Kidneybohnen (Dose) → Black beans", "Zwiebel → Schalotte"}, changes)
+}
+
+// A swap undone by its reverse leaves nothing to keep.
+func TestSubstitution_KeepRefusesWhenSwapsCancel(t *testing.T) {
+	e := newSubEnv(t)
+	e.swap(t, e.b)
+	e.swapOf(t, e.b, e.shallot.ID, e.onion.ID)
+	for _, mode := range []string{"recipe", "variant"} {
+		code, out := e.keep(t, e.b, mode)
+		assert.Equal(t, http.StatusBadRequest, code, out)
+	}
+}

@@ -81,6 +81,13 @@ type Restorer interface {
 	Restore(ctx context.Context, subjectID int64, before json.RawMessage) error
 }
 
+// Verifier is an optional Restorer extension: Verify runs before Restore and
+// returns domain.ErrPlanChangeStale when the row no longer matches after, the
+// snapshot the change being undone wrote (the row changed outside the log).
+type Verifier interface {
+	Verify(ctx context.Context, subjectID int64, after json.RawMessage) error
+}
+
 // Undo is the revert token of a change: the range of events it wrote.
 // FirstEventID is 0 when it wrote none.
 type Undo struct {
@@ -190,6 +197,11 @@ func (s *Service) Revert(ctx context.Context, u Undo) ([]Subject, error) {
 			}
 		}
 		for _, e := range slices.Backward(events) {
+			if v, ok := s.restorers[e.Kind].(Verifier); ok {
+				if err := v.Verify(ctx, e.SubjectID, e.After); err != nil {
+					return err
+				}
+			}
 			if err := s.restorers[e.Kind].Restore(ctx, e.SubjectID, e.Before); err != nil {
 				return err
 			}

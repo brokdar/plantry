@@ -16,8 +16,8 @@ import (
 type substitutionService interface {
 	Options(ctx context.Context, fromID int64, sessionIDs []int64) ([]substitution.Option, []int64, error)
 	Apply(ctx context.Context, sessionID, fromID, toID int64) (substitution.Applied, error)
-	Always(ctx context.Context, sessionID, fromID, toID int64) (foodevent.Undo, error)
-	SaveVariant(ctx context.Context, sessionID, fromID, toID int64) (substitution.Saved, error)
+	Always(ctx context.Context, sessionID int64) (foodevent.Undo, error)
+	SaveVariant(ctx context.Context, sessionID int64) (substitution.Saved, error)
 	Remove(ctx context.Context, sessionID int64) (foodevent.Undo, error)
 }
 
@@ -126,7 +126,7 @@ func (h *SubstitutionHandler) Keep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Mode == "recipe" {
-		undo, err := h.svc.Always(r.Context(), id, req.FromFoodID, req.ToFoodID)
+		undo, err := h.svc.Always(r.Context(), id)
 		if err != nil {
 			writePlateError(w, err)
 			return
@@ -134,7 +134,7 @@ func (h *SubstitutionHandler) Keep(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"undo": undo})
 		return
 	}
-	saved, err := h.svc.SaveVariant(r.Context(), id, req.FromFoodID, req.ToFoodID)
+	saved, err := h.svc.SaveVariant(r.Context(), id)
 	if err != nil {
 		writePlateError(w, err)
 		return

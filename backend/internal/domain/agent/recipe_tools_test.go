@@ -150,6 +150,6 @@ func TestRecipeTools_NotRegisteredWithoutServices(t *testing.T) {
 func TestPrompt_RecipeRuleFitsTheBudget(t *testing.T) {
 	t.Parallel()
 	prompt, _ := agent.ComposePrompt(nil, "", "", time.Time{})
-	assert.Contains(t, prompt, "create_variant; edit_recipe only when the user explicitly asks")
+	assert.Contains(t, prompt, "Never delete or archive a recipe.")
 	assert.Less(t, len(prompt), 24_000)
 }

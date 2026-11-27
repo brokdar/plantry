@@ -15,7 +15,7 @@ import (
 type RecipeChanger interface {
 	Variant(ctx context.Context, baseID int64, p recipechange.Proposal) (recipechange.Result, error)
 	PreviewEdit(ctx context.Context, id int64, p recipechange.Proposal) (recipechange.Preview, error)
-	Edit(ctx context.Context, id int64, p recipechange.Proposal) (recipechange.Result, error)
+	EditPreviewed(ctx context.Context, id int64, p recipechange.Proposal, pv recipechange.Preview) (recipechange.Result, error)
 }
 
 // AttributeSetter sets the assistant's attribute values (flavor.Service).
@@ -83,9 +83,9 @@ func changeOutput(res recipechange.Result, extra map[string]any) json.RawMessage
 func toolCreateVariant(rc RecipeChanger) Tool {
 	return Tool{
 		Name: createVariantName,
-		Description: "Save a changed version of a recipe as a variant (\"spicier\", \"with coconut yoghurt\"); the original stays. " +
-			"Give the whole recipe: ingredient lines as \"amount unit food\", steps, and changes (one sentence each: what changed and why). " +
-			"No confirmation needed. saved false: check.blocks says why; tell the user.",
+		Description: "Save a changed recipe as a variant (\"spicier\"); the original stays. " +
+			"Give the whole recipe: lines as \"amount unit food\", steps, changes (one sentence each: what and why). " +
+			"saved false: check.blocks says why; tell the user.",
 		Schema: json.RawMessage(`{"type":"object","required":["recipe_id","recipe"],"properties":{"recipe_id":{"type":"integer"},` +
 			recipeSchema + `},"additionalProperties":false}`),
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
@@ -105,9 +105,9 @@ func toolCreateVariant(rc RecipeChanger) Tool {
 func toolEditRecipe(rc RecipeChanger) Tool {
 	return Tool{
 		Name: editRecipeName,
-		Description: "Change a recipe itself, only when the user explicitly asks for that; otherwise use " + createVariantName + ". " +
-			"Same recipe fields. Returns before and after: show the user what changed. " +
-			"needs_confirmation: confirmed plates hold the recipe (their shopping changes); tell the user and call again with confirmed true once they agree.",
+		Description: "Change a recipe itself, only when the user explicitly asks; otherwise " + createVariantName + ". " +
+			"Same fields. Returns before and after: show them. " +
+			"needs_confirmation: confirmed plates hold the recipe; tell the user and call again with confirmed true once they agree.",
 		Schema: json.RawMessage(`{"type":"object","required":["recipe_id","recipe"],"properties":{"recipe_id":{"type":"integer"},` +
 			recipeSchema + `,"confirmed":{"type":"boolean"}},"additionalProperties":false}`),
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
@@ -127,7 +127,7 @@ func toolEditRecipe(rc RecipeChanger) Tool {
 				diff["needs_confirmation"], diff["confirmed_dates"] = true, pv.ConfirmedDates
 				return changeOutput(recipechange.Result{Check: pv.Check}, diff), ToolEffectNone, nil
 			}
-			res, err := rc.Edit(ctx, in.RecipeID, in.Recipe)
+			res, err := rc.EditPreviewed(ctx, in.RecipeID, in.Recipe, pv)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -139,8 +139,8 @@ func toolEditRecipe(rc RecipeChanger) Tool {
 func toolSetAttributes(as AttributeSetter) Tool {
 	return Tool{
 		Name: setAttributesName,
-		Description: "Set or correct a recipe's attributes (cuisine, kind, heroes, texture, temperature, saucy, richness, colour, taste, technique, format). " +
-			"Values the user set stay; kept lists them.",
+		Description: "Set or correct recipe attributes (cuisine, kind, heroes, texture, temperature, saucy, richness, colour, taste, technique, format). " +
+			"User-set values stay; kept lists them.",
 		Schema: json.RawMessage(`{"type":"object","required":["recipe_id","attributes"],"properties":{"recipe_id":{"type":"integer"},` +
 			`"attributes":{"type":"object","minProperties":1}},"additionalProperties":false}`),
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
