@@ -102,7 +102,7 @@
 {"id":"prosciutto","group":"meat","state":"","en":["prosciutto","parma ham"],"de":["parmaschinken","prosciutto","rohschinken"],"off":"prosciutto"},
 {"id":"chicken_breast","group":"poultry","state":"raw","en":["chicken breast","chicken breasts","chicken breast fillet","chicken breast fillets"],"de":["hähnchenbrust","hähnchenbrustfilet","hühnerbrust","hähnchenbrustfilets"],"fdc":"chicken broilers or fryers breast meat only raw","piece_g":150},
 {"id":"chicken_thigh","group":"poultry","state":"raw","en":["chicken thigh","chicken thighs","boneless chicken thighs","chicken thigh fillets","boneless thigh"],"de":["hähnchenschenkel","hähnchenoberschenkel","hähnchenoberkeulen"],"also":["chicken thigh"],"fdc":"chicken broilers or fryers thigh meat only raw","piece_g":110},
-{"id":"vegetable_broth","group":"broth","state":"","en":["vegetable broth","vegetable stock","veggie stock","veg stock"],"de":["gemüsebrühe","gemüsefond"],"fdc":"soup stock vegetable","density":1.0},
+{"id":"vegetable_broth","group":"broth","state":"","en":["vegetable broth","vegetable stock","veggie stock","veg stock"],"de":["gemüsebrühe","gemüsefond"],"fdc":"soup vegetable broth","density":1.0},
 {"id":"chicken_broth","group":"broth","state":"","en":["chicken broth","chicken stock","chicken stock broth"],"de":["hühnerbrühe","hühnerfond","geflügelbrühe"],"fdc":"soup chicken broth ready-to-serve","density":1.0},
 {"id":"beef_broth","group":"broth","state":"","en":["beef broth","beef stock"],"de":["rinderbrühe","rinderfond","fleischbrühe"],"fdc":"soup beef broth ready-to-serve","density":1.0},
 {"id":"white_wine","group":"alcohol","state":"","en":["white wine","dry white wine"],"de":["weißwein","trockener weißwein"],"fdc":"white wine","density":0.99},

@@ -2,6 +2,8 @@ package fdc_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fdc"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 )
 
@@ -82,6 +85,73 @@ func TestDynamicProvider_Configured(t *testing.T) {
 			svc := settings.NewService(newMemRepo(), settings.NewEnvSnapshot(tt.env), newTestCipher(t))
 			p := fdc.NewDynamicProvider(svc)
 			assert.Equal(t, tt.want, p.Configured(context.Background()))
+		})
+	}
+}
+
+// stubFallback stands in for the offline catalogue (adapters/fdclocal).
+type stubFallback struct{}
+
+func (stubFallback) SearchByName(context.Context, string, int) ([]food.Candidate, error) {
+	return []food.Candidate{{Name: "Vinegar, cider", Source: food.SourceFDC, FdcID: 173469}}, nil
+}
+
+func (stubFallback) GetByID(_ context.Context, id int) (food.Candidate, error) {
+	if id != 173469 {
+		return food.Candidate{}, domain.ErrNotFound
+	}
+	return food.Candidate{Name: "Vinegar, cider", Source: food.SourceFDC, FdcID: id}, nil
+}
+
+func (stubFallback) GetFoodPortions(context.Context, int) ([]food.PortionInfo, error) {
+	return []food.PortionInfo{{RawUnit: "undetermined", Modifier: "tbsp", GramWeight: 15}}, nil
+}
+
+// TestDynamicProvider_Fallback: without a key the offline catalogue answers;
+// with a key it answers when the API fails (5xx, 429) or finds nothing.
+func TestDynamicProvider_Fallback(t *testing.T) {
+	ctx := context.Background()
+	t.Run("no key", func(t *testing.T) {
+		svc := settings.NewService(newMemRepo(), settings.NewEnvSnapshot(nil), newTestCipher(t))
+		p := fdc.NewDynamicProvider(svc).WithFallback(stubFallback{})
+		assert.True(t, p.Configured(ctx))
+		cs, err := p.SearchByName(ctx, "cider vinegar", 5)
+		require.NoError(t, err)
+		require.Len(t, cs, 1)
+		assert.Equal(t, 173469, cs[0].FdcID)
+		c, err := p.GetByID(ctx, 173469)
+		require.NoError(t, err)
+		assert.Equal(t, "Vinegar, cider", c.Name)
+		ps, err := p.GetFoodPortions(ctx, 173469)
+		require.NoError(t, err)
+		assert.Len(t, ps, 1)
+	})
+	for _, tt := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"server error", http.StatusServiceUnavailable, ""},
+		{"rate limited", http.StatusTooManyRequests, ""},
+		{"no results", http.StatusOK, `{"foods":[]}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer srv.Close()
+			svc := settings.NewService(newMemRepo(), settings.NewEnvSnapshot(map[string]string{"PLANTRY_FDC_API_KEY": "abc"}), newTestCipher(t))
+			p := fdc.WithTestBaseURL(fdc.NewDynamicProvider(svc).WithFallback(stubFallback{}), srv.URL)
+			cs, err := p.SearchByName(ctx, "cider vinegar", 5)
+			require.NoError(t, err)
+			require.Len(t, cs, 1)
+			assert.Equal(t, 173469, cs[0].FdcID)
+			if tt.status != http.StatusOK {
+				c, err := p.GetByID(ctx, 173469)
+				require.NoError(t, err)
+				assert.Equal(t, 173469, c.FdcID)
+			}
 		})
 	}
 }
