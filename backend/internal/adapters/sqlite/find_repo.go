@@ -15,7 +15,7 @@ import (
 )
 
 // FindRepo implements finds.Store over recipe_suggestions rows with a state
-// (00071).
+// (00069).
 type FindRepo struct {
 	conn
 }
