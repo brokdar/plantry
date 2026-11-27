@@ -776,10 +776,14 @@ func (s *Service) Dismiss(ctx context.Context, id int64) error {
 	if t.State != StateShown {
 		return ErrStale
 	}
-	if err := s.d.Store.SetState(ctx, id, StateDismissed, s.d.Now()); err != nil {
-		return err
-	}
-	return s.learn(ctx, t, false)
+	// One unit of work for the state and what the taste learns from it.
+	_, err = s.d.Plates.Recorded(ctx, func(ctx context.Context) error {
+		if err := s.d.Store.SetState(ctx, id, StateDismissed, s.d.Now()); err != nil {
+			return err
+		}
+		return s.learn(ctx, t, false)
+	})
+	return err
 }
 
 // On reports whether the Chef is on (chef.enabled).

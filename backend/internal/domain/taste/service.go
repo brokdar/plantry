@@ -310,20 +310,24 @@ func (s *Service) attributes(ctx context.Context, id int64) (flavor.Attributes, 
 // apply appends one signal per blamed ref and adds it to the ref's always
 // item. A learned item whose polarity changes by it records a taste item
 // food event (the "Recently learned" list and its Undo).
+// It runs in one unit of work (joining the caller's).
 func (s *Service) apply(ctx context.Context, kind SignalKind, w float64, blamed []Blamed, foodID, plateID *int64) error {
 	now := s.d.Now().UTC().Truncate(time.Second)
-	for _, b := range blamed {
-		if b.Share <= 0 {
-			continue
+	_, err := s.d.Events.Recorded(ctx, func(ctx context.Context) error {
+		for _, b := range blamed {
+			if b.Share <= 0 {
+				continue
+			}
+			if err := s.d.Store.AddSignal(ctx, Signal{Kind: kind, Ref: b.Ref, Weight: w * b.Share, Share: b.Share, At: now, FoodID: foodID, PlateID: plateID}); err != nil {
+				return err
+			}
+			if err := s.learn(ctx, b.Ref, w*b.Share, b.Share, now); err != nil {
+				return err
+			}
 		}
-		if err := s.d.Store.AddSignal(ctx, Signal{Kind: kind, Ref: b.Ref, Weight: w * b.Share, Share: b.Share, At: now, FoodID: foodID, PlateID: plateID}); err != nil {
-			return err
-		}
-		if err := s.learn(ctx, b.Ref, w*b.Share, b.Share, now); err != nil {
-			return err
-		}
-	}
-	return nil
+		return nil
+	})
+	return err
 }
 
 func (s *Service) learn(ctx context.Context, ref Ref, w, share float64, now time.Time) error {

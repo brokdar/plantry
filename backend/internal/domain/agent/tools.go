@@ -482,15 +482,26 @@ func toolRecordPreference(svc Services) Tool {
 				return nil, ToolEffectNone, fmt.Errorf("%w: value: %v", domain.ErrInvalidInput, err)
 			}
 			p.Preferences[in.Key] = v
-			if _, err := svc.Profile.Update(ctx, p); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			// A likes_/dislikes_ preference is also a taste statement that
-			// outranks learned evidence (TASTE-10); D2 adds the chips.
-			if ref, polarity, ok := taste.PreferenceStatement(in.Key, v); ok && svc.Taste != nil {
-				if _, _, err := svc.Taste.State(ctx, ref, polarity, taste.ScopeAlways, time.Time{}); err != nil {
-					return nil, ToolEffectNone, err
+			write := func(ctx context.Context) error {
+				if _, err := svc.Profile.Update(ctx, p); err != nil {
+					return err
 				}
+				// A likes_/dislikes_ preference is also a taste statement that
+				// outranks learned evidence (TASTE-10); D2 adds the chips.
+				if ref, polarity, ok := taste.PreferenceStatement(in.Key, v); ok && svc.Taste != nil {
+					if _, _, err := svc.Taste.State(ctx, ref, polarity, taste.ScopeAlways, time.Time{}); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			if svc.Tx != nil {
+				err = svc.Tx.InTx(ctx, write)
+			} else {
+				err = write(ctx)
+			}
+			if err != nil {
+				return nil, ToolEffectNone, err
 			}
 			return mustJSON(map[string]any{"recorded": true, "key": in.Key}), ToolEffectNone, nil
 		},
