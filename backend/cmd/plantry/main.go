@@ -547,7 +547,8 @@ func run() error {
 	)
 	// Finds (FIND, C2): requested finds run on the chef runner; fetching is
 	// polite (robots, rate limit, backoff) and guarded like discovery.
-	houseCuisines := householdCuisines(profileSvc.Get, foodAttributeRepo.LibraryCuisines, lovedCuisines(tasteSvc.View), settingsSvc.DiscoveryCuisines)
+	houseCuisines := householdCuisines(profileSvc.Get, lovedCuisines(tasteSvc.View),
+		stapleCuisines(tasteSvc.Staples, foodAttributeRepo.Many, time.Now), settingsSvc.DiscoveryCuisines, foodAttributeRepo.LibraryCuisines)
 	findSvc = finds.NewService(finds.Deps{
 		Store: sqlite.NewFindRepo(conn), LLM: llmResolver, Runs: runRecorder,
 		Fetcher: httpfetch.NewPolite(httpfetch.New(httpfetch.WithDialGuard(nil, cfg.DevMode)),
@@ -569,8 +570,8 @@ func run() error {
 			NewDishes: func(ctx context.Context) (int, error) {
 				return settingsdom.NewDishesPerWeek(ctx, settingsSvc)
 			},
-			Dish: planningDish(foodRepo.HasCookHistory, houseCuisines, settingsSvc.DiscoveryCuisines),
-			Now:  time.Now,
+			Cuisines: houseCuisines,
+			Now:      time.Now,
 		},
 	})
 	findRequester.svc = findSvc

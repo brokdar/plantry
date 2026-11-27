@@ -38,11 +38,13 @@ const (
 // Household is what the pipeline knows about the household. Only Lang and
 // Diet ever reach a search query (NFR-5); the rest stays in the adapt step.
 type Household struct {
-	Lang        string
-	Diet        string
-	Portions    int
-	Gates       gates.Household
-	Kitchen     profile.Kitchen
+	Lang     string
+	Diet     string
+	Portions int
+	Gates    gates.Household
+	Kitchen  profile.Kitchen
+	// MeatDaysMax is the weekly meat-day limit (H5); nil: none.
+	MeatDaysMax *int
 	Never       []string
 	Loves       []string
 	RatherNot   []string

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
@@ -15,41 +16,31 @@ func list(v ...string) func(context.Context) ([]string, error) {
 	return func(context.Context) ([]string, error) { return v, nil }
 }
 
-// FIND-15: the household's cuisines are its library's, its loves, Cuisines
-// to explore and the locale's home cuisine.
-func TestHouseholdCuisines_LibraryLovesExploreLocale(t *testing.T) {
+// FIND-15, TASTE, CP3 run 3 item 6: the household's cuisines come best
+// first: its loves, its staples' cuisines, Cuisines to explore, its library's
+// (most recipes first) and the locale's home cuisine last, each once.
+func TestHouseholdCuisines_LovesFirstLocaleLast(t *testing.T) {
 	prof := func(context.Context) (*profile.Profile, error) { return &profile.Profile{Locale: "de-DE"}, nil }
-	got, err := householdCuisines(prof, list("italian", "indian"), list("thai"), list())(context.Background())
+	got, err := householdCuisines(prof, list("indian"), list("italian", "indian"), list("thai"), list("german", "italian", "french"))(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, []string{"german", "indian", "italian", "thai"}, got)
+	assert.Equal(t, []string{"indian", "italian", "thai", "german", "french"}, got)
 }
 
-// FIND-15, COLD-4: a planning find's dish rotates through Cuisines to explore
-// once the household has cooked; without any it falls back to the
-// household's cuisines (CP3 dry run: an empty list gave no dish and a 400),
-// and week one stays within the household's cuisines.
-func TestPlanningDish_Scope(t *testing.T) {
-	day := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
-	cooked := func(v bool) func(context.Context) (bool, error) {
-		return func(context.Context) (bool, error) { return v, nil }
+// THEME-1: the staples' cuisines, the most staples first, neutral left out.
+func TestStapleCuisines_MostStaplesFirst(t *testing.T) {
+	staples := func(context.Context, time.Time) (map[int64]bool, error) {
+		return map[int64]bool{1: true, 2: true, 3: true, 4: true}, nil
 	}
-	tests := []struct {
-		name    string
-		cooked  bool
-		house   []string
-		explore []string
-		want    string
-	}{
-		{"cooked, explore set", true, []string{"italian"}, []string{"thai"}, "thai"},
-		{"cooked, no explore", true, []string{"italian"}, nil, "italian"},
-		{"week one", false, []string{"italian"}, []string{"thai"}, "italian"},
-		{"nothing in scope", true, nil, nil, ""},
+	attrs := func(_ context.Context, ids []int64) (map[int64]flavor.Record, error) {
+		require.Equal(t, []int64{1, 2, 3, 4}, ids)
+		c := map[int64]string{1: "italian", 2: "mexican", 3: "mexican", 4: "neutral"}
+		out := map[int64]flavor.Record{}
+		for id, v := range c {
+			out[id] = flavor.Record{Values: flavor.Attributes{Cuisine: v}}
+		}
+		return out, nil
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := planningDish(cooked(tt.cooked), list(tt.house...), list(tt.explore...))(context.Background(), day)
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
+	got, err := stapleCuisines(staples, attrs, time.Now)(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"mexican", "italian"}, got)
 }

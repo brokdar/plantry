@@ -49,11 +49,11 @@ type Planning struct {
 	ChefOn  func(ctx context.Context) (bool, error)
 	// NewDishes is the window's new-dish count (chef.new_dishes_per_week).
 	NewDishes func(ctx context.Context) (int, error)
-	// Dish names the cuisine the planning finds for the window starting on
-	// day look for (the day's discovery cuisine); planningDishes makes each
-	// a different main.
-	Dish func(ctx context.Context, day time.Time) (string, error)
-	Now  func() time.Time
+	// Cuisines are the household's cuisines for planning finds, best first
+	// (FIND-15, TASTE); planningDishes makes each find a different main of
+	// one of the first ones.
+	Cuisines func(ctx context.Context) ([]string, error)
+	Now      func() time.Time
 }
 
 func (s *Service) chefOn(ctx context.Context) (bool, error) {
@@ -115,27 +115,37 @@ func (s *Service) Prefetch(ctx context.Context, windowStart time.Time) error {
 	if err != nil {
 		return err
 	}
-	have, err := s.openFitting(ctx)
+	h, err := s.household(ctx)
+	if err != nil {
+		return err
+	}
+	have, err := s.openFitting(ctx, h.Kitchen)
 	if err != nil {
 		return err
 	}
 	if want <= have {
 		return nil
 	}
-	cuisine, err := s.d.Planning.Dish(ctx, windowStart)
+	all, err := s.d.Planning.Cuisines(ctx)
 	if err != nil {
 		return err
 	}
-	if clean(cuisine) == "" {
+	var cuisines []string
+	for _, c := range all {
+		if c = clean(c); c != "" {
+			cuisines = append(cuisines, c)
+		}
+	}
+	if len(cuisines) == 0 {
 		// No cuisine in the household's scope (FIND-15): nothing to search.
 		return nil
 	}
-	return s.request(ctx, planningDishes(clean(cuisine), want-have, windowStart))
+	return s.request(ctx, planningDishes(cuisines, want-have, windowStart, wantsMeatFree(h)))
 }
 
 // openFitting counts the searching planning finds and the ready finds that
 // can fill a lunch or dinner main cell and no generation passed over.
-func (s *Service) openFitting(ctx context.Context) (int, error) {
+func (s *Service) openFitting(ctx context.Context, k profile.Kitchen) (int, error) {
 	searching := StateSearching
 	open, err := s.d.Store.List(ctx, &searching, maxStaged)
 	if err != nil {
@@ -146,10 +156,6 @@ func (s *Service) openFitting(ctx context.Context) (int, error) {
 		if f.Trigger == TriggerPlanning {
 			n++
 		}
-	}
-	k, err := s.kitchen(ctx)
-	if err != nil {
-		return 0, err
 	}
 	state := StateReady
 	ready, err := s.d.Store.List(ctx, &state, maxStaged)
@@ -164,13 +170,13 @@ func (s *Service) openFitting(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-// kitchen is the household's kitchen (time allowances for cellUnfit).
-func (s *Service) kitchen(ctx context.Context) (profile.Kitchen, error) {
+// household is what the pipeline knows about the household (zero without
+// one).
+func (s *Service) household(ctx context.Context) (Household, error) {
 	if s.d.Household == nil {
-		return profile.Kitchen{}, nil
+		return Household{}, nil
 	}
-	h, err := s.d.Household(ctx)
-	return h.Kitchen, err
+	return s.d.Household(ctx)
 }
 
 // ThemeSet starts n finds for a theme the user set on a future window
@@ -180,7 +186,7 @@ func (s *Service) ThemeSet(ctx context.Context, theme string, n int) error {
 	if err != nil || !on {
 		return err
 	}
-	return s.request(ctx, planningDishes(clean(theme), n, s.now()))
+	return s.request(ctx, planningDishes([]string{clean(theme)}, n, s.now(), false))
 }
 
 // request starts an autonomous find per dish; no provider starts none.
@@ -213,10 +219,11 @@ func (s *Service) Stage(ctx context.Context, n int, windowStart time.Time) ([]in
 	if err != nil || !on {
 		return nil, nil, err
 	}
-	k, err := s.kitchen(ctx)
+	h, err := s.household(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
+	k := h.Kitchen
 	state := StateReady
 	ready, err := s.d.Store.List(ctx, &state, maxStaged)
 	if err != nil {

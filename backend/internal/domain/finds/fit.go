@@ -20,16 +20,39 @@ var mainStyles = []string{
 	"skillet main",
 }
 
-// planningDishes are the n dishes the autonomous finds for cuisine search
-// for, each a different main style, rotating by week so that consecutive
-// windows ask for different ones.
-func planningDishes(cuisine string, n int, day time.Time) []string {
+// planningHead is how many of the household's cuisines, best first, the
+// planning finds rotate through.
+const planningHead = 3
+
+// planningDishes are the n dishes the autonomous finds search for: each a
+// different main style of one of the first planningHead cuisines (ordered
+// best first), both rotating by week so that consecutive windows ask for
+// different ones; meatFree asks for meat-free mains.
+func planningDishes(cuisines []string, n int, day time.Time, meatFree bool) []string {
+	head := cuisines[:min(len(cuisines), planningHead)]
 	week := day.YearDay() / 7
 	out := make([]string, 0, n)
 	for i := range n {
-		out = append(out, cuisine+" "+mainStyles[(week+i)%len(mainStyles)])
+		dish := head[(week+i)%len(head)]
+		if meatFree {
+			dish += " meat-free"
+		}
+		out = append(out, dish+" "+mainStyles[(week+i)%len(mainStyles)])
 	}
 	return out
+}
+
+// meatFreeShare is the weekly meat-day limit up to which planning finds ask
+// for meat-free mains: with at most three meat days most lunch and dinner
+// mains of a week are meat-free, and the library's meat mains already fill
+// the meat days (H5), so a meat find rarely gets a cell.
+const meatFreeShare = 3
+
+// wantsMeatFree reports whether the household's planning finds look for
+// meat-free mains: an omnivore household with a tight meat-day limit (a
+// vegetarian or vegan diet is in the query already).
+func wantsMeatFree(h Household) bool {
+	return h.Diet == "" && h.MeatDaysMax != nil && *h.MeatDaysMax <= meatFreeShare
 }
 
 // nextDish is the dish after dish in the main styles (GATE-4: an autonomous

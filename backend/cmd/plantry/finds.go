@@ -1,14 +1,16 @@
 package main
 
 import (
+	"cmp"
 	"context"
+	"maps"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/gates"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/kitchen"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
@@ -42,7 +44,7 @@ func findHousehold(
 		if err != nil {
 			return finds.Household{}, err
 		}
-		h := finds.Household{Lang: "en", Kitchen: p.Kitchen, Portions: max(1, int(p.HouseholdPortions+0.5))}
+		h := finds.Household{Lang: "en", Kitchen: p.Kitchen, MeatDaysMax: p.MeatDaysPerWeekMax, Portions: max(1, int(p.HouseholdPortions+0.5))}
 		if strings.HasPrefix(p.Locale, "de") {
 			h.Lang = "de"
 		}
@@ -95,18 +97,17 @@ func findHousehold(
 	}
 }
 
-// householdCuisines lists the cuisines the household eats (FIND-15): the ones
-// its library's recipes carry, the ones it loves (the cold-start answer
-// included), Cuisines to explore, and the locale's home cuisine.
+// householdCuisines lists the cuisines the household eats (FIND-15), best
+// first (TASTE): the ones it loves (learned, stated or the cold-start
+// answer), its staples' cuisines, Cuisines to explore, its library's
+// cuisines (most recipes first), and the locale's home cuisine last.
 func householdCuisines(
 	prof func(context.Context) (*profile.Profile, error),
-	library func(context.Context) ([]string, error),
-	loved func(context.Context) ([]string, error),
-	explore func(context.Context) ([]string, error),
+	loved, staples, explore, library func(context.Context) ([]string, error),
 ) func(context.Context) ([]string, error) {
 	return func(ctx context.Context) ([]string, error) {
 		var out []string
-		for _, src := range []func(context.Context) ([]string, error){library, loved, explore} {
+		for _, src := range []func(context.Context) ([]string, error){loved, staples, explore, library} {
 			more, err := src(ctx)
 			if err != nil {
 				return nil, err
@@ -120,37 +121,42 @@ func householdCuisines(
 		if strings.HasPrefix(p.Locale, "de") {
 			out = append(out, "german")
 		}
-		slices.Sort(out)
-		return slices.Compact(out), nil
+		seen := map[string]bool{}
+		return slices.DeleteFunc(out, func(c string) bool {
+			dup := seen[c]
+			seen[c] = true
+			return dup
+		}), nil
 	}
 }
 
-// planningDish picks the cuisine a planning find searches for on day: once
-// the household has cooked, today's of Cuisines to explore; in week one
-// (COLD-4) or without any, today's of the household's cuisines (FIND-15).
-// An empty scope gives "", and the find service then starts none.
-func planningDish(
-	history func(context.Context) (bool, error),
-	house func(context.Context) ([]string, error),
-	explore func(context.Context) ([]string, error),
-) func(context.Context, time.Time) (string, error) {
-	return func(ctx context.Context, day time.Time) (string, error) {
-		cooked, err := history(ctx)
+// stapleCuisines lists the cuisines of the household's staples (THEME-1),
+// the most staples first; neutral is left out.
+func stapleCuisines(
+	staples func(context.Context, time.Time) (map[int64]bool, error),
+	attrs func(context.Context, []int64) (map[int64]flavor.Record, error),
+	now func() time.Time,
+) func(context.Context) ([]string, error) {
+	return func(ctx context.Context) ([]string, error) {
+		set, err := staples(ctx, now())
+		if err != nil || len(set) == 0 {
+			return nil, err
+		}
+		recs, err := attrs(ctx, slices.Sorted(maps.Keys(set)))
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		var cuisines []string
-		if cooked {
-			if cuisines, err = explore(ctx); err != nil {
-				return "", err
+		n := map[string]int{}
+		for _, r := range recs {
+			if c := r.Values.Cuisine; c != "" && c != "neutral" {
+				n[c]++
 			}
 		}
-		if len(cuisines) == 0 {
-			if cuisines, err = house(ctx); err != nil {
-				return "", err
-			}
-		}
-		return discovery.DailyCuisine(cuisines, day), nil
+		out := slices.Collect(maps.Keys(n))
+		slices.SortFunc(out, func(a, b string) int {
+			return cmp.Or(cmp.Compare(n[b], n[a]), cmp.Compare(a, b))
+		})
+		return out, nil
 	}
 }
 

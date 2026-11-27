@@ -52,7 +52,7 @@ func TestFoodAttributeRepo_RoundTripAndCascade(t *testing.T) {
 }
 
 // FIND-15: the library's cuisines are the stored cuisines of its live
-// recipes; neutral, archived recipes and leaves add none.
+// recipes, the most recipes first; neutral, archived recipes and leaves add none.
 func TestFoodAttributeRepo_LibraryCuisines(t *testing.T) {
 	ctx := context.Background()
 	db := testhelper.NewTestDB(t)
@@ -79,5 +79,5 @@ func TestFoodAttributeRepo_LibraryCuisines(t *testing.T) {
 
 	got, err := repo.LibraryCuisines(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"indian", "italian"}, got)
+	assert.Equal(t, []string{"italian", "indian"}, got, "the most recipes first")
 }
