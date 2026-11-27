@@ -336,6 +336,7 @@ func (b *Builder) addFoods(ctx context.Context, s *State, foods map[int64]*food.
 		ff.Attrs = flavor.Resolve(flavor.InputOf(foods[id], macros[id]), attrs[id]).Values
 		s.Foods[id] = ff
 	}
+	ShareGroupHistory(s.Foods)
 	return nil
 }
 
@@ -454,7 +455,7 @@ func stringSet(v any) map[string]bool {
 func BaseFacts(f *food.Food) FoodFacts {
 	ff := FoodFacts{
 		ID: f.ID, Name: food.Data(f.Name), Kind: f.Kind, KeepDays: f.KeepDays, Freezable: f.Freezable != nil && *f.Freezable,
-		Favorite: f.Favorite, Archived: f.Archived, LastEaten: f.History.LastEaten, ReferencePortions: 1, DietClass: f.DietClass,
+		Favorite: f.Favorite, Archived: f.Archived, VariantGroup: groupOf(f), LastEaten: f.History.LastEaten, ReferencePortions: 1, DietClass: f.DietClass,
 		NoCook: NoCook(f), Sweet: IsSweet(f), Tags: food.Labels(f.Tags),
 	}
 	if f.ServingG != nil {

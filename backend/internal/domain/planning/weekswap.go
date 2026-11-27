@@ -178,6 +178,7 @@ func sidePickerFor(in ChooseInput, prop Proposal) sidePicker {
 	h.prop = cloneProposal(prop) // the day's other plates (sideToday)
 	for _, ss := range prop.Sessions {
 		h.used[ss.FoodID]++
+		h.usedDish[h.s.dish(ss.FoodID)]++
 	}
 	return func(c plate.CellKey, main int64, others []int64) (int64, bool) {
 		// A light meal keeps its side: a re-pick would only add to it.
@@ -186,7 +187,8 @@ func sidePickerFor(in ChooseInput, prop Proposal) sidePicker {
 		}
 		id, ok := h.pickSide(c, main, others, 0, "")
 		if ok {
-			h.used[id]++ // the rotation counts each re-pick
+			h.used[id]++
+			h.usedDish[h.s.dish(id)]++ // the rotation counts each re-pick
 		}
 		return id, ok
 	}

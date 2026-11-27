@@ -1,6 +1,7 @@
 package planning
 
 import (
+	"maps"
 	"math"
 	"slices"
 	"time"
@@ -606,7 +607,7 @@ func (x *index) earlierCook(i int, since time.Time) (time.Time, bool) {
 	var first time.Time
 	var found bool
 	for j, o := range x.cooks {
-		if j == i || o.foodID != ev.foodID || o.cell.Date.Before(since) || x.routine(o.cell) {
+		if j == i || x.s.dish(o.foodID) != x.s.dish(ev.foodID) || o.cell.Date.Before(since) || x.routine(o.cell) {
 			continue
 		}
 		if plate.Before(o.cell, ev.cell, x.s.SlotOrder) && (!found || o.cell.Date.Before(first)) {
@@ -650,7 +651,7 @@ func (x *index) eligibleRecipes(weeks int) int {
 	cookedBefore := map[int64]bool{}
 	for _, ev := range x.cooks {
 		if !ev.cell.Date.Before(since) && ev.cell.Date.Before(x.s.Window.Start) && !x.routine(ev.cell) {
-			cookedBefore[ev.foodID] = true
+			cookedBefore[x.s.dish(ev.foodID)] = true
 		}
 	}
 	// A standalone recipe is only a candidate where the window has a light
@@ -659,7 +660,9 @@ func (x *index) eligibleRecipes(weeks int) int {
 	for _, c := range x.s.Cells {
 		light = light || (c.Mode == availability.ModePlan && x.mealOf(c.SlotID) == mealLight)
 	}
-	for _, f := range x.s.Foods {
+	counted := map[int64]bool{} // a variant group counts once
+	for _, id := range slices.Sorted(maps.Keys(x.s.Foods)) {
+		f := x.s.Foods[id]
 		if !f.Composed() || f.Archived || !varietyRole(f.Role) || routine[f.ID] || (!light && !isMain(f.Role, mealFull)) {
 			continue
 		}
@@ -667,7 +670,8 @@ func (x *index) eligibleRecipes(weeks int) int {
 		if DietRestricts(x.s.Profile.DietType) && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t) {
 			continue
 		}
-		if (f.LastEaten == nil || f.LastEaten.Before(since)) && !cookedBefore[f.ID] {
+		if (f.LastEaten == nil || f.LastEaten.Before(since)) && !cookedBefore[x.s.dish(f.ID)] && !counted[x.s.dish(f.ID)] {
+			counted[x.s.dish(f.ID)] = true
 			if f.DietClass == diet.Omnivore {
 				meat++
 			} else {

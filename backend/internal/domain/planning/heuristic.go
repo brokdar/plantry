@@ -98,9 +98,11 @@ type planner struct {
 	allowMeat bool
 	// notes are the run-note lines of rules the heuristic had to bend or
 	// could not meet (a meat day past the limit, a cell without a main).
-	notes      []string
-	seen       map[int64][]time.Time
-	used       map[int64]int
+	notes []string
+	seen  map[int64][]time.Time
+	used  map[int64]int
+	// usedDish counts the same placements by dish (a variant group is one).
+	usedDish   map[int64]int
 	avoid      map[int64]bool
 	avoidBatch map[int64]bool
 	// exclude are foods the target may not hold at all (ChooseInput.Exclude).
@@ -138,7 +140,7 @@ func newPlanner(in ChooseInput) *planner {
 	h := &planner{
 		in: in, s: s, x: newIndex(s, in.Target), order: s.SlotOrder,
 		done: map[cellID]bool{}, occasions: map[int]map[cellID]bool{},
-		meatDays: map[int]bool{}, seen: map[int64][]time.Time{}, used: map[int64]int{},
+		meatDays: map[int]bool{}, seen: map[int64][]time.Time{}, used: map[int64]int{}, usedDish: map[int64]int{},
 		avoid: idSet(in.Avoid), avoidBatch: idSet(in.AvoidBatches), exclude: idSet(in.Exclude), routineFoods: nil,
 	}
 	h.routineFoods = h.x.routineFoods()
@@ -166,11 +168,13 @@ func newPlanner(in ChooseInput) *planner {
 		}
 	}
 	for _, ss := range s.Sessions {
-		h.seen[ss.FoodID] = append(h.seen[ss.FoodID], ss.CookDate)
+		k := s.dish(ss.FoodID)
+		h.seen[k] = append(h.seen[k], ss.CookDate)
 	}
 	for _, hp := range s.History {
 		for _, id := range hp.FoodIDs {
-			h.seen[id] = append(h.seen[id], hp.Date)
+			k := s.dish(id)
+			h.seen[k] = append(h.seen[k], hp.Date)
 		}
 	}
 	for _, ss := range s.Sessions {
@@ -575,9 +579,11 @@ func (h *planner) cook(c plate.CellKey) error {
 		h.prop.Sessions = append(h.prop.Sessions, ss)
 		sup.side = len(h.prop.Sessions) - 1
 		h.used[side]++
+		h.usedDish[h.s.dish(side)]++
 	}
 	h.supplies = append(h.supplies, sup)
 	h.used[main]++
+	h.usedDish[h.s.dish(main)]++
 	switch {
 	case f.Explore():
 		h.explorePlaced++
@@ -743,7 +749,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		// else qualifies.
 		atCap := h.x.mealOf(c.SlotID) == mealFull && h.dishFull(f.ID)
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
-			b2f(h.s.tooSlow(f, c)), b2f(h.overAllowance(f, c)), b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(!f.NutritionComplete), b2f(f.Role != food.RoleMain),
+			b2f(h.s.tooSlow(f, c)), b2f(h.overAllowance(f, c)), b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.usedDish[h.s.dish(f.ID)]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(!f.NutritionComplete), b2f(f.Role != food.RoleMain),
 			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
@@ -911,7 +917,7 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 			// plate comes after every other (no side twice a day).
 			keys = append(keys, b2f(h.sideToday(f.ID, c)))
 		}
-		keys = append(keys, float64(h.used[f.ID]))
+		keys = append(keys, float64(h.usedDish[h.s.dish(f.ID)]))
 		if fit {
 			clash, raised := h.s.sideFit(main, others, f)
 			if clash {
@@ -1001,7 +1007,7 @@ func (h *planner) recent(foodID int64, date time.Time, span int) bool {
 	if le := h.s.Foods[foodID].LastEaten; le != nil && !le.Before(since) {
 		return true
 	}
-	for _, d := range h.seen[foodID] {
+	for _, d := range h.seen[h.s.dish(foodID)] {
 		if !d.Before(since) {
 			return true
 		}

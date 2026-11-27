@@ -75,19 +75,19 @@ func quickFor(in ChooseInput, prop Proposal, key string, limit int, skip map[int
 	cookDate := prop.Sessions[si].CookDate
 	inPlan := map[int64]bool{}
 	for _, ss := range prop.Sessions {
-		inPlan[ss.FoodID] = true
+		inPlan[merged.dish(ss.FoodID)] = true
 	}
 	for _, p := range merged.Plates {
 		if p.Confirmed && merged.Window.Contains(p.Date) {
 			for _, c := range p.Components {
-				inPlan[c.FoodID] = true
+				inPlan[merged.dish(c.FoodID)] = true
 			}
 		}
 	}
 	household := merged.Profile.DietType
 	var cands []FoodFacts
 	for id, f := range merged.Foods {
-		if skip[id] || inPlan[id] || !f.Composed() || f.Archived || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 || !f.NutritionComplete ||
+		if skip[id] || inPlan[merged.dish(id)] || !f.Composed() || f.Archived || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 || !f.NutritionComplete ||
 			f.Minutes <= 0 || f.Minutes > limit || (f.Role != old.Role && f.Role != food.RoleMain) ||
 			(DietRestricts(household) && !fitsDiet(f.DietClass, diet.Class(household))) {
 			continue
