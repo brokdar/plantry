@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -31,6 +32,7 @@ type subEnv struct {
 	shallot  *food.Food
 	a, b     int64 // the two sessions
 	sessions *sqlite.CookSessionRepo
+	now      *time.Time // the service's clock
 }
 
 func newSubEnv(t *testing.T) *subEnv {
@@ -53,6 +55,8 @@ func newSubEnv(t *testing.T) *subEnv {
 	events = foodevent.NewService(sqlite.NewTxRunner(e.db), sqlite.NewFoodEventRepo(e.db), restorers, nil)
 	svc = substitution.NewService(e.foods, sessions, sqlite.NewSubstitutionRepo(e.db), events)
 	restorers[foodevent.KindSubstitution] = svc
+	now := day(t, "2026-11-01")
+	svc.Now = func() time.Time { return now }
 
 	shop := shopping.NewService(shopping.Deps{
 		Source: sqlite.NewShoppingRepo(e.db), Foods: e.foods, Settings: e.settings, Slots: sqlite.NewSlotRepo(e.db),
@@ -65,7 +69,7 @@ func newSubEnv(t *testing.T) *subEnv {
 	r.Delete("/api/cook-sessions/{id}/overrides", sh.Remove)
 	r.Post("/api/food-events/revert", handlers.NewFoodEventHandler(events).Revert)
 
-	se := &subEnv{shopEnv: e, api: r, shallot: shallot, sessions: sessions}
+	se := &subEnv{shopEnv: e, api: r, shallot: shallot, sessions: sessions, now: &now}
 	se.a = e.chiliBatch(t)
 	one := 1.0
 	p2, err := e.plates.Create(ctx, plate.PlateInput{
@@ -241,4 +245,99 @@ func TestSubstitution_Options(t *testing.T) {
 	assert.Equal(t, "Schalotte", o["name"])
 	assert.InDelta(t, 1.0, o["ratio"], 0)
 	assert.Equal(t, map[string]any{"amount": 60.0, "unit": "g"}, o["amount"]) // 240 g for 4 portions, batch of 1
+}
+
+func (e *subEnv) hiddenCount(t *testing.T) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM hidden_variants`).Scan(&n))
+	return n
+}
+
+func (e *subEnv) eventCount(t *testing.T) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM food_events`).Scan(&n))
+	return n
+}
+
+// A session whose recipe has no line of the ingredient is refused before any
+// write: no variant, no re-pointing, no event.
+func TestSubstitution_MissingLineWritesNothing(t *testing.T) {
+	e := newSubEnv(t)
+	events := e.eventCount(t)
+	var before int
+	require.NoError(t, e.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM foods`).Scan(&before))
+	code, out := e.do(t, http.MethodPost, "/api/cook-sessions/"+strconv.FormatInt(e.b, 10)+"/overrides",
+		map[string]int64{"from_food_id": e.shallot.ID, "to_food_id": e.onion.ID})
+	assert.Equal(t, http.StatusBadRequest, code, out)
+	assert.Equal(t, e.chili.ID, e.foodOf(t, e.b))
+	var after int
+	require.NoError(t, e.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM foods`).Scan(&after))
+	assert.Equal(t, before, after, "no clone")
+	assert.Zero(t, e.hiddenCount(t))
+	assert.Equal(t, events, e.eventCount(t), "no event")
+}
+
+// The shop dialog offers only the batches whose recipe has the item.
+func TestSubstitution_OptionsListApplicableSessions(t *testing.T) {
+	e := newSubEnv(t)
+	e.swap(t, e.b) // b now has shallot, a still onion
+	ids := strconv.FormatInt(e.a, 10) + "," + strconv.FormatInt(e.b, 10)
+	code, out := e.do(t, http.MethodGet, "/api/substitutes?food_id="+strconv.FormatInt(e.shallot.ID, 10)+"&session_ids="+ids, nil)
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, []any{float64(e.b)}, out["session_ids"])
+
+	code, out = e.do(t, http.MethodGet, "/api/substitutes?food_id="+strconv.FormatInt(e.apple.ID, 10)+"&session_ids="+ids, nil)
+	assert.Equal(t, http.StatusBadRequest, code, out)
+}
+
+// Confirmed sessions of today and later stay open to a swap; cooked ones and
+// ones with a plate before today are refused.
+func TestSubstitution_PastSessionsAreRefused(t *testing.T) {
+	e := newSubEnv(t)
+	swap := func() (int, map[string]any) {
+		return e.do(t, http.MethodPost, "/api/cook-sessions/"+strconv.FormatInt(e.b, 10)+"/overrides",
+			map[string]int64{"from_food_id": e.onion.ID, "to_food_id": e.shallot.ID})
+	}
+	sess, err := e.sessions.GetSession(context.Background(), e.b)
+	require.NoError(t, err)
+	cooked := day(t, "2026-11-05")
+	sess.CookedAt = &cooked
+	require.NoError(t, e.sessions.UpdateSession(context.Background(), sess))
+	code, out := swap()
+	assert.Equal(t, http.StatusBadRequest, code, "cooked: %v", out)
+	sess.CookedAt = nil
+	require.NoError(t, e.sessions.UpdateSession(context.Background(), sess))
+
+	*e.now = day(t, "2026-11-06")
+	code, out = swap()
+	assert.Equal(t, http.StatusBadRequest, code, "plate in the past: %v", out)
+	*e.now = day(t, "2026-11-05")
+	code, out = swap()
+	assert.Equal(t, http.StatusOK, code, "plate today: %v", out)
+}
+
+// Monday's batch substituted and eaten: the recipe is the one eaten (last
+// eaten, times cooked), not the hidden variant.
+func TestSubstitution_HistoryFollowsTheRecipe(t *testing.T) {
+	e := newSubEnv(t)
+	ctx := context.Background()
+	e.swap(t, e.b)
+	variant := e.foodOf(t, e.b)
+	h, err := e.foods.History(ctx, []int64{e.chili.ID, variant}, day(t, "2026-11-10"))
+	require.NoError(t, err)
+	require.NotNil(t, h[e.chili.ID].LastEaten, "the recipe is eaten through its variant")
+	assert.Equal(t, day(t, "2026-11-05"), *h[e.chili.ID].LastEaten)
+	assert.Equal(t, 2, h[e.chili.ID].TimesCooked, "both batches count")
+	base, err := e.foods.LookupByIDs(ctx, []int64{variant, e.chili.ID})
+	require.NoError(t, err)
+	assert.Equal(t, e.chili.ID, base[variant].HiddenBaseID)
+	assert.Zero(t, base[e.chili.ID].HiddenBaseID)
+
+	uneaten, err := e.foods.UneatenRecipes(ctx, day(t, "2026-11-03"), day(t, "2026-11-10"))
+	require.NoError(t, err)
+	for _, r := range uneaten {
+		assert.NotEqual(t, e.chili.ID, r.ID, "eaten through the variant, so not uneaten")
+	}
 }

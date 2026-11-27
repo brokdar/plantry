@@ -24,3 +24,8 @@ UPDATE plate_components SET food_id = ? WHERE cook_session_id = ?;
 -- name: TouchPlatesOfSession :exec
 UPDATE plates SET updated_at = datetime('now')
 WHERE id IN (SELECT plate_id FROM plate_components WHERE cook_session_id = ?);
+
+-- name: ListHiddenVariantBases :many
+-- The recipe each of the foods is a hidden variant of.
+SELECT food_id, base_food_id FROM hidden_variants
+WHERE food_id IN (sqlc.slice(ids)) AND base_food_id IS NOT NULL;

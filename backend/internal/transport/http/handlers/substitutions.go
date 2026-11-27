@@ -14,7 +14,7 @@ import (
 
 // substitutionService is the subset of substitution.Service the endpoints use.
 type substitutionService interface {
-	Options(ctx context.Context, fromID int64, sessionIDs []int64) ([]substitution.Option, error)
+	Options(ctx context.Context, fromID int64, sessionIDs []int64) ([]substitution.Option, []int64, error)
 	Apply(ctx context.Context, sessionID, fromID, toID int64) (foodevent.Undo, error)
 	Remove(ctx context.Context, sessionID int64) (foodevent.Undo, error)
 }
@@ -39,7 +39,8 @@ type substituteOption struct {
 }
 
 // Options handles GET /api/substitutes?food_id=&session_ids=1,2: up to three
-// substitutes for ingredient food_id with the amounts the listed batches need.
+// substitutes for ingredient food_id with the amounts the listed batches need,
+// and the listed batches the swap applies to (session_ids).
 func (h *SubstitutionHandler) Options(w http.ResponseWriter, r *http.Request) {
 	foodID, err := strconv.ParseInt(r.URL.Query().Get("food_id"), 10, 64)
 	if err != nil || foodID <= 0 {
@@ -55,7 +56,7 @@ func (h *SubstitutionHandler) Options(w http.ResponseWriter, r *http.Request) {
 		}
 		ids = append(ids, id)
 	}
-	opts, err := h.svc.Options(r.Context(), foodID, ids)
+	opts, applicable, err := h.svc.Options(r.Context(), foodID, ids)
 	if err != nil {
 		writePlateError(w, err)
 		return
@@ -68,7 +69,7 @@ func (h *SubstitutionHandler) Options(w http.ResponseWriter, r *http.Request) {
 			out[i].Amount = &q
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"options": out})
+	writeJSON(w, http.StatusOK, map[string]any{"options": out, "session_ids": applicable})
 }
 
 type applyOverrideRequest struct {

@@ -2341,6 +2341,7 @@
     "none": "Für {{name}} kann ich keinen Ersatz anbieten.",
     "loading": "Ersatz wird gesucht",
     "option": "{{amount}} {{name}}",
+    "some_batches": "Das gilt für {{count}} von {{total}} Vorkochen; die anderen haben die Zutat nicht im Rezept oder sind schon gekocht.",
     "all_batches": "Das gilt für alle {{count}} Vorkochen, die es brauchen.",
     "this_batch": "Das ändert nur dieses Vorkochen.",
     "applied": "{{to}} statt {{from}}",

@@ -95,15 +95,17 @@ SELECT COUNT(*) FROM foods WHERE kind = 'composed' AND archived = 0;
 -- name: ListUneatenRecipes :many
 -- Recipes no confirmed plate dated in [since, today] holds, plates marked
 -- not_eaten aside: FoodHistory's last_eaten is before since, or there is
--- none. The variety rule H8 counts them (D21). The eaten set is one
+-- none. A hidden substitution variant counts as its base recipe. The
+-- variety rule H8 counts them (D21). The eaten set is one
 -- uncorrelated scan of the date range (ix_plates_date).
 SELECT f.id, f.role
 FROM foods f
 WHERE f.kind = 'composed' AND f.archived = 0
   AND f.id NOT IN (
-      SELECT pc.food_id
+      SELECT COALESCE(hv.base_food_id, pc.food_id)
       FROM plates p
       JOIN plate_components pc ON pc.plate_id = p.id
+      LEFT JOIN hidden_variants hv ON hv.food_id = pc.food_id
       WHERE p.date >= sqlc.arg(since)
         AND p.date <= sqlc.arg(today)
         AND p.state = 'confirmed'
@@ -116,13 +118,14 @@ ORDER BY f.id;
 -- (D26). last_eaten is the latest confirmed plate dated on or before today
 -- that holds the food and is not marked not_eaten (empty when none);
 -- times_cooked counts the food's confirmed sessions cooked on or before today
--- with at least one linked plate not marked not_eaten.
+-- with at least one linked plate not marked not_eaten. A hidden substitution
+-- variant's plates and sessions count for its base recipe.
 SELECT f.id AS food_id,
        CAST(COALESCE((
            SELECT MAX(p.date)
            FROM plate_components pc
            JOIN plates p ON p.id = pc.plate_id
-           WHERE pc.food_id = f.id
+           WHERE (pc.food_id = f.id OR pc.food_id IN (SELECT hv.food_id FROM hidden_variants hv WHERE hv.base_food_id = f.id))
              AND p.date <= sqlc.arg(today)
              AND p.state = 'confirmed'
              AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
@@ -131,7 +134,7 @@ SELECT f.id AS food_id,
        (
            SELECT COUNT(*)
            FROM cook_sessions cs
-           WHERE cs.food_id = f.id
+           WHERE (cs.food_id = f.id OR cs.food_id IN (SELECT hv.food_id FROM hidden_variants hv WHERE hv.base_food_id = f.id))
              AND cs.cook_date <= sqlc.arg(today)
              AND cs.state = 'confirmed'
              AND EXISTS (SELECT 1 FROM plate_components pc

@@ -35,7 +35,8 @@ const sortLastEaten = "last_eaten"
 // (queries/foods.sql), which fills the response fields.
 const lastEatenExpr = `(SELECT MAX(p.date) FROM plate_components pc
 	JOIN plates p ON p.id = pc.plate_id
-	WHERE pc.food_id = foods.id AND p.date <= ? AND p.state = 'confirmed'
+	WHERE (pc.food_id = foods.id OR pc.food_id IN (SELECT hv.food_id FROM hidden_variants hv WHERE hv.base_food_id = foods.id))
+	  AND p.date <= ? AND p.state = 'confirmed'
 	  AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
 	                  WHERE pf.plate_id = p.id AND pf.status = 'not_eaten'))`
 
@@ -385,6 +386,15 @@ func (r *FoodRepo) LookupByIDs(ctx context.Context, ids []int64) (map[int64]*foo
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	bases, err := r.queriesFor(ctx).ListHiddenVariantBases(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range bases {
+		if f, ok := result[b.FoodID]; ok && b.BaseFoodID.Valid {
+			f.HiddenBaseID = b.BaseFoodID.Int64
+		}
 	}
 	return result, nil
 }

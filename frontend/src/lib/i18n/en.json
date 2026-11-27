@@ -2341,6 +2341,7 @@
     "none": "No substitute I can offer for {{name}}.",
     "loading": "Looking for substitutes",
     "option": "{{amount}} {{name}}",
+    "some_batches": "This applies to {{count}} of {{total}} batches; the others have no such ingredient in the recipe or are already cooked.",
     "all_batches": "This applies to all {{count}} batches that need it.",
     "this_batch": "This changes this batch only.",
     "applied": "{{to}} instead of {{from}}",

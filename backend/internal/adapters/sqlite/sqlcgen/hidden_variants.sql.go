@@ -8,6 +8,7 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const clearHiddenVariantSession = `-- name: ClearHiddenVariantSession :exec
@@ -29,6 +30,50 @@ func (q *Queries) GetHiddenVariant(ctx context.Context, foodID int64) (HiddenVar
 	var i HiddenVariant
 	err := row.Scan(&i.FoodID, &i.BaseFoodID, &i.SessionID)
 	return i, err
+}
+
+const listHiddenVariantBases = `-- name: ListHiddenVariantBases :many
+SELECT food_id, base_food_id FROM hidden_variants
+WHERE food_id IN (/*SLICE:ids*/?) AND base_food_id IS NOT NULL
+`
+
+type ListHiddenVariantBasesRow struct {
+	FoodID     int64
+	BaseFoodID sql.NullInt64
+}
+
+// The recipe each of the foods is a hidden variant of.
+func (q *Queries) ListHiddenVariantBases(ctx context.Context, ids []int64) ([]ListHiddenVariantBasesRow, error) {
+	query := listHiddenVariantBases
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHiddenVariantBasesRow{}
+	for rows.Next() {
+		var i ListHiddenVariantBasesRow
+		if err := rows.Scan(&i.FoodID, &i.BaseFoodID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listUnusedHiddenVariantIDs = `-- name: ListUnusedHiddenVariantIDs :many

@@ -53,6 +53,15 @@ func (s State) proposedMain(pp ProposedPlate) int64 {
 	return 0
 }
 
+// mealDish is the dish a main counts as for S8: a hidden substitution variant
+// counts as its recipe.
+func (s State) mealDish(id int64) int64 {
+	if b := s.Foods[id].BaseFood; b != 0 {
+		return b
+	}
+	return id
+}
+
 func (s State) countsAsMain(id int64) bool {
 	f, ok := s.Foods[id]
 	return ok && f.Composed() && isMain(f.Role, mealFull)
@@ -67,7 +76,7 @@ func (x *index) dishMeals() map[int64]int {
 			continue
 		}
 		if id := x.s.mainOf(p); id != 0 {
-			out[id]++
+			out[x.s.mealDish(id)]++
 		}
 	}
 	return out
@@ -94,12 +103,12 @@ func (x *index) dishIssues() []Issue {
 func (h *planner) dishMeals(id int64) int {
 	n := 0
 	for _, p := range h.s.Plates {
-		if h.s.Window.Contains(p.Date) && h.x.mealOf(p.SlotID) == mealFull && h.s.mainOf(p) == id {
+		if h.s.Window.Contains(p.Date) && h.x.mealOf(p.SlotID) == mealFull && h.s.mealDish(h.s.mainOf(p)) == id {
 			n++
 		}
 	}
 	for _, pp := range h.prop.Plates {
-		if h.s.Window.Contains(pp.Date) && h.x.mealOf(pp.SlotID) == mealFull && h.s.proposedMain(pp) == id {
+		if h.s.Window.Contains(pp.Date) && h.x.mealOf(pp.SlotID) == mealFull && h.s.mealDish(h.s.proposedMain(pp)) == id {
 			n++
 		}
 	}

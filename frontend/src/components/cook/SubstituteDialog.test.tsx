@@ -30,7 +30,10 @@ describe("SubstituteDialog", () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     await i18n.changeLanguage("en")
-    vi.mocked(getSubstitutes).mockResolvedValue({ options: [SHALLOT] })
+    vi.mocked(getSubstitutes).mockResolvedValue({
+      options: [SHALLOT],
+      session_ids: [7, 8],
+    })
     vi.mocked(applySubstitution).mockResolvedValue({
       undo: { first_event_id: 4, last_event_id: 4 },
     })
@@ -76,8 +79,33 @@ describe("SubstituteDialog", () => {
     expect(applySubstitution).toHaveBeenNthCalledWith(2, 8, 51, 90)
   })
 
+  it("shop: applies only to the batches that have the ingredient and says how many", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getSubstitutes).mockResolvedValue({
+      options: [SHALLOT],
+      session_ids: [8],
+    })
+    renderWithRouter(
+      <SubstituteDialog
+        open
+        onOpenChange={() => {}}
+        sessionIds={[7, 8]}
+        from={{ id: 51, name: "Onion" }}
+      />
+    )
+    expect(
+      await screen.findByText(/This applies to 1 of 2 batches/)
+    ).toBeInTheDocument()
+    await user.click(await screen.findByTestId("substitute-option"))
+    await waitFor(() => expect(applySubstitution).toHaveBeenCalledTimes(1))
+    expect(applySubstitution).toHaveBeenCalledWith(8, 51, 90)
+  })
+
   it("says so when nothing can be offered", async () => {
-    vi.mocked(getSubstitutes).mockResolvedValue({ options: [] })
+    vi.mocked(getSubstitutes).mockResolvedValue({
+      options: [],
+      session_ids: [7],
+    })
     renderWithRouter(
       <SubstituteDialog
         open

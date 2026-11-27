@@ -51,6 +51,8 @@ export function SubstituteDialog({
   const from = fixed ?? picked
   const options = useSubstitutes(from?.id ?? 0, sessionIds, open && !!from)
   const apply = useApplySubstitution()
+  // Only the batches whose recipe has the item (and are not past) change.
+  const applicableIds = options.data?.session_ids ?? sessionIds
   const german = i18n.language.startsWith("de")
 
   function close(next: boolean) {
@@ -70,9 +72,14 @@ export function SubstituteDialog({
           <DialogDescription>
             {!from
               ? t("substitute.pick_hint")
-              : sessionIds.length > 1
-                ? t("substitute.all_batches", { count: sessionIds.length })
-                : t("substitute.this_batch")}
+              : applicableIds.length < sessionIds.length
+                ? t("substitute.some_batches", {
+                    count: applicableIds.length,
+                    total: sessionIds.length,
+                  })
+                : applicableIds.length > 1
+                  ? t("substitute.all_batches", { count: applicableIds.length })
+                  : t("substitute.this_batch")}
           </DialogDescription>
         </DialogHeader>
 
@@ -123,15 +130,15 @@ export function SubstituteDialog({
                     onClick={() =>
                       apply.mutate(
                         {
-                          sessionIds,
+                          sessionIds: applicableIds,
                           fromId: from.id,
                           toId: o.food_id,
                           message:
-                            sessionIds.length > 1
+                            applicableIds.length > 1
                               ? t("substitute.applied_many", {
                                   to: o.name,
                                   from: from.name,
-                                  count: sessionIds.length,
+                                  count: applicableIds.length,
                                 })
                               : t("substitute.applied", {
                                   to: o.name,

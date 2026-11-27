@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -53,11 +54,13 @@ type Service struct {
 	sessions plate.SessionRepository
 	store    Store
 	events   *foodevent.Service
+	// Now is the clock for the past-plate guard; time.Now unless a test sets it.
+	Now func() time.Time
 }
 
 // NewService creates a Service.
 func NewService(foods food.Repository, sessions plate.SessionRepository, store Store, events *foodevent.Service) *Service {
-	return &Service{foods: foods, sessions: sessions, store: store, events: events}
+	return &Service{foods: foods, sessions: sessions, store: store, events: events, Now: time.Now}
 }
 
 var _ foodevent.Restorer = (*Service)(nil)
@@ -76,30 +79,48 @@ type Option struct {
 
 // Options returns up to three substitutes for the leaf from, taken from the
 // curated table: only foods in the catalogue with nutrition (P3), in table
-// order. sessionIDs name the batches the amounts are for; a session whose
-// recipe has no line of from is an error.
-func (s *Service) Options(ctx context.Context, fromID int64, sessionIDs []int64) ([]Option, error) {
+// order. sessionIDs name the batches the amounts are for; the sessions the
+// swap can apply to (their recipe has a line of from and they are not past)
+// are returned as applicable, in the order asked. When none can, it is
+// domain.ErrInvalidInput.
+func (s *Service) Options(ctx context.Context, fromID int64, sessionIDs []int64) ([]Option, []int64, error) {
 	from, err := s.leaf(ctx, fromID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var grams float64
+	applicable := []int64{}
+	var lastErr error
 	for _, id := range sessionIDs {
 		line, g, err := s.line(ctx, id, fromID)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			err = s.guardPast(ctx, id)
 		}
+		if errors.Is(err, domain.ErrInvalidInput) {
+			lastErr = err
+			continue
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		applicable = append(applicable, id)
 		if !line.ToTaste {
 			grams += g
 		}
 	}
+	if len(applicable) == 0 {
+		if lastErr == nil {
+			lastErr = fmt.Errorf("%w: no cook session given", domain.ErrInvalidInput)
+		}
+		return nil, nil, lastErr
+	}
 	rows := food.SubstitutesOf(from.Name)
 	if len(rows) == 0 {
-		return []Option{}, nil
+		return []Option{}, applicable, nil
 	}
 	leaves, err := s.leaves(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	out := []Option{}
 	for _, row := range rows {
@@ -116,7 +137,7 @@ func (s *Service) Options(ctx context.Context, fromID int64, sessionIDs []int64)
 		}
 		out = append(out, opt)
 	}
-	return out, nil
+	return out, applicable, nil
 }
 
 // Apply swaps leaf from for leaf to in the session's recipe and returns the
@@ -138,6 +159,12 @@ func (s *Service) Apply(ctx context.Context, sessionID, fromID, toID int64) (foo
 	return s.events.Recorded(ctx, func(ctx context.Context) error {
 		sess, err := s.sessions.GetSession(ctx, sessionID)
 		if err != nil {
+			return err
+		}
+		if _, _, err := s.line(ctx, sessionID, fromID); err != nil {
+			return err
+		}
+		if err := s.guardPast(ctx, sessionID); err != nil {
 			return err
 		}
 		cur, err := s.foods.Get(ctx, sess.FoodID)
@@ -172,6 +199,31 @@ func (s *Service) Apply(ctx context.Context, sessionID, fromID, toID int64) (foo
 		}
 		return s.record(ctx, sessionID, before, snap{FoodID: variant.ID})
 	})
+}
+
+// guardPast refuses a session that is already cooked ("Done cooking") or has a
+// plate dated before today: what was eaten stays as it was. Confirmed
+// sessions of today and later stay allowed (the swap happens at the stove).
+func (s *Service) guardPast(ctx context.Context, sessionID int64) error {
+	sess, err := s.sessions.GetSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if sess.CookedAt != nil {
+		return fmt.Errorf("%w: cook session %d is already cooked", domain.ErrInvalidInput, sessionID)
+	}
+	links, err := s.sessions.ListLinks(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	now := s.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	for _, l := range links {
+		if l.Cell.Date.Before(today) {
+			return fmt.Errorf("%w: cook session %d has plates in the past", domain.ErrInvalidInput, sessionID)
+		}
+	}
+	return nil
 }
 
 // Remove points the session back at its recipe and returns the undo token.

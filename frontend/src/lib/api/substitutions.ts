@@ -14,11 +14,12 @@ export interface SubstituteOption {
 }
 
 /** GET /api/substitutes — up to three substitutes for ingredient `foodId`
- *  with the amounts the listed batches need. */
+ *  with the amounts the listed batches need, plus the listed batches the swap
+ *  applies to (their recipe has the ingredient and they are not past). */
 export function getSubstitutes(
   foodId: number,
   sessionIds: readonly number[]
-): Promise<{ options: SubstituteOption[] }> {
+): Promise<{ options: SubstituteOption[]; session_ids: number[] }> {
   return apiFetch(
     `/substitutes?food_id=${foodId}&session_ids=${sessionIds.join(",")}`
   )

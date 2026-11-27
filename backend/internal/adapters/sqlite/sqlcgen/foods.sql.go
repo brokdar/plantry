@@ -306,7 +306,7 @@ SELECT f.id AS food_id,
            SELECT MAX(p.date)
            FROM plate_components pc
            JOIN plates p ON p.id = pc.plate_id
-           WHERE pc.food_id = f.id
+           WHERE (pc.food_id = f.id OR pc.food_id IN (SELECT hv.food_id FROM hidden_variants hv WHERE hv.base_food_id = f.id))
              AND p.date <= ?1
              AND p.state = 'confirmed'
              AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
@@ -315,7 +315,7 @@ SELECT f.id AS food_id,
        (
            SELECT COUNT(*)
            FROM cook_sessions cs
-           WHERE cs.food_id = f.id
+           WHERE (cs.food_id = f.id OR cs.food_id IN (SELECT hv.food_id FROM hidden_variants hv WHERE hv.base_food_id = f.id))
              AND cs.cook_date <= ?1
              AND cs.state = 'confirmed'
              AND EXISTS (SELECT 1 FROM plate_components pc
@@ -342,7 +342,8 @@ type FoodHistoryRow struct {
 // (D26). last_eaten is the latest confirmed plate dated on or before today
 // that holds the food and is not marked not_eaten (empty when none);
 // times_cooked counts the food's confirmed sessions cooked on or before today
-// with at least one linked plate not marked not_eaten.
+// with at least one linked plate not marked not_eaten. A hidden substitution
+// variant's plates and sessions count for its base recipe.
 func (q *Queries) FoodHistory(ctx context.Context, arg FoodHistoryParams) ([]FoodHistoryRow, error) {
 	query := foodHistory
 	var queryParams []interface{}
@@ -954,9 +955,10 @@ SELECT f.id, f.role
 FROM foods f
 WHERE f.kind = 'composed' AND f.archived = 0
   AND f.id NOT IN (
-      SELECT pc.food_id
+      SELECT COALESCE(hv.base_food_id, pc.food_id)
       FROM plates p
       JOIN plate_components pc ON pc.plate_id = p.id
+      LEFT JOIN hidden_variants hv ON hv.food_id = pc.food_id
       WHERE p.date >= ?1
         AND p.date <= ?2
         AND p.state = 'confirmed'
@@ -977,7 +979,8 @@ type ListUneatenRecipesRow struct {
 
 // Recipes no confirmed plate dated in [since, today] holds, plates marked
 // not_eaten aside: FoodHistory's last_eaten is before since, or there is
-// none. The variety rule H8 counts them (D21). The eaten set is one
+// none. A hidden substitution variant counts as its base recipe. The
+// variety rule H8 counts them (D21). The eaten set is one
 // uncorrelated scan of the date range (ix_plates_date).
 func (q *Queries) ListUneatenRecipes(ctx context.Context, arg ListUneatenRecipesParams) ([]ListUneatenRecipesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listUneatenRecipes, arg.Since, arg.Today)

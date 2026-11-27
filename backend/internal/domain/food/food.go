@@ -147,6 +147,9 @@ type Food struct {
 	// number of recipes using a leaf.
 	History     History
 	UsedInCount int
+	// HiddenBaseID is the recipe this food is a hidden substitution variant of
+	// (0: it is not one). Only LookupByIDs sets it.
+	HiddenBaseID int64
 	// DietClass is the effective diet class and DietClassSource where it
 	// comes from; set by Service.Derive, Service.DeriveDiet or
 	// SetDietClasses.

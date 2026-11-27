@@ -183,6 +183,9 @@ type FoodFacts struct {
 	// VariantGroup is the recipe's variant group id (0: none). A group is one
 	// dish for H8 (see State.dish, ShareGroupHistory).
 	VariantGroup int64
+	// BaseFood is the recipe a hidden substitution variant was made from (0:
+	// not one). It counts as that recipe for S8 and the 8-week count.
+	BaseFood int64
 	// LastEaten is the date of the newest confirmed past plate with the
 	// food; nil when never eaten. With a variant group: the newest of the
 	// group.

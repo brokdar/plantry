@@ -100,7 +100,8 @@ type Querier interface {
 	// (D26). last_eaten is the latest confirmed plate dated on or before today
 	// that holds the food and is not marked not_eaten (empty when none);
 	// times_cooked counts the food's confirmed sessions cooked on or before today
-	// with at least one linked plate not marked not_eaten.
+	// with at least one linked plate not marked not_eaten. A hidden substitution
+	// variant's plates and sessions count for its base recipe.
 	FoodHistory(ctx context.Context, arg FoodHistoryParams) ([]FoodHistoryRow, error)
 	GetAIChange(ctx context.Context, id int64) (AiChange, error)
 	GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailRow, error)
@@ -172,6 +173,8 @@ type Querier interface {
 	ListFoodPortions(ctx context.Context, foodID int64) ([]FoodPortion, error)
 	ListFoodTags(ctx context.Context, foodID int64) ([]FoodTag, error)
 	ListFoodTagsByFoodIDs(ctx context.Context, ids []int64) ([]FoodTag, error)
+	// The recipe each of the foods is a hidden variant of.
+	ListHiddenVariantBases(ctx context.Context, ids []int64) ([]ListHiddenVariantBasesRow, error)
 	ListKnownTags(ctx context.Context, limit int64) ([]ListKnownTagsRow, error)
 	// Leaf names used in recipes, most used first (discovery known mode, D8).
 	ListLeafNamesByRecipeUse(ctx context.Context, limit int64) ([]string, error)
@@ -213,7 +216,8 @@ type Querier interface {
 	ListUndoneAIChangesAfter(ctx context.Context, firstEventID sql.NullInt64) ([]AiChange, error)
 	// Recipes no confirmed plate dated in [since, today] holds, plates marked
 	// not_eaten aside: FoodHistory's last_eaten is before since, or there is
-	// none. The variety rule H8 counts them (D21). The eaten set is one
+	// none. A hidden substitution variant counts as its base recipe. The
+	// variety rule H8 counts them (D21). The eaten set is one
 	// uncorrelated scan of the date range (ix_plates_date).
 	ListUneatenRecipes(ctx context.Context, arg ListUneatenRecipesParams) ([]ListUneatenRecipesRow, error)
 	// Composed foods with at least one ingredient whose stored attributes hold
