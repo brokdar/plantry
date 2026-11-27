@@ -2263,7 +2263,6 @@
       "accept_failed": "Recipe saved, but the idea couldn't be marked as added."
     },
     "find": {
-      "title": "A recipe for \"{{dish}}\"",
       "dish_label": "Which dish?",
       "dish_placeholder": "e.g. chicken curry",
       "start": "Find a recipe",
@@ -2289,8 +2288,6 @@
       "source_unrated": "{{site}}",
       "changes": "What changed",
       "flags": "Worth a second look",
-      "flag_keep": "Keep as is",
-      "flag_apply": "Apply",
       "flag": {
         "outlier_grams_per_serving": "Amount per serving ({{value}} g) is unusual; other versions say {{typical}} g",
         "outlier_salt_per_kg": "Salt ({{value}} g/kg) differs from other versions ({{typical}} g/kg)",

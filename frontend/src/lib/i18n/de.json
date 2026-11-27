@@ -2263,7 +2263,6 @@
       "accept_failed": "Rezept gespeichert, aber die Idee konnte nicht als hinzugefügt markiert werden."
     },
     "find": {
-      "title": "Ein Rezept für „{{dish}}“",
       "dish_label": "Welches Gericht?",
       "dish_placeholder": "z. B. Hähnchencurry",
       "start": "Rezept suchen",
@@ -2289,8 +2288,6 @@
       "source_unrated": "{{site}}",
       "changes": "Was sich geändert hat",
       "flags": "Lohnt einen zweiten Blick",
-      "flag_keep": "So lassen",
-      "flag_apply": "Übernehmen",
       "flag": {
         "outlier_grams_per_serving": "Menge pro Portion ({{value}} g) ist ungewöhnlich; andere Versionen nennen {{typical}} g",
         "outlier_salt_per_kg": "Salz ({{value}} g/kg) weicht von anderen Versionen ab ({{typical}} g/kg)",
