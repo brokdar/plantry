@@ -27,7 +27,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h36" // h36: H8 counts GATE-2-blocked mains only for weekend cooks, the variety repair keeps GATE-2 (CP2); h35: Chef on blocks a recipe over the slot time allowance (GATE-2); h34: staples first, never items excluded (Chef D2); h33: taste score and monotony soft caps (Chef D1)
+const HeuristicVersion = "h37" // h37: week themes lean 40-60 % of the cook sessions (Chef D3); h36: H8 counts GATE-2-blocked mains only for weekend cooks, the variety repair keeps GATE-2 (CP2); h35: Chef on blocks a recipe over the slot time allowance (GATE-2); h34: staples first, never items excluded (Chef D2); h33: taste score and monotony soft caps (Chef D1)
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.
@@ -90,7 +90,7 @@ type Request struct {
 	// guests option (D16).
 	EatersByDate map[string]float64
 	// ExploreQuota is the number of explore recipes to include; nil follows
-	// plan.explore_per_week (D17).
+	// chef.new_dishes_per_week and the window's themes (D17, THEME-6).
 	ExploreQuota *int
 	// Light are the run's light requests (see LightIntent); the heuristic
 	// honours them and the LLM chooser is told them.
@@ -114,9 +114,12 @@ type Deps struct {
 	Light LightStore
 	Tx    domain.Transactor
 	// Finds places ready finds on a window generation; nil places none.
-	Finds    ReadyFinds
-	Progress *Progress
-	Choosers map[airun.Chooser]Chooser
+	Finds ReadyFinds
+	// ThemeDishes is how many new dishes the window's themes add (THEME-3);
+	// nil adds none.
+	ThemeDishes func(ctx context.Context, start time.Time) (int, error)
+	Progress    *Progress
+	Choosers    map[airun.Chooser]Chooser
 	// Extractor reads a run's free-text wish into constraints (PL2). With it,
 	// the "llm" chooser is this extraction followed by the heuristic: a model
 	// never places a meal. Without it the LLM chooser plans as before.
@@ -288,7 +291,7 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held 
 	if err != nil {
 		return 0, err
 	}
-	quota, err := s.exploreQuota(ctx, req.ExploreQuota)
+	quota, err := s.exploreQuota(ctx, req.ExploreQuota, start)
 	if err != nil {
 		return 0, err
 	}
@@ -512,12 +515,24 @@ func ready(ctx context.Context, c Chooser) error {
 	return nil
 }
 
-// exploreQuota is the asked quota, else plan.explore_per_week (D17).
-func (s *Service) exploreQuota(ctx context.Context, asked *int) (int, error) {
+// maxNewDishes caps New dishes per week, a theme's raise included (THEME-3).
+const maxNewDishes = 3
+
+// exploreQuota is the asked quota, else New dishes per week (D17, THEME-6)
+// raised by the window's themes up to maxNewDishes.
+func (s *Service) exploreQuota(ctx context.Context, asked *int, start time.Time) (int, error) {
 	if asked != nil {
 		return *asked, nil
 	}
-	return plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanExplorePerWeek)
+	n, err := settings.NewDishesPerWeek(ctx, s.d.Settings)
+	if err != nil || s.d.ThemeDishes == nil {
+		return n, err
+	}
+	extra, err := s.d.ThemeDishes(ctx, start)
+	if err != nil {
+		return 0, err
+	}
+	return min(maxNewDishes, max(n, extra)), nil
 }
 
 // WizardQuota maps the plan wizard's "include a new recipe" toggle to a
@@ -526,7 +541,7 @@ func (s *Service) WizardQuota(ctx context.Context, on bool) (int, error) {
 	if !on {
 		return 0, nil
 	}
-	n, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanExplorePerWeek)
+	n, err := settings.NewDishesPerWeek(ctx, s.d.Settings)
 	return max(n, 1), err
 }
 

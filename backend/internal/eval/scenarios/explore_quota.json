@@ -1,12 +1,12 @@
 {
   "name": "explore_quota",
-  "description": "plan.explore_per_week = 1 with one explore-tagged, never-eaten main in a library where the other mains were eaten recently: the generator places the explore recipe exactly once.",
+  "description": "chef.new_dishes_per_week = 1 with one explore-tagged, never-eaten main in a library where the other mains were eaten recently: the generator places the explore recipe exactly once.",
   "today": "2026-11-06",
   "start": "2026-11-07",
   "settings": {
     "plan.shopping_day": "5", "plan.batch_cooking": "true", "plan.default_keep_days": "3",
     "plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "false",
-    "plan.explore_per_week": "1"
+    "chef.new_dishes_per_week": "1"
   },
   "profile": {"diet_type": "omnivore", "household_portions": 1},
   "slots": ["dinner"],

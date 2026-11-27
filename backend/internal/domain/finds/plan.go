@@ -43,8 +43,7 @@ type Library interface {
 type Planning struct {
 	Library Library
 	ChefOn  func(ctx context.Context) (bool, error)
-	// NewDishes is the window's new-dish count. It reads
-	// plan.explore_per_week until D3's chef.new_dishes_per_week replaces it.
+	// NewDishes is the window's new-dish count (chef.new_dishes_per_week).
 	NewDishes func(ctx context.Context) (int, error)
 	// Dish names what a planning find for the window starting on day looks
 	// for (the day's discovery cuisine).

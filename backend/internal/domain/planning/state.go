@@ -15,6 +15,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/theme"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -43,6 +44,9 @@ type State struct {
 
 	Window window.Window
 	Today  time.Time
+	// Themes are the window's week themes (THEME-3): the heuristic leans
+	// 40-60 % of the cook sessions to recipes that fit them.
+	Themes []theme.Theme
 	// Cells are the window's resolved cells in (date, slot order) order.
 	Cells []Cell
 	// SlotOrder maps slot ids to their sort_order (D12).
@@ -232,6 +236,9 @@ type FoodFacts struct {
 	// It ranks first among equals and no soft rule holds it back. Set by
 	// the Builder.
 	Staple bool
+	// Theme: the recipe fits one of the window's week themes (THEME-3). Set
+	// by the Builder.
+	Theme bool
 	// Fresh and Starch are plate fit's inputs derived from the name and
 	// ingredients (freshStarch); nil is unknown.
 	Fresh, Starch *bool

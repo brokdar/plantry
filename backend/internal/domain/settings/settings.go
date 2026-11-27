@@ -5,6 +5,7 @@
 package settings
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -114,7 +115,7 @@ const (
 	KeyPlanFreezingEnabled        = "plan.freezing_enabled"
 	KeyPlanFreezerKeepDays        = "plan.freezer_keep_days"
 	KeyPlanVarietyWeeks           = "plan.variety_weeks"
-	KeyPlanExplorePerWeek         = "plan.explore_per_week"
+	KeyChefNewDishesPerWeek       = "chef.new_dishes_per_week"
 	KeyPlanMaxDishMealsPerWeek    = "plan.max_dish_meals_per_week"
 	KeyDiscoveryDailyEnabled      = "discovery.daily_enabled"
 	KeyDiscoveryCuisines          = "discovery.cuisines"
@@ -219,4 +220,33 @@ func ParseChefSites(raw string) ([]ChefSite, error) {
 		seen[s.Domain] = true
 	}
 	return sites, nil
+}
+
+// Getter reads one effective setting.
+type Getter interface {
+	Get(ctx context.Context, key string) (Value, error)
+}
+
+// NewDishesPerWeek is chef.new_dishes_per_week as planning uses it
+// (THEME-6): the stored value, else 1 with the Chef on and 0 with it off
+// (the explore quota's old default).
+func NewDishesPerWeek(ctx context.Context, g Getter) (int, error) {
+	v, err := g.Get(ctx, KeyChefNewDishesPerWeek)
+	if err != nil {
+		return 0, fmt.Errorf("read %s: %w", KeyChefNewDishesPerWeek, err)
+	}
+	if v.Source == SourceDefault {
+		on, err := g.Get(ctx, KeyChefEnabled)
+		if err != nil {
+			return 0, fmt.Errorf("read %s: %w", KeyChefEnabled, err)
+		}
+		if ok, _ := strconv.ParseBool(on.Raw); !ok {
+			return 0, nil
+		}
+	}
+	n, err := strconv.Atoi(v.Raw)
+	if err != nil {
+		return 0, fmt.Errorf("parse %s: %w", KeyChefNewDishesPerWeek, err)
+	}
+	return n, nil
 }

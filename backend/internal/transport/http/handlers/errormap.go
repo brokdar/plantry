@@ -95,6 +95,7 @@ var sentinelStatus = map[error]int{
 	domain.ErrReplanPast:                http.StatusBadRequest,
 	domain.ErrPastCell:                  http.StatusBadRequest,
 	domain.ErrPlanChangeStale:           http.StatusConflict,
+	domain.ErrThemeLimit:                http.StatusConflict,
 }
 
 func toHTTPWithResource(err error, resource string) (int, string) {

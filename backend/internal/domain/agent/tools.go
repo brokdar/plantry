@@ -121,6 +121,8 @@ type Services struct {
 	Taste TasteStatements
 	// Finds wire find_recipe; a nil Requester leaves it out.
 	Finds FindTools
+	// Themes wire set_week_theme; a nil Setter leaves it out.
+	Themes ThemeTools
 }
 
 // TasteStatements records a confirmed taste statement (taste.Service.State).
@@ -409,6 +411,9 @@ func defaultTools(svc Services) []Tool {
 	tools = append(tools, recipeTools(svc)...)
 	if svc.Finds.Requester != nil {
 		tools = append(tools, toolFindRecipe(svc.Finds))
+	}
+	if svc.Themes.Setter != nil {
+		tools = append(tools, toolSetWeekTheme(svc.Themes))
 	}
 	for i := range tools {
 		tools[i].CodeCallable = codeCallableTools[tools[i].Name]

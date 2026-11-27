@@ -80,7 +80,7 @@ Key-value rows in `app_settings`. The registry in `domain/settings/specs.go` lis
 | `plan.anchor` | `next_shopping_day` | `today` / `next_shopping_day` (00028 retired `fixed_weekday` and `plan.week_starts_on`) |
 | `plan.shopping_day` | `0` | 0 = Monday … 6 = Sunday |
 | `setup.completed` | `false` | Set by `POST /api/setup/complete` |
-| `plan.max_cook_occasions_per_day`, `plan.batch_cooking`, `plan.default_keep_days`, `plan.freezing_enabled`, `plan.freezer_keep_days`, `plan.variety_weeks`, `plan.explore_per_week`, `discovery.daily_enabled` | see `specs.go` | Stored and edited in Settings; the planner reads the `plan.*` keys, discovery reads `discovery.*` |
+| `plan.max_cook_occasions_per_day`, `plan.batch_cooking`, `plan.default_keep_days`, `plan.freezing_enabled`, `plan.freezer_keep_days`, `plan.variety_weeks`, `chef.new_dishes_per_week` (THEME-6, was `plan.explore_per_week`), `discovery.daily_enabled` | see `specs.go` | Stored and edited in Settings; the planner reads the `plan.*` keys, discovery reads `discovery.*` |
 | `plan.max_dish_meals_per_week` | `3` | int 1-14; soft rule S8: a recipe is the main of at most this many lunches or dinners in the window (`Settings.MaxDishMealsPerWeek`, 0 in a hand-built state reads as `DefaultMaxDishMeals`) |
 | `discovery.cuisines` | `[]` | JSON array of at most 10 lowercase cuisine names (each ≤ 40 chars) the daily idea rotates through |
 | `ai.run_retention_days` | `180` | 7–3650; see AI run log |

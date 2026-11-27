@@ -713,7 +713,7 @@ func TestService_EatersByDateAndNewRecipe(t *testing.T) {
 	assert.Equal(t, 1, newRecipes(e), "exactly one never-eaten recipe")
 	e = withHistory(t)
 	e.ok(e.generate(e.req()))
-	assert.Zero(t, newRecipes(e), "plan.explore_per_week 0: none")
+	assert.Zero(t, newRecipes(e), "chef.new_dishes_per_week 0: none")
 }
 
 // A regenerate keeps the guests of the plates it replaces (D16).
@@ -919,7 +919,7 @@ func TestService_ThinLibraryRegenerateEndsOK(t *testing.T) {
 	e.ok(e.regenerate(planning.Scope{Kind: planning.ScopePlate, PlateID: e.window()[key(tue, e.dinner)].ID}))
 }
 
-// B6-AC3: the quota follows plan.explore_per_week, the wizard toggle maps to
+// B6-AC3: the quota follows chef.new_dishes_per_week, the wizard toggle maps to
 // max(setting, 1) or 0, and a regenerate (the replan's path) forces 0.
 func TestService_ExploreQuota(t *testing.T) {
 	e := newSvcEnv(t)
@@ -931,7 +931,7 @@ func TestService_ExploreQuota(t *testing.T) {
 	}
 	assert.Equal(t, 1, quota(true), "toggle on with setting 0")
 	assert.Zero(t, quota(false))
-	require.NoError(t, set.Set(e.ctx, "plan.explore_per_week", "2"))
+	require.NoError(t, set.Set(e.ctx, "chef.new_dishes_per_week", "2"))
 	assert.Equal(t, 2, quota(true), "toggle on follows a larger setting")
 	assert.Zero(t, quota(false), "toggle off with setting 2")
 

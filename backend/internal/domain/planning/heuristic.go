@@ -115,6 +115,9 @@ type planner struct {
 	// explorePlaced and fillPlaced count the explore recipes and the
 	// never-eaten fillers the proposal cooks toward the quota (D17).
 	explorePlaced, fillPlaced int
+	// cooks and themeCooks count the main cook sessions and those that fit a
+	// week theme (THEME-3).
+	cooks, themeCooks int
 	// topUpBase is the portions of a component (plate, component index) before
 	// the kcal passes grew it: the 1.5x cap holds over all of them.
 	topUpBase map[[2]int]float64
@@ -588,6 +591,10 @@ func (h *planner) cook(c plate.CellKey) error {
 	h.supplies = append(h.supplies, sup)
 	h.used[main]++
 	h.usedDish[h.s.dish(main)]++
+	h.cooks++
+	if f.Theme {
+		h.themeCooks++
+	}
 	switch {
 	case f.Explore():
 		h.explorePlaced++
@@ -709,7 +716,9 @@ type candidate struct {
 // (H8), not replaced, complete nutrition (a day with unknown kcal is never
 // lifted), an explore recipe (newest first) while the explore
 // quota is open, then never-eaten ones to fill a shortfall; never-eaten
-// recipes last otherwise; known diet class, staples (THEME-1), fewest monotony caps passed
+// recipes last otherwise; known diet class, the week theme's turn (THEME-3:
+// a recipe that fits it while the theme is under half of the cook sessions,
+// one that does not otherwise), staples (THEME-1), fewest monotony caps passed
 // (TASTE-9), best taste score (TASTE, soft: learned items never exclude),
 // least recently eaten, favorite, liked, closest to the meal's kcal share,
 // food id. Diet-incompatible recipes never
@@ -724,6 +733,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 	var cands []candidate
 	dge := h.dgeState()
 	expo := h.exposureAt(c)
+	wantTheme := h.wantTheme()
 	for _, f := range h.s.Foods {
 		if !h.mainCandidate(f, c) || !h.reachesForced(f, c) {
 			continue
@@ -755,12 +765,29 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		// S8: a dish already at its weekly cap comes only when nothing
 		// else qualifies.
 		atCap := h.x.mealOf(c.SlotID) == mealFull && h.dishFull(f.ID)
+		themeKey := 0.0
+		if len(h.s.Themes) > 0 {
+			themeKey = b2f(f.Theme != wantTheme)
+		}
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
 			b2f(h.s.tooSlow(f, c)), b2f(h.overAllowance(f, c)), b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.usedDish[h.s.dish(f.ID)]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(!f.NutritionComplete), b2f(f.Role != food.RoleMain),
-			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), b2f(!f.Staple), float64(overMonotony(f, expo)), -tasteKey(f), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
+			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), themeKey, b2f(!f.Staple), float64(overMonotony(f, expo)), -tasteKey(f), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
 	return best(cands)
+}
+
+// wantTheme reports whether the next cook session should fit a week theme:
+// every one for a whole-week theme, else while at most half of the cook
+// sessions so far do, so the window lands at 40-60 % where the library
+// supplies (THEME-3).
+func (h *planner) wantTheme() bool {
+	for _, t := range h.s.Themes {
+		if t.WholeWeek {
+			return true
+		}
+	}
+	return 2*h.themeCooks <= h.cooks
 }
 
 // batchPlates is the number of plates a recipe cooked on c would feed at most:
