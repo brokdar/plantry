@@ -798,6 +798,13 @@
         "line": "Diese Woche: {{names}}. Es endet mit der Woche.",
         "empty": "Diese Woche gibt es kein Thema.",
         "link": "Zum Plan"
+      },
+      "cold": {
+        "title": "Was mag euer Haushalt besonders, worauf verzichtet er lieber?",
+        "hint": "Ein Satz genügt, zum Beispiel „wir lieben Thai und Pasta, aber kein Koriander“.",
+        "placeholder": "Wir lieben …, aber kein …",
+        "submit": "Vorschlagen",
+        "none": "Ich konnte nichts herauslesen. Nenne ein paar Gerichte, Küchen oder Zutaten."
       }
     }
   },
@@ -2462,6 +2469,10 @@
       "title": "Diese Woche",
       "open": "{{day}} im Plan öffnen",
       "empty": "Nichts geplant"
+    },
+    "rate_reason": {
+      "prompt": "{{name}} wird nicht mehr eingeplant. Was hat gestört?",
+      "done": "Danke, notiert."
     }
   },
   "recipes": {
@@ -2546,6 +2557,12 @@
       "enter_hint": "Werte pro 100 g für „{{name}}“, von der Verpackung oder aus einer Nährwerttabelle.",
       "save_nutrition": "Nährwerte speichern",
       "remove_in_recipe": "Zeile im Rezept entfernen"
+    },
+    "to_try": "Zum Ausprobieren",
+    "fill": {
+      "button": "Bibliothek füllen",
+      "hint": "Zehn Rezepte, die zu eurem Haushalt passen, zum Ausprobieren.",
+      "started": "Ich suche zehn Rezepte. Sie erscheinen in der Bibliothek, sobald sie fertig sind."
     }
   },
   "substitute": {

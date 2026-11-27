@@ -12,12 +12,14 @@ import { useTaste, useTasteEdits } from "@/lib/queries/taste"
 import { themeLabel, useWindowThemes } from "@/lib/queries/themes"
 
 import { SettingsGroup } from "../controls"
+import { ColdStart } from "./ColdStart"
 
 /** Settings → Taste (TASTE-11): what the household told the app and what the
  *  app noticed, in plain sentences. Shown with or without a key and with the
  *  Chef off. */
 export function TasteSection() {
   const { data: taste } = useTaste()
+  const chefOn = useSettingItems().data?.["chef.enabled"]?.value === "true"
   if (!taste) {
     return (
       <div className="flex flex-col gap-4" aria-hidden>
@@ -38,6 +40,7 @@ export function TasteSection() {
   const cuisines = taste.items.filter((i) => i.level === "cuisine")
   return (
     <div className="flex flex-col gap-8" data-testid="taste-page">
+      {chefOn && <ColdStart />}
       <NeverGroup foods={taste.never} />
       <ItemGroup id="love" items={love} />
       <ItemGroup id="rather_not" items={rather} />

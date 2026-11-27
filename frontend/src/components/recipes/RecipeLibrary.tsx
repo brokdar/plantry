@@ -41,6 +41,7 @@ import { NeedsCheckEntry } from "./NeedsCheck"
 import { RecipeCard } from "./RecipeCard"
 import { RecipeOnboarding } from "./RecipeOnboarding"
 import { RecipesHeader } from "./RecipesHeader"
+import { FillLibrary } from "./FillLibrary"
 
 const PAGE_SIZE = 24
 const GRID = "grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4"
@@ -73,7 +74,9 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
   const query = libraryQuery({ ...search, q: deferredQ })
   const filtered = hasLibraryFilters(search)
   const setup = useSetupStatus()
-  const discover = discoveryAvailable(useSettingItems().data)
+  const settings = useSettingItems().data
+  const discover = discoveryAvailable(settings)
+  const chefOn = settings?.["chef.enabled"]?.value === "true"
   const guided =
     setup.data !== undefined &&
     setup.data.recipe_count < setup.data.recipe_target
@@ -89,6 +92,8 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
       />
 
       <NeedsCheckEntry />
+
+      {chefOn && discover && <FillLibrary />}
 
       {setup.data && (
         <RecipeOnboarding

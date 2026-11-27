@@ -798,6 +798,13 @@
         "line": "This week: {{names}}. It ends with the week.",
         "empty": "No theme this week.",
         "link": "Open the plan"
+      },
+      "cold": {
+        "title": "What does your household love, and what would it rather skip?",
+        "hint": "One sentence is enough, for example \"we love thai and pasta, but no coriander\".",
+        "placeholder": "We love…, but no…",
+        "submit": "Suggest",
+        "none": "Nothing I could pick out. Try naming a few dishes, cuisines or ingredients."
       }
     }
   },
@@ -2462,6 +2469,10 @@
       "title": "This week",
       "open": "Open {{day}} in the plan",
       "empty": "Nothing planned"
+    },
+    "rate_reason": {
+      "prompt": "{{name}} is hidden from planning. What put you off?",
+      "done": "Thanks, noted."
     }
   },
   "recipes": {
@@ -2546,6 +2557,12 @@
       "enter_hint": "Values per 100 g for “{{name}}”, from the package or a nutrition table.",
       "save_nutrition": "Save nutrition",
       "remove_in_recipe": "Remove a line in the recipe"
+    },
+    "to_try": "To try",
+    "fill": {
+      "button": "Fill my library",
+      "hint": "Ten recipes that fit your household, added for you to try.",
+      "started": "Looking for ten recipes. They appear in your library as they are ready."
     }
   },
   "substitute": {

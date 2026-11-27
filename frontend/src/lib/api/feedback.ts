@@ -16,6 +16,8 @@ export interface FeedbackRecord {
   status: PlateFeedbackStatus
   note?: string | null
   rated_at: string
+  /** Trial recipes the disliked rating archived (NEW-4). */
+  archived_trials?: { food_id: number; name: string }[]
 }
 
 export interface PutFeedbackInput {

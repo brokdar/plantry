@@ -10,7 +10,14 @@ import { useConfirmStatement } from "@/lib/queries/taste"
  *  it permanent, [Just this week] keeps it for the window. A health
  *  statement (allergic, celiac, intolerant) is stored only with a tap, as a
  *  never item, so it offers [Always] only. */
-export function StatementChips({ statement }: { statement: Statement }) {
+export function StatementChips({
+  statement,
+  alwaysOnly = false,
+}: {
+  statement: Statement
+  /** No "Just this week": the statement has no window (cold start). */
+  alwaysOnly?: boolean
+}) {
   const { t } = useTranslation()
   const confirm = useConfirmStatement()
   const [done, setDone] = useState<"always" | "window" | null>(null)
@@ -53,7 +60,7 @@ export function StatementChips({ statement }: { statement: Statement }) {
           >
             {t("assistant.statement.always")}
           </Button>
-          {!health && (
+          {!health && !alwaysOnly && (
             <Button
               type="button"
               size="sm"

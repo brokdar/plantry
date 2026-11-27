@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 import {
@@ -28,6 +28,7 @@ import {
   useFoodNutrition,
   useScaled,
   useSetFoodArchived,
+  useMarkTrialSeen,
   useSetFoodFavorite,
 } from "@/lib/queries/foods"
 import { useSettingItems } from "@/lib/queries/settings"
@@ -63,6 +64,11 @@ export function RecipeDetail({
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { data: nutrition } = useFoodNutrition(recipe.id)
+  const markSeen = useMarkTrialSeen()
+  const { mutate: markTrialSeen } = markSeen
+  useEffect(() => {
+    if (recipe.to_try) markTrialSeen(recipe.id)
+  }, [recipe.id, recipe.to_try, markTrialSeen])
   const setFavorite = useSetFoodFavorite()
   const setArchived = useSetFoodArchived()
   const createVariant = useCreateVariant()
