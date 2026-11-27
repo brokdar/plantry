@@ -33,8 +33,10 @@ export interface LibrarySearch {
   /** Only the recipes hidden from planning (LIB-4). */
   hidden?: true
   sort?: LibrarySort
-  add?: "url" | "discover"
+  add?: "url" | "discover" | "find"
   suggestion?: number
+  /** With `add=find`: the find whose review opens. */
+  find?: number
 }
 
 export const QUICK_MINUTES = 30
@@ -72,10 +74,14 @@ export function parseLibrarySearch(
     new: flag(raw.new),
     hidden: flag(raw.hidden),
     sort: oneOf(LIBRARY_SORTS, raw.sort),
-    add: oneOf(["url", "discover"] as const, raw.add),
+    add: oneOf(["url", "discover", "find"] as const, raw.add),
     suggestion:
       typeof raw.suggestion === "number" && Number.isInteger(raw.suggestion)
         ? raw.suggestion
+        : undefined,
+    find:
+      typeof raw.find === "number" && Number.isInteger(raw.find)
+        ? raw.find
         : undefined,
   }
 }
@@ -89,7 +95,12 @@ export function rememberLibrarySearch(s: LibrarySearch): void {
   try {
     sessionStorage.setItem(
       SEARCH_KEY,
-      JSON.stringify({ ...s, add: undefined, suggestion: undefined })
+      JSON.stringify({
+        ...s,
+        add: undefined,
+        suggestion: undefined,
+        find: undefined,
+      })
     )
   } catch {
     // Back falls back to the unfiltered library.
@@ -104,7 +115,7 @@ export function rememberedLibrarySearch(): LibrarySearch {
     const search = parseLibrarySearch(
       raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
     )
-    return { ...search, add: undefined, suggestion: undefined }
+    return { ...search, add: undefined, suggestion: undefined, find: undefined }
   } catch {
     return parseLibrarySearch({})
   }

@@ -1416,6 +1416,12 @@
     },
     "tip": {
       "stale": "Dieser Tipp passt nicht mehr zur Mahlzeit."
+    },
+    "chef": {
+      "off": "Schalte den Chef in den Einstellungen ein, um Rezepte zu suchen."
+    },
+    "find": {
+      "not_found": "Diesen Fund gibt es nicht mehr."
     }
   },
   "common": {
@@ -2255,6 +2261,62 @@
       "gone": "Diese Idee ist nicht mehr verfügbar.",
       "failed": "Diese Idee konnte nicht geöffnet werden. Versuch es noch einmal.",
       "accept_failed": "Rezept gespeichert, aber die Idee konnte nicht als hinzugefügt markiert werden."
+    },
+    "find": {
+      "title": "Ein Rezept für „{{dish}}“",
+      "dish_label": "Welches Gericht?",
+      "dish_placeholder": "z. B. Hähnchencurry",
+      "start": "Rezept suchen",
+      "searching": "Ich suche ein Rezept …",
+      "steps": {
+        "searched": "Gesucht bei {{sites}}",
+        "read": "{{count}} Versionen gelesen",
+        "cross_checked": "{{versions}} Versionen von {{site}} verglichen, {{flags}} zum Nachprüfen",
+        "adapted": "An euren Haushalt angepasst ({{changes}} Änderungen)",
+        "matched": "{{lines}} Zutaten zugeordnet, {{unmatched}} nicht gefunden",
+        "checks_passed": "Alle Prüfungen bestanden",
+        "checks_failed": "Braucht einen Blick: {{codes}}",
+        "nothing_found": "Kein brauchbares Rezept gefunden",
+        "no_search": "Dieser Anbieter kann nicht selbst im Web suchen",
+        "error": "Bei der Suche ist etwas schiefgegangen"
+      },
+      "origin": {
+        "adapted_light": "Leicht angepasst nach {{site}}",
+        "adapted_medium": "Angepasst nach {{site}}",
+        "inspired": "Inspiriert von {{site}}"
+      },
+      "source": "{{site}} · {{rating}} Sterne von {{votes}} Köchen",
+      "source_unrated": "{{site}}",
+      "changes": "Was sich geändert hat",
+      "flags": "Lohnt einen zweiten Blick",
+      "flag_keep": "So lassen",
+      "flag_apply": "Übernehmen",
+      "flag": {
+        "outlier_grams_per_serving": "Menge pro Portion ({{value}} g) ist ungewöhnlich; andere Versionen nennen {{typical}} g",
+        "outlier_salt_per_kg": "Salz ({{value}} g/kg) weicht von anderen Versionen ab ({{typical}} g/kg)",
+        "outlier_oven_temp": "Ofentemperatur ({{value}}) weicht von anderen Versionen ab ({{typical}})",
+        "outlier_total_minutes": "Zeit ({{value}} Min.) weicht von anderen Versionen ab ({{typical}} Min.)",
+        "outlier_liquid_to_starch": "Flüssigkeit zu Stärke ({{value}}) weicht von anderen Versionen ab ({{typical}})"
+      },
+      "questions": "Eine Frage zu eurer Küche",
+      "question": {
+        "equipment": "Habt ihr dieses Gerät: {{tool}}?",
+        "skill": "Das ist etwas für geübte Köche. Seid ihr das?"
+      },
+      "answer_yes": "Ja",
+      "answer_no": "Nein",
+      "add": "Zu meinen Rezepten",
+      "not_for_me": "Nichts für mich",
+      "failed": "Diesmal kein Rezept gefunden.",
+      "gone": "Dieser Fund ist nicht mehr verfügbar.",
+      "reject": {
+        "prompt": "Was hat dich gestört?",
+        "taste": "Nicht mein Geschmack",
+        "ingredients": "Zutaten",
+        "too_long": "Dauert zu lange",
+        "looks_wrong": "Sieht falsch aus"
+      },
+      "needs_check": "Braucht eine Prüfung, bevor es in eure Rezepte kommt."
     }
   },
   "today": {

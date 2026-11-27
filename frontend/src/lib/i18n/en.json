@@ -1389,6 +1389,12 @@
     },
     "tip": {
       "stale": "This tip no longer fits the meal."
+    },
+    "chef": {
+      "off": "Turn the Chef on in Settings to look for recipes."
+    },
+    "find": {
+      "not_found": "That find no longer exists."
     }
   },
   "nutrition": {
@@ -2255,6 +2261,62 @@
       "gone": "This idea is no longer available.",
       "failed": "Couldn't open this idea. Try again.",
       "accept_failed": "Recipe saved, but the idea couldn't be marked as added."
+    },
+    "find": {
+      "title": "A recipe for \"{{dish}}\"",
+      "dish_label": "Which dish?",
+      "dish_placeholder": "e.g. chicken curry",
+      "start": "Find a recipe",
+      "searching": "Looking for a recipe…",
+      "steps": {
+        "searched": "Searched {{sites}}",
+        "read": "Read {{count}} versions",
+        "cross_checked": "Compared {{versions}} versions of {{site}}, {{flags}} to double-check",
+        "adapted": "Adapted for your household ({{changes}} changes)",
+        "matched": "Matched {{lines}} ingredients, {{unmatched}} not found",
+        "checks_passed": "All checks passed",
+        "checks_failed": "Needs a look: {{codes}}",
+        "nothing_found": "Found no usable recipe",
+        "no_search": "This provider can't search the web on its own",
+        "error": "Something went wrong while looking"
+      },
+      "origin": {
+        "adapted_light": "Lightly adapted from {{site}}",
+        "adapted_medium": "Adapted from {{site}}",
+        "inspired": "Inspired by {{site}}"
+      },
+      "source": "{{site}} · rated {{rating}} by {{votes}} cooks",
+      "source_unrated": "{{site}}",
+      "changes": "What changed",
+      "flags": "Worth a second look",
+      "flag_keep": "Keep as is",
+      "flag_apply": "Apply",
+      "flag": {
+        "outlier_grams_per_serving": "Amount per serving ({{value}} g) is unusual; other versions say {{typical}} g",
+        "outlier_salt_per_kg": "Salt ({{value}} g/kg) differs from other versions ({{typical}} g/kg)",
+        "outlier_oven_temp": "Oven temperature ({{value}}) differs from other versions ({{typical}})",
+        "outlier_total_minutes": "Time ({{value}} min) differs from other versions ({{typical}} min)",
+        "outlier_liquid_to_starch": "Liquid to starch ({{value}}) differs from other versions ({{typical}})"
+      },
+      "questions": "A question about your kitchen",
+      "question": {
+        "equipment": "Do you have this tool: {{tool}}?",
+        "skill": "This one is for experienced cooks. Is that you?"
+      },
+      "answer_yes": "Yes",
+      "answer_no": "No",
+      "add": "Add to my recipes",
+      "not_for_me": "Not for me",
+      "failed": "No recipe found this time.",
+      "gone": "That find is no longer available.",
+      "reject": {
+        "prompt": "What put you off?",
+        "taste": "Not my taste",
+        "ingredients": "Ingredients",
+        "too_long": "Takes too long",
+        "looks_wrong": "Looks wrong"
+      },
+      "needs_check": "Needs a check before it goes into your recipes."
     }
   },
   "today": {
