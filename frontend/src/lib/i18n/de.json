@@ -793,6 +793,24 @@
         "bitter": "bittere Gerichte",
         "umami": "herzhafte Gerichte"
       },
+      "technique": {
+        "braise": "Geschmortes",
+        "roast": "Ofengerichte",
+        "fry": "Gebratenes",
+        "saute": "Gerichte aus der Pfanne",
+        "grill": "Gegrilltes",
+        "bake": "Überbackenes",
+        "raw": "Rohkost",
+        "steam": "Gedämpftes"
+      },
+      "format": {
+        "bowl": "Bowls",
+        "one_pot": "Eintopfgerichte",
+        "casserole": "Aufläufe",
+        "wrap": "Wraps",
+        "soup": "Suppen",
+        "salad": "Salate"
+      },
       "theme": {
         "title": "Thema",
         "line": "Diese Woche: {{names}}. Es endet mit der Woche.",

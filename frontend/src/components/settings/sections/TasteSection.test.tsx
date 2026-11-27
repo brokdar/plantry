@@ -119,6 +119,38 @@ describe("TasteSection", () => {
     ).toBeVisible()
   })
 
+  it("says format and technique items in kitchen words", async () => {
+    vi.mocked(getTaste).mockResolvedValue(
+      taste({
+        items: [
+          item({
+            id: 1,
+            level: "format",
+            key: "one_pot",
+            source: "learned",
+            polarity: "love",
+            score: 0.3,
+          }),
+          item({
+            id: 2,
+            level: "technique",
+            key: "raw",
+            source: "learned",
+            polarity: "rather_not",
+            score: -0.3,
+          }),
+        ],
+      })
+    )
+    renderWithRouter(<TasteSection />)
+    const leanings = await screen.findByTestId("taste-leanings")
+    expect(
+      within(leanings).getByText("You seem to like one-pot dishes.")
+    ).toBeVisible()
+    expect(within(leanings).getByText(/raw dishes/)).toBeVisible()
+    expect(within(leanings).queryByText(/one_pot|One pot/)).toBeNull()
+  })
+
   it("removes, flips and makes an item never", async () => {
     vi.mocked(getTaste).mockResolvedValue(taste({ items: [item({ id: 1 })] }))
     renderWithRouter(<TasteSection />)

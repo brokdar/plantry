@@ -7,6 +7,7 @@ package taste
 
 import (
 	"math"
+	"slices"
 	"strings"
 	"time"
 )
@@ -234,4 +235,17 @@ func NormKey(s string) string {
 
 func sameDay(a, b time.Time) bool {
 	return a.Format(time.DateOnly) == b.Format(time.DateOnly)
+}
+
+// trivial are the format and technique keys that say nothing about a
+// household (most dishes are plated, boiled or simmered): the Taste page
+// leaves them out, planning still scores them (TASTE-11).
+var trivial = map[Level][]string{
+	LevelFormat:    {"plate"},
+	LevelTechnique: {"boil", "simmer"},
+}
+
+// Trivial reports whether the item level/key is one the Taste page leaves out.
+func Trivial(level Level, key string) bool {
+	return slices.Contains(trivial[level], key)
 }

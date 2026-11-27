@@ -64,6 +64,10 @@ func (h *TasteHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "error.server")
 		return
 	}
+	// TASTE-11: items that say nothing about the household stay off the page.
+	trivial := func(it taste.ItemView) bool { return taste.Trivial(it.Level, it.Key) }
+	v.Items = slices.DeleteFunc(v.Items, trivial)
+	v.Recent = slices.DeleteFunc(v.Recent, func(l taste.Learned) bool { return trivial(l.Item) })
 	out := page{View: v, Never: []kitchenFood{}}
 	if out.Staples, err = h.svc.StapleList(r.Context()); err != nil {
 		writeError(w, http.StatusInternalServerError, "error.server")
