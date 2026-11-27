@@ -2424,7 +2424,11 @@
       "freezer": "Freezer",
       "defrost": "Take {{name}} out of the freezer tonight",
       "last_day": "Last day",
-      "use_by": "{{slot}} is the last of the {{name}}"
+      "use_by": "{{slot}} is the last of the {{name}}",
+      "tonight": "Tonight",
+      "soak": "Soak the dried legumes for tomorrow's {{name}}",
+      "marinate": "Marinate tonight for tomorrow's {{name}}",
+      "thaw": "Move the frozen ingredients for tomorrow's {{name}} to the fridge"
     },
     "rate": {
       "question": "How was {{weekday}}'s {{name}}?",

@@ -47,7 +47,7 @@ export interface TodayRow {
 
 export interface TodayReminderView {
   key: string
-  kind: "defrost" | "use_by"
+  kind: "defrost" | "use_by" | "soak" | "marinate" | "thaw"
   label: string
   text: string
 }
@@ -240,6 +240,16 @@ export function buildTodayPlan(
     const key = `${r.kind}|${r.session_id}`
     if (seen.has(key)) continue
     seen.add(key)
+    if (r.kind === "soak" || r.kind === "marinate" || r.kind === "thaw") {
+      // The Chef's one prep line for tomorrow's cooking (PRO-1).
+      reminders.push({
+        key,
+        kind: r.kind,
+        label: f.t("today.reminder.tonight"),
+        text: f.t(`today.reminder.${r.kind}`, { name: r.food_name }),
+      })
+      continue
+    }
     reminders.push(
       r.kind === "defrost"
         ? {

@@ -114,6 +114,9 @@ type Deps struct {
 	// Progress is nil while no generation runner is wired: running_run_id
 	// is then always null.
 	Progress Progress
+	// Prep loads tomorrow's recipes for the Chef's prep reminder (PRO-1);
+	// nil: none.
+	Prep PrepRecipes
 	// Tx runs each read model's reads in one transaction, so a concurrent
 	// write cannot produce an inconsistent view.
 	Tx domain.Transactor

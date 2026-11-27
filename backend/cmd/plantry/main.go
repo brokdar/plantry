@@ -371,7 +371,21 @@ func run() error {
 		Diets:        foodSvc,
 		Light:        planLight,
 		Progress:     planningSvc,
-		Tx:           txRunner,
+		Prep: func(ctx context.Context, ids []int64) (map[int64]*food.Food, error) {
+			if on, err := settingsSvc.ChefEnabled(ctx); err != nil || !on {
+				return nil, err
+			}
+			out := make(map[int64]*food.Food, len(ids))
+			for _, id := range ids {
+				f, err := foodRepo.Get(ctx, id)
+				if err != nil {
+					return nil, err
+				}
+				out[id] = f
+			}
+			return out, nil
+		},
+		Tx: txRunner,
 	})
 
 	// Food resolver depends on llmResolver for optional AI translation

@@ -2424,7 +2424,11 @@
       "freezer": "Gefrierfach",
       "defrost": "{{name}} heute Abend aus dem Gefrierfach nehmen",
       "last_day": "Letzter Tag",
-      "use_by": "{{slot}}: der letzte Rest {{name}}"
+      "use_by": "{{slot}}: der letzte Rest {{name}}",
+      "tonight": "Heute Abend",
+      "soak": "Hülsenfrüchte für morgen ({{name}}) einweichen",
+      "marinate": "Heute Abend für morgen marinieren: {{name}}",
+      "thaw": "Tiefgekühltes für morgen ({{name}}) in den Kühlschrank legen"
     },
     "rate": {
       "question": "Wie war {{name}} am {{weekday}}?",

@@ -217,8 +217,36 @@ func (s *Service) today(ctx context.Context, date time.Time) (*Today, error) {
 	}
 
 	out.Reminders = reminders(sessions, date, tomorrow, e.order)
+	if err := s.prep(ctx, out, sessions, tomorrow); err != nil {
+		return nil, err
+	}
 	out.Rate = rate(plates, date, e.order)
 	return out, nil
+}
+
+// prep appends the Chef's one prep line for tomorrow's cooking (PRO-1/2).
+// It is not one of the window's unasked lines (PRO-4 excludes reminders).
+func (s *Service) prep(ctx context.Context, out *Today, sessions []plate.SessionView, tomorrow time.Time) error {
+	if s.d.Prep == nil {
+		return nil
+	}
+	var ids []int64
+	for _, v := range sessions {
+		if v.CookDate.Equal(tomorrow) {
+			ids = append(ids, v.FoodID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	recipes, err := s.d.Prep(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("prep recipes: %w", err)
+	}
+	if r, ok := prepReminder(sessions, tomorrow, recipes); ok {
+		out.Reminders = append(out.Reminders, r)
+	}
+	return nil
 }
 
 // verdict applies the §3.2 rules in order over confirmed rows: no confirmed
