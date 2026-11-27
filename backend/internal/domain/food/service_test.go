@@ -96,6 +96,10 @@ func (r *fakeRepo) SetFavorite(_ context.Context, _ int64, _ bool) (*food.Food, 
 	return &food.Food{}, nil
 }
 
+func (r *fakeRepo) SetArchived(_ context.Context, _ int64, _ bool) (*food.Food, error) {
+	return &food.Food{}, nil
+}
+
 func (r *fakeRepo) SetShopSection(_ context.Context, id int64, section *food.ShopSection) (*food.Food, error) {
 	r.shopSectionSet = true
 	return &food.Food{ID: id, Kind: food.KindLeaf, ShopSection: section}, nil

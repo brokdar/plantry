@@ -28,6 +28,8 @@ type memFoodRepo struct {
 	history  map[int64]food.History
 	// historyToday records the date History was last asked for.
 	historyToday time.Time
+	// lastList records the query List was last asked.
+	lastList food.ListQuery
 }
 
 func (r *memFoodRepo) History(_ context.Context, _ []int64, today time.Time) (map[int64]food.History, error) {
@@ -49,7 +51,8 @@ func (r *memFoodRepo) Get(_ context.Context, id int64) (*food.Food, error) {
 	return &cp, nil
 }
 
-func (r *memFoodRepo) List(_ context.Context, _ food.ListQuery) (*food.ListResult, error) {
+func (r *memFoodRepo) List(_ context.Context, q food.ListQuery) (*food.ListResult, error) {
+	r.lastList = q
 	items := make([]food.Food, 0, len(r.foods))
 	for _, id := range []int64{1, 2, 3, 4} {
 		if f, ok := r.foods[id]; ok {

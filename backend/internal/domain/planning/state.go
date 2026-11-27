@@ -177,6 +177,9 @@ type FoodFacts struct {
 	KeepDays          *int
 	Freezable         bool
 	Favorite          bool
+	// Archived: hidden from planning (LIB-4). The food stays in State.Foods
+	// when a plate holds it, but is never a candidate.
+	Archived bool
 	// LastEaten is the date of the newest confirmed past plate with the
 	// food; nil when never eaten.
 	LastEaten        *time.Time

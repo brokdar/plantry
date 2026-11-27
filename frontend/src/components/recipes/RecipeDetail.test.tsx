@@ -13,6 +13,8 @@ import type {
 vi.mock("@/lib/api/foods", () => ({
   getFoodNutrition: vi.fn(),
   setFoodFavorite: vi.fn(),
+  archiveFood: vi.fn(),
+  restoreFood: vi.fn(),
   getScaled: vi.fn(),
   createVariant: vi.fn(),
   updateFood: vi.fn(),
@@ -36,6 +38,8 @@ import {
   getFoodNutrition,
   getScaled,
   setDietClass,
+  archiveFood,
+  restoreFood,
   setFoodFavorite,
   updateFood,
 } from "@/lib/api/foods"
@@ -368,6 +372,25 @@ describe("RecipeDetail", () => {
     expect(favorite).toHaveAttribute("aria-pressed", "false")
     await user.click(favorite)
     expect(setFoodFavorite).toHaveBeenCalledWith(3, true)
+  })
+
+  it("hides a recipe from planning, and restores a hidden one", async () => {
+    vi.mocked(archiveFood).mockResolvedValue({ ...recipe, archived: true })
+    vi.mocked(restoreFood).mockResolvedValue(recipe)
+    const user = userEvent.setup()
+    const { unmount } = renderWithRouter(<RecipeDetail recipe={recipe} />)
+
+    expect(screen.queryByTestId("recipe-hidden-note")).toBeNull()
+    await user.click(
+      await screen.findByRole("button", { name: "Hide from planning" })
+    )
+    expect(archiveFood).toHaveBeenCalledWith(3)
+    unmount()
+
+    renderWithRouter(<RecipeDetail recipe={{ ...recipe, archived: true }} />)
+    expect(await screen.findByTestId("recipe-hidden-note")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Restore" }))
+    expect(restoreFood).toHaveBeenCalledWith(3)
   })
 
   it("F6-AC1: shows the diet class in the facts and saves an override", async () => {

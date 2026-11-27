@@ -79,7 +79,7 @@ func (q *Queries) ListFoodAttributes(ctx context.Context, ids []int64) ([]FoodAt
 
 const listUnlabelledRecipeIDs = `-- name: ListUnlabelledRecipeIDs :many
 SELECT f.id FROM foods f
-WHERE f.kind = 'composed'
+WHERE f.kind = 'composed' AND f.archived = 0
   AND EXISTS (SELECT 1 FROM food_components c WHERE c.parent_id = f.id)
   AND NOT EXISTS (
       SELECT 1 FROM food_attributes a

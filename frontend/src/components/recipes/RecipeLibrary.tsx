@@ -18,7 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { ComposedFood, FoodRole } from "@/lib/api/foods"
 import { todayISO } from "@/lib/dates"
 import { discoveryAvailable } from "@/lib/discovery/available"
-import { useFoods } from "@/lib/queries/foods"
+import { useFoods, useSetFoodArchived } from "@/lib/queries/foods"
 import { useSettingItems } from "@/lib/queries/settings"
 import { useSetupStatus } from "@/lib/queries/setup"
 import {
@@ -45,12 +45,13 @@ const GRID = "grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4"
 const ALL_ROLES = "all"
 const ALL_DIETS = "all"
 
-type FlagFilter = "quick" | "stale" | "fav" | "new"
+type FlagFilter = "quick" | "stale" | "fav" | "new" | "hidden"
 const FLAG_FILTERS: { key: FlagFilter; label: string }[] = [
   { key: "quick", label: "recipes.library.quick" },
   { key: "stale", label: "recipes.library.stale" },
   { key: "fav", label: "recipes.library.favorites" },
   { key: "new", label: "recipes.library.new" },
+  { key: "hidden", label: "recipes.library.hidden" },
 ]
 
 type RecipeLibraryProps = {
@@ -317,6 +318,7 @@ function LibraryResults({
     limit,
     offset: 0,
   })
+  const restore = useSetFoodArchived()
   const items = (data?.items ?? []) as ComposedFood[]
   const total = data?.total ?? 0
 
@@ -367,8 +369,19 @@ function LibraryResults({
       </p>
       <ul className={GRID} data-testid="recipes-grid">
         {items.map((item) => (
-          <li key={item.id}>
+          <li key={item.id} className="flex flex-col gap-2">
             <RecipeCard recipe={item} today={today} />
+            {query.archived === 1 && (
+              <Button
+                variant="outline"
+                className="min-h-11 self-start md:pointer-fine:min-h-8"
+                disabled={restore.isPending}
+                onClick={() => restore.mutate({ id: item.id, archived: false })}
+                data-testid={`recipe-restore-${item.id}`}
+              >
+                {t("recipes.library.restore")}
+              </Button>
+            )}
           </li>
         ))}
       </ul>

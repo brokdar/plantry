@@ -133,7 +133,8 @@ type Querier interface {
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
 	LastFoodEventID(ctx context.Context) (int64, error)
 	LastPlateEventID(ctx context.Context) (int64, error)
-	// Which of the given leaves at least one composed food uses.
+	// Which of the given leaves at least one active (not archived) composed
+	// food uses.
 	LeafIDsUsedInRecipes(ctx context.Context, ids []int64) ([]int64, error)
 	ListAIChangesByConversation(ctx context.Context, conversationID sql.NullInt64) ([]AiChange, error)
 	// A run's steps in seq order. A tool step's args and result are returned
@@ -231,6 +232,7 @@ type Querier interface {
 	// D11: any suggestion accepted -> accepted; all rejected -> discarded; else
 	// open. A run without suggestions keeps NULL.
 	SetDiscoveryRunOutcome(ctx context.Context, id int64) error
+	SetFoodArchived(ctx context.Context, arg SetFoodArchivedParams) (Food, error)
 	SetFoodDietClass(ctx context.Context, arg SetFoodDietClassParams) (Food, error)
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
 	// Sets only the image, and only on a food without one (discovery accept).

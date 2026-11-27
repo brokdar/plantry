@@ -619,7 +619,7 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 	var out []altCand
 	for _, id := range ids {
 		f := s.Foods[id]
-		if onPlate[id] || !fitsPosition(f, req.What, kind) || !fitsDiet(f.DietClass, household) ||
+		if onPlate[id] || f.Archived || !fitsPosition(f, req.What, kind) || !fitsDiet(f.DietClass, household) ||
 			(req.Constraints.Diet != "" && !fitsDiet(f.DietClass, diet.Class(req.Constraints.Diet))) ||
 			!req.Constraints.matches(f, words) {
 			continue

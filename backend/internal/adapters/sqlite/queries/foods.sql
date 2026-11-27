@@ -85,6 +85,13 @@ RETURNING *;
 -- name: DeleteFood :execresult
 DELETE FROM foods WHERE id = ?;
 
+-- name: SetFoodArchived :one
+UPDATE foods SET
+    archived   = ?,
+    updated_at = datetime('now')
+WHERE id = ? AND kind = 'composed'
+RETURNING *;
+
 -- name: SetFoodFavorite :one
 UPDATE foods SET
     favorite   = ?,
@@ -93,7 +100,7 @@ WHERE id = ?
 RETURNING *;
 
 -- name: CountComposedFoods :one
-SELECT COUNT(*) FROM foods WHERE kind = 'composed';
+SELECT COUNT(*) FROM foods WHERE kind = 'composed' AND archived = 0;
 
 -- name: ListUneatenRecipes :many
 -- Recipes no confirmed plate dated in [since, today] holds, plates marked
@@ -102,7 +109,7 @@ SELECT COUNT(*) FROM foods WHERE kind = 'composed';
 -- uncorrelated scan of the date range (ix_plates_date).
 SELECT f.id, f.role
 FROM foods f
-WHERE f.kind = 'composed'
+WHERE f.kind = 'composed' AND f.archived = 0
   AND f.id NOT IN (
       SELECT pc.food_id
       FROM plates p
@@ -157,7 +164,7 @@ INSERT INTO variant_groups (name) VALUES (?) RETURNING *;
 
 -- name: ListSiblingFoods :many
 SELECT * FROM foods
-WHERE kind = 'composed' AND variant_group_id = ? AND id != ?
+WHERE kind = 'composed' AND archived = 0 AND variant_group_id = ? AND id != ?
 ORDER BY name;
 
 -- name: CreateFoodComponent :exec
@@ -242,22 +249,23 @@ WHERE id = ?
 RETURNING *;
 
 -- name: LeafIDsUsedInRecipes :many
--- Which of the given leaves at least one composed food uses.
+-- Which of the given leaves at least one active (not archived) composed
+-- food uses.
 SELECT DISTINCT fc.child_id
 FROM food_components fc
-JOIN foods p ON p.id = fc.parent_id AND p.kind = 'composed'
+JOIN foods p ON p.id = fc.parent_id AND p.kind = 'composed' AND p.archived = 0
 WHERE fc.child_id IN (sqlc.slice(ids));
 
 -- name: ListRecipeNames :many
 -- The newest recipe names, for the discovery prompt (D8).
-SELECT name FROM foods WHERE kind = 'composed' ORDER BY id DESC LIMIT ?;
+SELECT name FROM foods WHERE kind = 'composed' AND archived = 0 ORDER BY id DESC LIMIT ?;
 
 -- name: ListLeafNamesByRecipeUse :many
 -- Leaf names used in recipes, most used first (discovery known mode, D8).
 SELECT f.name
 FROM foods f
 JOIN food_components fc ON fc.child_id = f.id
-JOIN foods p ON p.id = fc.parent_id AND p.kind = 'composed'
+JOIN foods p ON p.id = fc.parent_id AND p.kind = 'composed' AND p.archived = 0
 WHERE f.kind = 'leaf'
 GROUP BY f.id, f.name
 ORDER BY COUNT(DISTINCT fc.parent_id) DESC, f.name

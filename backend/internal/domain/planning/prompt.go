@@ -689,7 +689,7 @@ func eligibleSplit(in ChooseInput) (kept []FoodFacts, dropped []excludedFood) {
 	t := diet.Class(in.State.Profile.DietType)
 	for _, f := range in.State.Foods {
 		switch {
-		case !f.Composed():
+		case !f.Composed() || f.Archived:
 		case avoid[f.ID]:
 			dropped = append(dropped, excludedFood{f.ID, f.Name, excludeReplaced})
 		case t != "" && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t):

@@ -2,6 +2,7 @@ package food
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
 
@@ -36,6 +38,7 @@ type Service struct {
 	imgStore        ImageSaver                          // optional; nil-safe
 	portionProvider PortionProvider                     // optional; SyncPortionsFromFDC returns ErrLookupFailed when nil
 	saved           func(ctx context.Context, id int64) // optional; see WithSaved
+	events          Recorder                            // set by WithEvents; Archive needs it
 }
 
 // NewService creates a food service backed by the given repository.
@@ -196,6 +199,77 @@ func (s *Service) List(ctx context.Context, q ListQuery) (*ListResult, error) {
 		return s.listByDiet(ctx, q)
 	}
 	return s.repo.List(ctx, q)
+}
+
+// Recorder is the food change log (foodevent.Service).
+type Recorder interface {
+	Recorded(ctx context.Context, fn func(ctx context.Context) error) (foodevent.Undo, error)
+	Record(ctx context.Context, e foodevent.Event) error
+}
+
+// WithEvents wires the food change log, which Archive and Restore write to.
+func (s *Service) WithEvents(r Recorder) *Service {
+	s.events = r
+	return s
+}
+
+var _ foodevent.Restorer = (*Service)(nil)
+
+// archiveSnapshot is the recipe kind's food event JSON.
+type archiveSnapshot struct {
+	Archived bool `json:"archived"`
+}
+
+// Archive hides recipe id from planning and lists (LIB-4); it stays readable
+// by id and can be planned by hand. Archive and Unarchive log a recipe food
+// event and return the undo token of the change.
+func (s *Service) Archive(ctx context.Context, id int64) (*Food, foodevent.Undo, error) {
+	return s.setArchived(ctx, id, true)
+}
+
+// Restore sets recipe id's archive state back to before (the recipe kind's
+// foodevent.Restorer).
+func (s *Service) Restore(ctx context.Context, id int64, before json.RawMessage) error {
+	var snap archiveSnapshot
+	if err := json.Unmarshal(before, &snap); err != nil {
+		return fmt.Errorf("recipe snapshot of food %d: %w", id, err)
+	}
+	_, err := s.repo.SetArchived(ctx, id, snap.Archived)
+	return err
+}
+
+// Unarchive puts recipe id back into planning and lists.
+func (s *Service) Unarchive(ctx context.Context, id int64) (*Food, foodevent.Undo, error) {
+	return s.setArchived(ctx, id, false)
+}
+
+func (s *Service) setArchived(ctx context.Context, id int64, archived bool) (*Food, foodevent.Undo, error) {
+	var out *Food
+	undo, err := s.events.Recorded(ctx, func(ctx context.Context) error {
+		old, err := s.repo.Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		if old.Kind != KindComposed {
+			return fmt.Errorf("%w: only a recipe can be archived", domain.ErrInvalidInput)
+		}
+		if old.Archived == archived {
+			out = old
+			return nil
+		}
+		if out, err = s.repo.SetArchived(ctx, id, archived); err != nil {
+			return err
+		}
+		before, _ := json.Marshal(archiveSnapshot{Archived: old.Archived})
+		after, _ := json.Marshal(archiveSnapshot{Archived: archived})
+		return s.events.Record(ctx, foodevent.Event{
+			Kind: foodevent.KindRecipe, SubjectID: id, Action: foodevent.ActionUpdate, Before: before, After: after,
+		})
+	})
+	if err != nil {
+		return nil, foodevent.Undo{}, err
+	}
+	return out, undo, nil
 }
 
 // SetFavorite toggles the favorite flag. Favorites surface first in listings

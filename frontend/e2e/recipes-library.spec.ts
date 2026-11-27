@@ -97,6 +97,41 @@ test.describe("Recipe library", () => {
     }
   })
 
+  test("LIB-4: a recipe hidden from planning leaves the list, shows under the filter and comes back on Restore", async ({
+    page,
+  }) => {
+    const tag = uid()
+    const { composed, stub } = await seedComposedWithStub(
+      { name: `Hide Me ${tag}`, role: "main" },
+      tag
+    )
+    try {
+      await page.goto(`/recipes/${composed.id}`)
+      await page.getByTestId("recipe-archive").click()
+      await expect(page.getByTestId("recipe-hidden-note")).toBeVisible()
+
+      await page.goto("/recipes")
+      await searchFor(page, tag)
+      await expect(page.getByTestId("recipes-empty")).toBeVisible()
+      await expect(page.getByTestId(`recipe-card-${composed.id}`)).toHaveCount(
+        0
+      )
+
+      await page.getByTestId("recipes-filter-hidden").click()
+      await expect(page.getByTestId(`recipe-card-${composed.id}`)).toBeVisible()
+      await page.getByTestId(`recipe-restore-${composed.id}`).click()
+      await expect(page.getByTestId(`recipe-card-${composed.id}`)).toHaveCount(
+        0
+      )
+
+      await page.getByTestId("recipes-filter-hidden").click()
+      await expect(page.getByTestId(`recipe-card-${composed.id}`)).toBeVisible()
+    } finally {
+      await cleanupFood(composed.id)
+      await cleanupFood(stub.id)
+    }
+  })
+
   test("F8-AC1: last eaten, Not eaten lately and Sort by last eaten", async ({
     page,
   }) => {

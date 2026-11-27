@@ -87,7 +87,7 @@ func quickFor(in ChooseInput, prop Proposal, key string, limit int, skip map[int
 	household := merged.Profile.DietType
 	var cands []FoodFacts
 	for id, f := range merged.Foods {
-		if skip[id] || inPlan[id] || !f.Composed() || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 || !f.NutritionComplete ||
+		if skip[id] || inPlan[id] || !f.Composed() || f.Archived || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 || !f.NutritionComplete ||
 			f.Minutes <= 0 || f.Minutes > limit || (f.Role != old.Role && f.Role != food.RoleMain) ||
 			(DietRestricts(household) && !fitsDiet(f.DietClass, diet.Class(household))) {
 			continue

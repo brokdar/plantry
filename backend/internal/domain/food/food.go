@@ -138,6 +138,9 @@ type Food struct {
 	Description *string
 	ImagePath   *string
 	Favorite    bool
+	// Archived hides a recipe from planning and lists (LIB-4); it stays
+	// readable by id.
+	Archived bool
 
 	// Derived, never stored: set only by Service.Derive.
 	// History is the composed food's eating history (D16), UsedInCount the
@@ -204,8 +207,21 @@ type Portion struct {
 	Grams  float64
 }
 
+// ArchiveScope says which foods by archive state a listing keeps. The zero
+// value keeps the active ones, so a reader is safe by default.
+type ArchiveScope int
+
+// Archive scopes.
+const (
+	ArchiveActive ArchiveScope = iota
+	ArchiveOnly
+	ArchiveAll
+)
+
 // ListQuery filters, paginates, and sorts a food listing.
 type ListQuery struct {
+	// Archive picks active (default), archived or all foods.
+	Archive      ArchiveScope
 	Kind         Kind // "" means both kinds
 	Search       string
 	Role         string

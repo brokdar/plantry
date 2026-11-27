@@ -16,6 +16,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
@@ -183,6 +184,7 @@ type foodResponse struct {
 	Description *string `json:"description,omitempty"`
 	ImagePath   *string `json:"image_path,omitempty"`
 	Favorite    bool    `json:"favorite"`
+	Archived    bool    `json:"archived"`
 	CreatedAt   string  `json:"created_at"`
 	UpdatedAt   string  `json:"updated_at"`
 
@@ -362,6 +364,7 @@ func toFoodResponse(f *food.Food) foodResponse {
 		Description: f.Description,
 		ImagePath:   f.ImagePath,
 		Favorite:    f.Favorite,
+		Archived:    f.Archived,
 		CreatedAt:   f.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:   f.UpdatedAt.Format(time.RFC3339),
 
@@ -708,6 +711,9 @@ func (h *FoodHandler) List(w http.ResponseWriter, r *http.Request) {
 	q.Role = r.URL.Query().Get("role")
 	q.Tag = r.URL.Query().Get("tag")
 	q.FavoriteOnly = r.URL.Query().Get("favorite") == "1"
+	if r.URL.Query().Get("archived") == "1" {
+		q.Archive = food.ArchiveOnly
+	}
 	q.SortBy = r.URL.Query().Get("sort")
 	q.SortDesc = r.URL.Query().Get("order") == "desc"
 	if v := r.URL.Query().Get("limit"); v != "" {
@@ -846,6 +852,36 @@ func (h *FoodHandler) SetFavorite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f, err := h.svc.SetFavorite(r.Context(), id, req.Favorite)
+	if err != nil {
+		status, key := foodHTTPError(err)
+		writeError(w, status, key)
+		return
+	}
+	h.writeFood(w, r, http.StatusOK, today, f)
+}
+
+// Archive handles POST /api/foods/{id}/archive: the recipe leaves planning
+// and the lists (LIB-4).
+func (h *FoodHandler) Archive(w http.ResponseWriter, r *http.Request) {
+	h.setArchived(w, r, h.svc.Archive)
+}
+
+// Unarchive handles POST /api/foods/{id}/restore.
+func (h *FoodHandler) Unarchive(w http.ResponseWriter, r *http.Request) {
+	h.setArchived(w, r, h.svc.Unarchive)
+}
+
+func (h *FoodHandler) setArchived(w http.ResponseWriter, r *http.Request, do func(context.Context, int64) (*food.Food, foodevent.Undo, error)) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+	f, _, err := do(r.Context(), id)
 	if err != nil {
 		status, key := foodHTTPError(err)
 		writeError(w, status, key)

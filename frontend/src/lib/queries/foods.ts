@@ -24,6 +24,8 @@ import {
   setFoodAttributes,
   setNoCook,
   setFoodFavorite,
+  archiveFood,
+  restoreFood,
   setShopSection,
   syncPortions,
   updateFood,
@@ -246,6 +248,23 @@ export function useSetFoodFavorite() {
       void queryClient.invalidateQueries({ queryKey: foodKeys.lists() })
       void queryClient.invalidateQueries({ queryKey: foodKeys.detail(id) })
     },
+    onError: (err) => toastError(err, t),
+  })
+}
+
+/** Hide a recipe from planning, or restore it (LIB-4). The plan candidates
+ *  change, so the plan views refetch too. */
+export function useSetFoodArchived() {
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({ id, archived }: { id: number; archived: boolean }) =>
+      archived ? archiveFood(id) : restoreFood(id),
+    onSuccess: (_data, { id }) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: foodKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: foodKeys.detail(id) }),
+        queryClient.invalidateQueries({ queryKey: planKeys.all }),
+      ]),
     onError: (err) => toastError(err, t),
   })
 }

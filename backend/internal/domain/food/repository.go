@@ -41,6 +41,9 @@ type Repository interface {
 	Siblings(ctx context.Context, variantGroupID int64, excludeID int64) ([]Food, error)
 
 	SetFavorite(ctx context.Context, id int64, favorite bool) (*Food, error)
+	// SetArchived hides a recipe from planning, or restores it; domain.ErrNotFound
+	// for a missing food or a leaf.
+	SetArchived(ctx context.Context, id int64, archived bool) (*Food, error)
 	// SetShopSection writes a leaf's store section override (nil clears it)
 	// and returns the food.
 	SetShopSection(ctx context.Context, id int64, section *ShopSection) (*Food, error)

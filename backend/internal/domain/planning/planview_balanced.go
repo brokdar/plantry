@@ -229,7 +229,7 @@ func richerMainExists(in ChooseInput, merged State, date string, gap float64) bo
 		return f.LastEaten != nil && d.Sub(*f.LastEaten) < span && d.After(*f.LastEaten)
 	}
 	for id, f := range merged.Foods {
-		if f.Composed() && isMain(f.Role, mealFull) && !held[id] && !skip[id] && !recent(f) && !(noMeat && f.Groups.MeatG > 0) && fitsDiet(f.DietClass, household) && f.Macros.Kcal >= best+need {
+		if f.Composed() && !f.Archived && isMain(f.Role, mealFull) && !held[id] && !skip[id] && !recent(f) && !(noMeat && f.Groups.MeatG > 0) && fitsDiet(f.DietClass, household) && f.Macros.Kcal >= best+need {
 			return true
 		}
 	}

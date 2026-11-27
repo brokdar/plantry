@@ -30,6 +30,8 @@ export interface LibrarySearch {
   fav?: true
   /** Added in the last 30 days. */
   new?: true
+  /** Only the recipes hidden from planning (LIB-4). */
+  hidden?: true
   sort?: LibrarySort
   add?: "url" | "discover"
   suggestion?: number
@@ -68,6 +70,7 @@ export function parseLibrarySearch(
     stale: flag(raw.stale),
     fav: flag(raw.fav),
     new: flag(raw.new),
+    hidden: flag(raw.hidden),
     sort: oneOf(LIBRARY_SORTS, raw.sort),
     add: oneOf(["url", "discover"] as const, raw.add),
     suggestion:
@@ -109,7 +112,16 @@ export function rememberedLibrarySearch(): LibrarySearch {
 
 /** True when any filter (not the sort) narrows the list. */
 export function hasLibraryFilters(s: LibrarySearch): boolean {
-  return !!(s.q || s.role || s.diet || s.quick || s.stale || s.fav || s.new)
+  return !!(
+    s.q ||
+    s.role ||
+    s.diet ||
+    s.quick ||
+    s.stale ||
+    s.fav ||
+    s.new ||
+    s.hidden
+  )
 }
 
 /** Maps the filters onto `GET /api/foods` (B7 list params). */
@@ -123,6 +135,7 @@ export function libraryQuery(s: LibrarySearch): FoodListParams {
     not_eaten_weeks: s.stale ? STALE_WEEKS : undefined,
     favorite: s.fav ? 1 : undefined,
     created_within_days: s.new ? NEW_DAYS : undefined,
+    archived: s.hidden ? 1 : undefined,
     sort: s.sort ?? "name",
   }
 }

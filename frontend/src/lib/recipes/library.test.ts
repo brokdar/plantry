@@ -172,6 +172,16 @@ describe("libraryQuery", () => {
   })
 })
 
+describe("hidden filter", () => {
+  it("keeps only true, asks the list for the archived recipes and counts as a filter", () => {
+    expect(parseLibrarySearch({ hidden: true }).hidden).toBe(true)
+    expect(parseLibrarySearch({ hidden: "yes" }).hidden).toBeUndefined()
+    expect(libraryQuery({ hidden: true }).archived).toBe(1)
+    expect(libraryQuery({}).archived).toBeUndefined()
+    expect(hasLibraryFilters({ hidden: true })).toBe(true)
+  })
+})
+
 describe("hasLibraryFilters", () => {
   it("ignores the sort and the import sheet", () => {
     expect(hasLibraryFilters({ sort: "created", add: "url" })).toBe(false)
