@@ -98,9 +98,11 @@ async function seed(): Promise<Seed> {
   }
 }
 
-async function undo(page: Page) {
+async function undo(page: Page, toast?: string) {
+  // After keeping a swap, wait for the keep toast: it replaces the swap's.
+  if (toast) await expect(page.getByText(toast)).toBeVisible()
   const button = page.getByRole("button", { name: "Undo" })
-  // Keeping a swap replaces the swap's toast; wait out its exit.
+  // The replaced toast is still leaving.
   await expect(button).toHaveCount(1)
   await button.click()
 }
@@ -199,7 +201,7 @@ test.describe("Substitutions", () => {
       await (await pickShallot()).getByTestId("substitute-variant").click()
       await expect.poll(async () => (await variants()).length).toBe(1)
       expect((await variants())[0].name).toMatch(/with Schalotte/)
-      await undo(page)
+      await undo(page, "Saved as a variant with")
       await expect.poll(async () => (await variants()).length).toBe(0)
       // Undo returns to the batch's own swap; drop that too.
       await request.delete(`${API}/api/cook-sessions/${s.sessionId}/overrides`)
@@ -219,7 +221,7 @@ test.describe("Substitutions", () => {
       expect(recipe.children.map((c) => c.child_name).join()).toMatch(
         /Schalotte/
       )
-      await undo(page)
+      await undo(page, "Recipe now has")
       await expect
         .poll(async () =>
           (
