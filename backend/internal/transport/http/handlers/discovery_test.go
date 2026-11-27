@@ -140,7 +140,7 @@ func newDiscoveryAPI(t *testing.T, client llm.Client) *discoveryAPI {
 			Index:     repo,
 			Guard:     func(u string) error { return httpfetch.PublicURL(u, nil, true) },
 		},
-		Annotator: &discovery.Annotator{Matcher: food.NewResolver(foods, nil, nil, nil), Used: foods, Nutrition: food.NewNutritionResolver(foods)},
+		Annotator: &discovery.Annotator{Matcher: food.NewMatcher(foods, nil, nil), Used: foods, Nutrition: food.NewNutritionResolver(foods)},
 		Store:     &discovery.Store{Repo: repo, Images: images},
 		Logger:    logger,
 	})

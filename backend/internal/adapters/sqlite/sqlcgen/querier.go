@@ -131,6 +131,7 @@ type Querier interface {
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
 	HasQueuedChefJob(ctx context.Context, arg HasQueuedChefJobParams) (bool, error)
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
+	InsertFoodOrigin(ctx context.Context, arg InsertFoodOriginParams) error
 	LastFoodEventID(ctx context.Context) (int64, error)
 	LastPlateEventID(ctx context.Context) (int64, error)
 	// Which of the given leaves at least one active (not archived) composed
@@ -166,6 +167,7 @@ type Querier interface {
 	ListFoodComponents(ctx context.Context, parentID int64) ([]ListFoodComponentsRow, error)
 	ListFoodEventsInRange(ctx context.Context, arg ListFoodEventsInRangeParams) ([]FoodEvent, error)
 	ListFoodInstructions(ctx context.Context, foodID int64) ([]FoodInstruction, error)
+	ListFoodOriginLeaves(ctx context.Context, arg ListFoodOriginLeavesParams) ([]int64, error)
 	ListFoodPortions(ctx context.Context, foodID int64) ([]FoodPortion, error)
 	ListFoodTags(ctx context.Context, foodID int64) ([]FoodTag, error)
 	ListFoodTagsByFoodIDs(ctx context.Context, ids []int64) ([]FoodTag, error)

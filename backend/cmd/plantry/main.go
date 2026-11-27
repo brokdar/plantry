@@ -317,6 +317,18 @@ func run() error {
 	// Food resolver depends on llmResolver for optional AI translation
 	// and pick-best ranking; nil llmResolver disables those features.
 	resolver := food.NewResolver(foodRepo, offProvider, fdcProvider, llmResolver).WithRecorder(runRecorder)
+	// The one matching path (MATCH-4): imports, the review's re-search and
+	// Discover. Its chef_match call asks the Chef guard (set below).
+	var matchGuard *chef.Guard
+	var offSearcher food.LangSearcher
+	if ls, ok := offProvider.(food.LangSearcher); ok {
+		offSearcher = ls
+	}
+	matcher := food.NewMatcher(foodRepo, fdcProvider, offSearcher).WithPicker(llmResolver, runRecorder,
+		func(ctx context.Context, requested bool) (bool, bool, error) {
+			d, err := matchGuard.Check(ctx, airun.KindChefMatch, requested)
+			return d.Run, d.Warn, err
+		})
 
 	aiRepo := sqlite.NewAIRepo(conn)
 	changeRepo := sqlite.NewAIChangeRepo(conn)
@@ -364,7 +376,7 @@ func run() error {
 		devHandler = handlers.NewDevHandler(clock)
 	}
 	importFetcher := httpfetch.New(httpfetch.WithDialGuard(nil, cfg.DevMode))
-	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver, foodSvc).WithRecorder(runRecorder)
+	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver, foodSvc).WithRecorder(runRecorder).WithMatcher(matcher)
 	importHandler := handlers.NewImportHandler(importSvc)
 
 	// Discovery (D7): research → verify → annotate → store, one run
@@ -386,7 +398,7 @@ func run() error {
 		Profile:   profileSvc,
 		Catalogue: foodRepo,
 		Verifier:  &discovery.Verifier{Extractor: importSvc, Index: suggestionRepo, Guard: discoveryGuard},
-		Annotator: &discovery.Annotator{Matcher: resolver, Used: foodRepo, Nutrition: nutritionResolver},
+		Annotator: &discovery.Annotator{Matcher: matcher, Used: foodRepo, Nutrition: nutritionResolver},
 		Store:     suggestionStore,
 		Logger:    logger,
 	})
@@ -413,6 +425,7 @@ func run() error {
 	flavorSvc := flavor.NewService(foodAttributeRepo, foodRepo, nutritionResolver, foodEventSvc)
 	foodRestorers[foodevent.KindAttribute] = flavorSvc
 	chefGuard := &chef.Guard{Settings: settingsSvc, Spend: aiRunRepo, Prices: priceOverrides, Now: time.Now}
+	matchGuard = chefGuard
 	// Attribute labelling (ATTR-2): a chef_attributes job per saved recipe
 	// and the one-time library pass, each a capped run.
 	var labelling *flavor.Labelling

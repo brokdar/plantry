@@ -195,3 +195,25 @@ func TestSearchByName_ContextCancelled(t *testing.T) {
 	assert.Nil(t, candidates)
 	assert.ErrorIs(t, err, context.Canceled)
 }
+
+// TestSearchByName_ClassicSearchAndStringQuantities: the search goes to the
+// classic endpoint that honours search_terms, and a product whose quantities
+// are strings decodes instead of failing the whole response.
+func TestSearchByName_ClassicSearchAndStringQuantities(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/cgi/search.pl", r.URL.Path)
+		assert.Equal(t, "mango chutney", r.URL.Query().Get("search_terms"))
+		assert.Equal(t, "en", r.URL.Query().Get("lc"))
+		_, _ = w.Write([]byte(`{"products":[
+			{"product_name":"Mango Chutney","serving_quantity":"15","product_quantity":"340 g","nutriments":{"energy-kcal_100g":220}},
+			{"product_name":"Premium Mango Chutney","serving_quantity":20,"nutriments":{"energy-kcal_100g":210}}]}`))
+	}))
+	defer srv.Close()
+
+	got, err := New(WithBaseURL(srv.URL)).SearchByName(context.Background(), "mango chutney", "en", 5)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	require.NotNil(t, got[0].ServingQuantityG)
+	assert.InDelta(t, 15, *got[0].ServingQuantityG, 0.001)
+	assert.InDelta(t, 20, *got[1].ServingQuantityG, 0.001)
+}

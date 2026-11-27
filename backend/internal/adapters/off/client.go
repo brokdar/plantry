@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -116,7 +117,9 @@ func (c *Client) LookupBarcode(ctx context.Context, barcode string, lang string)
 // SearchByName searches for products by free-text query.
 // Returns an empty slice when no products match.
 func (c *Client) SearchByName(ctx context.Context, query string, lang string, limit int) ([]Candidate, error) {
-	u := fmt.Sprintf("%s/api/v2/search?search_terms=%s&lc=%s&fields=%s&page_size=%s&page=1&sort_by=score",
+	// The v2 search ignores search_terms and returns popular products; the
+	// classic search honours them.
+	u := fmt.Sprintf("%s/cgi/search.pl?search_terms=%s&search_simple=1&action=process&json=1&lc=%s&fields=%s&page_size=%s&page=1",
 		c.baseURL, url.QueryEscape(query), url.QueryEscape(lang), productFields, strconv.Itoa(limit))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -150,7 +153,7 @@ func (c *Client) SearchByName(ctx context.Context, query string, lang string, li
 func mapProduct(p offProduct, lang string) Candidate {
 	var serving *float64
 	if p.ServingQuantity > 0 {
-		v := p.ServingQuantity
+		v := float64(p.ServingQuantity)
 		serving = &v
 	}
 	return Candidate{
@@ -219,8 +222,8 @@ type offProduct struct {
 	ProductNameEn       string        `json:"product_name_en"`
 	Brands              string        `json:"brands"`
 	ServingSize         string        `json:"serving_size"`
-	ServingQuantity     float64       `json:"serving_quantity"`
-	ProductQuantity     float64       `json:"product_quantity"`
+	ServingQuantity     flexFloat     `json:"serving_quantity"`
+	ProductQuantity     flexFloat     `json:"product_quantity"`
 	ProductQuantityUnit string        `json:"product_quantity_unit"`
 	Nutriments          offNutriments `json:"nutriments"`
 	ImageFrontSmallURL  string        `json:"image_front_small_url"`
@@ -250,4 +253,19 @@ type offNutriments struct {
 	VitaminB12100g   *float64 `json:"vitamin-b12_100g"`
 	VitaminB6100g    *float64 `json:"vitamin-b6_100g"`
 	VitaminB9100g    *float64 `json:"vitamin-b9_100g"`
+}
+
+// flexFloat decodes a number OFF sends as a JSON number or a string ("250");
+// anything unparsable is 0, so one odd product does not fail a search.
+type flexFloat float64
+
+func (f *flexFloat) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil {
+		*f = 0
+		return nil
+	}
+	*f = flexFloat(v)
+	return nil
 }
