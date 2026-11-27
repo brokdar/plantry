@@ -86,9 +86,11 @@ describe("ShopPage", () => {
     })
     const user = userEvent.setup()
     renderShop()
-    // Wait on the cheap test id (the group appears once the kitchen query
-    // resolves); a findByRole poll walks the whole tree and can outlast its
+    // Wait for the list first (the first test of the file also pays the
+    // cold render), then for the group, which appears once the kitchen query
+    // resolves; a findByRole poll walks the whole tree and can outlast its
     // timeout on a loaded 4-vCPU runner.
+    await screen.findByTestId("shop-count")
     await screen.findByTestId("shop-at-home")
     const toggle = screen.getByRole("button", {
       name: "Probably at home, 1 item",
