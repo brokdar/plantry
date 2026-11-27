@@ -56,7 +56,8 @@ WHERE id = sqlc.arg(id) AND kind = 'discovery';
 -- Suggestions, optionally of one status and run, last decided (else newest)
 -- first.
 SELECT * FROM recipe_suggestions
-WHERE (CAST(sqlc.narg(status) AS TEXT) IS NULL OR status = CAST(sqlc.narg(status) AS TEXT))
+WHERE status <> 'hidden'
+  AND (CAST(sqlc.narg(status) AS TEXT) IS NULL OR status = CAST(sqlc.narg(status) AS TEXT))
   AND (CAST(sqlc.narg(run_id) AS INTEGER) IS NULL OR ai_run_id = CAST(sqlc.narg(run_id) AS INTEGER))
 ORDER BY COALESCE(decided_at, created_at) DESC, id DESC
 LIMIT sqlc.arg(lim);

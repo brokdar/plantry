@@ -1,5 +1,6 @@
-// Package finds holds the pieces of the find pipeline (FIND-1..17) that
-// later PRs assemble.
+// Package finds is the find pipeline (FIND-1..17): search the enabled sites,
+// fetch three versions, rank, cross-check, adapt, match, gate, and store the
+// find in its FIND-4 state.
 package finds
 
 import (

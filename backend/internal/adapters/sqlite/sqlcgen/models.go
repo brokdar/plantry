@@ -190,6 +190,12 @@ type CookSession struct {
 	Reason         sql.NullString
 }
 
+type FindSourcePenalty struct {
+	Site      string
+	Count     int64
+	UpdatedAt string
+}
+
 type Food struct {
 	ID                int64
 	Name              string
@@ -311,6 +317,11 @@ type HiddenVariant struct {
 	SessionID  sql.NullInt64
 }
 
+type KitchenQuestionsAsked struct {
+	Question string
+	AskedAt  string
+}
+
 type NeverItem struct {
 	FoodID int64
 }
@@ -424,6 +435,16 @@ type RecipeSuggestion struct {
 	ShownOn         sql.NullString
 	CreatedAt       string
 	DecidedAt       sql.NullString
+	State           sql.NullString
+	FindTrigger     sql.NullString
+	SourcesJson     string
+	FlagsJson       string
+	Origin          sql.NullString
+	ChangesJson     string
+	GatesJson       string
+	StepsJson       string
+	QuestionsJson   string
+	UpdatedAt       string
 }
 
 type SubstitutionSwap struct {

@@ -47,6 +47,8 @@ type Querier interface {
 	CreateChefTip(ctx context.Context, arg CreateChefTipParams) (int64, error)
 	CreateConversation(ctx context.Context, title sql.NullString) (AiConversation, error)
 	CreateCookSession(ctx context.Context, arg CreateCookSessionParams) (CookSession, error)
+	// A requested or autonomous find starts searching (FIND-4).
+	CreateFind(ctx context.Context, arg CreateFindParams) (RecipeSuggestion, error)
 	CreateFood(ctx context.Context, arg CreateFoodParams) (Food, error)
 	CreateFoodComponent(ctx context.Context, arg CreateFoodComponentParams) error
 	CreateFoodEvent(ctx context.Context, arg CreateFoodEventParams) error
@@ -67,6 +69,9 @@ type Querier interface {
 	// D12: whether a daily discovery run for the day ended without storing a
 	// suggestion (error, partial, cancelled).
 	DailyRunFailed(ctx context.Context, day string) (int64, error)
+	// Keep (in_library, with the saved food) or discard a ready or needs_check
+	// find; no row when it is decided already.
+	DecideFind(ctx context.Context, arg DecideFindParams) (RecipeSuggestion, error)
 	// Accept or reject a pending suggestion; no row when it is decided already.
 	DecideRecipeSuggestion(ctx context.Context, arg DecideRecipeSuggestionParams) (RecipeSuggestion, error)
 	DeleteActiveSlotAvailabilityDefaults(ctx context.Context) error
@@ -106,6 +111,9 @@ type Querier interface {
 	// UpsertPrompt never makes this UPDATE fail and leave the run 'running'.
 	FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.Result, error)
 	FinishChefJob(ctx context.Context, arg FinishChefJobParams) error
+	// The pipeline's outcome: state and everything it learned. A ready or
+	// needs_check find shows as pending in Discover; a failed one stays hidden.
+	FinishFind(ctx context.Context, arg FinishFindParams) (RecipeSuggestion, error)
 	// Derived eating history (D16) relative to today, over confirmed rows only
 	// (D26). last_eaten is the latest confirmed plate dated on or before today
 	// that holds the food and is not marked not_eaten (empty when none);
@@ -179,6 +187,8 @@ type Querier interface {
 	ListCookSessionsByIDs(ctx context.Context, ids []int64) ([]CookSession, error)
 	// Sessions cooking in [from_date, to_date] or linked to a plate dated in it.
 	ListCookSessionsInRange(ctx context.Context, arg ListCookSessionsInRangeParams) ([]CookSession, error)
+	// Finds (rows with a state), optionally of one state, newest first.
+	ListFinds(ctx context.Context, arg ListFindsParams) ([]RecipeSuggestion, error)
 	ListFoodAttributes(ctx context.Context, ids []int64) ([]FoodAttribute, error)
 	ListFoodComponents(ctx context.Context, parentID int64) ([]ListFoodComponentsRow, error)
 	ListFoodEventsInRange(ctx context.Context, arg ListFoodEventsInRangeParams) ([]FoodEvent, error)
@@ -189,6 +199,7 @@ type Querier interface {
 	ListFoodTagsByFoodIDs(ctx context.Context, ids []int64) ([]FoodTag, error)
 	// The recipe each of the foods is a hidden variant of.
 	ListHiddenVariantBases(ctx context.Context, ids []int64) ([]ListHiddenVariantBasesRow, error)
+	ListKitchenQuestionsAsked(ctx context.Context) ([]string, error)
 	ListKnownTags(ctx context.Context, limit int64) ([]ListKnownTagsRow, error)
 	// Leaf names used in recipes, most used first (discovery known mode, D8).
 	ListLeafNamesByRecipeUse(ctx context.Context, limit int64) ([]string, error)
@@ -224,6 +235,7 @@ type Querier interface {
 	ListRecipeSuggestions(ctx context.Context, arg ListRecipeSuggestionsParams) ([]RecipeSuggestion, error)
 	ListSettings(ctx context.Context) ([]AppSetting, error)
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
+	ListSourcePenalties(ctx context.Context) ([]ListSourcePenaltiesRow, error)
 	// Every food's and suggestion's (any status) source_url, for the
 	// normalized duplicate check.
 	ListSourceURLs(ctx context.Context) ([]string, error)
@@ -251,8 +263,12 @@ type Querier interface {
 	// table. Newest first so the cap drops the oldest rows.
 	ListUserPlateUpdates(ctx context.Context, arg ListUserPlateUpdatesParams) ([]ListUserPlateUpdatesRow, error)
 	MarkAIChangeUndone(ctx context.Context, arg MarkAIChangeUndoneParams) (sql.Result, error)
+	// KIT-2/3: a question is asked once.
+	MarkKitchenQuestionAsked(ctx context.Context, question string) error
 	MarkSubstitutionSwapOffered(ctx context.Context, arg MarkSubstitutionSwapOfferedParams) error
 	MatchBasicAtHome(ctx context.Context, foodID int64) error
+	// "Looks wrong" lowers the site's rank (NEW-4).
+	PenaliseSource(ctx context.Context, site string) error
 	// Deletes up to 500 steps of runs started before the cutoff; the runs,
 	// prompts and tool schemas stay. The repo repeats it until nothing is left,
 	// so no single statement holds the write lock for long.
