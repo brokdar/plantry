@@ -1720,6 +1720,14 @@
     }
   },
   "plan": {
+    "assistant_did": {
+      "title": "What the assistant did",
+      "find_placed": "Added {{name}} to this week",
+      "undo": "Undo",
+      "undo_label": "Undo: {{name}}",
+      "more": "and {{count}} more",
+      "undone": "Taken out again"
+    },
     "undo": {
       "plate_removed": "Plate removed",
       "batch_removed": "Batch removed",

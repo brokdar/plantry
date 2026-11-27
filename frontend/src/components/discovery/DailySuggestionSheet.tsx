@@ -124,9 +124,13 @@ export function DailySuggestionSheet({ date }: { date: string }) {
                   className="h-11 px-4 md:pointer-fine:h-9"
                   onClick={() => {
                     close()
+                    // A ready find (Chef on) opens the find review.
                     void navigate({
                       to: "/recipes",
-                      search: { add: "discover", suggestion: suggestion.id },
+                      search:
+                        suggestion.mode === "find"
+                          ? { add: "find", find: suggestion.id }
+                          : { add: "discover", suggestion: suggestion.id },
                     })
                   }}
                 >

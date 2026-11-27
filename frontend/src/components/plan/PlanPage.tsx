@@ -28,10 +28,13 @@ import {
   usePlanDay,
   useRevertUndo,
 } from "@/lib/queries/plan"
+import { usePlanOpened } from "@/lib/queries/assistant-did"
 import { useSettingItems } from "@/lib/queries/settings"
+import { useTips } from "@/lib/queries/tips"
 import { cn } from "@/lib/utils"
 
 import { Board } from "./Board"
+import { AssistantDid } from "./AssistantDid"
 import { BoardSkeleton } from "./BoardSkeleton"
 import { DiscardDialog } from "./DiscardDialog"
 import { DraftBar } from "./DraftBar"
@@ -190,6 +193,10 @@ function PlanView({
   const regenerate = useRegenerate()
   const { window: win } = plan
   const windowSearch = anchored ? undefined : win.start
+  // The Chef is on when the window's tips say so (P11: opening the page is
+  // a planning session).
+  const chefOn = useTips(win.start).data?.on === true
+  usePlanOpened(win.start, chefOn)
 
   /** Opens or closes the assistant (`?assistant=1`), keeping the rest of
    *  the URL. Closing from inside the panel returns focus to the toggle. */
@@ -482,6 +489,7 @@ function PlanView({
               )
             }
           />
+          <AssistantDid start={win.start} enabled={chefOn} />
           {plan.week && <WeekLedger week={plan.week} soft={plan.soft} />}
           <BatchHighlightProvider>
             {board.empty && !board.readOnly && !running && (
