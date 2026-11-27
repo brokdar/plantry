@@ -2362,6 +2362,7 @@
         "checks_failed": "Needs a look: {{codes}}",
         "no_sites": "No enabled recipe site can be searched right now",
         "nothing_found": "Found no usable recipe",
+        "duplicate": "Another find kept the same recipe page first",
         "no_search": "This provider can't search the web on its own",
         "no_provider": "No AI provider is set up",
         "off": "The assistant is switched off",

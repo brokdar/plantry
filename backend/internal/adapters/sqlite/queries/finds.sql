@@ -84,11 +84,6 @@ SELECT * FROM recipe_suggestions
 WHERE placed_on = sqlc.arg(placed_on) AND state = 'in_library'
 ORDER BY id;
 
--- name: CountOpenPlanningFinds :one
--- Autonomous finds that are ready or still searching (prefetch counts them).
-SELECT COUNT(*) FROM recipe_suggestions
-WHERE state = 'ready' OR (state = 'searching' AND find_trigger = 'planning');
-
 -- name: ShowNextReadyFind :one
 -- FIND-2: with the Chef on the daily idea is a ready find, never shown
 -- before, after the given id.

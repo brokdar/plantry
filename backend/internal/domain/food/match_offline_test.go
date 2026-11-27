@@ -17,7 +17,7 @@ import (
 )
 
 // TestMatch_OfflineCatalogueWithoutFDCKey: without an FDC key the common
-// foods the CP3 trial and the C2 canary left unmatched (P3) match a generic
+// foods the CP3 trials and the C2 canary left unmatched (P3) match a generic
 // FDC food with nutrition from the embedded catalogue; nonsense stays
 // unmatched.
 func TestMatch_OfflineCatalogueWithoutFDCKey(t *testing.T) {
@@ -44,6 +44,15 @@ func TestMatch_OfflineCatalogueWithoutFDCKey(t *testing.T) {
 		{"en", food.MatchLine{Name: "oyster sauce", Amount: 2, Unit: "tbsp"}, 174529, ""},
 		{"en", food.MatchLine{Name: "black beans", Amount: 400, Unit: "g"}, 175188, ""},
 		{"en", food.MatchLine{Name: "brown lentils", Amount: 200, Unit: "g"}, 2644283, ""},
+		// The Japanese lines of the CP3b theme week (mirin has no FDC food).
+		{"en", food.MatchLine{Name: "dashi stock", Amount: 1, Unit: "cup"}, 172885, ""},
+		{"en", food.MatchLine{Name: "nori sheets", Amount: 2, Unit: "piece"}, 168458, ""},
+		{"en", food.MatchLine{Name: "kombu", Amount: 1, Unit: "piece"}, 168457, ""},
+		{"en", food.MatchLine{Name: "wakame", Amount: 1, Unit: "tbsp"}, 170496, ""},
+		{"en", food.MatchLine{Name: "sriracha", Amount: 1, Unit: "tbsp"}, 171186, ""},
+		{"en", food.MatchLine{Name: "gyoza or wonton wrappers", Amount: 50, Unit: "piece"}, 172802, ""},
+		{"en", food.MatchLine{Name: "daikon", Amount: 200, Unit: "g"}, 168451, ""},
+		{"en", food.MatchLine{Name: "shiitake mushrooms", Amount: 100, Unit: "g"}, 169242, ""},
 		{"de", food.MatchLine{Name: "Lauch", Amount: 1, Unit: "Stück"}, 169246, ""},
 		{"de", food.MatchLine{Name: "Kokosmilch", Amount: 400, Unit: "ml"}, 170173, ""},
 		{"de", food.MatchLine{Name: "Knollensellerie", Amount: 300, Unit: "g"}, 170400, ""},

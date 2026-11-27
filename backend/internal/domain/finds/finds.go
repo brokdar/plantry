@@ -163,8 +163,6 @@ type Store interface {
 	Unplace(ctx context.Context, id int64) (*Find, error)
 	// Placed lists the finds placed in the window starting on windowStart.
 	Placed(ctx context.Context, windowStart time.Time) ([]Find, error)
-	// OpenAutonomous counts ready finds and searching planning finds.
-	OpenAutonomous(ctx context.Context) (int, error)
 	// TouchSession keeps the planning session open until at least until;
 	// SessionUntil is when it closes (zero: never opened).
 	TouchSession(ctx context.Context, until time.Time) error

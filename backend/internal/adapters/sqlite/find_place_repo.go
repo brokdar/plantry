@@ -56,15 +56,6 @@ func (r *FindRepo) Placed(ctx context.Context, windowStart time.Time) ([]finds.F
 	return out, nil
 }
 
-// OpenAutonomous counts ready finds and searching planning finds.
-func (r *FindRepo) OpenAutonomous(ctx context.Context) (int, error) {
-	n, err := r.queriesFor(ctx).CountOpenPlanningFinds(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("count open finds: %w", err)
-	}
-	return int(n), nil
-}
-
 // TouchSession keeps the planning session open until at least until.
 func (r *FindRepo) TouchSession(ctx context.Context, until time.Time) error {
 	if err := r.queriesFor(ctx).TouchPlanningSession(ctx, until.UTC().Format(time.RFC3339)); err != nil {

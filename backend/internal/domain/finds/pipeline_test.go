@@ -102,17 +102,18 @@ type rig struct {
 	store  *sqlite.FindRepo
 	client *fake.Client
 	db     *sql.DB
-	// house sets the Cuisines and FirstWeek of the household the rig returns.
+	// house sets the Cuisines, FirstWeek and Recipes of the household the rig
+	// returns.
 	house finds.Household
 }
 
-func newRig(t *testing.T, web bool, m lineMatcher, kitchen profile.Kitchen, turns ...fake.Turn) *rig {
+func newRig(t *testing.T, web bool, m importer.Matcher, kitchen profile.Kitchen, turns ...fake.Turn) *rig {
 	t.Helper()
 	return newRigWrapped(t, nil, web, m, kitchen, turns...)
 }
 
 // newRigWrapped is newRig with the provider client wrapped (nil: as is).
-func newRigWrapped(t *testing.T, wrap func(*fake.Client) llm.Client, web bool, m lineMatcher, kitchen profile.Kitchen, turns ...fake.Turn) *rig {
+func newRigWrapped(t *testing.T, wrap func(*fake.Client) llm.Client, web bool, m importer.Matcher, kitchen profile.Kitchen, turns ...fake.Turn) *rig {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)
@@ -127,7 +128,7 @@ func newRigWrapped(t *testing.T, wrap func(*fake.Client) llm.Client, web bool, m
 		Store: store, LLM: llm.StaticResolver(rec.Meter(provider, "fake"), "fake-model"), Runs: rec,
 		Fetcher: pageFetcher{t}, Extractor: importer.NewService(nil, jsonld.Extractor{}, nil, nil, nil), Matcher: m,
 		Household: func(context.Context) (finds.Household, error) {
-			return finds.Household{Lang: "en", Diet: "vegetarian", Portions: 2, Kitchen: kitchen, Cuisines: r.house.Cuisines, FirstWeek: r.house.FirstWeek}, nil
+			return finds.Household{Lang: "en", Diet: "vegetarian", Portions: 2, Kitchen: kitchen, Cuisines: r.house.Cuisines, FirstWeek: r.house.FirstWeek, Recipes: r.house.Recipes}, nil
 		},
 		Sites: func(context.Context) ([]settings.ChefSite, error) {
 			return []settings.ChefSite{
@@ -148,7 +149,8 @@ var curryURLs = []string{
 	"https://www.thewoksoflife.com/chicken-curry/",
 }
 
-var kitchen = profile.Kitchen{MinutesWeekday: 30, MinutesWeekend: 60, Equipment: []string{"oven", "stovetop"}}
+// kitchen allows 90 min at the weekend: every recorded curry fits a cell.
+var kitchen = profile.Kitchen{MinutesWeekday: 30, MinutesWeekend: 90, Equipment: []string{"oven", "stovetop"}}
 
 func (r *rig) run(t *testing.T, trigger finds.Trigger) *finds.Find {
 	t.Helper()

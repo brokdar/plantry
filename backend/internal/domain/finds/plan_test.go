@@ -2,6 +2,7 @@ package finds_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
@@ -34,6 +37,9 @@ func newSessionRig(t *testing.T, chefOn bool, newDishes int) *sessionRig {
 			require.False(t, requested, "planning finds are autonomous")
 			r.queued = append(r.queued, f.Dish)
 			return nil
+		},
+		Household: func(context.Context) (finds.Household, error) {
+			return finds.Household{Kitchen: profile.Kitchen{MinutesWeekday: 30, MinutesWeekend: 60}}, nil
 		},
 		Planning: finds.Planning{
 			ChefOn:    func(context.Context) (bool, error) { return chefOn, nil },
@@ -73,7 +79,8 @@ func TestPlanningSession_NextWindowPrefetches(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))
-	assert.Equal(t, []string{"thai"}, r.queued, "2 new dishes, 1 ready: 1 search")
+	require.Len(t, r.queued, 1, "2 new dishes, 1 ready: 1 search")
+	assert.True(t, strings.HasPrefix(r.queued[0], "thai "), r.queued[0])
 	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))
 	assert.Len(t, r.queued, 1, "the searching one counts")
 
@@ -110,7 +117,10 @@ func TestPlanningSession_ThemeAndChefOff(t *testing.T) {
 	ctx := context.Background()
 	r := newSessionRig(t, true, 1)
 	require.NoError(t, r.svc.ThemeSet(ctx, "japanese", 2))
-	assert.Equal(t, []string{"japanese", "japanese"}, r.queued)
+	require.Len(t, r.queued, 2)
+	assert.True(t, strings.HasPrefix(r.queued[0], "japanese "), r.queued[0])
+	assert.True(t, strings.HasPrefix(r.queued[1], "japanese "), r.queued[1])
+	assert.NotEqual(t, r.queued[0], r.queued[1], "two finds of one theme look for different mains")
 
 	off := newSessionRig(t, false, 2)
 	require.NoError(t, off.svc.Touch(ctx))
@@ -120,4 +130,45 @@ func TestPlanningSession_ThemeAndChefOff(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, open)
 	assert.Empty(t, off.queued)
+}
+
+// readyDraft stores a ready planning find with the draft.
+func (r *sessionRig) readyDraft(t *testing.T, d *importer.Draft) {
+	t.Helper()
+	ctx := context.Background()
+	f, err := r.store.Create(ctx, "french main dish", finds.TriggerPlanning)
+	require.NoError(t, err)
+	_, err = r.store.Finish(ctx, f.ID, finds.Outcome{State: finds.StateReady, Draft: d, SourceURL: "https://example.org/" + d.Name})
+	require.NoError(t, err)
+}
+
+// CP3b item 1, FIND-3: a ready find that cannot fill a lunch or dinner main
+// (a side, or longer than the longest time allowance) stays ready but does
+// not hold the window's new searches back.
+func TestPrefetch_ReadyFindThatCannotFillAMainDoesNotCount(t *testing.T) {
+	r := newSessionRig(t, true, 2)
+	r.readyDraft(t, &importer.Draft{Name: "French Onion Soup", Tags: []string{"Dinner", "Side Dish", "Soup"}, PrepMinutes: ptr(10), CookMinutes: ptr(90)})
+	r.readyDraft(t, &importer.Draft{Name: "Slow ragu", Tags: []string{"Main Course"}, TotalMinutes: ptr(180)})
+
+	require.NoError(t, r.svc.Opened(context.Background(), nextWindow, false, true))
+	require.Len(t, r.queued, 2, "neither ready find fills a main cell: 2 searches")
+	assert.NotEqual(t, r.queued[0], r.queued[1])
+	for _, d := range r.queued {
+		assert.True(t, strings.HasPrefix(d, "thai ") && strings.HasSuffix(d, "main") || d == "thai main dish", d)
+	}
+
+	fits := newSessionRig(t, true, 2)
+	fits.readyDraft(t, &importer.Draft{Name: "Dal", Tags: []string{"Main Course", "Side Dish"}, TotalMinutes: ptr(45)})
+	require.NoError(t, fits.svc.Opened(context.Background(), nextWindow, false, true))
+	assert.Len(t, fits.queued, 1, "a fitting ready main counts")
+}
+
+// CP3b item 2: the finds of consecutive weeks look for different mains.
+func TestThemeSet_DishesVaryByWeek(t *testing.T) {
+	r := newSessionRig(t, true, 1)
+	require.NoError(t, r.svc.ThemeSet(context.Background(), "japanese", 1))
+	r.now = r.now.AddDate(0, 0, 7)
+	require.NoError(t, r.svc.ThemeSet(context.Background(), "japanese", 1))
+	require.Len(t, r.queued, 2)
+	assert.NotEqual(t, r.queued[0], r.queued[1])
 }

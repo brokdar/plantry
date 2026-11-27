@@ -36,8 +36,6 @@ type Querier interface {
 	CountChefTipsCreatedBetween(ctx context.Context, arg CountChefTipsCreatedBetweenParams) ([]CountChefTipsCreatedBetweenRow, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
-	// Autonomous finds that are ready or still searching (prefetch counts them).
-	CountOpenPlanningFinds(ctx context.Context) (int64, error)
 	// What a generation run wrote that still exists (B6).
 	CountPlanRunRows(ctx context.Context, id sql.NullInt64) (CountPlanRunRowsRow, error)
 	CountPlateEventsAfter(ctx context.Context, arg CountPlateEventsAfterParams) (int64, error)

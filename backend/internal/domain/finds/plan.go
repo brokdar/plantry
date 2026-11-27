@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
 // SessionLength is how long a planning session stays open after its last
@@ -47,8 +49,9 @@ type Planning struct {
 	ChefOn  func(ctx context.Context) (bool, error)
 	// NewDishes is the window's new-dish count (chef.new_dishes_per_week).
 	NewDishes func(ctx context.Context) (int, error)
-	// Dish names what a planning find for the window starting on day looks
-	// for (the day's discovery cuisine).
+	// Dish names the cuisine the planning finds for the window starting on
+	// day look for (the day's discovery cuisine); planningDishes makes each
+	// a different main.
 	Dish func(ctx context.Context, day time.Time) (string, error)
 	Now  func() time.Time
 }
@@ -96,8 +99,9 @@ func (s *Service) Opened(ctx context.Context, windowStart time.Time, drafts, nex
 }
 
 // Prefetch starts the finds the window's new dishes still need, only during
-// a planning session (P11): new dishes less the ready and searching ones
-// (FIND-3: ready finds first).
+// a planning session (P11): new dishes less the searching ones and the ready
+// ones that can fill a lunch or dinner main (FIND-3: ready finds first; one
+// that cannot stays ready for later and does not hold a new search back).
 func (s *Service) Prefetch(ctx context.Context, windowStart time.Time) error {
 	on, err := s.chefOn(ctx)
 	if err != nil || !on {
@@ -110,22 +114,62 @@ func (s *Service) Prefetch(ctx context.Context, windowStart time.Time) error {
 	if err != nil {
 		return err
 	}
-	have, err := s.d.Store.OpenAutonomous(ctx)
+	have, err := s.openFitting(ctx)
 	if err != nil {
 		return err
 	}
 	if want <= have {
 		return nil
 	}
-	dish, err := s.d.Planning.Dish(ctx, windowStart)
+	cuisine, err := s.d.Planning.Dish(ctx, windowStart)
 	if err != nil {
 		return err
 	}
-	if clean(dish) == "" {
+	if clean(cuisine) == "" {
 		// No cuisine in the household's scope (FIND-15): nothing to search.
 		return nil
 	}
-	return s.request(ctx, dish, want-have)
+	return s.request(ctx, planningDishes(clean(cuisine), want-have, windowStart))
+}
+
+// openFitting counts the searching planning finds and the ready finds that
+// can fill a lunch or dinner main cell.
+func (s *Service) openFitting(ctx context.Context) (int, error) {
+	searching := StateSearching
+	open, err := s.d.Store.List(ctx, &searching, maxStaged)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, f := range open {
+		if f.Trigger == TriggerPlanning {
+			n++
+		}
+	}
+	k, err := s.kitchen(ctx)
+	if err != nil {
+		return 0, err
+	}
+	state := StateReady
+	ready, err := s.d.Store.List(ctx, &state, maxStaged)
+	if err != nil {
+		return 0, err
+	}
+	for _, f := range ready {
+		if cellUnfit(f.Draft, k) == "" {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// kitchen is the household's kitchen (time allowances for cellUnfit).
+func (s *Service) kitchen(ctx context.Context) (profile.Kitchen, error) {
+	if s.d.Household == nil {
+		return profile.Kitchen{}, nil
+	}
+	h, err := s.d.Household(ctx)
+	return h.Kitchen, err
 }
 
 // ThemeSet starts n finds for a theme the user set on a future window
@@ -135,12 +179,12 @@ func (s *Service) ThemeSet(ctx context.Context, theme string, n int) error {
 	if err != nil || !on {
 		return err
 	}
-	return s.request(ctx, theme, n)
+	return s.request(ctx, planningDishes(clean(theme), n, s.now()))
 }
 
-// request starts n autonomous finds for dish; no provider starts none.
-func (s *Service) request(ctx context.Context, dish string, n int) error {
-	for range n {
+// request starts an autonomous find per dish; no provider starts none.
+func (s *Service) request(ctx context.Context, dishes []string) error {
+	for _, dish := range dishes {
 		_, err := s.Request(ctx, dish, TriggerPlanning)
 		if errors.Is(err, llm.ErrProviderMissing) {
 			return nil
@@ -154,35 +198,58 @@ func (s *Service) request(ctx context.Context, dish string, n int) error {
 
 // Stage adds up to n ready finds, oldest first, to the library as untried
 // recipes placed in the window starting on windowStart, before a generation
-// (FIND-3). It returns their food ids; Settle returns the unused ones.
-func (s *Service) Stage(ctx context.Context, n int, windowStart time.Time) ([]int64, error) {
+// (FIND-3). It returns their food ids (Settle returns the unused ones) and a
+// note per ready find left for a later week because it cannot fill a lunch
+// or dinner main. Of two ready finds from one source page only the first is
+// placed.
+func (s *Service) Stage(ctx context.Context, n int, windowStart time.Time) ([]int64, []string, error) {
 	if n <= 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	on, err := s.chefOn(ctx)
 	if err != nil || !on {
-		return nil, err
+		return nil, nil, err
+	}
+	k, err := s.kitchen(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
 	state := StateReady
 	ready, err := s.d.Store.List(ctx, &state, maxStaged)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	slices.Reverse(ready) // List is newest first
 	var ids []int64
+	var notes []string
+	urls := map[string]bool{}
 	for i := range ready {
-		if len(ids) == n {
-			break
-		}
-		id, err := s.place(ctx, &ready[i], windowStart)
-		if err != nil {
-			// The find stays ready; the run plans without it.
-			s.d.Logger.WarnContext(ctx, "finds.stage skipped", "find_id", ready[i].ID, "error", err)
+		f := &ready[i]
+		if why := cellUnfit(f.Draft, k); why != "" {
+			name := f.Dish
+			if f.Draft != nil {
+				name = f.Draft.Name
+			}
+			notes = append(notes, fmt.Sprintf("The ready new dish %s waits for a later week: %s.", name, why))
 			continue
 		}
+		if len(ids) == n {
+			continue
+		}
+		u := discovery.NormalizeURL(f.SourceURL)
+		if f.SourceURL != "" && urls[u] {
+			continue
+		}
+		id, err := s.place(ctx, f, windowStart)
+		if err != nil {
+			// The find stays ready; the run plans without it.
+			s.d.Logger.WarnContext(ctx, "finds.stage skipped", "find_id", f.ID, "error", err)
+			continue
+		}
+		urls[u] = true
 		ids = append(ids, id)
 	}
-	return ids, nil
+	return ids, notes, nil
 }
 
 // Settle returns the staged finds the generation did not place to ready.

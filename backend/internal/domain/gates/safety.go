@@ -72,8 +72,8 @@ func (c *checker) hasWholeBeefLamb() bool {
 
 var (
 	tempRe = regexp.MustCompile(`(\d{2,3})\s*(?:°|º|grad|degrees?)\s*(f\b|fahrenheit)?`)
-	// negated doneness: "until no longer pink", "nicht mehr rosa".
-	negDoneRe = regexp.MustCompile(`(no longer|not|nicht mehr|nicht|kein\w*|nichts mehr|ohne)\s+(?:\w+\s+)?(?:pink|rosa|blutig|rare|roh)`)
+	// negated doneness: "until no longer pink", "until no pink remains", "nicht mehr rosa".
+	negDoneRe = regexp.MustCompile(`\b(no longer|not|no|nicht mehr|nicht|kein\w*|nichts mehr|ohne)\s+(?:\w+\s+)?(?:pink|rosa|blutig|rare|roh)`)
 	// raw-ish doneness wording, en and de; "rosa pfeffer" is a spice.
 	rareRe  = regexp.MustCompile(`medium[ -]rare|\brare\b|(?:cook\w* to|bis|until)\s+medium\s*(?:doneness|gar)\b|medium gebraten|medium gar|blutig|englisch gebraten|\brosa\b|\bpink\b|saignant|halb durch|halbroh|underdone`)
 	spiceRe = regexp.MustCompile(`rosa pfeffer|rosapfeffer|rosa beeren|pink pepper\w*|rosa pfefferbeeren`)

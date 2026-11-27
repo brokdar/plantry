@@ -20,6 +20,10 @@ import (
 // household".
 const knownLeavesLimit = 500
 
+// libraryNamesLimit bounds the recipe names an autonomous find checks a
+// dish against (newest first).
+const libraryNamesLimit = 2000
+
 // findHousehold builds what the find pipeline knows about the household:
 // language and diet (the only fields a search may carry), the gates'
 // household, the kitchen, never items, leaning taste items and the leaves
@@ -31,6 +35,7 @@ func findHousehold(
 	leaves func(context.Context, int) ([]string, error),
 	cuisines func(context.Context) ([]string, error),
 	history func(context.Context) (bool, error),
+	recipes func(context.Context, int) ([]string, error),
 ) func(context.Context) (finds.Household, error) {
 	return func(ctx context.Context) (finds.Household, error) {
 		p, err := prof(ctx)
@@ -83,6 +88,9 @@ func findHousehold(
 			return finds.Household{}, err
 		}
 		h.FirstWeek = !cooked
+		if h.Recipes, err = recipes(ctx, libraryNamesLimit); err != nil {
+			return finds.Household{}, err
+		}
 		return h, nil
 	}
 }
@@ -173,7 +181,7 @@ func (l *lazyFinds) Request(ctx context.Context, dish string, trigger finds.Trig
 // (C3); the find service is built after the planner.
 func (l *lazyFinds) Touch(ctx context.Context) error { return l.svc.Touch(ctx) }
 
-func (l *lazyFinds) Stage(ctx context.Context, n int, windowStart time.Time) ([]int64, error) {
+func (l *lazyFinds) Stage(ctx context.Context, n int, windowStart time.Time) ([]int64, []string, error) {
 	return l.svc.Stage(ctx, n, windowStart)
 }
 

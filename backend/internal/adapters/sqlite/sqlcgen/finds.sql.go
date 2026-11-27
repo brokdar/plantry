@@ -25,19 +25,6 @@ func (q *Queries) BlockSearchDomain(ctx context.Context, arg BlockSearchDomainPa
 	return err
 }
 
-const countOpenPlanningFinds = `-- name: CountOpenPlanningFinds :one
-SELECT COUNT(*) FROM recipe_suggestions
-WHERE state = 'ready' OR (state = 'searching' AND find_trigger = 'planning')
-`
-
-// Autonomous finds that are ready or still searching (prefetch counts them).
-func (q *Queries) CountOpenPlanningFinds(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countOpenPlanningFinds)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createFind = `-- name: CreateFind :one
 INSERT INTO recipe_suggestions (mode, query, source_url, draft_json, annotations_json, grounded, status, state, find_trigger)
 VALUES ('find', ?1, '', '{}', '{}', 0, 'hidden', 'searching', ?2)

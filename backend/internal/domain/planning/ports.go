@@ -112,11 +112,12 @@ type Cells interface {
 // PlateRows reads persisted plates (the plate repository).
 // ReadyFinds lets a generation place the Chef's ready finds (FIND-3, C3):
 // Stage adds up to n of them to the library as untried recipes before the
-// run, Settle returns the ones the run did not place. Touch opens the
+// run and says why each ready one it left out cannot be used this week;
+// Settle returns the ones the run did not place. Touch opens the
 // planning session a generation is (P11).
 type ReadyFinds interface {
 	Touch(ctx context.Context) error
-	Stage(ctx context.Context, n int, windowStart time.Time) ([]int64, error)
+	Stage(ctx context.Context, n int, windowStart time.Time) (staged []int64, notes []string, err error)
 	Settle(ctx context.Context, windowStart time.Time, staged []int64, placed func(foodID int64) bool) error
 }
 

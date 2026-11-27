@@ -553,7 +553,7 @@ func run() error {
 		Fetcher: httpfetch.NewPolite(httpfetch.New(httpfetch.WithDialGuard(nil, cfg.DevMode)),
 			httpfetch.WithAIGroupsExempt(aiGroupsExempt(settingsSvc.ChefSites))),
 		Extractor: importSvc, Matcher: matcher,
-		Household: findHousehold(profileSvc.Get, sqlite.NewKitchenRepo(conn).NeverItems, tasteSvc.View, foodRepo.LeafNamesByRecipeUse, houseCuisines, foodRepo.HasCookHistory),
+		Household: findHousehold(profileSvc.Get, sqlite.NewKitchenRepo(conn).NeverItems, tasteSvc.View, foodRepo.LeafNamesByRecipeUse, houseCuisines, foodRepo.HasCookHistory, foodRepo.RecipeNames),
 		Sites:     settingsSvc.ChefSites,
 		Enqueue: func(ctx context.Context, id int64, requested bool) error {
 			_, err := chefRunner.Enqueue(ctx, airun.KindChefFind, strconv.FormatInt(id, 10), requested)
