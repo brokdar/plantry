@@ -52,13 +52,13 @@ func TestSideFit_SecondProtein(t *testing.T) {
 func TestPickSide_NoSecondProtein(t *testing.T) {
 	lunch := plate.CellKey{Date: bfMon, SlotID: bfLunch}
 	h := proteinSidePlanner(false)
-	h.used[bfCouscous] = 3 // the rotation prefers the tofu
+	h.used[bfCouscous], h.usedDish[bfCouscous] = 3, 3 // the rotation prefers the tofu
 	got, ok := h.pickSide(lunch, bfCurry, nil, 0, "")
 	require.True(t, ok)
 	require.Equal(t, sdRice, got, "no protein on the plate: the tofu may join")
 
 	h = proteinSidePlanner(true)
-	h.used[bfCouscous] = 3
+	h.used[bfCouscous], h.usedDish[bfCouscous] = 3, 3
 	got, ok = h.pickSide(lunch, bfCurry, nil, 0, "")
 	require.True(t, ok)
 	assert.Equal(t, bfCouscous, got)

@@ -66,19 +66,19 @@ func variantFor(in ChooseInput, merged State, prop Proposal, is Issue, skip map[
 	}
 	inPlan := map[int64]bool{}
 	for _, ss := range prop.Sessions {
-		inPlan[ss.FoodID] = true
+		inPlan[merged.dish(ss.FoodID)] = true
 	}
 	for _, pl := range prop.Plates {
 		for _, c := range pl.Components {
 			if c.SessionKey == "" && c.SessionID == 0 && c.Portions > 0 {
-				inPlan[c.FoodID] = true
+				inPlan[merged.dish(c.FoodID)] = true
 			}
 		}
 	}
 	for _, p := range merged.Plates {
 		if p.Confirmed && merged.Window.Contains(p.Date) {
 			for _, c := range p.Components {
-				inPlan[c.FoodID] = true
+				inPlan[merged.dish(c.FoodID)] = true
 			}
 		}
 	}
@@ -94,7 +94,7 @@ func variantFor(in ChooseInput, merged State, prop Proposal, is Issue, skip map[
 	}
 	var cands []FoodFacts
 	for id, f := range merged.Foods {
-		if id == oldID || merged.tooSlow(f, cell) || skip[id] || inPlan[id] || !f.Composed() || f.Archived || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 ||
+		if id == oldID || merged.tooSlow(f, cell) || skip[id] || inPlan[merged.dish(id)] || !f.Composed() || f.Archived || !varietyRole(f.Role) || !isMain(f.Role, mealFull) || f.Macros.Kcal <= 0 ||
 			!f.NutritionComplete || (DietRestricts(household) && !fitsDiet(f.DietClass, diet.Class(household))) {
 			continue
 		}

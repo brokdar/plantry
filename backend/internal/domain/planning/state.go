@@ -180,8 +180,12 @@ type FoodFacts struct {
 	// Archived: hidden from planning (LIB-4). The food stays in State.Foods
 	// when a plate holds it, but is never a candidate.
 	Archived bool
+	// VariantGroup is the recipe's variant group id (0: none). A group is one
+	// dish for H8 (see State.dish, ShareGroupHistory).
+	VariantGroup int64
 	// LastEaten is the date of the newest confirmed past plate with the
-	// food; nil when never eaten.
+	// food; nil when never eaten. With a variant group: the newest of the
+	// group.
 	LastEaten        *time.Time
 	TimesEaten8Weeks int
 	// LikeScore is liked minus disliked tag hits (D19).

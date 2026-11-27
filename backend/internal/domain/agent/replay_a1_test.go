@@ -105,10 +105,15 @@ func TestReplayA1(t *testing.T) {
 		ctx, _ := e.chat()
 		res := run(e, ctx, "apply_changes", `{"ops":[{"op":"move","plate_id":32,"to":{"date":"2026-11-27","slot_id":3},"occupant":"swap"}]}`)
 		offers := relMaps(res["offers"])
-		require.Len(t, offers, 1)
+		// The fixture holds a variant pair (Chili con carne / sin carne, one group = one dish for H8):
+		// their two cooks are a repeat, and taking the other variant's batch removes it.
+		require.Len(t, offers, 2)
 		assert.Equal(t, true, offers[0]["recommended"])
-		eff := offers[0]["effect"].(map[string]any)
-		got := run(e, ctx, "apply_changes", mustMarshal(t, map[string]any{"ops": offers[0]["ops"], "dry_run": true}))
+		assert.Equal(t, false, offers[1]["recommended"])
+		fri := offers[1] // the swap on the moved plate's day
+		eff := fri["effect"].(map[string]any)
+		require.Equal(t, "Fri 27 Nov", eff["day"])
+		got := run(e, ctx, "apply_changes", mustMarshal(t, map[string]any{"ops": fri["ops"], "dry_run": true}))
 		after := relMaps(got["after"].(map[string]any)["days"])
 		var kcal float64
 		for _, d := range after {
