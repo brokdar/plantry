@@ -19,6 +19,8 @@ import type {
   Suggestion,
 } from "@/lib/api/discovery"
 import { todayISO } from "@/lib/dates"
+import { useRequestFind } from "@/lib/queries/finds"
+import { useSettingItems } from "@/lib/queries/settings"
 import {
   useDiscover,
   useDiscoveryRun,
@@ -27,6 +29,7 @@ import {
 } from "@/lib/queries/discovery"
 import { cn } from "@/lib/utils"
 
+import { FindResult } from "./FindResult"
 import { RejectReasons } from "./RejectReasons"
 import { SuggestionCard } from "./SuggestionCard"
 
@@ -58,10 +61,20 @@ export function DiscoverSheet({
   const [cuisine, setCuisine] = useState("")
   const [focus, setFocus] = useState("")
   const [search, setSearch] = useState<Search | null>(null)
+  const chefOn = useSettingItems().data?.["chef.enabled"]?.value === "true"
+  const [dish, setDish] = useState("")
+  const [findId, setFindId] = useState<number | null>(null)
+  const requestFind = useRequestFind()
   const start = useDiscover()
   const run = useDiscoveryRun(search?.runId)
   const running = start.isPending || run.data?.status === "running"
   const ready = mode !== "explore" || cuisine.trim() !== ""
+
+  function onFind(e: React.FormEvent) {
+    e.preventDefault()
+    if (!dish.trim() || requestFind.isPending) return
+    requestFind.mutate(dish.trim(), { onSuccess: (f) => setFindId(f.id) })
+  }
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -110,59 +123,84 @@ export function DiscoverSheet({
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6">
-          <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-            <div
-              role="group"
-              aria-label={t("discovery.discover.mode_label")}
-              className="flex flex-wrap gap-2"
-            >
-              {MODES.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={mode === m}
-                  onClick={() => setMode(m)}
-                  className={cn(
-                    "inline-flex min-h-11 items-center rounded-lg border px-3 text-small transition-colors duration-150 ease-out md:pointer-fine:min-h-8",
-                    mode === m
-                      ? "border-accent bg-accent font-semibold text-on-accent"
-                      : "border-line bg-panel text-ink hover:border-ink-muted"
-                  )}
-                  data-testid={`discover-mode-${m}`}
+          {chefOn ? (
+            <>
+              <form className="flex flex-col gap-4" onSubmit={onFind}>
+                <Field
+                  label={t("discovery.find.dish_label")}
+                  placeholder={t("discovery.find.dish_placeholder")}
+                  value={dish}
+                  onChange={setDish}
+                  testId="discover-dish"
+                />
+                <Button
+                  type="submit"
+                  disabled={!dish.trim() || requestFind.isPending}
+                  className="h-11 self-start px-4 md:pointer-fine:h-9"
+                  data-testid="discover-find"
                 >
-                  {t(`discovery.discover.mode_${m}`)}
-                </button>
-              ))}
-            </div>
-            {mode === "explore" && (
-              <Field
-                label={t("discovery.discover.cuisine_label")}
-                placeholder={t("discovery.discover.cuisine_placeholder")}
-                value={cuisine}
-                onChange={setCuisine}
-                testId="discover-cuisine"
-              />
-            )}
-            {mode === "known" && (
-              <Field
-                label={t("discovery.discover.focus_label")}
-                placeholder={t("discovery.discover.focus_placeholder")}
-                value={focus}
-                onChange={setFocus}
-                testId="discover-focus"
-              />
-            )}
-            <Button
-              type="submit"
-              disabled={!ready || running}
-              className="h-11 self-start px-4 md:pointer-fine:h-9"
-              data-testid="discover-start"
-            >
-              {t("discovery.discover.start")}
-            </Button>
-          </form>
+                  {t("discovery.find.start")}
+                </Button>
+              </form>
+              {findId !== null && <FindResult key={findId} id={findId} />}
+            </>
+          ) : (
+            <>
+              <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+                <div
+                  role="group"
+                  aria-label={t("discovery.discover.mode_label")}
+                  className="flex flex-wrap gap-2"
+                >
+                  {MODES.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      aria-pressed={mode === m}
+                      onClick={() => setMode(m)}
+                      className={cn(
+                        "inline-flex min-h-11 items-center rounded-lg border px-3 text-small transition-colors duration-150 ease-out md:pointer-fine:min-h-8",
+                        mode === m
+                          ? "border-accent bg-accent font-semibold text-on-accent"
+                          : "border-line bg-panel text-ink hover:border-ink-muted"
+                      )}
+                      data-testid={`discover-mode-${m}`}
+                    >
+                      {t(`discovery.discover.mode_${m}`)}
+                    </button>
+                  ))}
+                </div>
+                {mode === "explore" && (
+                  <Field
+                    label={t("discovery.discover.cuisine_label")}
+                    placeholder={t("discovery.discover.cuisine_placeholder")}
+                    value={cuisine}
+                    onChange={setCuisine}
+                    testId="discover-cuisine"
+                  />
+                )}
+                {mode === "known" && (
+                  <Field
+                    label={t("discovery.discover.focus_label")}
+                    placeholder={t("discovery.discover.focus_placeholder")}
+                    value={focus}
+                    onChange={setFocus}
+                    testId="discover-focus"
+                  />
+                )}
+                <Button
+                  type="submit"
+                  disabled={!ready || running}
+                  className="h-11 self-start px-4 md:pointer-fine:h-9"
+                  data-testid="discover-start"
+                >
+                  {t("discovery.discover.start")}
+                </Button>
+              </form>
 
-          {search && <Results key={search.runId} search={search} />}
+              {search && <Results key={search.runId} search={search} />}
+            </>
+          )}
         </div>
       </SheetContent>
     </Sheet>

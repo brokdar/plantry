@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
@@ -478,6 +479,12 @@ func (s *Service) recipeToDraft(ctx context.Context, rec *RawRecipe, sourceURL, 
 	}
 	if d.ReferencePortions == 0 {
 		d.ReferencePortions = 1
+	}
+	if rec.AuthorName != "" || rec.Rating != nil || rec.RatingCount > 0 || rec.DatePublished != nil {
+		d.Source = &DraftSource{Author: rec.AuthorName, Rating: rec.Rating, Votes: rec.RatingCount, Reviews: rec.ReviewCount}
+		if rec.DatePublished != nil {
+			d.Source.Published = rec.DatePublished.Format(time.DateOnly)
+		}
 	}
 	if len(rec.Image) > 0 {
 		d.ImageURL = rec.Image[0]

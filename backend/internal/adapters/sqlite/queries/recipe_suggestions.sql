@@ -33,7 +33,7 @@ GROUP BY ai_run_id;
 UPDATE recipe_suggestions SET
     status = sqlc.arg(status), reason = sqlc.narg(reason), food_id = sqlc.narg(food_id),
     decided_at = datetime('now')
-WHERE id = sqlc.arg(id) AND status = 'pending'
+WHERE id = sqlc.arg(id) AND status = 'pending' AND state IS NULL
 RETURNING *;
 
 -- name: SetDiscoveryRunOutcome :exec
@@ -56,16 +56,17 @@ WHERE id = sqlc.arg(id) AND kind = 'discovery';
 -- Suggestions, optionally of one status and run, last decided (else newest)
 -- first.
 SELECT * FROM recipe_suggestions
-WHERE (CAST(sqlc.narg(status) AS TEXT) IS NULL OR status = CAST(sqlc.narg(status) AS TEXT))
+WHERE status <> 'hidden'
+  AND (CAST(sqlc.narg(status) AS TEXT) IS NULL OR status = CAST(sqlc.narg(status) AS TEXT))
   AND (CAST(sqlc.narg(run_id) AS INTEGER) IS NULL OR ai_run_id = CAST(sqlc.narg(run_id) AS INTEGER))
 ORDER BY COALESCE(decided_at, created_at) DESC, id DESC
 LIMIT sqlc.arg(lim);
 
 -- name: DeletePendingSuggestionsBefore :many
--- D12: pending suggestions created before the cutoff go; their ids let the
--- caller delete the images.
+-- D12: pending suggestions (not finds, which have a state) created before
+-- the cutoff go; their ids let the caller delete the images.
 DELETE FROM recipe_suggestions
-WHERE status = 'pending' AND created_at < sqlc.arg(before)
+WHERE status = 'pending' AND state IS NULL AND created_at < sqlc.arg(before)
 RETURNING id;
 
 -- name: GetShownSuggestion :one
@@ -81,7 +82,7 @@ UPDATE recipe_suggestions SET shown_on = NULL WHERE shown_on = ?;
 UPDATE recipe_suggestions SET shown_on = sqlc.arg(day)
 WHERE id = (
     SELECT s.id FROM recipe_suggestions s
-    WHERE s.status = 'pending' AND s.shown_on IS NULL AND s.id > sqlc.arg(after)
+    WHERE s.status = 'pending' AND s.state IS NULL AND s.shown_on IS NULL AND s.id > sqlc.arg(after)
     ORDER BY s.id LIMIT 1
 )
 RETURNING *;

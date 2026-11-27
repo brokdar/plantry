@@ -119,6 +119,8 @@ type Services struct {
 	Recipes RecipeTools
 	// Taste may be nil: record_preference then writes the profile only.
 	Taste TasteStatements
+	// Finds wire find_recipe; a nil Requester leaves it out.
+	Finds FindTools
 }
 
 // TasteStatements records a confirmed taste statement (taste.Service.State).
@@ -405,6 +407,9 @@ func defaultTools(svc Services) []Tool {
 		tools = append(tools, toolUndoLastChange(svc))
 	}
 	tools = append(tools, recipeTools(svc)...)
+	if svc.Finds.Requester != nil {
+		tools = append(tools, toolFindRecipe(svc.Finds))
+	}
 	for i := range tools {
 		tools[i].CodeCallable = codeCallableTools[tools[i].Name]
 		if tools[i].Name == "undo_last_change" || tools[i].Name == "regenerate" {

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 import { Loader2, Search } from "lucide-react"
 
 import { DiscoverSheet } from "@/components/discovery/DiscoverSheet"
+import { FindKeep } from "@/components/discovery/FindKeep"
 import { SuggestionReview } from "@/components/discovery/SuggestionReview"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -234,6 +235,10 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
       <SuggestionReview
         id={search.add === "discover" ? search.suggestion : undefined}
         onClose={() => set({ add: undefined, suggestion: undefined })}
+      />
+      <FindKeep
+        id={search.add === "find" ? search.find : undefined}
+        onClose={() => set({ add: undefined, find: undefined })}
       />
     </div>
   )

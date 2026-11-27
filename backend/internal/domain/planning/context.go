@@ -612,7 +612,15 @@ func ReadSettings(ctx context.Context, r SettingsReader) (Settings, error) {
 	if err != nil {
 		return Settings{}, fmt.Errorf("parse %s: %w", settings.KeyChefBatchVariation, err)
 	}
-	return Settings{BatchSettings: batch, MaxCookOccasionsPerDay: maxCook, VarietyWeeks: variety, BatchCooking: batchCooking, MaxDishMealsPerWeek: maxDish, PlateFit: plateFit, BatchVariation: batchVariation}, nil
+	v, err = r.Get(ctx, settings.KeyChefEnabled)
+	if err != nil {
+		return Settings{}, fmt.Errorf("read %s: %w", settings.KeyChefEnabled, err)
+	}
+	chefOn, err := strconv.ParseBool(v.Raw)
+	if err != nil {
+		return Settings{}, fmt.Errorf("parse %s: %w", settings.KeyChefEnabled, err)
+	}
+	return Settings{ChefOn: chefOn, BatchSettings: batch, MaxCookOccasionsPerDay: maxCook, VarietyWeeks: variety, BatchCooking: batchCooking, MaxDishMealsPerWeek: maxDish, PlateFit: plateFit, BatchVariation: batchVariation}, nil
 }
 
 // routineBase is the id of the first routine plate in a state (D8): they

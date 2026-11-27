@@ -70,4 +70,17 @@ type Draft struct {
 	Role      string `json:"role,omitempty"`
 	KeepDays  *int   `json:"keep_days,omitempty"`
 	Freezable *bool  `json:"freezable,omitempty"`
+	// Source is the page's author and rating (FIND-9, REV-1 source line);
+	// nil when the page names neither.
+	Source *DraftSource `json:"source,omitempty"`
+}
+
+// DraftSource is what the page says about itself: author, rating (1..5),
+// votes, reviews and the publication date (YYYY-MM-DD).
+type DraftSource struct {
+	Author    string   `json:"author,omitempty"`
+	Rating    *float64 `json:"rating,omitempty"`
+	Votes     int      `json:"votes,omitempty"`
+	Reviews   int      `json:"reviews,omitempty"`
+	Published string   `json:"published,omitempty"`
 }

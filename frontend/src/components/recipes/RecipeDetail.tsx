@@ -13,6 +13,7 @@ import {
   PencilLine,
 } from "lucide-react"
 
+import { NotForMe } from "@/components/recipes/NotForMe"
 import { QuantityStepper } from "@/components/plan/QuantityStepper"
 import { useSettingField } from "@/components/settings/setting-field"
 import { Button } from "@/components/ui/button"
@@ -70,6 +71,7 @@ export function RecipeDetail({
   const chatOn =
     settings?.["chef.enabled"]?.value === "true" &&
     Boolean(settings?.["ai.provider"]?.value)
+  const chefOn = settings?.["chef.enabled"]?.value === "true"
   const [today] = useState(todayISO)
   const [portions, setPortions] = useState(
     initial ?? recipe.reference_portions ?? 1
@@ -160,6 +162,7 @@ export function RecipeDetail({
                 : t("recipe_detail.hide")}
             </span>
           </Button>
+          {chefOn && !recipe.archived && <NotForMe id={recipe.id} />}
           <Button
             type="button"
             variant="outline"

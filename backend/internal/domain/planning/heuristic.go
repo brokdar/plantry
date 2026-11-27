@@ -780,15 +780,28 @@ func (h *planner) batchPlates(f FoodFacts, c plate.CellKey) int {
 // preference only: it ranks below the wish's hard limit and above the rest.
 // Unknown minutes never exceed it.
 func (h *planner) overAllowance(f FoodFacts, c plate.CellKey) bool {
-	p := h.s.Profile
+	return h.s.overAllowance(f, c, h.batchPlates(f, c))
+}
+
+// overAllowance is the planner-free form of the KIT-1 check: plates is the
+// number of plates the cook would feed.
+func (s State) overAllowance(f FoodFacts, c plate.CellKey, plates int) bool {
+	p := s.Profile
 	if !f.Composed() || f.Minutes <= 0 || p.MinutesWeekday == 0 {
 		return false
 	}
 	limit := p.MinutesWeekday
-	if wd := c.Date.Weekday(); wd == time.Saturday || wd == time.Sunday || h.batchPlates(f, c) >= batchDayPlates {
+	if wd := c.Date.Weekday(); wd == time.Saturday || wd == time.Sunday || plates >= batchDayPlates {
 		limit = p.MinutesWeekend
 	}
 	return f.Minutes > limit
+}
+
+// slotBlocked is GATE-2: with the Chef on, a recipe over the slot's time
+// allowance is ineligible for that slot. Equipment is not stored on recipes
+// (the find pipeline checks it at keep), so only time applies here.
+func (h *planner) slotBlocked(f FoodFacts, c plate.CellKey) bool {
+	return h.s.Settings.ChefOn && h.overAllowance(f, c)
 }
 
 // batchDayPlates is the plates a session must feed to count as a batch cook
@@ -861,7 +874,7 @@ func (d dgeState) meat(f FoodFacts) float64 {
 
 // mainCandidate reports whether f may be cooked as the main of c.
 func (h *planner) mainCandidate(f FoodFacts, c plate.CellKey) bool {
-	if !f.Composed() || f.Archived || f.Never || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] || h.exclude[f.ID] {
+	if !f.Composed() || f.Archived || f.Never || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] || h.exclude[f.ID] || h.slotBlocked(f, c) {
 		return false
 	}
 	// A lunch or dinner takes a main; a standalone recipe is a breakfast.
@@ -911,7 +924,7 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 	}
 	var cands []candidate
 	for _, f := range h.s.Foods {
-		if !f.Composed() || f.Archived || f.Never || !sideRole(f.Role) || f.ID == exclude || f.ID == main || slices.Contains(others, f.ID) || (fit && h.exclude[f.ID]) || h.s.RatherNot[f.ID] || !h.fits(f) || !h.reachesForced(f, c) {
+		if !f.Composed() || f.Archived || f.Never || !sideRole(f.Role) || f.ID == exclude || f.ID == main || slices.Contains(others, f.ID) || (fit && h.exclude[f.ID]) || h.s.RatherNot[f.ID] || !h.fits(f) || !h.reachesForced(f, c) || h.slotBlocked(f, c) {
 			continue
 		}
 		last := 0.0

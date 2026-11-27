@@ -8,6 +8,10 @@ const root = import.meta.dir
 const files: Record<string, { file: string; type: string }> = {
   "/fesenjan.html": { file: "fesenjan.html", type: "text/html; charset=utf-8" },
   "/pasta.html": { file: "pasta.html", type: "text/html; charset=utf-8" },
+  "/chef-curry.html": {
+    file: "chef-curry.html",
+    type: "text/html; charset=utf-8",
+  },
   "/img/fesenjan.jpg": { file: "img/fesenjan.jpg", type: "image/jpeg" },
   "/img/pasta.jpg": { file: "img/pasta.jpg", type: "image/jpeg" },
 }
@@ -15,16 +19,17 @@ const files: Record<string, { file: string; type: string }> = {
 Bun.serve({
   port,
   async fetch(req) {
-    const hit = files[new URL(req.url).pathname]
+    const url = new URL(req.url)
+    const hit = files[url.pathname]
     if (!hit) return new Response("not found", { status: 404 })
     const file = Bun.file(`${root}/${hit.file}`)
     // Pages name their image by absolute URL (the importer does not resolve
     // relative ones), so {{SITE}} becomes the host the request came to.
     const body = hit.type.startsWith("text/html")
-      ? (await file.text()).replaceAll(
-          "{{SITE}}",
-          `http://${req.headers.get("host")}`
-        )
+      ? (await file.text())
+          .replaceAll("{{SITE}}", `http://${req.headers.get("host")}`)
+          // chef-curry.html: ingredient names carry the spec run's tag.
+          .replaceAll("{{RUN}}", url.searchParams.get("r") ?? "")
       : file
     return new Response(body, { headers: { "content-type": hit.type } })
   },

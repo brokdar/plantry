@@ -402,3 +402,35 @@ func TestRunner_QueuedUntilClaimed(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, queued, "it ran")
 }
+
+// A job the guard skipped or that failed is reported, so what it was for
+// does not wait on it.
+func TestRunner_ReportsSkippedAndFailedJobs(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, false) // switch off: the guard skips the job
+	var mu sync.Mutex
+	got := map[int64]chef.Status{}
+	reasons := map[int64]string{}
+	r := chef.NewRunner(chef.RunnerConfig{
+		Store: e.jobs, Guard: e.guard, Concurrency: 1, MaxAttempts: 2, Now: e.clock.Now,
+		Logger: slog.New(slog.DiscardHandler),
+		Handlers: map[airun.Kind]chef.Handler{airun.KindChefFind: func(context.Context, chef.Job) error {
+			return errors.New("boom")
+		}},
+		OnUnfinished: func(_ context.Context, job chef.Job, st chef.Status, errText string) {
+			mu.Lock()
+			defer mu.Unlock()
+			got[job.ID], reasons[job.ID] = st, errText
+		},
+	})
+	skipped, err := r.Enqueue(ctx, airun.KindChefFind, "1", false)
+	require.NoError(t, err)
+	drain(t, r)
+	require.NoError(t, e.settings.Set(ctx, settings.KeyChefEnabled, "true"))
+	failed, err := r.Enqueue(ctx, airun.KindChefFind, "2", false)
+	require.NoError(t, err)
+	drain(t, r)
+	assert.Equal(t, chef.StatusSkipped, got[skipped])
+	assert.Equal(t, string(chef.ReasonOff), reasons[skipped])
+	assert.Equal(t, chef.StatusFailed, got[failed])
+}

@@ -212,6 +212,20 @@ func (s *Service) NotForMe(ctx context.Context, foodID int64, reason string, her
 	return s.recipeSignal(ctx, SignalNotForMe, WeightNotForMeOther, foodID)
 }
 
+// NotForMeIngredients records a "Not for me" with the ingredients reason
+// on a find that never reached the library (C2): it has no attributes yet,
+// so only the named ingredients teach.
+func (s *Service) NotForMeIngredients(ctx context.Context, heroes []string) error {
+	if len(heroes) == 0 {
+		return nil
+	}
+	blamed := make([]Blamed, 0, len(heroes))
+	for _, h := range heroes {
+		blamed = append(blamed, Blamed{Ref{LevelHero, NormKey(h)}, 1 / float64(len(heroes))})
+	}
+	return s.apply(ctx, SignalNotForMe, WeightNotForMe, blamed, nil, nil)
+}
+
 // recipeDiff returns the recipes on after but not before (added) and on
 // before but not after (removed); nil plates hold nothing.
 func recipeDiff(before, after *plate.Plate) (added, removed []int64) {

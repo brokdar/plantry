@@ -264,6 +264,15 @@ func (s *Service) DiscoveryCuisines(ctx context.Context) ([]string, error) {
 	return ParseCuisines(raw)
 }
 
+// ChefSites returns the chef.sites allow-list (FIND-7).
+func (s *Service) ChefSites(ctx context.Context) ([]ChefSite, error) {
+	raw, err := s.effectiveRaw(ctx, KeyChefSites)
+	if err != nil {
+		return nil, err
+	}
+	return ParseChefSites(raw)
+}
+
 // ChefEnabled reports whether the Chef is on (ON-1).
 func (s *Service) ChefEnabled(ctx context.Context) (bool, error) {
 	raw, err := s.effectiveRaw(ctx, KeyChefEnabled)

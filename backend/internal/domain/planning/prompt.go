@@ -696,12 +696,38 @@ func eligibleSplit(in ChooseInput) (kept []FoodFacts, dropped []excludedFood) {
 			dropped = append(dropped, excludedFood{f.ID, f.Name, excludeReplaced})
 		case t != "" && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t):
 			dropped = append(dropped, excludedFood{f.ID, f.Name, excludeDiet})
+		case in.slotBlockedEverywhere(f):
+			dropped = append(dropped, excludedFood{f.ID, f.Name, excludeSlotTime})
 		default:
 			kept = append(kept, f)
 		}
 	}
 	slices.SortFunc(kept, func(a, b FoodFacts) int { return cmp.Compare(a.ID, b.ID) })
 	return kept, dropped
+}
+
+// slotBlockedEverywhere is GATE-2 for the chooser's list: with the Chef on, a
+// recipe over the time allowance in every target cell is not offered. Batch
+// size is judged by its reference portions over the household's.
+func (in ChooseInput) slotBlockedEverywhere(f FoodFacts) bool {
+	s := in.State
+	if !s.Settings.ChefOn || len(in.Target.Cells) == 0 {
+		return false
+	}
+	for _, c := range in.Target.Cells {
+		eaters := s.Profile.HouseholdPortions
+		if n := in.EatersByDate[c.Date.Format(time.DateOnly)]; n > 0 {
+			eaters = n
+		}
+		plates := 1
+		if s.Settings.BatchCooking && eaters > 0 {
+			plates = int((f.ReferencePortions + epsilon) / eaters)
+		}
+		if !s.overAllowance(f, c, plates) {
+			return false
+		}
+	}
+	return true
 }
 
 // keepOrder ranks candidates for the token budget: sides first for a side

@@ -29,6 +29,8 @@ type Handlers struct {
 	Profile       *handlers.ProfileHandler
 	Kitchen       *handlers.KitchenHandler
 	Taste         *handlers.TasteHandler
+	Finds         *handlers.FindsHandler
+	NotForMe      *handlers.NotForMeHandler
 	Presets       *handlers.PresetHandler
 	AI            *handlers.AIHandler
 	AIRuns        *handlers.AIRunsHandler
@@ -219,6 +221,16 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			})
 		}
 
+		if h.NotForMe != nil {
+			api.Post("/foods/{id}/not-for-me", h.NotForMe.Post)
+		}
+		if h.Finds != nil {
+			api.Get("/finds", h.Finds.List)
+			api.Post("/finds", h.Finds.Create)
+			api.Get("/finds/{id}", h.Finds.Get)
+			api.Post("/finds/{id}/keep", h.Finds.Keep)
+			api.Post("/finds/{id}/discard", h.Finds.Discard)
+		}
 		if h.Taste != nil {
 			api.Get("/taste", h.Taste.Get)
 			api.Delete("/taste/items/{id}", h.Taste.Delete)
