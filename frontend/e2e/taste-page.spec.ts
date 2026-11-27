@@ -110,7 +110,10 @@ test("a chat statement gets chips; the Taste page lists, flips, removes and Undo
     await expect(
       page.getByTestId("taste-item").filter({ hasText: word })
     ).toHaveCount(0)
-    await page.getByRole("button", { name: "Undo" }).first().click()
+    await page
+      .locator("[data-sonner-toast]")
+      .getByRole("button", { name: "Undo" })
+      .click()
     await expect(
       page.getByTestId("taste-item").filter({ hasText: word })
     ).toHaveCount(1)
