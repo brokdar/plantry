@@ -1,0 +1,1090 @@
+[
+ {
+  "name": "Almond butter",
+  "kcal_100g": 614.0,
+  "protein_100g": 21.0,
+  "fat_100g": 55.5,
+  "carbs_100g": 18.8,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Apple",
+  "kcal_100g": 54.0,
+  "protein_100g": 0.3,
+  "fat_100g": 0.2,
+  "carbs_100g": 11.4,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Arugula",
+  "kcal_100g": 25.0,
+  "protein_100g": 2.6,
+  "fat_100g": 0.7,
+  "carbs_100g": 3.7,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Bacon (smoked)",
+  "kcal_100g": 417.0,
+  "protein_100g": 12.6,
+  "fat_100g": 40.0,
+  "carbs_100g": 1.4,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Baking powder",
+  "kcal_100g": 53.0,
+  "protein_100g": 0.0,
+  "fat_100g": 0.0,
+  "carbs_100g": 27.7,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Balsamic vinegar",
+  "kcal_100g": 88.0,
+  "protein_100g": 0.5,
+  "fat_100g": 0.0,
+  "carbs_100g": 17.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Banana",
+  "kcal_100g": 93.0,
+  "protein_100g": 1.1,
+  "fat_100g": 0.2,
+  "carbs_100g": 20.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Basil (dried)",
+  "kcal_100g": 233.0,
+  "protein_100g": 23.0,
+  "fat_100g": 4.1,
+  "carbs_100g": 47.8,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Basil pesto",
+  "kcal_100g": 450.0,
+  "protein_100g": 5.0,
+  "fat_100g": 45.0,
+  "carbs_100g": 6.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Basmati and wild rice (dry)",
+  "kcal_100g": 350.0,
+  "protein_100g": 8.0,
+  "fat_100g": 1.5,
+  "carbs_100g": 76.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Basmati rice (dry)",
+  "kcal_100g": 350.0,
+  "protein_100g": 8.0,
+  "fat_100g": 0.8,
+  "carbs_100g": 77.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Bay leaf",
+  "kcal_100g": 313.0,
+  "protein_100g": 7.6,
+  "fat_100g": 8.4,
+  "carbs_100g": 75.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Beef broth",
+  "kcal_100g": 7.0,
+  "protein_100g": 1.1,
+  "fat_100g": 0.2,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Beef mince",
+  "kcal_100g": 254.0,
+  "protein_100g": 17.2,
+  "fat_100g": 20.0,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Beef shoulder",
+  "kcal_100g": 150.0,
+  "protein_100g": 21.0,
+  "fat_100g": 7.0,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Black olives",
+  "kcal_100g": 115.0,
+  "protein_100g": 0.8,
+  "fat_100g": 11.0,
+  "carbs_100g": 6.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Black pepper",
+  "kcal_100g": 251.0,
+  "protein_100g": 10.4,
+  "fat_100g": 3.3,
+  "carbs_100g": 64.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Bouillon granules",
+  "kcal_100g": 213.0,
+  "protein_100g": 16.0,
+  "fat_100g": 8.9,
+  "carbs_100g": 17.4,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Breadcrumbs",
+  "kcal_100g": 395.0,
+  "protein_100g": 13.0,
+  "fat_100g": 5.0,
+  "carbs_100g": 72.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Broccoli",
+  "kcal_100g": 28.0,
+  "protein_100g": 3.0,
+  "fat_100g": 0.4,
+  "carbs_100g": 5.1,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Brown sugar",
+  "kcal_100g": 380.0,
+  "protein_100g": 0.1,
+  "fat_100g": 0.0,
+  "carbs_100g": 98.1,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Butter",
+  "kcal_100g": 717.0,
+  "protein_100g": 0.85,
+  "fat_100g": 81.1,
+  "carbs_100g": 0.06,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Butter beans (dried)",
+  "kcal_100g": 338.0,
+  "protein_100g": 21.5,
+  "fat_100g": 0.7,
+  "carbs_100g": 63.4,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Caraway seeds",
+  "kcal_100g": 333.0,
+  "protein_100g": 19.8,
+  "fat_100g": 14.6,
+  "carbs_100g": 49.9,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Carrot",
+  "kcal_100g": 41.0,
+  "protein_100g": 0.9,
+  "fat_100g": 0.2,
+  "carbs_100g": 9.6,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Celery",
+  "kcal_100g": 14.0,
+  "protein_100g": 0.7,
+  "fat_100g": 0.2,
+  "carbs_100g": 3.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Cheddar",
+  "kcal_100g": 410.0,
+  "protein_100g": 24.3,
+  "fat_100g": 33.8,
+  "carbs_100g": 2.1,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Chicken breast",
+  "kcal_100g": 120.0,
+  "protein_100g": 22.5,
+  "fat_100g": 2.6,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Chicken broth",
+  "kcal_100g": 5.0,
+  "protein_100g": 0.5,
+  "fat_100g": 0.2,
+  "carbs_100g": 0.4,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Chicken drumsticks",
+  "kcal_100g": 161.0,
+  "protein_100g": 18.0,
+  "fat_100g": 9.2,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Chicken thigh (boneless)",
+  "kcal_100g": 121.0,
+  "protein_100g": 19.7,
+  "fat_100g": 4.1,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Chickpeas (canned, drained)",
+  "kcal_100g": 139.0,
+  "protein_100g": 7.0,
+  "fat_100g": 2.8,
+  "carbs_100g": 22.5,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Chili powder",
+  "kcal_100g": 282.0,
+  "protein_100g": 13.5,
+  "fat_100g": 14.3,
+  "carbs_100g": 49.7,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Chives",
+  "kcal_100g": 30.0,
+  "protein_100g": 3.3,
+  "fat_100g": 0.7,
+  "carbs_100g": 4.4,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Chopped tomatoes (canned)",
+  "kcal_100g": 16.0,
+  "protein_100g": 0.8,
+  "fat_100g": 0.2,
+  "carbs_100g": 3.5,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Ciabatta",
+  "kcal_100g": 259.0,
+  "protein_100g": 9.5,
+  "fat_100g": 2.7,
+  "carbs_100g": 48.1,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Cinnamon",
+  "kcal_100g": 247.0,
+  "protein_100g": 4.0,
+  "fat_100g": 1.2,
+  "carbs_100g": 80.6,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Coconut yogurt",
+  "kcal_100g": 100.0,
+  "protein_100g": 1.0,
+  "fat_100g": 7.0,
+  "carbs_100g": 8.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Cod fillet",
+  "kcal_100g": 82.0,
+  "protein_100g": 18.0,
+  "fat_100g": 0.7,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Cooked brown rice",
+  "kcal_100g": 123.0,
+  "protein_100g": 2.7,
+  "fat_100g": 1.0,
+  "carbs_100g": 25.6,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Cooking cream (15%)",
+  "kcal_100g": 160.0,
+  "protein_100g": 2.7,
+  "fat_100g": 15.0,
+  "carbs_100g": 3.8,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Coriander (fresh)",
+  "kcal_100g": 23.0,
+  "protein_100g": 2.1,
+  "fat_100g": 0.5,
+  "carbs_100g": 3.7,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Cornstarch",
+  "kcal_100g": 381.0,
+  "protein_100g": 0.26,
+  "fat_100g": 0.05,
+  "carbs_100g": 91.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Couscous (dry)",
+  "kcal_100g": 376.0,
+  "protein_100g": 13.0,
+  "fat_100g": 0.6,
+  "carbs_100g": 77.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Cream cheese",
+  "kcal_100g": 342.0,
+  "protein_100g": 5.9,
+  "fat_100g": 34.2,
+  "carbs_100g": 4.1,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Cucumber",
+  "kcal_100g": 15.0,
+  "protein_100g": 0.65,
+  "fat_100g": 0.11,
+  "carbs_100g": 3.6,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Cumin",
+  "kcal_100g": 375.0,
+  "protein_100g": 17.8,
+  "fat_100g": 22.3,
+  "carbs_100g": 44.2,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Curry powder",
+  "kcal_100g": 325.0,
+  "protein_100g": 14.3,
+  "fat_100g": 14.0,
+  "carbs_100g": 55.8,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Egg",
+  "kcal_100g": 143.0,
+  "protein_100g": 12.6,
+  "fat_100g": 9.5,
+  "carbs_100g": 0.7,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Egg yolk",
+  "kcal_100g": 322.0,
+  "protein_100g": 15.9,
+  "fat_100g": 26.5,
+  "carbs_100g": 3.6,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Eggplant",
+  "kcal_100g": 25.0,
+  "protein_100g": 1.0,
+  "fat_100g": 0.2,
+  "carbs_100g": 6.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Emmental",
+  "kcal_100g": 380.0,
+  "protein_100g": 26.9,
+  "fat_100g": 27.8,
+  "carbs_100g": 5.4,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Feta",
+  "kcal_100g": 264.0,
+  "protein_100g": 14.0,
+  "fat_100g": 21.0,
+  "carbs_100g": 4.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Frozen peas",
+  "kcal_100g": 77.0,
+  "protein_100g": 5.2,
+  "fat_100g": 0.4,
+  "carbs_100g": 13.6,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Frozen spinach",
+  "kcal_100g": 29.0,
+  "protein_100g": 3.6,
+  "fat_100g": 0.6,
+  "carbs_100g": 4.2,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Garlic",
+  "kcal_100g": 149.0,
+  "protein_100g": 6.4,
+  "fat_100g": 0.5,
+  "carbs_100g": 33.1,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Ghee",
+  "kcal_100g": 876.0,
+  "protein_100g": 0.3,
+  "fat_100g": 99.5,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Ginger",
+  "kcal_100g": 80.0,
+  "protein_100g": 1.8,
+  "fat_100g": 0.8,
+  "carbs_100g": 17.8,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Greek yogurt",
+  "kcal_100g": 97.0,
+  "protein_100g": 9.0,
+  "fat_100g": 5.0,
+  "carbs_100g": 4.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Green lentils (canned, cooked)",
+  "kcal_100g": 116.0,
+  "protein_100g": 9.0,
+  "fat_100g": 0.4,
+  "carbs_100g": 20.1,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Ground almonds",
+  "kcal_100g": 579.0,
+  "protein_100g": 21.2,
+  "fat_100g": 49.9,
+  "carbs_100g": 21.6,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Honey",
+  "kcal_100g": 304.0,
+  "protein_100g": 0.3,
+  "fat_100g": 0.0,
+  "carbs_100g": 82.4,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Hummus",
+  "kcal_100g": 250.0,
+  "protein_100g": 7.9,
+  "fat_100g": 18.0,
+  "carbs_100g": 14.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Kidney beans (canned, drained)",
+  "kcal_100g": 124.0,
+  "protein_100g": 8.0,
+  "fat_100g": 1.1,
+  "carbs_100g": 21.5,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Lasagne sheets (dry)",
+  "kcal_100g": 371.0,
+  "protein_100g": 13.0,
+  "fat_100g": 1.5,
+  "carbs_100g": 74.7,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Lemon",
+  "kcal_100g": 29.0,
+  "protein_100g": 1.1,
+  "fat_100g": 0.3,
+  "carbs_100g": 9.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Lemon juice",
+  "kcal_100g": 22.0,
+  "protein_100g": 0.35,
+  "fat_100g": 0.24,
+  "carbs_100g": 6.9,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Light coconut milk",
+  "kcal_100g": 74.0,
+  "protein_100g": 0.7,
+  "fat_100g": 6.7,
+  "carbs_100g": 2.4,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Lime juice",
+  "kcal_100g": 25.0,
+  "protein_100g": 0.4,
+  "fat_100g": 0.1,
+  "carbs_100g": 8.4,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Low-fat quark",
+  "kcal_100g": 67.0,
+  "protein_100g": 12.0,
+  "fat_100g": 0.3,
+  "carbs_100g": 4.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Marjoram (dried)",
+  "kcal_100g": 271.0,
+  "protein_100g": 12.7,
+  "fat_100g": 7.0,
+  "carbs_100g": 60.6,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Milk (whole)",
+  "kcal_100g": 61.0,
+  "protein_100g": 3.2,
+  "fat_100g": 3.3,
+  "carbs_100g": 4.8,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Milk chocolate",
+  "kcal_100g": 535.0,
+  "protein_100g": 7.7,
+  "fat_100g": 30.0,
+  "carbs_100g": 59.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Mixed berries",
+  "kcal_100g": 57.0,
+  "protein_100g": 0.7,
+  "fat_100g": 0.3,
+  "carbs_100g": 14.5,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Mixed nuts",
+  "kcal_100g": 607.0,
+  "protein_100g": 20.0,
+  "fat_100g": 54.0,
+  "carbs_100g": 13.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Mozzarella",
+  "kcal_100g": 300.0,
+  "protein_100g": 22.2,
+  "fat_100g": 22.4,
+  "carbs_100g": 2.2,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Muesli (unsweetened)",
+  "kcal_100g": 360.0,
+  "protein_100g": 10.0,
+  "fat_100g": 6.0,
+  "carbs_100g": 63.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Mushrooms",
+  "kcal_100g": 22.0,
+  "protein_100g": 3.1,
+  "fat_100g": 0.3,
+  "carbs_100g": 3.3,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Mustard",
+  "kcal_100g": 60.0,
+  "protein_100g": 3.7,
+  "fat_100g": 3.3,
+  "carbs_100g": 5.8,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Natural yogurt",
+  "kcal_100g": 61.0,
+  "protein_100g": 3.5,
+  "fat_100g": 3.3,
+  "carbs_100g": 4.7,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Nutmeg",
+  "kcal_100g": 525.0,
+  "protein_100g": 5.8,
+  "fat_100g": 36.3,
+  "carbs_100g": 49.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Olive oil",
+  "kcal_100g": 884.0,
+  "protein_100g": 0.0,
+  "fat_100g": 100.0,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Onion",
+  "kcal_100g": 40.0,
+  "protein_100g": 1.1,
+  "fat_100g": 0.1,
+  "carbs_100g": 9.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Orange",
+  "kcal_100g": 47.0,
+  "protein_100g": 0.9,
+  "fat_100g": 0.1,
+  "carbs_100g": 12.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Oregano (dried)",
+  "kcal_100g": 265.0,
+  "protein_100g": 9.0,
+  "fat_100g": 4.3,
+  "carbs_100g": 68.9,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Paprika powder",
+  "kcal_100g": 282.0,
+  "protein_100g": 14.1,
+  "fat_100g": 12.9,
+  "carbs_100g": 54.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Parmesan",
+  "kcal_100g": 392.0,
+  "protein_100g": 35.8,
+  "fat_100g": 25.0,
+  "carbs_100g": 3.2,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Parsley",
+  "kcal_100g": 36.0,
+  "protein_100g": 3.0,
+  "fat_100g": 0.8,
+  "carbs_100g": 6.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Passata",
+  "kcal_100g": 38.0,
+  "protein_100g": 1.65,
+  "fat_100g": 0.21,
+  "carbs_100g": 8.98,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Pasta (dry)",
+  "kcal_100g": 356.0,
+  "protein_100g": 12.5,
+  "fat_100g": 1.5,
+  "carbs_100g": 71.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Peanut butter",
+  "kcal_100g": 598.0,
+  "protein_100g": 22.2,
+  "fat_100g": 51.4,
+  "carbs_100g": 22.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Peanut oil",
+  "kcal_100g": 884.0,
+  "protein_100g": 0.0,
+  "fat_100g": 100.0,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Peanuts (salted)",
+  "kcal_100g": 587.0,
+  "protein_100g": 24.4,
+  "fat_100g": 49.7,
+  "carbs_100g": 21.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Pine nuts",
+  "kcal_100g": 673.0,
+  "protein_100g": 13.7,
+  "fat_100g": 68.4,
+  "carbs_100g": 13.1,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Pork loin",
+  "kcal_100g": 120.0,
+  "protein_100g": 22.0,
+  "fat_100g": 3.5,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Potatoes",
+  "kcal_100g": 77.0,
+  "protein_100g": 2.05,
+  "fat_100g": 0.09,
+  "carbs_100g": 17.5,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Prawns (peeled)",
+  "kcal_100g": 85.0,
+  "protein_100g": 20.0,
+  "fat_100g": 0.5,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Puff pastry",
+  "kcal_100g": 551.0,
+  "protein_100g": 7.3,
+  "fat_100g": 38.5,
+  "carbs_100g": 45.7,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Pumpkin (Hokkaido)",
+  "kcal_100g": 26.0,
+  "protein_100g": 1.0,
+  "fat_100g": 0.1,
+  "carbs_100g": 6.5,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Pumpkin seeds",
+  "kcal_100g": 559.0,
+  "protein_100g": 30.2,
+  "fat_100g": 49.0,
+  "carbs_100g": 10.7,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Red bell pepper",
+  "kcal_100g": 26.0,
+  "protein_100g": 1.0,
+  "fat_100g": 0.3,
+  "carbs_100g": 6.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Red chili pepper",
+  "kcal_100g": 40.0,
+  "protein_100g": 1.9,
+  "fat_100g": 0.4,
+  "carbs_100g": 8.8,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Red lentils (dry)",
+  "kcal_100g": 358.0,
+  "protein_100g": 23.9,
+  "fat_100g": 2.2,
+  "carbs_100g": 63.1,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Ricotta",
+  "kcal_100g": 150.0,
+  "protein_100g": 7.5,
+  "fat_100g": 10.2,
+  "carbs_100g": 7.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Rolled oats",
+  "kcal_100g": 389.0,
+  "protein_100g": 16.9,
+  "fat_100g": 6.9,
+  "carbs_100g": 66.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Romaine lettuce",
+  "kcal_100g": 17.0,
+  "protein_100g": 1.2,
+  "fat_100g": 0.3,
+  "carbs_100g": 3.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Salmon fillet",
+  "kcal_100g": 208.0,
+  "protein_100g": 20.4,
+  "fat_100g": 13.4,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Salt",
+  "kcal_100g": 0.0,
+  "protein_100g": 0.0,
+  "fat_100g": 0.0,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Savoy cabbage",
+  "kcal_100g": 27.0,
+  "protein_100g": 2.0,
+  "fat_100g": 0.1,
+  "carbs_100g": 6.1,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Self-raising flour",
+  "kcal_100g": 354.0,
+  "protein_100g": 9.9,
+  "fat_100g": 1.0,
+  "carbs_100g": 74.2,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Sesame oil",
+  "kcal_100g": 884.0,
+  "protein_100g": 0.0,
+  "fat_100g": 100.0,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Skyr (natural)",
+  "kcal_100g": 63.0,
+  "protein_100g": 11.0,
+  "fat_100g": 0.2,
+  "carbs_100g": 4.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Smoked salmon",
+  "kcal_100g": 117.0,
+  "protein_100g": 18.0,
+  "fat_100g": 4.3,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Smoked sausage (Krakauer)",
+  "kcal_100g": 301.0,
+  "protein_100g": 12.1,
+  "fat_100g": 26.6,
+  "carbs_100g": 2.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Soy milk",
+  "kcal_100g": 54.0,
+  "protein_100g": 3.3,
+  "fat_100g": 1.8,
+  "carbs_100g": 6.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Soy sauce",
+  "kcal_100g": 53.0,
+  "protein_100g": 8.1,
+  "fat_100g": 0.6,
+  "carbs_100g": 4.9,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Spinach (fresh)",
+  "kcal_100g": 23.0,
+  "protein_100g": 2.9,
+  "fat_100g": 0.4,
+  "carbs_100g": 3.6,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Spring onions",
+  "kcal_100g": 32.0,
+  "protein_100g": 1.8,
+  "fat_100g": 0.2,
+  "carbs_100g": 7.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Sugar",
+  "kcal_100g": 387.0,
+  "protein_100g": 0.0,
+  "fat_100g": 0.0,
+  "carbs_100g": 100.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Sweet corn (canned)",
+  "kcal_100g": 67.0,
+  "protein_100g": 2.3,
+  "fat_100g": 1.2,
+  "carbs_100g": 14.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Sweet potato",
+  "kcal_100g": 86.0,
+  "protein_100g": 1.6,
+  "fat_100g": 0.1,
+  "carbs_100g": 20.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Thyme (dried)",
+  "kcal_100g": 276.0,
+  "protein_100g": 9.1,
+  "fat_100g": 7.4,
+  "carbs_100g": 63.9,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Thyme (fresh)",
+  "kcal_100g": 101.0,
+  "protein_100g": 5.6,
+  "fat_100g": 1.7,
+  "carbs_100g": 24.5,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Tikka masala paste",
+  "kcal_100g": 150.0,
+  "protein_100g": 2.5,
+  "fat_100g": 11.0,
+  "carbs_100g": 9.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Tofu (firm)",
+  "kcal_100g": 144.0,
+  "protein_100g": 17.3,
+  "fat_100g": 8.7,
+  "carbs_100g": 2.8,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Tomato",
+  "kcal_100g": 18.0,
+  "protein_100g": 0.9,
+  "fat_100g": 0.2,
+  "carbs_100g": 3.9,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Tomato paste",
+  "kcal_100g": 82.0,
+  "protein_100g": 4.3,
+  "fat_100g": 0.5,
+  "carbs_100g": 18.9,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Tuna (canned, drained)",
+  "kcal_100g": 116.0,
+  "protein_100g": 26.0,
+  "fat_100g": 1.0,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Turkey mince",
+  "kcal_100g": 150.0,
+  "protein_100g": 19.7,
+  "fat_100g": 7.7,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Vanilla extract",
+  "kcal_100g": 288.0,
+  "protein_100g": 0.06,
+  "fat_100g": 0.06,
+  "carbs_100g": 12.7,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Vegetable broth",
+  "kcal_100g": 5.0,
+  "protein_100g": 0.2,
+  "fat_100g": 0.1,
+  "carbs_100g": 0.9,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Vegetable oil",
+  "kcal_100g": 884.0,
+  "protein_100g": 0.0,
+  "fat_100g": 100.0,
+  "carbs_100g": 0.0,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Wheat flour",
+  "kcal_100g": 364.0,
+  "protein_100g": 10.3,
+  "fat_100g": 1.0,
+  "carbs_100g": 76.3,
+  "seeded_2026_11_16": true
+ },
+ {
+  "name": "Wheat tortillas",
+  "kcal_100g": 310.0,
+  "protein_100g": 8.5,
+  "fat_100g": 7.5,
+  "carbs_100g": 50.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Wholegrain bread",
+  "kcal_100g": 216.0,
+  "protein_100g": 7.0,
+  "fat_100g": 1.2,
+  "carbs_100g": 39.0,
+  "seeded_2026_11_16": false
+ },
+ {
+  "name": "Zucchini",
+  "kcal_100g": 17.0,
+  "protein_100g": 1.2,
+  "fat_100g": 0.3,
+  "carbs_100g": 3.1,
+  "seeded_2026_11_16": false
+ }
+]
