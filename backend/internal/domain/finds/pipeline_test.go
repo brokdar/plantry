@@ -296,3 +296,19 @@ func TestPipeline_AC7(t *testing.T) {
 		})
 	}
 }
+
+// A web search the provider pauses is resent with the paused reply until the
+// search tool is called (the discovery converse loop's rule).
+func TestPipeline_PausedSearchContinues(t *testing.T) {
+	t.Parallel()
+	pause := fake.Turn{
+		ForTool: finds.SearchTool, StopReason: "pause_turn",
+		Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{{Type: "text", Text: "Still searching."}}},
+		Usage:   fake.ScriptedUsage{InputTokens: 400, OutputTokens: 50},
+	}
+	r := newRig(t, true, lineMatcher{}, kitchen, pause, searchTurn(curryURLs...), adaptTurn(false, fitsKitchen))
+	f := r.run(t, finds.TriggerPlanning)
+	require.Equal(t, finds.StateReady, f.State, f.Steps)
+	reqs := r.client.Requests()
+	require.Len(t, reqs[1].Messages, 2, "the paused reply went back")
+}

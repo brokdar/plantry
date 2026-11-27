@@ -464,6 +464,35 @@ func webSearch(ctx context.Context, client llm.Client, model string) bool {
 
 // callTool sends req and decodes the input of the named tool's call.
 func callTool(ctx context.Context, client llm.Client, req llm.Request, tool string, into any) error {
+	for i := 0; ; i++ {
+		resp, err := streamOnce(ctx, client, req)
+		if err != nil {
+			return fmt.Errorf("%s: %w", tool, err)
+		}
+		if resp == nil {
+			break
+		}
+		for _, b := range resp.Message.Content {
+			if b.Type == llm.ContentTypeToolUse && b.ToolUseName == tool {
+				if err := json.Unmarshal(b.ToolUseInput, into); err != nil {
+					return fmt.Errorf("%s: unreadable reply: %w", tool, err)
+				}
+				return nil
+			}
+		}
+		// A long web search the provider paused: send it back as it is.
+		if resp.StopReason != llm.StopReasonPauseTurn || i == maxPauseContinuations {
+			break
+		}
+		req.Messages = append(slices.Clone(req.Messages), resp.Message)
+	}
+	return fmt.Errorf("%s: the reply did not call the tool", tool)
+}
+
+// maxPauseContinuations bounds the resends of a paused web search turn.
+const maxPauseContinuations = 3
+
+func streamOnce(ctx context.Context, client llm.Client, req llm.Request) (*llm.Response, error) {
 	events := make(chan llm.Event, 16)
 	done := make(chan struct{})
 	go func() {
@@ -473,18 +502,5 @@ func callTool(ctx context.Context, client llm.Client, req llm.Request, tool stri
 	}()
 	resp, err := client.Stream(ctx, req, events)
 	<-done
-	if err != nil {
-		return fmt.Errorf("%s: %w", tool, err)
-	}
-	if resp != nil {
-		for _, b := range resp.Message.Content {
-			if b.Type == llm.ContentTypeToolUse && b.ToolUseName == tool {
-				if err := json.Unmarshal(b.ToolUseInput, into); err != nil {
-					return fmt.Errorf("%s: unreadable reply: %w", tool, err)
-				}
-				return nil
-			}
-		}
-	}
-	return fmt.Errorf("%s: the reply did not call the tool", tool)
+	return resp, err
 }
