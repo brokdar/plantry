@@ -223,6 +223,7 @@ func (b *Builder) build(ctx context.Context, w window.Window, today, from, to ti
 		if confirmed && p.Date.Before(today) && !p.Date.Before(eatenSince) {
 			for _, id := range distinctFoods(p) {
 				timesEaten[id]++
+				referenced[id] = true // so a hidden variant's base is resolved and folded below
 			}
 		}
 		if p.Feedback != nil && p.Date.Before(today) && !p.Date.Before(eatenSince) {
