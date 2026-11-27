@@ -101,7 +101,8 @@ func (s *Service) Opened(ctx context.Context, windowStart time.Time, drafts, nex
 // Prefetch starts the finds the window's new dishes still need, only during
 // a planning session (P11): new dishes less the searching ones and the ready
 // ones that can fill a lunch or dinner main (FIND-3: ready finds first; one
-// that cannot stays ready for later and does not hold a new search back).
+// that cannot, or that a generation already passed over, stays ready for
+// later and does not hold a new search back).
 func (s *Service) Prefetch(ctx context.Context, windowStart time.Time) error {
 	on, err := s.chefOn(ctx)
 	if err != nil || !on {
@@ -133,7 +134,7 @@ func (s *Service) Prefetch(ctx context.Context, windowStart time.Time) error {
 }
 
 // openFitting counts the searching planning finds and the ready finds that
-// can fill a lunch or dinner main cell.
+// can fill a lunch or dinner main cell and no generation passed over.
 func (s *Service) openFitting(ctx context.Context) (int, error) {
 	searching := StateSearching
 	open, err := s.d.Store.List(ctx, &searching, maxStaged)
@@ -156,7 +157,7 @@ func (s *Service) openFitting(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	for _, f := range ready {
-		if cellUnfit(f.Draft, k) == "" {
+		if f.PassedOn == nil && cellUnfit(f.Draft, k) == "" {
 			n++
 		}
 	}
@@ -200,8 +201,10 @@ func (s *Service) request(ctx context.Context, dishes []string) error {
 // recipes placed in the window starting on windowStart, before a generation
 // (FIND-3). It returns their food ids (Settle returns the unused ones) and a
 // note per ready find left for a later week because it cannot fill a lunch
-// or dinner main. Of two ready finds from one source page only the first is
-// placed.
+// or dinner main or cannot be added as a recipe; those are passed over (they
+// stay ready but no longer count toward New dishes), and finds passed over
+// before are not offered again. Of two ready finds from one source page only
+// the first is placed.
 func (s *Service) Stage(ctx context.Context, n int, windowStart time.Time) ([]int64, []string, error) {
 	if n <= 0 {
 		return nil, nil, nil
@@ -223,14 +226,23 @@ func (s *Service) Stage(ctx context.Context, n int, windowStart time.Time) ([]in
 	var ids []int64
 	var notes []string
 	urls := map[string]bool{}
+	pass := func(f *Find, why string) error {
+		name := f.Dish
+		if f.Draft != nil {
+			name = f.Draft.Name
+		}
+		notes = append(notes, fmt.Sprintf("The ready new dish %s waits for a later week: %s.", name, why))
+		return s.d.Store.Pass(ctx, f.ID, windowStart)
+	}
 	for i := range ready {
 		f := &ready[i]
+		if f.PassedOn != nil {
+			continue
+		}
 		if why := cellUnfit(f.Draft, k); why != "" {
-			name := f.Dish
-			if f.Draft != nil {
-				name = f.Draft.Name
+			if err := pass(f, why); err != nil {
+				return ids, notes, err
 			}
-			notes = append(notes, fmt.Sprintf("The ready new dish %s waits for a later week: %s.", name, why))
 			continue
 		}
 		if len(ids) == n {
@@ -244,6 +256,9 @@ func (s *Service) Stage(ctx context.Context, n int, windowStart time.Time) ([]in
 		if err != nil {
 			// The find stays ready; the run plans without it.
 			s.d.Logger.WarnContext(ctx, "finds.stage skipped", "find_id", f.ID, "error", err)
+			if err := pass(f, "it could not be added as a recipe"); err != nil {
+				return ids, notes, err
+			}
 			continue
 		}
 		urls[u] = true
@@ -252,7 +267,8 @@ func (s *Service) Stage(ctx context.Context, n int, windowStart time.Time) ([]in
 	return ids, notes, nil
 }
 
-// Settle returns the staged finds the generation did not place to ready.
+// Settle returns the staged finds the generation did not place to ready,
+// passed over for the window.
 func (s *Service) Settle(ctx context.Context, windowStart time.Time, staged []int64, placed func(foodID int64) bool) error {
 	fs, err := s.d.Store.Placed(ctx, windowStart)
 	if err != nil {
@@ -263,7 +279,11 @@ func (s *Service) Settle(ctx context.Context, windowStart time.Time, staged []in
 		if f.FoodID == nil || !slices.Contains(staged, *f.FoodID) || placed(*f.FoodID) {
 			continue
 		}
-		errs = append(errs, s.unplace(ctx, f, false))
+		err := s.unplace(ctx, f, false)
+		if err == nil {
+			err = s.d.Store.Pass(ctx, f.ID, windowStart)
+		}
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }
@@ -416,8 +436,15 @@ func (s *Service) recipe(ctx context.Context, f *Find) (*food.Food, error) {
 			Resolution: importer.ResolutionExisting, FoodID: leaf, ToTaste: line.ToTaste,
 			Amount: line.Amount, Unit: line.Unit, PortionGrams: line.PortionGrams,
 		}
-		if !line.ToTaste && (row.Amount <= 0 || row.Unit == "") && m.Grams != nil {
+		switch {
+		case line.ToTaste || m.Grams == nil:
+		case row.Amount <= 0 || row.Unit == "":
 			row.Amount, row.Unit, row.PortionGrams = *m.Grams, "g", nil
+		case row.PortionGrams == nil && line.NeedsWeight:
+			// "5 bratwurst links" on a leaf without a piece weight: the
+			// matched grams give it, as the review would (CP3 run 3).
+			w := *m.Grams / row.Amount
+			row.PortionGrams = &w
 		}
 		in.Children = append(in.Children, row)
 	}

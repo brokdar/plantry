@@ -163,6 +163,22 @@ func TestPrefetch_ReadyFindThatCannotFillAMainDoesNotCount(t *testing.T) {
 	assert.Len(t, fits.queued, 1, "a fitting ready main counts")
 }
 
+// CP3 run 3 item 5: a fitting ready find a generation passed over (it could
+// not use it in its window) no longer counts toward New dishes: the next
+// window searches a new one.
+func TestPrefetch_PassedReadyFindDoesNotCount(t *testing.T) {
+	r := newSessionRig(t, true, 1)
+	r.readyDraft(t, &importer.Draft{Name: "Roasted Bratwurst", Tags: []string{"Main Course"}, TotalMinutes: ptr(60)})
+	ready := finds.StateReady
+	list, err := r.store.List(context.Background(), &ready, 5)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.NoError(t, r.store.Pass(context.Background(), list[0].ID, nextWindow.AddDate(0, 0, -7)))
+
+	require.NoError(t, r.svc.Opened(context.Background(), nextWindow, false, true))
+	assert.Len(t, r.queued, 1, "the passed find stays ready but a new one is searched")
+}
+
 // CP3b item 2: the finds of consecutive weeks look for different mains.
 func TestThemeSet_DishesVaryByWeek(t *testing.T) {
 	r := newSessionRig(t, true, 1)

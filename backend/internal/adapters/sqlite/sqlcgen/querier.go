@@ -288,6 +288,9 @@ type Querier interface {
 	MarkKitchenQuestionAsked(ctx context.Context, question string) error
 	MarkSubstitutionSwapOffered(ctx context.Context, arg MarkSubstitutionSwapOfferedParams) error
 	MatchBasicAtHome(ctx context.Context, foodID int64) error
+	// A generation offered the ready find to the window starting on passed_on
+	// and did not use it.
+	PassFind(ctx context.Context, arg PassFindParams) error
 	// "Looks wrong" lowers the site's rank (NEW-4).
 	PenaliseSource(ctx context.Context, site string) error
 	// The planner placed a ready find (FIND-4 ready -> in_library) in the

@@ -78,6 +78,12 @@ UPDATE recipe_suggestions SET
 WHERE id = sqlc.arg(id) AND state = 'in_library' AND placed_on IS NOT NULL
 RETURNING *;
 
+-- name: PassFind :exec
+-- A generation offered the ready find to the window starting on passed_on
+-- and did not use it.
+UPDATE recipe_suggestions SET passed_on = sqlc.arg(passed_on), updated_at = datetime('now')
+WHERE id = sqlc.arg(id) AND state = 'ready';
+
 -- name: ListPlacedFinds :many
 -- The finds the planner placed in the window starting on placed_on.
 SELECT * FROM recipe_suggestions

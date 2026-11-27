@@ -158,6 +158,66 @@ func TestGenerate_ReadyFindThatCannotFillAMainWaits(t *testing.T) {
 	assert.Contains(t, e.runs.end(id).Notes, "The ready new dish Lentil salad waits for a later week: it is not a main dish.")
 }
 
+// CP3 run 3 item 5: "Roasted Bratwurst with Peppers and Onions" sat ready
+// for four weeks because its line "5 bratwurst links" matched a leaf without
+// a piece weight and building the recipe failed every week. The matched
+// grams give the piece weight, so it is placed.
+func TestGenerate_ReadyFindWithAPieceLineWithoutWeightIsPlaced(t *testing.T) {
+	e := newFindsEnv(t, true)
+	wurst := e.insert(`INSERT INTO foods (name, kind, source, kcal_100g, protein_100g, fat_100g, carbs_100g) VALUES ('Frankfurter, beef, unheated', 'leaf', 'fdc', 314, 11, 29, 3)`)
+	grams := 250.0
+	d := &importer.Draft{
+		Name: "Roasted Bratwurst with Peppers and Onions", ReferencePortions: 5, Instructions: []string{"Roast."},
+		Ingredients: []importer.DraftIngredient{{
+			RawText: "5 bratwurst links", Name: "bratwurst links", Amount: 5, Unit: "piece", NeedsWeight: true,
+			Match: &food.LineMatch{
+				Status: food.MatchMatched, Pick: 0, Grams: &grams,
+				Candidates: []food.Candidate{{Name: "Frankfurter, beef, unheated", ExistingID: &wurst}},
+			},
+		}},
+	}
+	f, err := e.store.Create(e.ctx, "german oven bake main", finds.TriggerPlanning)
+	require.NoError(t, err)
+	_, err = e.store.Finish(e.ctx, f.ID, finds.Outcome{State: finds.StateReady, Draft: d, SourceURL: "https://example.org/brats"})
+	require.NoError(t, err)
+
+	e.generate(e.req())
+
+	placed := e.find(f.ID)
+	require.Equal(t, finds.StateInLibrary, placed.State)
+	assert.True(t, e.eaten(*placed.FoodID))
+	recipe, err := sqlite.NewFoodRepo(e.db).Get(e.ctx, *placed.FoodID)
+	require.NoError(t, err)
+	require.Len(t, recipe.Children, 1)
+	assert.InDelta(t, 250, recipe.Children[0].Grams, 0.01, "5 pieces of 50 g")
+}
+
+// CP3 run 3 item 5: a ready find a generation could not use is passed over
+// for the window: it stays ready, the note says why, and the next
+// generation does not offer it again.
+func TestGenerate_UnusableReadyFindIsPassedOver(t *testing.T) {
+	e := newFindsEnv(t, true)
+	d := &importer.Draft{
+		Name: "Mystery stew", ReferencePortions: 4, Instructions: []string{"Cook."},
+		Ingredients: []importer.DraftIngredient{{Name: "mystery", Amount: 1, Unit: "piece", Match: &food.LineMatch{Status: food.MatchUnmatched}}},
+	}
+	f, err := e.store.Create(e.ctx, "stew", finds.TriggerPlanning)
+	require.NoError(t, err)
+	_, err = e.store.Finish(e.ctx, f.ID, finds.Outcome{State: finds.StateReady, Draft: d, SourceURL: "https://example.org/stew"})
+	require.NoError(t, err)
+
+	id := e.generate(e.req())
+
+	left := e.find(f.ID)
+	assert.Equal(t, finds.StateReady, left.State, "it stays ready for the user")
+	require.NotNil(t, left.PassedOn)
+	assert.Equal(t, e.start.Format(time.DateOnly), *left.PassedOn)
+	assert.Contains(t, e.runs.end(id).Notes, "The ready new dish Mystery stew waits for a later week: it could not be added as a recipe.")
+
+	again := e.generate(e.req())
+	assert.NotContains(t, e.runs.end(again).Notes, "Mystery stew", "a passed find is not offered again")
+}
+
 // CP3b item 3: of two ready finds from one source page (normalised URL)
 // only one is placed.
 func TestGenerate_SameSourceReadyFindsPlaceOnce(t *testing.T) {

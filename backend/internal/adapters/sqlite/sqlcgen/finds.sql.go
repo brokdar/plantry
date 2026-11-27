@@ -28,7 +28,7 @@ func (q *Queries) BlockSearchDomain(ctx context.Context, arg BlockSearchDomainPa
 const createFind = `-- name: CreateFind :one
 INSERT INTO recipe_suggestions (mode, query, source_url, draft_json, annotations_json, grounded, status, state, find_trigger)
 VALUES ('find', ?1, '', '{}', '{}', 0, 'hidden', 'searching', ?2)
-RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on, passed_on
 `
 
 type CreateFindParams struct {
@@ -67,6 +67,7 @@ func (q *Queries) CreateFind(ctx context.Context, arg CreateFindParams) (RecipeS
 		&i.QuestionsJson,
 		&i.UpdatedAt,
 		&i.PlacedOn,
+		&i.PassedOn,
 	)
 	return i, err
 }
@@ -77,7 +78,7 @@ UPDATE recipe_suggestions SET
     status = CASE WHEN ?1 = 'in_library' THEN 'accepted' ELSE 'rejected' END,
     decided_at = datetime('now'), updated_at = datetime('now')
 WHERE id = ?4 AND state IN ('ready', 'needs_check')
-RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on, passed_on
 `
 
 type DecideFindParams struct {
@@ -124,6 +125,7 @@ func (q *Queries) DecideFind(ctx context.Context, arg DecideFindParams) (RecipeS
 		&i.QuestionsJson,
 		&i.UpdatedAt,
 		&i.PlacedOn,
+		&i.PassedOn,
 	)
 	return i, err
 }
@@ -138,7 +140,7 @@ UPDATE recipe_suggestions SET
     status = CASE WHEN ?1 = 'failed' THEN 'hidden' ELSE 'pending' END,
     updated_at = datetime('now')
 WHERE id = ?12 AND state = 'searching'
-RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on, passed_on
 `
 
 type FinishFindParams struct {
@@ -201,6 +203,7 @@ func (q *Queries) FinishFind(ctx context.Context, arg FinishFindParams) (RecipeS
 		&i.QuestionsJson,
 		&i.UpdatedAt,
 		&i.PlacedOn,
+		&i.PassedOn,
 	)
 	return i, err
 }
@@ -217,7 +220,7 @@ func (q *Queries) GetPlanningSession(ctx context.Context) (string, error) {
 }
 
 const listFinds = `-- name: ListFinds :many
-SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on FROM recipe_suggestions
+SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on, passed_on FROM recipe_suggestions
 WHERE state IS NOT NULL
   AND (CAST(?1 AS TEXT) IS NULL OR state = CAST(?1 AS TEXT))
 ORDER BY updated_at DESC, id DESC
@@ -266,6 +269,7 @@ func (q *Queries) ListFinds(ctx context.Context, arg ListFindsParams) ([]RecipeS
 			&i.QuestionsJson,
 			&i.UpdatedAt,
 			&i.PlacedOn,
+			&i.PassedOn,
 		); err != nil {
 			return nil, err
 		}
@@ -308,7 +312,7 @@ func (q *Queries) ListKitchenQuestionsAsked(ctx context.Context) ([]string, erro
 }
 
 const listPlacedFinds = `-- name: ListPlacedFinds :many
-SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on FROM recipe_suggestions
+SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on, passed_on FROM recipe_suggestions
 WHERE placed_on = ?1 AND state = 'in_library'
 ORDER BY id
 `
@@ -350,6 +354,7 @@ func (q *Queries) ListPlacedFinds(ctx context.Context, placedOn sql.NullString) 
 			&i.QuestionsJson,
 			&i.UpdatedAt,
 			&i.PlacedOn,
+			&i.PassedOn,
 		); err != nil {
 			return nil, err
 		}
@@ -467,6 +472,23 @@ func (q *Queries) MarkKitchenQuestionAsked(ctx context.Context, question string)
 	return err
 }
 
+const passFind = `-- name: PassFind :exec
+UPDATE recipe_suggestions SET passed_on = ?1, updated_at = datetime('now')
+WHERE id = ?2 AND state = 'ready'
+`
+
+type PassFindParams struct {
+	PassedOn sql.NullString
+	ID       int64
+}
+
+// A generation offered the ready find to the window starting on passed_on
+// and did not use it.
+func (q *Queries) PassFind(ctx context.Context, arg PassFindParams) error {
+	_, err := q.db.ExecContext(ctx, passFind, arg.PassedOn, arg.ID)
+	return err
+}
+
 const penaliseSource = `-- name: PenaliseSource :exec
 INSERT INTO find_source_penalties (site, count) VALUES (?, 1)
 ON CONFLICT (site) DO UPDATE SET count = count + 1, updated_at = datetime('now')
@@ -483,7 +505,7 @@ UPDATE recipe_suggestions SET
     state = 'in_library', status = 'accepted', food_id = ?1, placed_on = ?2,
     decided_at = datetime('now'), updated_at = datetime('now')
 WHERE id = ?3 AND state = 'ready'
-RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on, passed_on
 `
 
 type PlaceFindParams struct {
@@ -524,6 +546,7 @@ func (q *Queries) PlaceFind(ctx context.Context, arg PlaceFindParams) (RecipeSug
 		&i.QuestionsJson,
 		&i.UpdatedAt,
 		&i.PlacedOn,
+		&i.PassedOn,
 	)
 	return i, err
 }
@@ -535,7 +558,7 @@ WHERE id = (
     WHERE s.state = 'ready' AND s.shown_on IS NULL AND s.id > ?2
     ORDER BY s.id LIMIT 1
 )
-RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on, passed_on
 `
 
 type ShowNextReadyFindParams struct {
@@ -575,6 +598,7 @@ func (q *Queries) ShowNextReadyFind(ctx context.Context, arg ShowNextReadyFindPa
 		&i.QuestionsJson,
 		&i.UpdatedAt,
 		&i.PlacedOn,
+		&i.PassedOn,
 	)
 	return i, err
 }
@@ -594,7 +618,7 @@ UPDATE recipe_suggestions SET
     state = 'ready', status = 'pending', food_id = NULL, placed_on = NULL,
     decided_at = NULL, updated_at = datetime('now')
 WHERE id = ?1 AND state = 'in_library' AND placed_on IS NOT NULL
-RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on, passed_on
 `
 
 // A placed find goes back to ready (the run did not use it, or Undo).
@@ -628,6 +652,7 @@ func (q *Queries) UnplaceFind(ctx context.Context, id int64) (RecipeSuggestion, 
 		&i.QuestionsJson,
 		&i.UpdatedAt,
 		&i.PlacedOn,
+		&i.PassedOn,
 	)
 	return i, err
 }

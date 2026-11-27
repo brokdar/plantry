@@ -117,7 +117,11 @@ type Find struct {
 	RunID     *int64   `json:"run_id"`
 	// PlacedOn is the start (YYYY-MM-DD) of the window the planner placed
 	// the find in (C3); nil otherwise.
-	PlacedOn  *string    `json:"placed_on"`
+	PlacedOn *string `json:"placed_on"`
+	// PassedOn is the start of the window a generation offered the ready
+	// find to and did not use it in; such a find no longer counts toward
+	// New dishes (FIND-3).
+	PassedOn  *string    `json:"passed_on"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	DecidedAt *time.Time `json:"decided_at"`
@@ -161,6 +165,9 @@ type Store interface {
 	// starting on windowStart; Unplace puts a placed find back to ready.
 	Place(ctx context.Context, id, foodID int64, windowStart time.Time) (*Find, error)
 	Unplace(ctx context.Context, id int64) (*Find, error)
+	// Pass records that a generation offered the ready find to the window
+	// starting on windowStart and did not use it.
+	Pass(ctx context.Context, id int64, windowStart time.Time) error
 	// Placed lists the finds placed in the window starting on windowStart.
 	Placed(ctx context.Context, windowStart time.Time) ([]Find, error)
 	// TouchSession keeps the planning session open until at least until;
