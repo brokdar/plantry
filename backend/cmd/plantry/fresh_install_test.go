@@ -66,3 +66,20 @@ func TestSeedFreshInstall_UpgradeKeepsDefaultOff(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, on, "an explicit on is unchanged")
 }
+
+// A start that fails on the secret key must leave the database fresh, so the
+// next good start still seeds the Chef.
+func TestRun_BadSecretKeyLeavesDBFresh(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plantry.db")
+	t.Setenv("PLANTRY_DB_PATH", path)
+	t.Setenv("PLANTRY_SECRET_KEY", "too-short")
+
+	require.Error(t, run())
+
+	conn, err := openDB(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	fresh, err := isFreshDB(conn)
+	require.NoError(t, err)
+	require.True(t, fresh)
+}

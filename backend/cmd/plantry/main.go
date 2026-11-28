@@ -103,14 +103,6 @@ func run() error {
 	}
 	defer func() { _ = conn.Close() }()
 
-	fresh, err := isFreshDB(conn)
-	if err != nil {
-		return fmt.Errorf("schema version: %w", err)
-	}
-	if err := migrate(conn); err != nil {
-		return fmt.Errorf("migrate: %w", err)
-	}
-
 	static, err := webui.Handler()
 	if err != nil {
 		return fmt.Errorf("static: %w", err)
@@ -126,6 +118,16 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("crypto: %w", err)
 	}
+	// Nothing fallible may sit between reading the fresh flag and seeding:
+	// a failed start after migrate would leave a non-fresh DB never seeded.
+	fresh, err := isFreshDB(conn)
+	if err != nil {
+		return fmt.Errorf("schema version: %w", err)
+	}
+	if err := migrate(conn); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+
 	settingsRepo := sqlite.NewAppSettingsRepo(conn)
 	envSnapshot := settingsdom.NewEnvSnapshot(map[string]string{
 		"PLANTRY_AI_PROVIDER":           cfg.AIProvider,
