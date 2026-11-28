@@ -153,7 +153,12 @@ func smallAmount(amount float64, unit string) bool {
 	if u == "g" || u == "ml" {
 		return base <= 30
 	}
-	return amount <= 2
+	// Only spoons, pinches and whole pieces count by the piece; cups, cans,
+	// heads and other units have no kitchen-size rule.
+	if u == "tsp" || u == "tbsp" || u == "pinch" || wholePieces[u] {
+		return amount <= 2
+	}
+	return false
 }
 
 var smallSpoonRE = regexp.MustCompile(`(?i)^\s*(?:tsp|teaspoons?|tbsp|tablespoons?|tl\b|el\b|prise)`)

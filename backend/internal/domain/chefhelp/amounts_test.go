@@ -130,3 +130,24 @@ func TestAllowedNumbers_WentWrongIsACorrection(t *testing.T) {
 	assert.False(t, amountsListed("660 ml Coconut milk: stir in.", wrong, names...))
 	assert.True(t, amountsListed("A splash of coconut milk, 1 tsp sugar.", wrong, names...))
 }
+
+func TestSmallAmountUnits(t *testing.T) {
+	for _, c := range []struct {
+		amount float64
+		unit   string
+		want   bool
+	}{
+		{2, "cup", false},
+		{1, "can", false},
+		{2, "head", false},
+		{1, "tbsp", true},
+		{2, "cloves", true},
+		{1, "pinch", true},
+		{40, "g", false},
+		{20, "ml", true},
+	} {
+		if got := smallAmount(c.amount, c.unit); got != c.want {
+			t.Errorf("smallAmount(%v, %q) = %v, want %v", c.amount, c.unit, got, c.want)
+		}
+	}
+}
