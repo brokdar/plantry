@@ -111,3 +111,19 @@ func TestBuildVersion_NeverPanics(t *testing.T) {
 	v := airun.BuildVersion()
 	assert.LessOrEqual(t, len(v), 12+len("-dirty"))
 }
+
+// A run that ends in error is one error-level line, matchable to its row by
+// run_id and request_id; a good run stays info.
+func TestRecorder_FailedRunEndsAtErrorLevel(t *testing.T) {
+	for status, level := range map[airun.Status]string{airun.StatusError: "ERROR", airun.StatusOK: "INFO"} {
+		rec, logs := newRecorder(t, newMemStore())
+		ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChefFind})
+		run.Finish(ctx, status, "error.server")
+		end := findLog(logLines(t, logs.String()), "ai.run.end")
+		require.NotNil(t, end)
+		assert.Equal(t, level, end["level"], "status %s", status)
+		assert.Contains(t, end, "run_id")
+		assert.Contains(t, end, "request_id")
+		assert.Equal(t, string(airun.KindChefFind), end["kind"])
+	}
+}

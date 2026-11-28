@@ -142,6 +142,10 @@ func run() error {
 		return fmt.Errorf("seed fresh install: %w", err)
 	}
 
+	if err := logStartup(context.Background(), logger, conn, settingsSvc, time.Now()); err != nil {
+		return err
+	}
+
 	// External food providers.
 	// A nil interface (not a nil *off.Provider) so the resolver's nil checks
 	// skip OFF entirely.
