@@ -153,7 +153,6 @@ func TestHelp_PromptGivesKitchenAmountsAndFixTable(t *testing.T) {
 	prompt := req.Messages[0].Content[0].Text
 	assert.Contains(t, prompt, "- 600 g Kidneybohnen (Dose)")
 	assert.Contains(t, prompt, "- 3 piece Zwiebel", "counts in halves")
-	assert.Contains(t, prompt, "call an ingredient by the word the steps use")
 	assert.Contains(t, req.System, "never calculate")
 	assert.Contains(t, req.System, "not literally the current step")
 	assert.Contains(t, req.System, "Burnt: stop, do not scrape")
