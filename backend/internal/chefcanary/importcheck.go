@@ -171,6 +171,26 @@ func (c ImportCase) classify(changes []importer.Change, allowed []string) []Chan
 	return out
 }
 
+// legacyWrong is the first definition of a wrong fix (as at 73c4b8b1), kept so
+// earlier runs stay comparable: any applied change of a kind the set does not
+// allow, or any edit of the planted line, in a planted case.
+func (c ImportCase) legacyWrong(changes []importer.Change, allowed []string) bool {
+	if c.Planted == nil {
+		return false
+	}
+	for _, ch := range changes {
+		if !slices.Contains(allowed, ch.Kind) {
+			return true
+		}
+		for _, e := range ch.Edits {
+			if e.Field == importer.FieldIngredient && e.Index == c.Expect.Ingredient && !c.Expect.Recipe {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func countVerdict(recs []ChangeRecord, verdict string) int {
 	return len(slices.DeleteFunc(slices.Clone(recs), func(r ChangeRecord) bool { return r.Verdict != verdict }))
 }
@@ -217,7 +237,7 @@ func RunImportCheck(ctx context.Context, cfg ImportCheckConfig) (ModeReport, err
 
 	cases := ImportCases(cfg.Set)
 	rep := ModeReport{Mode: "importcheck", Cases: len(cases)}
-	var planted, detected, wrongFix, notRun, clean, cleanChanged, cleanFlagged, fixed, toJudge, ran int
+	var planted, detected, wrongFix, legacyWrongFix, notRun, clean, cleanChanged, cleanFlagged, fixed, toJudge, ran int
 	for _, c := range cases {
 		if l.capReached() {
 			rep.StoppedBySpendCap = true
@@ -253,6 +273,9 @@ func RunImportCheck(ctx context.Context, cfg ImportCheckConfig) (ModeReport, err
 		if wrong > 0 {
 			wrongFix++
 		}
+		if c.legacyWrong(chk.Changes, cfg.Set.AllowedChanges) {
+			legacyWrongFix++
+		}
 		if c.Planted != nil {
 			planted++
 			res.OK = c.found(chk.Flags)
@@ -282,6 +305,7 @@ func RunImportCheck(ctx context.Context, cfg ImportCheckConfig) (ModeReport, err
 
 	rep.add(Metric{Name: "detection_rate", Value: pct(detected, planted), Unit: "%", Note: fmt.Sprintf("%d/%d planted errors", detected, planted)}.target(">= 80 %", true, 80))
 	rep.add(Metric{Name: "wrong_fix_rate", Value: pct(wrongFix, ran), Unit: "%", Note: fmt.Sprintf("%d/%d checked recipes with a wrong change (an ingredient line changed other than back to the original); judged-wrong designed changes add to it", wrongFix, ran)}.target("<= 5 %", false, 5))
+	rep.add(Metric{Name: "wrong_fix_rate.legacy", Value: pct(legacyWrongFix, planted), Unit: "%", Note: fmt.Sprintf("%d/%d planted recipes with any change of a kind the set does not allow or any edit of the planted line (the first definition, for comparing earlier runs)", legacyWrongFix, planted)})
 	rep.add(Metric{Name: "planted_fixed_correctly", Value: float64(fixed), Note: fmt.Sprintf("of %d planted: the planted line was put back to its original", planted)})
 	rep.add(Metric{Name: "changes_to_judge", Value: float64(toJudge), Note: "clarity, safety cue and other designed changes, in " + judgeFileName})
 	byGroup(&rep, "detection_rate.kind.", func(c CaseResult) string {

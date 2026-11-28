@@ -46,11 +46,11 @@ var (
 	inchGingerRE = regexp.MustCompile(`(?i)^(\d+(?:\.\d+)?)[-\s]*inch(?:\s+piece)?(?:\s+of)?\s+((?:fresh\s+)?ginger\b.*)$`)
 	residueRE    = regexp.MustCompile(`^[\s)(*\-–,;]+|[\s)(*\-–,;]+$`)
 	// rangeToRE is a range written with a word: "3½ to 4 lbs.", "2 bis 3 EL".
-	rangeToRE = regexp.MustCompile(`(?i)\b(\d+(?:[.,]\d+)?[½¼¾⅓⅔⅛]?)\s+(?:to|bis)\s+(\d+(?:[.,]\d+)?[½¼¾⅓⅔⅛]?)\b`)
+	rangeToRE = regexp.MustCompile(`(?i)\b(\d+(?:[.,]\d+)?[½¼¾⅓⅔⅛]?)\s+(?:to|bis)\s+(\d+(?:[.,]\d+)?(?:[½¼¾⅓⅔⅛]|\b))`)
 	// ozGramsRE is a weight stated in ounces and grams: "(5 oz, 140 g)"; the grams win.
 	ozGramsRE = regexp.MustCompile(`(?i)\(\s*\d+(?:[.,]\d+)?\s*oz\.?\s*,\s*(\d+(?:[.,]\d+)?\s*g)\s*\)`)
 	// gingerCmRE is fresh ginger counted as a piece and measured in cm: "1 Stück frischer Ingwer (ca. 2 cm)".
-	gingerCmRE = regexp.MustCompile(`(?i)^(?:\d+\s+)?(?:stück|stücke|stk\.?|piece|pieces)\s+((?:frische[rn]?\s+)?(?:ingwer|ginger)\b[^(]*?)\s*\(\s*(?:ca\.?|etwa|about)?\s*(\d+(?:[.,]\d+)?)\s*cm\s*\)$`)
+	gingerCmRE = regexp.MustCompile(`(?i)^(?:(\d+)\s+)?(?:stück|stücke|stk\.?|piece|pieces)\s+((?:frische[rn]?\s+)?(?:ingwer|ginger)\b[^(]*?)\s*\(\s*(?:ca\.?|etwa|about)?\s*(\d+(?:[.,]\d+)?)\s*cm\s*\)$`)
 	// jeListRE is a German "je N a, b X" line: N of each of the listed kinds.
 	jeListRE    = regexp.MustCompile(`(?i)^je\s+(\d+(?:[.,]\d+)?)\s+(\S.*)$`)
 	listSplitRE = regexp.MustCompile(`(?i)\s*(?:,|\sund\s|\soder\s)\s*`)
@@ -88,8 +88,12 @@ func prepareLine(raw string) string {
 		s = strconv.FormatFloat(math.Round(in*gramsPerInchGinger), 'f', -1, 64) + " g " + m[2]
 	}
 	if m := gingerCmRE.FindStringSubmatch(s); m != nil {
-		cm, _ := strconv.ParseFloat(strings.ReplaceAll(m[2], ",", "."), 64)
-		s = strconv.FormatFloat(math.Round(cm/2.54*gramsPerInchGinger), 'f', -1, 64) + " g " + m[1]
+		cm, _ := strconv.ParseFloat(strings.ReplaceAll(m[3], ",", "."), 64)
+		n := 1.0
+		if m[1] != "" {
+			n, _ = strconv.ParseFloat(m[1], 64)
+		}
+		s = strconv.FormatFloat(math.Round(n*cm/2.54*gramsPerInchGinger), 'f', -1, 64) + " g " + m[2]
 	}
 	s = ozGramsRE.ReplaceAllString(s, "($1)")
 	s = rangeToRE.ReplaceAllStringFunc(s, func(m string) string {

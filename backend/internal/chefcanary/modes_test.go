@@ -118,6 +118,7 @@ func TestRunImportCheck_ReportsDetectionWrongFixesAndCleanChanges(t *testing.T) 
 	assert.InDelta(t, 50, metric(t, rep, "detection_rate").Value, 0.01)
 	assert.False(t, *metric(t, rep, "detection_rate").Met)
 	assert.Zero(t, metric(t, rep, "wrong_fix_rate").Value, "a role change is a designed change to judge, not a wrong fix")
+	assert.InDelta(t, 100, metric(t, rep, "wrong_fix_rate.legacy").Value, 0.01, "legacy: the role change is outside the allowed kinds, in both planted cases")
 	assert.Equal(t, 5.0, metric(t, rep, "changes_to_judge").Value)
 	assert.Contains(t, rep.Artifacts["importcheck-changes.md"], "a-x10: role")
 	assert.Equal(t, 3.0, metric(t, rep, "clean_recipes_changed").Value)
@@ -146,6 +147,7 @@ func TestRunImportCheck_RestoringThePlantedLineIsACorrectFix(t *testing.T) {
 	rep, err := chefcanary.RunImportCheck(context.Background(), chefcanary.ImportCheckConfig{Env: e, Set: unitSet()})
 	require.NoError(t, err)
 	assert.Equal(t, 1.0, metric(t, rep, "planted_fixed_correctly").Value)
+	assert.InDelta(t, 100, metric(t, rep, "wrong_fix_rate.legacy").Value, 0.01, "legacy: any edit of the planted line counts, also the restoring one")
 	assert.InDelta(t, 100.0/3, metric(t, rep, "wrong_fix_rate").Value, 0.01, "only the clean ml line changed wrongly (1 of 3 recipes)")
 	byID := map[string]chefcanary.CaseResult{}
 	for _, r := range rep.Results {
