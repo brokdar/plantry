@@ -108,6 +108,17 @@ docker compose cp plantry:/data/backup ./backup     # take it off the volume
 
 To restore: stop Plantry, put the backup file at `/data/plantry.db` and its `secret.key` at `/data/secret.key` (remove any `plantry.db-wal` and `plantry.db-shm` next to the old database), then start Plantry. Pending migrations run on start, so a backup from an older version restores into a newer one.
 
+### Getting a report from the server
+
+`plantry report` summarises how Plantry ran over the last 30 days (`-days N` changes it) as Markdown: AI runs by kind with errors, durations and cost, Chef spend against the monthly cap, how help answers, finds, tips and import checks ended, planning violations, ratings and a short "Problems" list. It opens the database read-only, so it is safe while the server runs, and it holds counts, rates, durations and dish names only: no API keys, prompts or text you typed. Nothing is sent anywhere; you hand the file over yourself.
+
+```bash
+docker compose exec plantry plantry report -out /data/report.md
+docker compose cp plantry:/data/report.md ./report.md
+```
+
+The target file must not exist yet. When the report is not enough, `plantry backup` (above) carries the data itself.
+
 ---
 
 ## Development
