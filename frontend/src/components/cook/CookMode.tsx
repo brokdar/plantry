@@ -39,8 +39,10 @@ export interface CookModeProps {
   onPortionsChange: (portions: number) => void
   /** Session mode: "Covers Sun dinner, Mon lunch · 2 spare". */
   coverage?: string
-  /** Session mode: the "I don't have an ingredient" entry. */
-  help?: ReactNode
+  /** Session mode: the "I don't have an ingredient" entry, a node under the
+   *  ingredients; or, with the Chef on, the Help button as a function of the
+   *  step on screen, shown above both panels so it is always in reach. */
+  help?: ReactNode | ((step: number) => ReactNode)
   /** Session mode: portions to freeze, reminded on the last step. */
   freezePortions?: number
   /** The way out, e.g. a link back to Today or the recipe. */
@@ -80,6 +82,7 @@ export function CookMode({
   const { t, i18n } = useTranslation()
   const [tab, setTab] = useState("ingredients")
   const [timers, setTimers] = useState<RunningTimer[]>([])
+  const [step, setStep] = useState(0)
   useWakeLock()
 
   // Leaving drops the timers, so ask first while one still runs; Done
@@ -210,6 +213,7 @@ export function CookMode({
             {t("cook.tabs.steps")}
           </TabsPrimitive.Trigger>
         </TabsPrimitive.List>
+        {typeof help === "function" && help(step)}
         <div className="flex flex-1 flex-col md:grid md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-12">
           <TabsPrimitive.Content
             value="ingredients"
@@ -220,7 +224,7 @@ export function CookMode({
               {t("cook.tabs.ingredients")}
             </h2>
             <ScaledIngredients ingredients={ingredients} />
-            {help}
+            {typeof help !== "function" && help}
             {garnishes && garnishes.length > 0 && (
               <section
                 className="flex flex-col gap-2"
@@ -247,6 +251,7 @@ export function CookMode({
             </h2>
             <StepPager
               steps={steps}
+              onStepChange={setStep}
               onStartTimer={startTimer}
               finish={finish}
               lastStepNote={
