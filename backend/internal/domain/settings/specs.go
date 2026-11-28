@@ -199,6 +199,12 @@ var registry = []Spec{
 		},
 	},
 	{
+		// LIB-1: opt-in monthly library review card on Recipes.
+		Key:     KeyChefLibraryReview,
+		Kind:    KindBool,
+		Default: "false",
+	},
+	{
 		// FIND-7: the sites finds search.
 		Key:     KeyChefSites,
 		Kind:    KindString,

@@ -130,6 +130,15 @@ func (q *Queries) DecideFind(ctx context.Context, arg DecideFindParams) (RecipeS
 	return i, err
 }
 
+const deleteSearchBlock = `-- name: DeleteSearchBlock :exec
+DELETE FROM find_search_blocks WHERE domain = ?1
+`
+
+func (q *Queries) DeleteSearchBlock(ctx context.Context, domain string) error {
+	_, err := q.db.ExecContext(ctx, deleteSearchBlock, domain)
+	return err
+}
+
 const finishFind = `-- name: FinishFind :one
 UPDATE recipe_suggestions SET
     state = ?1, source_url = ?2, draft_json = ?3,
@@ -386,6 +395,33 @@ func (q *Queries) ListSearchBlocked(ctx context.Context, now string) ([]string, 
 			return nil, err
 		}
 		items = append(items, domain)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSearchBlocks = `-- name: ListSearchBlocks :many
+SELECT domain, blocked_until FROM find_search_blocks WHERE blocked_until > ?1 ORDER BY domain
+`
+
+func (q *Queries) ListSearchBlocks(ctx context.Context, now string) ([]FindSearchBlock, error) {
+	rows, err := q.db.QueryContext(ctx, listSearchBlocks, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FindSearchBlock{}
+	for rows.Next() {
+		var i FindSearchBlock
+		if err := rows.Scan(&i.Domain, &i.BlockedUntil); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

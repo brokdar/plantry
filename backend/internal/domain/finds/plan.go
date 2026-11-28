@@ -45,10 +45,33 @@ type Library interface {
 	HasPortion(ctx context.Context, foodID int64, unit string) (bool, error)
 }
 
+// QueuedGap is a library gap the assistant fills itself (LIB-3): Dish is the
+// find query, FindID the find started for it (0: not started), Offered
+// whether this planning session took a gap already.
+type QueuedGap struct {
+	Kind    string
+	Dish    string
+	FindID  int64
+	Offered bool
+}
+
+// GapQueue is the gaps the library review queued for planning (FIND-1b).
+type GapQueue interface {
+	Gaps(ctx context.Context) ([]QueuedGap, error)
+	StartGap(ctx context.Context, kind string, findID int64) error
+	// FreeGap lets a gap whose find failed be tried again in a later session.
+	FreeGap(ctx context.Context, kind string) error
+	DeleteGap(ctx context.Context, kind string) error
+	// NewGapSession opens a planning session for gaps: one may start again.
+	NewGapSession(ctx context.Context) error
+}
+
 // Planning is what the planning side of finds reads (C3).
 type Planning struct {
 	Library Library
-	ChefOn  func(ctx context.Context) (bool, error)
+	// Gaps is optional: without it no gap is queued work.
+	Gaps   GapQueue
+	ChefOn func(ctx context.Context) (bool, error)
 	// NewDishes is the window's new-dish count (chef.new_dishes_per_week).
 	NewDishes func(ctx context.Context) (int, error)
 	// Cuisines are the household's cuisines for planning finds, best first
@@ -71,6 +94,17 @@ func (s *Service) Touch(ctx context.Context) error {
 	on, err := s.chefOn(ctx)
 	if err != nil || !on {
 		return err
+	}
+	if g := s.d.Planning.Gaps; g != nil {
+		open, err := s.InSession(ctx)
+		if err != nil {
+			return err
+		}
+		if !open {
+			if err := g.NewGapSession(ctx); err != nil {
+				return err
+			}
+		}
 	}
 	return s.d.Store.TouchSession(ctx, s.d.Planning.Now().Add(SessionLength))
 }
@@ -113,6 +147,9 @@ func (s *Service) Prefetch(ctx context.Context, windowStart time.Time) error {
 	if open, err := s.InSession(ctx); err != nil || !open {
 		return err
 	}
+	if err := s.fillGap(ctx); err != nil {
+		return err
+	}
 	want, err := s.d.Planning.NewDishes(ctx)
 	if err != nil {
 		return err
@@ -143,6 +180,55 @@ func (s *Service) Prefetch(ctx context.Context, windowStart time.Time) error {
 		return nil
 	}
 	return s.request(ctx, planningDishes(cuisines, want-have, windowStart, wantsMeatFree(h)))
+}
+
+// fillGap starts the find for the oldest queued library gap (LIB-3, FIND-1b),
+// at most one per planning session. A gap whose find went ready is done and
+// leaves the queue; one whose find failed or is gone is tried again in a
+// later session.
+func (s *Service) fillGap(ctx context.Context) error {
+	q := s.d.Planning.Gaps
+	if q == nil {
+		return nil
+	}
+	gaps, err := q.Gaps(ctx)
+	if err != nil {
+		return err
+	}
+	var next *QueuedGap
+	offered := false
+	for i, g := range gaps {
+		offered = offered || g.Offered
+		if g.FindID == 0 {
+			if next == nil {
+				next = &gaps[i]
+			}
+			continue
+		}
+		f, err := s.d.Store.Get(ctx, g.FindID)
+		switch {
+		case errors.Is(err, domain.ErrNotFound) || (err == nil && (f.State == StateFailed || f.State == StateDiscarded)):
+			if err = q.FreeGap(ctx, g.Kind); err == nil && next == nil {
+				next = &gaps[i]
+			}
+		case err == nil && f.State != StateSearching:
+			err = q.DeleteGap(ctx, g.Kind)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if offered || next == nil {
+		return nil
+	}
+	f, err := s.Request(ctx, next.Dish, TriggerPlanning)
+	if errors.Is(err, llm.ErrProviderMissing) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return q.StartGap(ctx, next.Kind, f.ID)
 }
 
 // openFitting counts the searching planning finds and the ready finds that

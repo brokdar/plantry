@@ -38,3 +38,55 @@ export function startLibraryLabelling(): Promise<{ jobs: number }> {
 export function fillLibrary(): Promise<{ items: { id: number }[] }> {
   return apiFetch("/chef/fill-library", { method: "POST" })
 }
+
+/** One recipe site the finds search (FIND-7). */
+export interface ChefSite {
+  domain: string
+  lang: "en" | "de"
+  enabled: boolean
+  /** A built-in site: it can be disabled, not removed. */
+  default: boolean
+  /** The search provider refuses the site until then (ISO time); null
+   *  otherwise. */
+  blocked_until: string | null
+}
+
+/** GET /api/chef/sites. */
+export function listChefSites(): Promise<{ items: ChefSite[] }> {
+  return apiFetch("/chef/sites")
+}
+
+/** POST /api/chef/sites: adds a site, enabled; the domain is normalised. */
+export function addChefSite(input: {
+  domain: string
+  lang: "en" | "de"
+}): Promise<{ items: ChefSite[] }> {
+  return apiFetch("/chef/sites", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+const sitePath = (domain: string) => `/chef/sites/${encodeURIComponent(domain)}`
+
+/** PUT /api/chef/sites/{domain}: switches a site on or off. */
+export function setChefSiteEnabled(
+  domain: string,
+  enabled: boolean
+): Promise<{ items: ChefSite[] }> {
+  return apiFetch(sitePath(domain), {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  })
+}
+
+/** DELETE /api/chef/sites/{domain}: a site the user added (409 for a
+ *  default one). */
+export function removeChefSite(domain: string): Promise<{ items: ChefSite[] }> {
+  return apiFetch(sitePath(domain), { method: "DELETE" })
+}
+
+/** POST /api/chef/sites/{domain}/retry: clears the search block. */
+export function retryChefSite(domain: string): Promise<{ items: ChefSite[] }> {
+  return apiFetch(`${sitePath(domain)}/retry`, { method: "POST" })
+}

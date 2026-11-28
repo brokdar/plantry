@@ -1,11 +1,17 @@
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 
 import {
+  addChefSite,
   fillLibrary,
   getChefSpend,
   getLabellingEstimate,
+  listChefSites,
+  removeChefSite,
+  retryChefSite,
+  setChefSiteEnabled,
   startLibraryLabelling,
+  type ChefSite,
 } from "@/lib/api/chef"
 import { toast, toastError } from "@/lib/toast"
 
@@ -46,4 +52,44 @@ export function useFillLibrary() {
     onSuccess: () => toast(t("recipes.fill.started")),
     onError: (err) => toastError(err, t),
   })
+}
+
+/** The recipe sites finds search (FIND-7). */
+export function useChefSites() {
+  return useQuery({
+    queryKey: chefKeys.sites(),
+    queryFn: async () => (await listChefSites()).items,
+  })
+}
+
+/** Site mutations: each answers with the whole list, which replaces the
+ *  cached one. */
+export function useChefSiteActions() {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  const options = {
+    onSuccess: (r: { items: ChefSite[] }) =>
+      qc.setQueryData(chefKeys.sites(), r.items),
+    onError: (err: unknown) => toastError(err, t),
+  }
+  return {
+    add: useMutation({
+      mutationFn: (input: { domain: string; lang: "en" | "de" }) =>
+        addChefSite(input),
+      ...options,
+    }),
+    toggle: useMutation({
+      mutationFn: ({ domain, enabled }: { domain: string; enabled: boolean }) =>
+        setChefSiteEnabled(domain, enabled),
+      ...options,
+    }),
+    remove: useMutation({
+      mutationFn: (domain: string) => removeChefSite(domain),
+      ...options,
+    }),
+    retry: useMutation({
+      mutationFn: (domain: string) => retryChefSite(domain),
+      ...options,
+    }),
+  }
 }

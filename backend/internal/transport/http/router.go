@@ -31,6 +31,8 @@ type Handlers struct {
 	Taste         *handlers.TasteHandler
 	Themes        *handlers.ThemeHandler
 	Finds         *handlers.FindsHandler
+	Sites         *handlers.SitesHandler
+	LibraryReview *handlers.LibraryReviewHandler
 	ChefPlan      *handlers.ChefPlanHandler
 	NotForMe      *handlers.NotForMeHandler
 	Presets       *handlers.PresetHandler
@@ -243,6 +245,18 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			api.Post("/chef/fill-library", h.Finds.FillLibrary)
 			api.Post("/finds/{id}/keep", h.Finds.Keep)
 			api.Post("/finds/{id}/discard", h.Finds.Discard)
+		}
+		if h.Sites != nil {
+			api.Get("/chef/sites", h.Sites.List)
+			api.Post("/chef/sites", h.Sites.Add)
+			api.Put("/chef/sites/{domain}", h.Sites.SetEnabled)
+			api.Delete("/chef/sites/{domain}", h.Sites.Remove)
+			api.Post("/chef/sites/{domain}/retry", h.Sites.Retry)
+		}
+		if h.LibraryReview != nil {
+			api.Get("/library-review", h.LibraryReview.Get)
+			api.Post("/library-review/dismiss", h.LibraryReview.Dismiss)
+			api.Post("/library-review/variants", h.LibraryReview.MakeVariants)
 		}
 		if h.Themes != nil {
 			api.Route("/windows/{start}/themes", func(r chi.Router) {

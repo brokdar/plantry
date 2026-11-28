@@ -114,3 +114,9 @@ ON CONFLICT (domain) DO UPDATE SET blocked_until = excluded.blocked_until;
 
 -- name: ListSearchBlocked :many
 SELECT domain FROM find_search_blocks WHERE blocked_until > sqlc.arg(now);
+
+-- name: ListSearchBlocks :many
+SELECT domain, blocked_until FROM find_search_blocks WHERE blocked_until > sqlc.arg(now) ORDER BY domain;
+
+-- name: DeleteSearchBlock :exec
+DELETE FROM find_search_blocks WHERE domain = sqlc.arg(domain);

@@ -12,6 +12,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/libreview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
@@ -21,6 +22,7 @@ import (
 type sessionRig struct {
 	svc      *finds.Service
 	store    *sqlite.FindRepo
+	gaps     *sqlite.LibraryReviewRepo
 	now      time.Time
 	cuisines []string
 	house    finds.Household
@@ -29,7 +31,8 @@ type sessionRig struct {
 
 func newSessionRig(t *testing.T, chefOn bool, newDishes int) *sessionRig {
 	t.Helper()
-	r := &sessionRig{store: sqlite.NewFindRepo(testhelper.NewTestDB(t)), now: time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC), cuisines: []string{"thai"}}
+	db := testhelper.NewTestDB(t)
+	r := &sessionRig{store: sqlite.NewFindRepo(db), gaps: sqlite.NewLibraryReviewRepo(db), now: time.Date(2026, 11, 2, 18, 0, 0, 0, time.UTC), cuisines: []string{"thai"}}
 	r.house = finds.Household{Kitchen: profile.Kitchen{MinutesWeekday: 30, MinutesWeekend: 60}}
 	r.svc = finds.NewService(finds.Deps{
 		Store: r.store,
@@ -44,6 +47,7 @@ func newSessionRig(t *testing.T, chefOn bool, newDishes int) *sessionRig {
 			return r.house, nil
 		},
 		Planning: finds.Planning{
+			Gaps:      r.gaps,
 			ChefOn:    func(context.Context) (bool, error) { return chefOn, nil },
 			NewDishes: func(context.Context) (int, error) { return newDishes, nil },
 			Cuisines:  func(context.Context) ([]string, error) { return r.cuisines, nil },
@@ -216,4 +220,59 @@ func TestThemeSet_DishesVaryByWeek(t *testing.T) {
 	require.NoError(t, r.svc.ThemeSet(context.Background(), "japanese", 1))
 	require.Len(t, r.queued, 2)
 	assert.NotEqual(t, r.queued[0], r.queued[1])
+}
+
+// LIB-3, FIND-1b: a queued library gap starts one find at the next planning
+// session, never outside one and never a second in the same session; it
+// leaves the queue when its find succeeds and is tried again in a later
+// session when the find failed.
+func TestPrefetch_QueuedGapStartsOneFindPerSession(t *testing.T) {
+	ctx := context.Background()
+	r := newSessionRig(t, true, 0) // no new dishes: only gaps search
+	at := r.now.Add(-24 * time.Hour)
+	require.NoError(t, r.gaps.QueueGap(ctx, libreview.Gap{Kind: "quick_main", Dish: "a quick weeknight main"}, at))
+	require.NoError(t, r.gaps.QueueGap(ctx, libreview.Gap{Kind: "few_mains", Dish: "a family main"}, at.Add(time.Minute)))
+	queued := func() []finds.QueuedGap {
+		g, err := r.gaps.Gaps(ctx)
+		require.NoError(t, err)
+		return g
+	}
+
+	require.NoError(t, r.svc.Prefetch(ctx, nextWindow))
+	assert.Empty(t, r.queued, "no session, no search")
+
+	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))
+	assert.Equal(t, []string{"a quick weeknight main"}, r.queued, "the oldest gap, one find")
+	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))
+	r.now = r.now.Add(10 * time.Minute)
+	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))
+	assert.Len(t, r.queued, 1, "one gap per planning session while it searches")
+
+	first := queued()[0]
+	require.NotZero(t, first.FindID)
+	_, err := r.store.Finish(ctx, first.FindID, finds.Outcome{State: finds.StateReady})
+	require.NoError(t, err)
+	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))
+	assert.Len(t, r.queued, 1, "still the same session: the next gap waits")
+	require.Len(t, queued(), 1, "the filled gap left the queue")
+	assert.Equal(t, "few_mains", queued()[0].Kind)
+	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))
+	assert.Len(t, r.queued, 1, "a later call of the same session still starts nothing")
+
+	r.now = r.now.Add(finds.SessionLength + time.Minute) // the session closed
+	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))
+	assert.Equal(t, []string{"a quick weeknight main", "a family main"}, r.queued, "next session: the next gap")
+
+	second := queued()[0]
+	_, err = r.store.Finish(ctx, second.FindID, finds.Outcome{State: finds.StateFailed})
+	require.NoError(t, err)
+	r.now = r.now.Add(finds.SessionLength + time.Minute)
+	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))
+	assert.Equal(t, "a family main", r.queued[2], "a failed find is tried again in a later session")
+	assert.Len(t, queued(), 1)
+
+	off := newSessionRig(t, false, 0)
+	require.NoError(t, off.gaps.QueueGap(ctx, libreview.Gap{Kind: "quick_main", Dish: "x"}, at))
+	require.NoError(t, off.svc.Opened(ctx, nextWindow, true, true))
+	assert.Empty(t, off.queued, "the Chef off queues nothing")
 }

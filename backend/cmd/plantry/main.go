@@ -45,6 +45,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/kitchen"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/libreview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
@@ -553,8 +554,10 @@ func run() error {
 	// polite (robots, rate limit, backoff) and guarded like discovery.
 	houseCuisines := householdCuisines(profileSvc.Get, lovedCuisines(tasteSvc.View),
 		stapleCuisines(tasteSvc.Staples, foodAttributeRepo.Many, time.Now), settingsSvc.DiscoveryCuisines, foodAttributeRepo.LibraryCuisines)
+	findRepo := sqlite.NewFindRepo(conn)
+	reviewRepo := sqlite.NewLibraryReviewRepo(conn)
 	findSvc = finds.NewService(finds.Deps{
-		Store: sqlite.NewFindRepo(conn), LLM: llmResolver, Runs: runRecorder,
+		Store: findRepo, LLM: llmResolver, Runs: runRecorder,
 		Fetcher: httpfetch.NewPolite(httpfetch.New(httpfetch.WithDialGuard(nil, cfg.DevMode)),
 			httpfetch.WithAIGroupsExempt(aiGroupsExempt(settingsSvc.ChefSites))),
 		Extractor: importSvc, Matcher: matcher,
@@ -570,6 +573,7 @@ func run() error {
 				Foods: foodSvc, Catalogue: foodRepo, Origins: sqlite.NewFoodOriginRepo(conn),
 				Finalizer: importSvc, Plates: plateSvc,
 			}),
+			Gaps:   reviewRepo,
 			ChefOn: settingsSvc.ChefEnabled,
 			NewDishes: func(ctx context.Context) (int, error) {
 				return settingsdom.NewDishesPerWeek(ctx, settingsSvc)
@@ -668,6 +672,17 @@ func run() error {
 		Taste:        handlers.NewTasteHandler(tasteSvc).WithKitchen(kitchenSvc, foodSvc, profileSvc),
 		Themes:       handlers.NewThemeHandler(themeSvc),
 		Finds:        handlers.NewFindsHandler(findSvc, settingsSvc.ChefEnabled),
+		Sites:        handlers.NewSitesHandler(settingsSvc, findRepo),
+		LibraryReview: handlers.NewLibraryReviewHandler(libreview.NewService(libreview.Deps{
+			Store: reviewRepo, Tx: txRunner, Now: time.Now,
+			Enabled: func(ctx context.Context) (bool, error) {
+				on, err := settingsSvc.ChefEnabled(ctx)
+				if err != nil || !on {
+					return false, err
+				}
+				return settingsSvc.ChefLibraryReviewEnabled(ctx)
+			},
+		})),
 		ChefPlan: handlers.NewChefPlanHandler(handlers.ChefPlanDeps{
 			Finds: findSvc, ChefOn: settingsSvc.ChefEnabled, Plates: plateSvc,
 			ShoppingDay: func(ctx context.Context) (int, error) {

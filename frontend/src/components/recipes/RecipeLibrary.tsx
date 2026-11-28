@@ -42,6 +42,7 @@ import { RecipeCard } from "./RecipeCard"
 import { RecipeOnboarding } from "./RecipeOnboarding"
 import { RecipesHeader } from "./RecipesHeader"
 import { FillLibrary } from "./FillLibrary"
+import { LibraryReview } from "./LibraryReview"
 
 const PAGE_SIZE = 24
 const GRID = "grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4"
@@ -94,6 +95,12 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
       <NeedsCheckEntry />
 
       {chefOn && discover && <FillLibrary />}
+
+      <LibraryReview
+        enabled={
+          chefOn && settings?.["chef.library_review_enabled"]?.value === "true"
+        }
+      />
 
       {setup.data && (
         <RecipeOnboarding

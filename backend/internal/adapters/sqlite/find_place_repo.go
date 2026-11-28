@@ -111,3 +111,29 @@ func (r *FindRepo) SearchBlocked(ctx context.Context, now time.Time) ([]string, 
 	}
 	return out, nil
 }
+
+// SearchBlocks lists the domains the find search skips at now with the time
+// each is blocked until.
+func (r *FindRepo) SearchBlocks(ctx context.Context, now time.Time) (map[string]time.Time, error) {
+	rows, err := r.queriesFor(ctx).ListSearchBlocks(ctx, now.UTC().Format(time.RFC3339))
+	if err != nil {
+		return nil, fmt.Errorf("list search blocks: %w", err)
+	}
+	out := make(map[string]time.Time, len(rows))
+	for _, row := range rows {
+		until, err := time.Parse(time.RFC3339, row.BlockedUntil)
+		if err != nil {
+			return nil, fmt.Errorf("search block %s until %q: %w", row.Domain, row.BlockedUntil, err)
+		}
+		out[row.Domain] = until
+	}
+	return out, nil
+}
+
+// ClearSearchBlock lets the find search try the domain again.
+func (r *FindRepo) ClearSearchBlock(ctx context.Context, domain string) error {
+	if err := r.queriesFor(ctx).DeleteSearchBlock(ctx, domain); err != nil {
+		return fmt.Errorf("clear search block %s: %w", domain, err)
+	}
+	return nil
+}
