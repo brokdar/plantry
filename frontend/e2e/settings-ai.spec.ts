@@ -138,7 +138,7 @@ test.describe("AI settings", () => {
       const getModels = page.waitForResponse(
         (r) =>
           r.url().includes("/api/settings/ai/models") &&
-          r.request().method() === "GET" &&
+          r.request().method() === "POST" &&
           r.ok()
       )
       await page.getByTestId("ai-test-connection").click()
@@ -200,7 +200,7 @@ test.describe("AI settings", () => {
       // The API-key row shows a masked preview built from the saved value —
       // strong evidence that the encrypted round-trip succeeded.
       await expect(
-        page.getByText(new RegExp(`sk-\\*{4}${tag.slice(-4)}`))
+        page.getByText(new RegExp(`\\*{4}${tag.slice(-4)}`))
       ).toBeVisible()
     })
   })

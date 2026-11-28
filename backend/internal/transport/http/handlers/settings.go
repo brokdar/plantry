@@ -199,14 +199,24 @@ func writeKeyCheckError(ctx context.Context, provider string, w http.ResponseWri
 	}
 }
 
-// Models handles GET /api/settings/ai/models?provider=X.
-// Optional query param api_key overrides the stored/env key for this request
+// Models handles POST /api/settings/ai/models with a JSON body
+// {"provider": X, "api_key": Y}. The key travels in the body, never in the
+// URL, so a reverse proxy's access log cannot capture it.
+// Optional api_key overrides the stored/env key for this request
 // only — letting the UI validate a new key before saving it. For both real
 // providers the models call is the key check: it needs a valid key and costs
 // no tokens, so `validated` is true only when the provider accepted the key.
 func (h *SettingsHandler) Models(w http.ResponseWriter, r *http.Request) {
-	provider := strings.ToLower(r.URL.Query().Get("provider"))
-	apiKey := r.URL.Query().Get("api_key")
+	var req struct {
+		Provider string `json:"provider"`
+		APIKey   string `json:"api_key"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	provider := strings.ToLower(req.Provider)
+	apiKey := req.APIKey
 
 	if apiKey == "" {
 		cfg, err := h.svc.EffectiveAI(r.Context())

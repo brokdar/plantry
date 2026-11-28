@@ -4,7 +4,7 @@
 usage: slim_chat_start.py <rounds/<round>/start-chat.db> chat_start.db
 
 Keeps the plan, library, profile and settings; drops run data (ai_* tables,
-plate events and feedback) and the run ids that point at it, then VACUUMs.
+plate events and feedback) and the run ids that point at it, drops encrypted settings (API keys), then VACUUMs.
 """
 import shutil
 import sqlite3
@@ -19,6 +19,8 @@ for t in ["ai_messages", "ai_conversations", "ai_run_steps", "ai_runs", "ai_chan
     db.execute(f"delete from {t}")
 for t in ["plates", "cook_sessions"]:
     db.execute(f"update {t} set ai_run_id = NULL")
+# Never carry credentials into a tracked fixture (encrypted settings = API keys).
+db.execute("delete from app_settings where encrypted = 1")
 assert db.execute("pragma foreign_key_check").fetchall() == []
 db.commit()
 db.execute("vacuum")

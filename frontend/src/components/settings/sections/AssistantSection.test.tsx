@@ -133,7 +133,7 @@ describe("AssistantSection", () => {
           key: "ai.api_key",
           value: "",
           source: "db",
-          masked_preview: "sk-****abcd",
+          masked_preview: "****abcd",
         },
       ])
       const user = userEvent.setup()

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -26,7 +27,7 @@ func modelsRouter(t *testing.T, anthropicURL, openaiURL string) *chi.Mux {
 	h := handlers.NewSettingsHandler(svc, handlers.SystemInfo{}, nil)
 	h.SetProviderBaseURLs(anthropicURL, openaiURL)
 	r := chi.NewRouter()
-	r.Get("/ai/models", h.Models)
+	r.Post("/ai/models", h.Models)
 	return r
 }
 
@@ -44,8 +45,10 @@ func fakeProvider(t *testing.T, status int, body string, seenKey *string) *httpt
 }
 
 func getModels(r http.Handler, query string) *httptest.ResponseRecorder {
+	q, _ := url.ParseQuery(query)
+	body, _ := json.Marshal(map[string]string{"provider": q.Get("provider"), "api_key": q.Get("api_key")})
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ai/models?"+query, nil))
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/ai/models", bytes.NewReader(body)))
 	return w
 }
 
