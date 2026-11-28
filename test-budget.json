@@ -343,7 +343,7 @@
           "tests": 6
         },
         "internal/eval": {
-          "cpu_s": 29.7,
+          "cpu_s": 24.5,
           "tests": 14
         },
         "internal/testhelper": {
