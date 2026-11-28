@@ -1,5 +1,6 @@
 import type { AvailabilityMode } from "@/lib/api/availability"
 import type { Issue, Plan, PlanCell, PlanDay } from "@/lib/api/plan"
+import type { PrepAhead } from "@/lib/api/foods"
 import type {
   PlanSnapshot,
   PlanState,
@@ -52,6 +53,9 @@ export interface BoardCell {
    *  a plate. */
   state: PlanState | null
   badge: CellBadge | null
+  /** The cook cell of a recipe that needs a step before the day; null
+   *  otherwise. */
+  prepAhead: PrepAhead | null
   /** The main food's name; null without a plate. */
   mainName: string | null
   /** The main food's image path (thumbnail); null without one. */
@@ -264,6 +268,10 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
       plate,
       state: plate?.state ?? null,
       badge,
+      prepAhead:
+        badge?.variant === "cook"
+          ? (byId.get(badge.sessionId)?.session.prep_ahead ?? null)
+          : null,
       mainName: main?.food_name ?? null,
       mainImage: main?.image_path ?? null,
       sideText:

@@ -378,15 +378,10 @@ func run() error {
 			if on, err := settingsSvc.ChefEnabled(ctx); err != nil || !on {
 				return nil, err
 			}
-			out := make(map[int64]*food.Food, len(ids))
-			for _, id := range ids {
-				f, err := foodRepo.Get(ctx, id)
-				if err != nil {
-					return nil, err
-				}
-				out[id] = f
-			}
-			return out, nil
+			return loadRecipes(ctx, foodRepo, ids)
+		},
+		Steps: func(ctx context.Context, ids []int64) (map[int64]*food.Food, error) {
+			return loadRecipes(ctx, foodRepo, ids)
 		},
 		Tx: txRunner,
 	})
@@ -787,6 +782,22 @@ const discoveryShutdownWait = 10 * time.Second
 // strconvOrEmpty renders a non-negative int as its decimal form, returning
 // "" for zero. Used when building the env snapshot so that an unset env-var
 // (zero rate limit) is distinguishable from a configured one.
+// loadRecipes loads the full recipes (ingredients and steps) of ids, each once.
+func loadRecipes(ctx context.Context, repo *sqlite.FoodRepo, ids []int64) (map[int64]*food.Food, error) {
+	out := make(map[int64]*food.Food, len(ids))
+	for _, id := range ids {
+		if _, ok := out[id]; ok {
+			continue
+		}
+		f, err := repo.Get(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out[id] = f
+	}
+	return out, nil
+}
+
 func strconvOrEmpty(n int) string {
 	if n <= 0 {
 		return ""

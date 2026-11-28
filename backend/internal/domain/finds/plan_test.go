@@ -216,6 +216,20 @@ func TestPrefetch_DishesFollowTheHousehold(t *testing.T) {
 	assert.True(t, strings.HasPrefix(free.queued[0], "indian "))
 }
 
+// R5: the finds of a week theme ask for meat-free mains too when the meat-day
+// limit is tight (CP4b: a mostly vegetarian household got Gyudon and Miso
+// chicken for its Japanese week).
+func TestThemeSet_MeatFreeWhenTheMeatDayLimitIsTight(t *testing.T) {
+	r := newSessionRig(t, true, 1)
+	limit := 2
+	r.house.MeatDaysMax = &limit
+	require.NoError(t, r.svc.ThemeSet(context.Background(), "japanese", 2))
+	require.Len(t, r.queued, 2)
+	for _, d := range r.queued {
+		assert.Contains(t, d, " meat-free ", d)
+	}
+}
+
 // CP3b item 2: the finds of consecutive weeks look for different mains.
 func TestThemeSet_DishesVaryByWeek(t *testing.T) {
 	r := newSessionRig(t, true, 1)

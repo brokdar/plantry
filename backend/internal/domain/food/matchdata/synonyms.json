@@ -108,7 +108,7 @@
 {"id":"white_wine","group":"alcohol","state":"","en":["white wine","dry white wine"],"de":["weißwein","trockener weißwein"],"fdc":"white wine","density":0.99},
 {"id":"red_wine","group":"alcohol","state":"","en":["red wine","dry red wine"],"de":["rotwein","trockener rotwein"],"fdc":"alcoholic beverage wine table red","density":0.99},
 {"id":"sake","group":"alcohol","state":"","en":["sake","cooking sake","shaoxing wine","shaoxing rice wine","shaoxing cooking wine","chinese rice wine"],"de":["sake","reiswein"],"fdc":"sake","density":1.0},
-{"id":"mirin","group":"condiment","state":"","en":["mirin","sweet rice wine"],"de":["mirin","süßer reiswein"],"fdc":"alcoholic beverage rice sake","off":"mirin","density":1.2},
+{"id":"mirin","group":"condiment","state":"","en":["mirin","sweet rice wine"],"de":["mirin","süßer reiswein"],"fdc":"alcoholic beverage wine dessert sweet","off":"mirin","density":1.2},
 {"id":"dashi","group":"broth","state":"","en":["dashi","dashi stock","dashi broth","japanese soup stock"],"de":["dashi","dashi-brühe","dashibrühe"],"fdc":"soup stock fish home-prepared","density":1.0},
 {"id":"nori","group":"veg","state":"","en":["nori","nori sheets","nori sheet","roasted seaweed","sushi nori"],"de":["nori","noriblätter","nori-blätter","algenblätter"],"fdc":"seaweed laver raw","piece_g":2.6},
 {"id":"kombu","group":"veg","state":"","en":["kombu","kelp","dried kelp"],"de":["kombu","seetang"],"fdc":"seaweed kelp raw","piece_g":5},

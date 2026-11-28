@@ -10,6 +10,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 )
@@ -232,4 +233,33 @@ func TestReadModels_ReadInOneTx(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, f.tx.calls, "Today")
 	assert.Zero(t, f.readsOutsideTx)
+}
+
+// R5: the plan carries the prep-ahead mark of a session's recipe, Chef on or
+// off, so the board can show "start the day before".
+func TestPlan_PrepAheadMarksSessions(t *testing.T) {
+	f := newFixture()
+	sid := f.ac1()
+	f.store.foods[chiliID].Instructions = []food.Instruction{{Text: "Marinate the beans overnight."}}
+	steps := func(_ context.Context, ids []int64) (map[int64]*food.Food, error) {
+		out := map[int64]*food.Food{}
+		for _, id := range ids {
+			out[id] = f.foods[id]
+		}
+		return out, nil
+	}
+	start := date("2026-10-31")
+
+	svc := NewService(Deps{
+		Plates: f.store, Sessions: f.store, Foods: f.store, Nutrition: f.store,
+		Availability: f.store, Slots: f.store, Settings: f.settings, Profile: f.profile, Recipes: f.store, Tx: f.tx,
+		Runs: f.store, Diets: f.diets, Progress: f.progress, Light: lightStore{f.store}, Steps: steps,
+	})
+	p, err := svc.Plan(ctx, &start, date("2026-11-04"))
+	require.NoError(t, err)
+	assert.Equal(t, map[int64]*PrepAhead{sid: {Kind: ReminderMarinate}}, p.PrepAhead)
+
+	p, err = f.service().Plan(ctx, &start, date("2026-11-04"))
+	require.NoError(t, err)
+	assert.Nil(t, p.PrepAhead, "without the dependency there is no mark")
 }

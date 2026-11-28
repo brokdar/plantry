@@ -663,9 +663,12 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 		}
 		// Unknown minutes (0) never pass max_minutes, as in find_foods.
 		if !f.Composed() || req.Constraints.MaxMinutes <= 0 || (f.Minutes > 0 && f.Minutes <= req.Constraints.MaxMinutes) {
-			out = append(out, altCand{food: f, comp: comp})
+			// GATE-2: a fresh cook over the cell's time allowance is no choice.
+			if !s.slotBlocked(f, p.Cell(), s.householdPlates(f)) {
+				out = append(out, altCand{food: f, comp: comp})
+			}
 			if f.Composed() {
-				if k, ok := s.cookAtCell(x, p, id); ok {
+				if k, ok := s.cookAtCell(x, p, id); ok && !s.slotBlocked(f, k, s.householdPlates(f)) {
 					out = append(out, altCand{food: f, cookAt: &k, comp: comp})
 				}
 			}

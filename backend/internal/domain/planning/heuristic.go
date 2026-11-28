@@ -771,7 +771,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		}
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
 			b2f(h.s.tooSlow(f, c)), b2f(h.overAllowance(f, c)), b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.usedDish[h.s.dish(f.ID)]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(!f.NutritionComplete), b2f(f.Role != food.RoleMain),
-			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), themeKey, b2f(!f.Staple), float64(overMonotony(f, expo)), -tasteKey(f), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
+			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), themeKey, b2f(!f.Staple), float64(overMonotony(f, expo)), dge.overFish(f), -tasteKey(f), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
 	return best(cands)
@@ -866,6 +866,7 @@ type dgeState struct {
 	needFish, needLegume bool
 	meatG                float64
 	limitG               float64
+	fishMeals            int
 }
 
 // dgeState counts what the fixed plates and the recipes cooked so far hold:
@@ -877,7 +878,10 @@ func (h *planner) dgeState() dgeState {
 	d := dgeState{needFish: t == "" || diet.Compatible(diet.Pescetarian, t), needLegume: true, limitG: h.meatLimitG}
 	// note takes the groups of one portion eaten (g) and the portions of
 	// meat that count against the week.
-	note := func(g FoodGroups, meatPortions float64) {
+	note := func(g FoodGroups, meatPortions float64, meals int) {
+		if g.FishG >= minMealG {
+			d.fishMeals += meals
+		}
 		d.needFish = d.needFish && g.FishG < minMealG
 		d.needLegume = d.needLegume && g.LegumeG < minMealG
 		d.meatG += g.MeatG * meatPortions
@@ -890,17 +894,24 @@ func (h *planner) dgeState() dgeState {
 		for _, c := range p.Components {
 			pg = pg.add(h.s.Foods[c.FoodID].Groups.times(c.Multiplier()))
 		}
-		note(pg, 1)
+		note(pg, 1, 1)
 	}
 	for _, id := range slices.Sorted(maps.Keys(h.used)) { // sorted: float sums are order-dependent
 		f := h.s.Foods[id]
-		note(f.Groups, float64(h.used[id])*f.ReferencePortions)
+		note(f.Groups, float64(h.used[id])*f.ReferencePortions, h.used[id]*max(1, h.s.householdPlates(f)))
 	}
 	return d
 }
 
 // fish is 0 for a fish main (a fish meal, see minMealG) while the week has none (1 otherwise).
 func (d dgeState) fish(f FoodFacts) float64 { return b2f(!(d.needFish && f.Groups.FishG >= minMealG)) }
+
+// overFish is 1 for a fish main once the week holds DGEFishMaxMeals fish meals
+// (a batch counts as the meals it feeds): soft, so a library of fish mains
+// only still plans.
+func (d dgeState) overFish(f FoodFacts) float64 {
+	return b2f(f.Groups.FishG >= minMealG && d.fishMeals >= DGEFishMaxMeals)
+}
 
 // legume is 0 for a legume main while the week has none.
 func (d dgeState) legume(f FoodFacts) float64 {

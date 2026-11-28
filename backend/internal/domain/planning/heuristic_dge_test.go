@@ -1,9 +1,11 @@
 package planning_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
@@ -74,4 +76,45 @@ func TestHeuristic_DGETieBreak(t *testing.T) {
 		p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
 		assert.False(t, cooked(p, meaty))
 	})
+}
+
+// A fish main past two fish meals in the week comes last (R5: the CP4b
+// explorer week held three fish meals).
+func TestHeuristic_FishMealsPastTwoRankLast(t *testing.T) {
+	s := batchCooker()
+	s.Settings.BatchCooking = false
+	for id := int64(101); id <= 110; id++ { // none eaten lately
+		f := s.Foods[id]
+		f.LastEaten = nil
+		s.Foods[id] = f
+	}
+	for id := int64(104); id <= 108; id++ {
+		withGroups(s, id, planning.FoodGroups{FishG: 120})
+		f := s.Foods[id]
+		f.Favorite = true // favorites rank above the DGE keys: only the cap holds the fish back
+		s.Foods[id] = f
+	}
+	p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+	fish := 0
+	for _, ss := range p.Sessions {
+		if s.Foods[ss.FoodID].Groups.FishG >= 50 {
+			fish++
+		}
+	}
+	assert.Equal(t, 2, fish, "the favorite fish mains fill two meals")
+}
+
+func TestEvaluate_FishAboveTwoMealsIsASoftIssue(t *testing.T) {
+	s := batchCooker()
+	s.Profile.KcalTarget = f64(1800)
+	for id := int64(101); id <= 110; id++ {
+		withGroups(s, id, planning.FoodGroups{FishG: 120})
+	}
+	target := windowTarget(s)
+	p := choose(t, planning.ChooseInput{State: s, Target: target})
+	ev := planning.Evaluate(planning.Merge(s, target, p), target)
+	require.NotNil(t, ev.Week)
+	has := slices.ContainsFunc(ev.Issues, func(is planning.Issue) bool { return is.Code == planning.CodeWeekFishAboveDGE })
+	assert.Equal(t, ev.Week.FishMeals > 2, has)
+	assert.Greater(t, ev.Week.FishMeals, 2, "a fish-only library goes past two")
 }

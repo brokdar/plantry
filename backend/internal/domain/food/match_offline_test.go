@@ -58,14 +58,16 @@ func TestMatch_OfflineCatalogueWithoutFDCKey(t *testing.T) {
 		{"de", food.MatchLine{Name: "Knollensellerie", Amount: 300, Unit: "g"}, 170400, ""},
 		{"de", food.MatchLine{Name: "Kurkumapulver", Amount: 1, Unit: "TL"}, 172231, ""},
 		// R4-fixes: lines the CP3 verdict left unmatched. Mirin and adobo
-		// seasoning have no USDA food: the closest real one stands in.
+		// seasoning have no USDA food: the closest real one stands in. R5:
+		// mirin is the sweet dessert wine, not sake (5 g carbs a 100 g where
+		// mirin holds some 35; dessert wine 14 is the nearest, 8 g sugar).
 		// CP4 lines: garam masala has no USDA food; curry powder, a ground
 		// spice blend, is the closest real one.
 		{"en", food.MatchLine{Name: "garam masala", Amount: 1, Unit: "tsp"}, 170924, ""},
-		{"en", food.MatchLine{Name: "Mirin", Amount: 1, Unit: "tbsp"}, 167723, ""},
+		{"en", food.MatchLine{Name: "Mirin", Amount: 1, Unit: "tbsp"}, 173176, ""},
 		{"en", food.MatchLine{Name: "portobello mushroom caps", Amount: 200, Unit: "g"}, 169255, ""},
 		{"en", food.MatchLine{Name: "green chiles", Amount: 4, Unit: "oz"}, 168577, ""},
-		{"en", food.MatchLine{Name: "mirin", Amount: 2, Unit: "tbsp"}, 167723, ""},
+		{"en", food.MatchLine{Name: "mirin", Amount: 2, Unit: "tbsp"}, 173176, ""},
 		{"en", food.MatchLine{Name: "adobo seasoning", Amount: 1, Unit: "tsp"}, 171328, ""},
 		{"en", food.MatchLine{Name: "adobo sauce", Amount: 1, Unit: "tbsp"}, 171604, ""},
 		{"en", food.MatchLine{Name: "chipotle peppers in adobo sauce", Amount: 30, Unit: "g"}, 171604, ""},

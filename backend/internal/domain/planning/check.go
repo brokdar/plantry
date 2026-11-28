@@ -75,6 +75,7 @@ const (
 	CodeAddOnExcess         = "add_on_excess"
 	CodeWeekMeatAboveDGE    = "week_meat_above_dge"
 	CodeWeekFishBelowDGE    = "week_fish_below_dge"
+	CodeWeekFishAboveDGE    = "week_fish_above_dge"
 	CodeWeekLegumesBelow    = "week_legumes_below_dge"
 )
 

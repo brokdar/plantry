@@ -10,11 +10,18 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
 
-// kitchenAmount renders an amount as a cook measures it: grams and ml
-// rounded as units.Display does, small volumes as spoons in halves, counts
-// and other units in halves.
-func kitchenAmount(amount float64, unit string) string {
+// kitchenAmount renders an amount of the named ingredient as a cook measures
+// it: grams and ml rounded as units.Display does, small volumes as spoons in
+// halves, a large volume of a solid (cheese, vegetables, dry grains) in
+// grams, counts in whole pieces, other units in halves.
+func kitchenAmount(amount float64, unit, name string) string {
 	base, u := units.ToBase(amount, unit)
+	if u == "ml" && base > 60 {
+		if g, ok := food.SolidGrams(name, base); ok {
+			q := units.Display(g, "g")
+			return number(q.Amount) + " " + q.Unit
+		}
+	}
 	switch {
 	case u == "ml" && base < 15:
 		return spoon(base/5, "tsp")
@@ -25,6 +32,9 @@ func kitchenAmount(amount float64, unit string) string {
 		return number(q.Amount) + " " + q.Unit
 	case u == "tsp" || u == "tbsp":
 		return spoon(amount, u)
+	}
+	if units.IsCount(units.Normalize(unit)) {
+		return number(math.Max(1, math.Round(amount))) + " " + unit
 	}
 	return strings.TrimSpace(number(halves(amount)) + " " + unit)
 }
@@ -105,7 +115,7 @@ func allowedNumbers(recipe *food.Food, portions float64) []float64 {
 	var out []float64
 	for _, c := range recipe.Children {
 		if !c.ToTaste {
-			out = append(out, parseQuantity(strings.Fields(kitchenAmount(c.Amount*scale, c.Unit))[0]))
+			out = append(out, parseQuantity(strings.Fields(kitchenAmount(c.Amount*scale, c.Unit, c.ChildName))[0]))
 		}
 	}
 	for _, st := range recipe.Instructions {

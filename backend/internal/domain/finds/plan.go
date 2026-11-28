@@ -274,7 +274,11 @@ func (s *Service) ThemeSet(ctx context.Context, theme string, n int) error {
 	if err != nil || !on {
 		return err
 	}
-	return s.request(ctx, planningDishes([]string{clean(theme)}, n, s.now(), false))
+	h, err := s.household(ctx)
+	if err != nil {
+		return err
+	}
+	return s.request(ctx, planningDishes([]string{clean(theme)}, n, s.now(), wantsMeatFree(h)))
 }
 
 // request starts an autonomous find per dish; no provider starts none.

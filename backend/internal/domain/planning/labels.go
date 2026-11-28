@@ -50,6 +50,7 @@ var issueTexts = map[string]IssueText{
 	CodeAddOnExcess:           {"sides", "A side is over its usual serving or repeated too often."},
 	CodeWeekMeatAboveDGE:      {"weekly meat", "The week holds more meat than the recommended maximum."},
 	CodeWeekFishBelowDGE:      {"weekly fish", "The week holds no fish meal."},
+	CodeWeekFishAboveDGE:      {"weekly fish", "The week holds more than two fish meals."},
 	CodeWeekLegumesBelow:      {"weekly legumes", "The week holds no legume meal."},
 	// H3/H4 reuse the session warning codes of plate.
 	"leftover_before_cook": {"leftover before cooking", "A leftover is eaten before its batch is cooked."},

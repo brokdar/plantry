@@ -14,20 +14,26 @@ func TestKitchenAmount(t *testing.T) {
 		amount float64
 		unit   string
 		want   string
+		name   string
 	}{
-		{1200, "g", "1.2 kg"},
-		{85.05, "g", "85 g"},
-		{37.5, "ml", "2.5 tbsp"},
-		{60, "ml", "4 tbsp"},
-		{75, "ml", "75 ml"},
-		{1.88, "ml", "0.5 tsp"},
-		{28.12, "ml", "2 tbsp"},
-		{12, "ml", "2.5 tsp"},
-		{0.75, "piece", "1 piece"},
-		{2.2, "clove", "2 clove"},
-		{1.3, "tbsp", "1.5 tbsp"},
+		{1200, "g", "1.2 kg", ""},
+		{85.05, "g", "85 g", ""},
+		{37.5, "ml", "2.5 tbsp", ""},
+		{60, "ml", "4 tbsp", ""},
+		{75, "ml", "75 ml", ""},
+		{1.88, "ml", "0.5 tsp", ""},
+		{28.12, "ml", "2 tbsp", ""},
+		{12, "ml", "2.5 tsp", ""},
+		{0.75, "piece", "1 piece", ""},
+		{2.2, "clove", "2 clove", ""},
+		{1.3, "tbsp", "1.5 tbsp", ""},
+		{3.5, "piece", "4 piece", "Spring onions"},
+		{2.5, "piece", "3 piece", ""},
+		{440, "ml", "185 g", "Cheddar"},
+		{480, "ml", "480 ml", "Beef broth"},
+		{480, "ml", "480 ml", "Milk"},
 	} {
-		assert.Equal(t, c.want, kitchenAmount(c.amount, c.unit), "%v %s", c.amount, c.unit)
+		assert.Equal(t, c.want, kitchenAmount(c.amount, c.unit, c.name), "%v %s", c.amount, c.unit)
 	}
 }
 
