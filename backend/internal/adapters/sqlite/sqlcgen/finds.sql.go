@@ -139,6 +139,57 @@ func (q *Queries) DeleteSearchBlock(ctx context.Context, domain string) error {
 	return err
 }
 
+const failReadyFind = `-- name: FailReadyFind :one
+UPDATE recipe_suggestions SET
+    state = 'failed', status = 'hidden',
+    steps_json = json_insert(steps_json, '$[#]', json_object('key', ?1)),
+    updated_at = datetime('now')
+WHERE id = ?2 AND state = 'ready'
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at, state, find_trigger, sources_json, flags_json, origin, changes_json, gates_json, steps_json, questions_json, updated_at, placed_on, passed_on
+`
+
+type FailReadyFindParams struct {
+	StepKey interface{}
+	ID      int64
+}
+
+// A ready find the recipe save refuses every time ends failed, with the
+// step key as its reason.
+func (q *Queries) FailReadyFind(ctx context.Context, arg FailReadyFindParams) (RecipeSuggestion, error) {
+	row := q.db.QueryRowContext(ctx, failReadyFind, arg.StepKey, arg.ID)
+	var i RecipeSuggestion
+	err := row.Scan(
+		&i.ID,
+		&i.Mode,
+		&i.Query,
+		&i.SourceUrl,
+		&i.DraftJson,
+		&i.AnnotationsJson,
+		&i.ImagePath,
+		&i.Grounded,
+		&i.Status,
+		&i.Reason,
+		&i.AiRunID,
+		&i.FoodID,
+		&i.ShownOn,
+		&i.CreatedAt,
+		&i.DecidedAt,
+		&i.State,
+		&i.FindTrigger,
+		&i.SourcesJson,
+		&i.FlagsJson,
+		&i.Origin,
+		&i.ChangesJson,
+		&i.GatesJson,
+		&i.StepsJson,
+		&i.QuestionsJson,
+		&i.UpdatedAt,
+		&i.PlacedOn,
+		&i.PassedOn,
+	)
+	return i, err
+}
+
 const finishFind = `-- name: FinishFind :one
 UPDATE recipe_suggestions SET
     state = ?1, source_url = ?2, draft_json = ?3,

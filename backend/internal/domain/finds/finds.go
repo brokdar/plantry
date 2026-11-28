@@ -149,6 +149,8 @@ type Store interface {
 	// Finish stores the outcome of a searching find; domain.ErrNotFound when
 	// the find is not searching.
 	Finish(ctx context.Context, id int64, o Outcome) (*Find, error)
+	// FailReady ends a ready find as failed, with the step key as its reason.
+	FailReady(ctx context.Context, id int64, key string) error
 	List(ctx context.Context, state *State, limit int) ([]Find, error)
 	// Decide keeps (in_library, with food) or discards a ready or
 	// needs_check find; domain.ErrDiscoveryDecided when it is decided already.

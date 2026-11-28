@@ -105,6 +105,8 @@ type rig struct {
 	// house sets the Cuisines, FirstWeek and Recipes of the household the rig
 	// returns.
 	house finds.Household
+	// robots, when set, decides which sites the search may use.
+	robots func(domain string) bool
 }
 
 func newRig(t *testing.T, web bool, m importer.Matcher, kitchen profile.Kitchen, turns ...fake.Turn) *rig {
@@ -140,6 +142,7 @@ func newRigWrapped(t *testing.T, wrap func(*fake.Client) llm.Client, web bool, m
 			}, nil
 		},
 		Enqueue: func(context.Context, int64, bool) error { return nil },
+		Robots:  func(_ context.Context, d string) bool { return r.robots == nil || r.robots(d) },
 	})
 	return r
 }

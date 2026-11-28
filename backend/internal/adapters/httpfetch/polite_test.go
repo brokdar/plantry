@@ -219,3 +219,22 @@ func TestExemptDomains(t *testing.T) {
 	assert.False(t, ex("notchefkoch.de"))
 	assert.False(t, ex("example.com"))
 }
+
+// CP4 fix: AllowsRecipes reads the cached robots.txt: a site that disallows
+// everything for us is out, one that only guards private paths is in.
+func TestPolite_AllowsRecipes(t *testing.T) {
+	for fixture, want := range map[string]bool{
+		"disallow_all.txt":   false,
+		"ai_user_groups.txt": false,
+		"chefkoch_like.txt":  false,
+		"allow_all.txt":      true,
+		"":                   true,
+		"malformed.txt":      true,
+	} {
+		s := newSite(t, fixture)
+		p, _ := newPolite(false)
+		assert.Equal(t, want, p.AllowsRecipes(context.Background(), s.URL), fixture)
+		assert.Equal(t, want, p.AllowsRecipes(context.Background(), s.URL), "cached: "+fixture)
+		assert.Equal(t, 1, s.count("/robots.txt"), "one robots fetch: "+fixture)
+	}
+}

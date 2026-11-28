@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -78,6 +79,10 @@ type Deps struct {
 	Matcher   importer.Matcher
 	Household func(ctx context.Context) (Household, error)
 	Sites     func(ctx context.Context) ([]settings.ChefSite, error)
+	// Robots, when set, reports whether a site's robots.txt (cached 24 h)
+	// lets us read its recipe pages; a site it refuses is left out of the
+	// search's allowed list.
+	Robots func(ctx context.Context, domain string) bool
 	// Enqueue queues the find's chef_find job.
 	Enqueue func(ctx context.Context, id int64, requested bool) error
 	Taste   Taste
@@ -90,7 +95,11 @@ type Deps struct {
 }
 
 // Service runs finds.
-type Service struct{ d Deps }
+type Service struct {
+	d Deps
+	// robotsLogged is the domains already logged as left out (once each).
+	robotsLogged sync.Map
+}
 
 // NewService returns a find service.
 func NewService(d Deps) *Service {
@@ -369,6 +378,14 @@ func (s *Service) attempt(ctx context.Context, client llm.Client, model string, 
 	}})
 	o.Gates = gates.Check(gateRecipe(a.draft, checked), h.Gates)
 	o.Gates.Blocks = append(o.Gates.Blocks, removedMentions(base.Draft, a)...)
+	for i := range a.draft.Ingredients {
+		if !importer.SettleQuantityless(&a.draft.Ingredients[i]) {
+			o.Gates.Blocks = append(o.Gates.Blocks, gates.Finding{
+				Code: "missing_amount", Ingredient: i, Step: -1,
+				Reason: a.draft.Ingredients[i].Name + " has no amount",
+			})
+		}
+	}
 	for _, fl := range o.Gates.Flags {
 		o.Flags = append(o.Flags, Flag{Code: fl.Code, Reason: fl.Reason})
 	}
@@ -473,6 +490,12 @@ func (s *Service) domains(ctx context.Context, lang string) ([]string, error) {
 	var same, all []string
 	for _, st := range sites {
 		if !st.Enabled || slices.Contains(blocked, st.Domain) {
+			continue
+		}
+		if s.d.Robots != nil && !s.d.Robots(ctx, st.Domain) {
+			if _, seen := s.robotsLogged.LoadOrStore(st.Domain, true); !seen {
+				s.d.Logger.WarnContext(ctx, "finds.search site left out: robots.txt disallows", "site", st.Domain)
+			}
 			continue
 		}
 		all = append(all, st.Domain)

@@ -127,6 +127,32 @@ func (p *Polite) Fetch(ctx context.Context, rawURL string) (string, string, erro
 	return body, final, err
 }
 
+// recipeProbePaths stand for a site's recipe pages when only its robots.txt
+// is known.
+var recipeProbePaths = []string{"/", "/recipe/x", "/recipes/x"}
+
+// AllowsRecipes reports whether the robots.txt of the site at baseURL (cached
+// 24 h like Fetch's) lets Plantry read its recipe pages. A robots.txt that
+// cannot be fetched now counts as allowing: the fetch itself decides then.
+func (p *Polite) AllowsRecipes(ctx context.Context, baseURL string) bool {
+	u, err := url.Parse(baseURL)
+	if err != nil || u.Host == "" {
+		return true
+	}
+	host := strings.ToLower(u.Host)
+	rules, err := p.robotsFor(ctx, u, host)
+	if err != nil || rules == nil {
+		return true
+	}
+	exempt := p.aiExempt != nil && p.aiExempt(u.Hostname())
+	for _, path := range recipeProbePaths {
+		if rules.allowed(path, exempt) {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *Polite) isBlocked(host string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()

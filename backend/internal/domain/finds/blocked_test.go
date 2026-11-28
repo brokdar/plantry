@@ -73,3 +73,14 @@ func TestPipeline_BlockedSearchDomains(t *testing.T) {
 		require.Equal(t, 1, bc.refused, "no second search without sites")
 	})
 }
+
+// CP4 fix: a site whose robots.txt refuses us is left out of the search's
+// allowed list.
+func TestPipeline_RobotsRefusedSiteLeftOut(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...), adaptTurn(true, fitsKitchen))
+	r.robots = func(d string) bool { return d != "bbcgoodfood.com" }
+	f := r.run(t, finds.TriggerPlanning)
+	require.Equal(t, "budgetbytes.com, thewoksoflife.com", f.Steps[0].Params["sites"])
+	require.Equal(t, []string{"budgetbytes.com", "thewoksoflife.com"}, r.client.Requests()[0].WebSearch.AllowedDomains)
+}

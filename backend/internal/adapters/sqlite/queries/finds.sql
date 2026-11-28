@@ -18,6 +18,16 @@ UPDATE recipe_suggestions SET
 WHERE id = sqlc.arg(id) AND state = 'searching'
 RETURNING *;
 
+-- name: FailReadyFind :one
+-- A ready find the recipe save refuses every time ends failed, with the
+-- step key as its reason.
+UPDATE recipe_suggestions SET
+    state = 'failed', status = 'hidden',
+    steps_json = json_insert(steps_json, '$[#]', json_object('key', sqlc.arg(step_key))),
+    updated_at = datetime('now')
+WHERE id = sqlc.arg(id) AND state = 'ready'
+RETURNING *;
+
 -- name: ListFinds :many
 -- Finds (rows with a state), optionally of one state, newest first.
 SELECT * FROM recipe_suggestions
