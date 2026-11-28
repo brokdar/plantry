@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -26,7 +27,7 @@ import (
 // Tool is the forced tool of a help run; Version its prompt version.
 const (
 	Tool    = "chef_help_answer"
-	Version = "hp2"
+	Version = "hp3"
 )
 
 // Help kinds.
@@ -41,7 +42,7 @@ var Problems = []string{"too_salty", "too_thin", "too_thick", "burnt", "not_cook
 const (
 	// MaxLines and MaxLineRunes bound an answer (HELP-2: three lines).
 	MaxLines     = 3
-	MaxLineRunes = 160
+	MaxLineRunes = 220
 	maxTextRunes = 500
 	maxTokens    = 600
 )
@@ -219,22 +220,23 @@ func (s *Service) run(ctx context.Context, req Request, recipe *food.Food, porti
 	return Answer{Lines: lines, RunID: run.ID()}, nil
 }
 
-// clamp enforces the answer shape: no blank lines, at most MaxLines, each
-// at most MaxLineRunes (cut at a word and ended with an ellipsis).
+// selfTalkRE starts a line that is the model thinking aloud, not an
+// instruction to the cook.
+var selfTalkRE = regexp.MustCompile(`(?i)^(no,|wait\b|actually\b|hmm\b|oops\b|let me\b)`)
+
+// clamp enforces the answer shape: no blank lines, no self-talk, at most
+// MaxLines, each at most MaxLineRunes. A longer line is cut at the last
+// sentence end within the cap, else the last clause break (ended with a
+// full stop), else the last word (ended with an ellipsis); never mid-word.
 func clamp(in []string) []string {
 	out := []string{}
 	for _, l := range in {
 		l = strings.Join(strings.Fields(l), " ")
-		if l == "" {
+		if l == "" || selfTalkRE.MatchString(l) {
 			continue
 		}
 		if utf8.RuneCountInString(l) > MaxLineRunes {
-			r := []rune(l)[:MaxLineRunes-1]
-			cut := string(r)
-			if i := strings.LastIndex(cut, " "); i > MaxLineRunes/2 {
-				cut = cut[:i]
-			}
-			l = strings.TrimRight(cut, " ,;:.") + "…"
+			l = cutLine(l)
 		}
 		out = append(out, l)
 		if len(out) == MaxLines {
@@ -242,6 +244,25 @@ func clamp(in []string) []string {
 		}
 	}
 	return out
+}
+
+func cutLine(l string) string {
+	cut := string([]rune(l)[:MaxLineRunes])
+	floor := len(cut) / 3
+	for _, sep := range []string{". ", "! ", "? "} {
+		if i := strings.LastIndex(cut+" ", sep); i > floor {
+			return cut[:i+1]
+		}
+	}
+	for _, sep := range []string{"; ", ", ", ": ", " - ", " – "} {
+		if i := strings.LastIndex(cut, sep); i > floor {
+			return strings.TrimRight(cut[:i], " ,;:-–") + "."
+		}
+	}
+	if i := strings.LastIndex(cut, " "); i > floor {
+		cut = cut[:i]
+	}
+	return strings.TrimRight(cut, " ,;:.") + "…"
 }
 
 func callTool(ctx context.Context, client llm.Client, req llm.Request) (json.RawMessage, error) {
@@ -272,6 +293,8 @@ const system = "You help one person cooking right now, standing at the stove, by
 	"Put the amount first on a line where one applies (\"2 tbsp soy sauce: stir in now\"); " +
 	"copy an amount exactly as listed below, only for an ingredient the current step uses, and never calculate, split or convert one. " +
 	"A fix that adds something not listed (a pinch of sugar, a splash of vinegar) gets no number. " +
+	"Keep each line under 160 characters and end it as a complete sentence. " +
+	"Every line is the final instruction to the cook: never reasoning, a correction of yourself or a reply to the user (no \"No, ...\", \"Wait\", \"Actually\"). " +
 	"No greeting, no apology, no lists of options: the single best fix first. " +
 	"For \"something went wrong\" the problem is about the dish cooked so far, not literally the current step; if it cannot have happened yet at this step, say what to check and the fix for the dish as a whole. " +
 	"Fixes by problem: too salty: add more of the unsalted base or a liquid that fits the dish, a little acid; never water into eggs. " +
@@ -329,7 +352,7 @@ func buildRequest(model string, req Request, recipe *food.Food, portions float64
 			Name:        Tool,
 			Description: "Record the answer: at most three short lines, amount first.",
 			Schema: json.RawMessage(`{"type":"object","required":["lines"],"properties":{` +
-				`"lines":{"type":"array","maxItems":3,"items":{"type":"string"}}}}`),
+				`"lines":{"type":"array","maxItems":3,"items":{"type":"string","maxLength":160}}}}`),
 		}},
 		ToolChoice: &llm.ToolChoice{Name: Tool},
 		MaxTokens:  maxTokens,

@@ -109,16 +109,19 @@ func TestAdapt_HeatFollowsTasteAndHotSpiceIsFlagged(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		rather    []string
+		first     bool
 		wantHeat  string
 		wantFlags int
 	}{
-		{"taste dislikes heat", []string{"heat"}, "Heat tolerance: mild.", 1},
-		{"kitchen heat stands", nil, "Heat tolerance: hot.", 0},
+		{"taste dislikes heat", []string{"heat"}, false, "Heat tolerance: mild.", 1},
+		{"kitchen heat stands", nil, false, "Heat tolerance: hot.", 0},
+		{"first week is mild whatever the kitchen says", nil, true, "Heat tolerance: mild.", 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newRig(t, true, lineMatcher{}, hotKitchen, searchTurn(curryURLs...),
 				toolTurn(finds.AdaptTool, adaptJSON(`[{"line":0,"to":"2 tsp hot curry powder","reason":"x"}]`)))
 			r.house.RatherNot = tc.rather
+			r.house.FirstWeek = tc.first
 			f := r.run(t, finds.TriggerPlanning)
 			reqs := r.client.Requests()
 			assert.Contains(t, reqs[1].Messages[0].Content[0].Text, tc.wantHeat)

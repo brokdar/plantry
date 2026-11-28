@@ -113,11 +113,12 @@ func adaptRequest(model string, d *importer.Draft, h Household, flags []Flag) ll
 }
 
 // effectiveHeat is the household's heat tolerance for an adaptation: the
-// kitchen setting, mild in the first week while unknown, and at most mild
-// when taste leans away from heat (a learned or stated rather-not item).
+// kitchen setting, at most mild in the first week (COLD-4: mild and
+// familiar whatever is set), and at most mild when taste leans away from
+// heat (a learned or stated rather-not item).
 func effectiveHeat(h Household) profile.Heat {
 	heat := h.Kitchen.Heat
-	if heat == "" && h.FirstWeek {
+	if h.FirstWeek && heat != profile.HeatNone {
 		heat = profile.HeatMild
 	}
 	if slices.Contains(h.RatherNot, "heat") && heat != profile.HeatNone {
