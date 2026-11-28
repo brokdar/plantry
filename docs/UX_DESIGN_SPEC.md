@@ -390,6 +390,17 @@ Three short steps. It opens as a full page on phone and as a centred panel over 
 - Dismissing with the close button or the Escape key counts as "not now", not as a rejection.
 - If generation fails, the sheet silently does not appear. It never shows an error on app open.
 
+### 5.9a Chef surfaces
+
+Shown only with the Chef on and a provider (a switch in Settings, on for new installs).
+
+- **Tips:** one line under a plate with one checked improvement ("Something sharp lifts the rich plate") and Apply or Dismiss.
+- **Themes:** a Theme row on the plan board header (at most two a week), with "How about {name} this week?" Yes or No thanks.
+- **Finds:** Find a recipe asks "Which dish?" and shows its steps (searched, read, cross-checked, adapted, matched, checks) before a card with origin, "What changed", "Worth a second look" and **Add to my recipes** or **Not for me**.
+- **Help in cook mode:** an entry on a step for a missing ingredient or a question; answers state amounts for this pot.
+- **Taste (`/settings/taste`):** sections Never, You love, You'd rather not, Leanings, Cuisines, Kitchen link and Recently learned (Undo); each line says where it came from.
+- **Settings:** the Chef switch (turning it on shows the cost of labelling the library first), Monthly limit with this month's spend, Recipe sites.
+
 ### 5.10 Mid-week re-plan
 
 From Plan's overflow menu, or by marking confirmed cells *No plate*:
@@ -453,6 +464,13 @@ Every setting shows its effect in one line ("Plantry plans at most 1 cooking ses
 | Assistant / Assistent | The AI | "Agent", "LLM", "AI" in labels |
 | Notes to your assistant | `profile.system_prompt` | "System prompt" |
 | Recipe · Ingredient / Rezept · Zutat | Composed and leaf food | "Food", "component" |
+| Chef / Chef | The Settings switch and spend card for the assistant's autonomous work; elsewhere the user meets "the assistant" | "Agent", "AI" |
+| Taste / Geschmack | The Settings page of loves, rather-nots, never, leanings and cuisines | "Preferences", "profile" |
+| Kitchen / Küche | Active time, equipment, skill, basics at home | "Constraints" |
+| Theme / Thema | A cuisine, ingredient or mood that steers one week | "Campaign" |
+| New dishes per week / Neue Gerichte pro Woche | How many finds a week brings | "Explore quota" |
+| Find a recipe / Rezept suchen | A recipe the assistant looked up, cross-checked and adapted; "Add to my recipes" or "Not for me" | "Result", "suggestion" |
+| Recipe sites / Rezeptseiten | The sites the assistant may search | "Sources", "scrapers" |
 
 ---
 

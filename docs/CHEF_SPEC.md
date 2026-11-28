@@ -1,6 +1,8 @@
 # Spec: The Chef
 
-> **Status:** Draft 2, 2026-11-24.
+> **Status:** Shipped in releases R1–R5 (2026-11). This text is the spec as written before the build; where the build differs: reserved cells were not built (the trials showed no need for them), and the Chef is on by default for new installs only (ON-3); an upgrade keeps its setting.
+>
+> **Draft 2, 2026-11-24.**
 > **Scope:** what the feature does, the data it needs, its API surface, its limits and how it is accepted. How the assistant organises its work internally (skills, subagents, prompts) is left to the implementation, by the owner's decision.
 > **Language:** "the Chef" is this document's name for the capability, never a UI label; the user sees "the assistant" (UX spec §7).
 > Starting values for weights, thresholds and limits are marked *(tunable)*; the implementation tunes them against the eval sets.

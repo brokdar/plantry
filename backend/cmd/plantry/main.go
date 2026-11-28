@@ -103,6 +103,10 @@ func run() error {
 	}
 	defer func() { _ = conn.Close() }()
 
+	fresh, err := isFreshDB(conn)
+	if err != nil {
+		return fmt.Errorf("schema version: %w", err)
+	}
 	if err := migrate(conn); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
@@ -132,6 +136,9 @@ func run() error {
 		"PLANTRY_FDC_API_KEY":           cfg.FDCAPIKey,
 	})
 	settingsSvc := settingsdom.NewService(settingsRepo, envSnapshot, cipher)
+	if err := seedFreshInstall(context.Background(), settingsSvc, fresh); err != nil {
+		return fmt.Errorf("seed fresh install: %w", err)
+	}
 
 	// External food providers.
 	// A nil interface (not a nil *off.Provider) so the resolver's nil checks
@@ -827,6 +834,30 @@ func migrate(conn *sql.DB) error {
 		return err
 	}
 	return goose.Up(conn, "migrations")
+}
+
+// isFreshDB reports whether the database had no schema before migrating: a
+// new install, as opposed to an upgrade.
+func isFreshDB(conn *sql.DB) (bool, error) {
+	goose.SetBaseFS(db.Migrations)
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		return false, err
+	}
+	v, err := goose.GetDBVersion(conn)
+	if err != nil {
+		return false, err
+	}
+	return v == 0, nil
+}
+
+// seedFreshInstall starts a new install with the Chef on (ON-3). An upgrade
+// keeps its setting; the spec default stays off so fresh test databases do
+// not change.
+func seedFreshInstall(ctx context.Context, svc *settingsdom.Service, fresh bool) error {
+	if !fresh {
+		return nil
+	}
+	return svc.Set(ctx, settingsdom.KeyChefEnabled, "true")
 }
 
 // appVersion is what runs record as app_version: the ldflags version and

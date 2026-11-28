@@ -81,6 +81,17 @@ The second insight is **batch cooking**. People cook once and eat the leftovers.
 - **Add** opens the normal import review, pre-filled and tagged explore; **Not for me** records a reason (too long, ingredients, taste) that feeds the next research
 - Needs a provider; without one the Discover entry points are hidden and nothing else changes
 
+### "Let the Chef look after the details" (the Chef)
+
+- One switch in Settings (on for new installs, off for upgrades until turned on) and a monthly spend cap; with it off, Plantry behaves as before. It needs a provider; without one the Chef's parts stay hidden
+- **Plate judgment and tips:** recipes carry attributes (taste, texture, colour, heat), planning ranks plates by fit, and a tip offers one checked improvement when it matters
+- **Honest import:** an import check compares what a page says with what the recipe computes before it is saved
+- **Substitutions and variants:** a filled variant with a list of changes, in-place edits with a diff and Undo
+- **Taste page:** what you love, would rather not have and never eat, with leanings noticed from ratings and swaps; every line can be removed or flipped
+- **Finds, themes and New dishes:** the assistant finds and cross-checks recipes on the sites you allow, adapts them to your household and adds them on trial; a theme (cuisine, ingredient or mood) steers a week; "New dishes per week" sets how many finds a week brings
+- **Help in cook mode:** an answer for a missing ingredient or a question about the step, with amounts that fit the pot
+- **Recipe sites and library review:** choose which sites are searched; a monthly review lists duplicates and recipes to check, opt-in
+
 ### "Know what to buy"
 
 - The shopping list comes from confirmed cook sessions and plates (drafts only with a switch), summed in base units, rounded up for countable items, grouped by store section

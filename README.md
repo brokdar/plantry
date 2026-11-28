@@ -53,6 +53,7 @@ Swapping rice for naan is one click. Adding a side salad is one click. Tofu curr
 **Settings and insights**
 - Household, meals and week, cooking, assistant and system sections; English and German
 - Insights lists every AI run with its prompt version, tokens, cost and outcome
+- The Chef (a switch in Settings, needs an AI provider): plate tips, themes and New dishes, finds, help in cook mode, recipe sites and a monthly library review, under a monthly spend cap. New installs start with the Chef on; upgrades keep their setting
 
 ---
 
