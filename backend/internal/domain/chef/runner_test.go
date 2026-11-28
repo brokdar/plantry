@@ -1,10 +1,13 @@
 package chef_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -433,4 +436,34 @@ func TestRunner_ReportsSkippedAndFailedJobs(t *testing.T) {
 	assert.Equal(t, chef.StatusSkipped, got[skipped])
 	assert.Equal(t, string(chef.ReasonOff), reasons[skipped])
 	assert.Equal(t, chef.StatusFailed, got[failed])
+}
+
+// A failed job is one error-level line naming the job and its kind.
+func TestRunner_FailedJobLogsAtErrorLevel(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t, true)
+	var buf bytes.Buffer
+	r := chef.NewRunner(chef.RunnerConfig{
+		Store: e.jobs, Guard: e.guard, Concurrency: 1, MaxAttempts: 1, Now: e.clock.Now,
+		Logger: slog.New(slog.NewJSONHandler(&buf, nil)),
+		Handlers: map[airun.Kind]chef.Handler{airun.KindChefFind: func(context.Context, chef.Job) error {
+			return errors.New("boom")
+		}},
+	})
+	id, err := r.Enqueue(ctx, airun.KindChefFind, "1", false)
+	require.NoError(t, err)
+	drain(t, r)
+	var line map[string]any
+	for _, l := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		var m map[string]any
+		require.NoError(t, json.Unmarshal([]byte(l), &m))
+		if m["msg"] == "chef.jobs.failed" {
+			line = m
+		}
+	}
+	require.NotNil(t, line, buf.String())
+	assert.Equal(t, "ERROR", line["level"])
+	assert.EqualValues(t, id, line["job"])
+	assert.Equal(t, string(airun.KindChefFind), line["kind"])
+	assert.Equal(t, "boom", line["error"])
 }

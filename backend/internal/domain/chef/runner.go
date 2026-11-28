@@ -223,7 +223,7 @@ func (r *Runner) run(ctx context.Context, job Job) (Status, string) {
 		if r.base.Err() != nil {
 			return StatusRunning, ""
 		}
-		log.Warn("chef.jobs.failed", "error", err)
+		log.Error("chef.jobs.failed", "error", err)
 		return StatusFailed, err.Error()
 	}
 	return StatusDone, ""

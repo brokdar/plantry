@@ -1,8 +1,10 @@
 package http
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -63,10 +65,11 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Recoverer)
 	r.Use(plantrymw.SecurityHeaders())
 	r.Use(plantrymw.Actor())
 	r.Use(requestLogger(logger))
+	// Inside the request logger, so a panic still gets its 500 request line.
+	r.Use(recoverer(logger))
 
 	r.Route("/api", func(api chi.Router) {
 		api.Use(plantrymw.MaxBodySize(10 << 20)) // 10 MB cap; accommodates image uploads
@@ -426,7 +429,11 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 			next.ServeHTTP(ww, r)
-			logger.Info("http.request",
+			level := slog.LevelInfo
+			if ww.Status() >= http.StatusInternalServerError {
+				level = slog.LevelError
+			}
+			logger.Log(r.Context(), level, "http.request",
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", ww.Status(),
@@ -434,6 +441,37 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 				"duration_ms", time.Since(start).Milliseconds(),
 				"request_id", middleware.GetReqID(r.Context()),
 			)
+		})
+	}
+}
+
+// recoverer turns a panic into a 500 and one JSON error line (request id,
+// route, panic value, stack): the log is all the operator has.
+func recoverer(logger *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				v := recover()
+				if v == nil {
+					return
+				}
+				if v == http.ErrAbortHandler {
+					panic(v)
+				}
+				logger.ErrorContext(r.Context(), "http.panic",
+					"method", r.Method,
+					"path", r.URL.Path,
+					"panic", fmt.Sprint(v),
+					"stack", string(debug.Stack()),
+					"request_id", middleware.GetReqID(r.Context()),
+				)
+				// Only before the reply started: a second header makes net/http
+				// print a plain-text line into the JSON log.
+				if ww, ok := w.(middleware.WrapResponseWriter); !ok || ww.Status() == 0 {
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+			}()
+			next.ServeHTTP(w, r)
 		})
 	}
 }

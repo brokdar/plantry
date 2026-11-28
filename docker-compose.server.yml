@@ -1,0 +1,33 @@
+# Plantry on a server: runs the published image instead of building one.
+#   docker compose -f docker-compose.server.yml --env-file .env up -d
+# Pin a release with PLANTRY_VERSION=<tag without the "v"> in .env
+# (the release workflow publishes 1.2.3, 1.2 and latest). See README,
+# "Run on a server".
+services:
+  plantry:
+    image: ghcr.io/brokdar/plantry:${PLANTRY_VERSION:-latest}
+    container_name: plantry
+    ports:
+      - "${PLANTRY_HOST_PORT:-8080}:8080"
+    environment:
+      PLANTRY_PORT: "8080"
+      PLANTRY_DB_PATH: "/data/plantry.db"
+      PLANTRY_LOG_LEVEL: "${PLANTRY_LOG_LEVEL:-info}"
+      PLANTRY_SECRET_KEY: "${PLANTRY_SECRET_KEY:-}"
+      PLANTRY_FDC_API_KEY: "${PLANTRY_FDC_API_KEY:-}"
+      PLANTRY_AI_PROVIDER: "${PLANTRY_AI_PROVIDER:-}"
+      PLANTRY_AI_MODEL: "${PLANTRY_AI_MODEL:-}"
+      PLANTRY_AI_API_KEY: "${PLANTRY_AI_API_KEY:-}"
+      # "Today" is the container's local date, so it follows TZ.
+      TZ: "${TZ:-Etc/UTC}"
+    volumes:
+      - plantry-data:/data
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  plantry-data:

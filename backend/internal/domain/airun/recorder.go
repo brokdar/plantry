@@ -321,7 +321,11 @@ func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, re
 			run.warn(ctx, "ai.run.finish failed", err)
 		}
 	}
-	run.rec.logger.InfoContext(ctx, "ai.run.end", append(run.LogAttrs(),
+	endLevel := slog.LevelInfo
+	if status == StatusError {
+		endLevel = slog.LevelError
+	}
+	run.rec.logger.Log(ctx, endLevel, "ai.run.end", append(run.LogAttrs(),
 		"kind", run.kind,
 		"provider", end.Provider,
 		"model", end.Model,
