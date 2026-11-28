@@ -14,7 +14,7 @@ Generated 2026-11-28 12:00 UTC, window: last 30 days.
 
 - App version: dev
 - Schema version: 76
-- Database size: 0.0 MB
+- Database size: N MB
 - chef.enabled: true (stored)
 - ai.provider: (none) (default)
 - ai.model: fake-model (stored)

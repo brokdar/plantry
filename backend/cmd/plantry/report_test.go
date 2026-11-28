@@ -6,27 +6,58 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/jaltszeimer/plantry/backend/db"
 	settingsdom "github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 var updateGolden = flag.Bool("update", false, "rewrite testdata/report.golden.md")
 
+// migratedReportDB migrates one database per process; each test copies it.
+var migratedReportDB = sync.OnceValues(func() ([]byte, error) {
+	dir, err := os.MkdirTemp("", "plantry-report-")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	path := filepath.Join(dir, "plantry.db")
+	conn, err := openDB(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := migrate(conn); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	if err := conn.Close(); err != nil {
+		return nil, err
+	}
+	return os.ReadFile(path)
+})
+
+// freshReportDB is a migrated database file of its own.
+func freshReportDB(t *testing.T) string {
+	t.Helper()
+	raw, err := migratedReportDB()
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "plantry.db")
+	require.NoError(t, os.WriteFile(path, raw, 0o600))
+	return path
+}
+
 func seededDB(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "plantry.db")
+	path := freshReportDB(t)
 	conn, err := openDB(path)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
-	require.NoError(t, migrate(conn))
 	testhelper.SeedReport(t, conn)
 	return path
 }
@@ -44,7 +75,8 @@ func reportAt(t *testing.T, path string) string {
 // connection of the fixture is still open (the server's case) and holds
 // neither the stored API key nor the text typed into a run.
 func TestReportGolden(t *testing.T) {
-	md := reportAt(t, seededDB(t))
+	// The file size depends on the SQLite build, so it is not part of the golden.
+	md := regexp.MustCompile(`Database size: [0-9.]+ MB`).ReplaceAllString(reportAt(t, seededDB(t)), "Database size: N MB")
 	assert.NotContains(t, md, "SECRETKEYVALUE")
 	assert.NotContains(t, md, "TYPEDTEXT")
 
@@ -58,13 +90,7 @@ func TestReportGolden(t *testing.T) {
 }
 
 func TestReportEmptyDatabaseSaysNoData(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "plantry.db")
-	conn, err := openDB(path)
-	require.NoError(t, err)
-	require.NoError(t, migrate(conn))
-	require.NoError(t, conn.Close())
-
-	md := reportAt(t, path)
+	md := reportAt(t, freshReportDB(t))
 	assert.Contains(t, md, "No data: no AI runs in the window.")
 	assert.Contains(t, md, "Nothing stands out.")
 }
@@ -89,12 +115,12 @@ func TestReportCommandWritesFileAndRefusesExisting(t *testing.T) {
 // A backup from an older build is read as it is: the sections whose tables
 // the schema lacks say so and the rest renders. The report never migrates.
 func TestReportOldSchemaSkipsMissingTables(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "plantry.db")
+	// The schema-75 database is the latest one without the two tables 76 added.
+	path := freshReportDB(t)
 	conn, err := openDB(path)
 	require.NoError(t, err)
-	goose.SetBaseFS(db.Migrations)
-	require.NoError(t, goose.SetDialect("sqlite3"))
-	require.NoError(t, goose.UpTo(conn, "migrations", 75))
+	_, err = conn.Exec(`DROP TABLE chef_help_verdicts; DROP TABLE import_check_outcomes; DELETE FROM goose_db_version WHERE version_id = 76`)
+	require.NoError(t, err)
 	require.NoError(t, conn.Close())
 
 	md := reportAt(t, path)
@@ -106,10 +132,9 @@ func TestReportOldSchemaSkipsMissingTables(t *testing.T) {
 }
 
 func TestReportSettingsShowEffectiveValueAndSource(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "plantry.db")
+	path := freshReportDB(t)
 	conn, err := openDB(path)
 	require.NoError(t, err)
-	require.NoError(t, migrate(conn))
 	_, err = conn.Exec(`INSERT INTO app_settings (key, value, encrypted) VALUES ('ai.model', 'claude-haiku-5-5', 0)`)
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
