@@ -84,3 +84,15 @@ func TestParseAndMatch_CP3Run4Lines(t *testing.T) {
 		})
 	}
 }
+
+// A counted piece of tofu has no known weight; only a package does.
+func TestParseLine_TofuPieceNeedsWeight(t *testing.T) {
+	for _, line := range []string{"2 Stück Räuchertofu", "1 piece smoked tofu"} {
+		got := importer.ParseLineEN(line)
+		assert.True(t, got.NeedsWeight, line)
+		assert.Nil(t, got.PortionGrams, line)
+	}
+	got := importer.ParseLineEN("1 package extra-firm tofu")
+	require.NotNil(t, got.PortionGrams)
+	assert.InDelta(t, 397, *got.PortionGrams, 0.01)
+}

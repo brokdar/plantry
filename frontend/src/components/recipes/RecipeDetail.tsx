@@ -290,9 +290,9 @@ export function RecipeDetail({
             className="flex flex-wrap items-start gap-x-8 gap-y-4 border-t border-line pt-4"
             data-testid="recipe-facts"
           >
-            {minutes > 0 && (
+            {(minutes > 0 || recipe.prep_ahead) && (
               <Fact label={t("recipe_detail.time")}>
-                {t("recipe_detail.minutes", { count: minutes })}
+                {minutes > 0 && t("recipe_detail.minutes", { count: minutes })}
                 {recipe.prep_ahead && (
                   <PrepAheadNote
                     prepAhead={recipe.prep_ahead}

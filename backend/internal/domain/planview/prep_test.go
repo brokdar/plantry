@@ -87,6 +87,7 @@ func TestPrepAheadOf(t *testing.T) {
 		{"marinate 15 minutes needs no mark", nil, []string{"Marinate for 15 minutes."}, nil},
 		{"soak dried chickpeas", []string{"dried chickpeas"}, []string{"Soak the chickpeas."}, &PrepAhead{Kind: "soak"}},
 		{"soak 6 hours", []string{"dried chickpeas"}, []string{"Soak for 6 hours."}, &PrepAhead{Kind: "soak", Hours: 6}},
+		{"soak 30 minutes needs no mark", []string{"dried chickpeas"}, []string{"Soak for 30 minutes."}, nil},
 		{"thaw", []string{"frozen peas"}, []string{"Cook."}, &PrepAhead{Kind: "thaw"}},
 	}
 	for _, tt := range tests {

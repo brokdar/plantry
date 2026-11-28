@@ -160,7 +160,7 @@ func PrepAheadOf(ingredients, steps []string) *PrepAhead {
 			minutesOnly = true
 		}
 	}
-	if hours == 0 && minutesOnly && kind == ReminderMarinate {
+	if hours == 0 && minutesOnly {
 		return nil
 	}
 	return &PrepAhead{Kind: kind, Hours: hours}

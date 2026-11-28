@@ -212,8 +212,10 @@ func ParseLineDE(raw string) DraftIngredient {
 
 	// "1 package extra-firm tofu", "2 servings steamed rice": the package or
 	// serving is the count, the rest the food.
+	fromPackage := false
 	if !hasUnit && len(tokens) > 1 {
 		if _, ok := countWords[strings.ToLower(tokens[0])]; ok {
+			fromPackage = strings.HasPrefix(strings.ToLower(tokens[0]), "p")
 			unit, unitToken, hasUnit = "piece", tokens[0], true
 			name = strings.TrimSpace(strings.Join(tokens[1:], " "))
 		}
@@ -232,6 +234,9 @@ func ParseLineDE(raw string) DraftIngredient {
 		out.Amount = amount
 		out.Unit = unit
 		if w, ok := explicitWeight(parenNote, amount); ok {
+			out.PortionGrams = &w
+		} else if fromPackage && strings.Contains(strings.ToLower(name), "tofu") {
+			w := float64(units.PackageTofuGrams)
 			out.PortionGrams = &w
 		} else if estimate := units.EstimateCountGrams(unit, name); estimate > 0 {
 			out.PortionGrams = &estimate

@@ -23,7 +23,6 @@ var pieceWeights = []struct {
 	units    []string
 	keywords []string
 }{
-	{397, []string{"piece"}, []string{"tofu"}},                                              // a 14 oz package
 	{158, []string{"piece"}, []string{"steamed rice", "cooked rice", "steamed white rice"}}, // a serving: USDA 1 cup cooked
 	{3, []string{"piece", "clove"}, []string{"knoblauch", "garlic"}},                        // a counted garlic "piece" is a clove
 	{15, []string{"piece"}, []string{"frühlingszwiebel", "lauchzwiebel", "spring onion", "scallion"}},
@@ -45,6 +44,10 @@ var pieceWeights = []struct {
 	{500, []string{"piece"}, []string{"brokkoli", "broccoli"}}, // one head, like CountGrams["head"]
 	{0.6, []string{"piece", "leaf"}, []string{"lorbeer", "bay leaf", "bay leaves"}},
 }
+
+// PackageTofuGrams is one 14 oz package of tofu, the weight of a counted
+// "1 package tofu" line; a piece of tofu has no such weight.
+const PackageTofuGrams = 397
 
 // EstimateCountGrams is the grams of one count unit of the named ingredient
 // when nobody has weighed it: the ingredient's own weight for a piece, clove
