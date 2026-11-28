@@ -80,3 +80,11 @@ Test data of the Chef's ingredient matching (B1), in `matching/`, loaded by `Loa
 
 `TestBaselineLocalMatchRates` pins the no-key rate of today's resolver (line parser, then local catalogue) so B1
 can show it beats it.
+
+## Paid-canary sets (F1)
+
+`paid/*.json`, loaded by `LoadFinds`, `LoadImportCheck`, `LoadSubs`, `LoadHelp` (paid.go), used by `cmd/plantry-chef-canary -mode`:
+`finds.json` (40 requests: 8 themes x the constraints vegetarian, no_pork, mild_child, max_30min, german),
+`importcheck.json` (12 clean base recipes and 25 planted errors that are built from them: `amount_x10`, `wrong_unit`,
+`drop_step`, `swap_ingredient`, `scale_servings`), `subs.json` (28 "no X" cases with diet, allergen and never constraints)
+and `help.json` (3 recipes, 20 questions). `TestPaidSets` pins the sizes and the loaders validate references.

@@ -11,6 +11,19 @@
 //	PLANTRY_CHEF_CANARY_LIVE=1 go run ./cmd/plantry-chef-canary -db /tmp/canary.db \
 //	  -settings-db /path/plantry.db [-secret-key-file /path/secret.key]
 //
+// -mode picks what runs (labels is the default, the A3 labelling above):
+//
+//	finds        the real find pipeline over 40 requests (themes x constraints)
+//	importcheck  planted-error and clean recipes through the import check
+//	subs         substitution cases (rule-based, no provider needed)
+//	help         explain-step and went-wrong questions through chefhelp
+//	month        a normal month's cost computed from the run log
+//
+// Live runs of finds, importcheck and help need -spend-cap (USD): the run stops
+// before the next case once the run log's cost of the run reaches it. Each mode
+// writes -out as JSON and prints one line per metric. Use a copy of a real
+// database: finds, runs and the labels are written into it.
+//
 // A missing -db file is created, migrated and seeded with the set; an
 // existing one is labelled as it is (use a copy: the labels and the run log
 // are written into it). Every call is in that database's run log.
@@ -28,6 +41,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/pressly/goose/v3"
@@ -37,9 +51,11 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/anthropic"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/httpfetch"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/openai"
 	"github.com/jaltszeimer/plantry/backend/internal/chefcanary"
 	"github.com/jaltszeimer/plantry/backend/internal/chefsets"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 )
@@ -60,32 +76,54 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout 
 	settingsDB := fs.String("settings-db", "", "read the AI provider, model and key from this server database (opened read-only); env vars win")
 	secretKeyFile := fs.String("secret-key-file", "", "secret key file that decrypts -settings-db (default PLANTRY_SECRET_KEY, else secret.key next to it)")
 	out := fs.String("out", "", "write the JSON report here")
+	mode := fs.String("mode", "labels", "labels, finds, importcheck, subs, help or month")
+	spendCap := fs.Float64("spend-cap", 0, "USD: stop before the next case once the run log's cost of this run reaches it (required for a live finds, importcheck or help run)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *dbPath == "" {
 		return errors.New("-db is required")
 	}
+	if !slices.Contains(modes, *mode) {
+		return fmt.Errorf("-mode must be one of %s", strings.Join(modes, ", "))
+	}
+	if *spendCap < 0 {
+		return errors.New("-spend-cap must not be negative")
+	}
+	if *mode != "labels" && *mode != "subs" && *mode != "month" && *fakeScript == "" && *spendCap == 0 {
+		return fmt.Errorf("a live %s run needs -spend-cap", *mode)
+	}
 	set, err := loadSet(*sealed)
 	if err != nil {
 		return err
 	}
-	client, providerName, mdl, err := newClient(getenv, *model, *fakeScript, *settingsDB, *secretKeyFile)
-	if err != nil {
-		return err
+	var (
+		client       llm.Client
+		providerName string
+		mdl          string
+	)
+	if *mode != "subs" && *mode != "month" {
+		if client, providerName, mdl, err = newClient(getenv, *model, *fakeScript, *settingsDB, *secretKeyFile); err != nil {
+			return err
+		}
 	}
 	conn, err := openDB(*dbPath)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = conn.Close() }()
-	if err := chefcanary.Seed(ctx, conn, set); err != nil {
-		return err
+	if *mode != "month" {
+		if err := chefcanary.Seed(ctx, conn, set); err != nil {
+			return err
+		}
 	}
-	rep, err := chefcanary.Run(ctx, chefcanary.Config{
-		DB: conn, Set: set, Client: client, Provider: providerName, Model: mdl,
-		Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})),
-	})
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	var rep report
+	if *mode == "labels" {
+		rep, err = chefcanary.Run(ctx, chefcanary.Config{DB: conn, Set: set, Client: client, Provider: providerName, Model: mdl, Logger: logger})
+	} else {
+		rep, err = runMode(ctx, *mode, chefcanary.Env{DB: conn, Client: client, Provider: providerName, Model: mdl, Logger: logger, SpendCap: *spendCap}, *fakeScript != "")
+	}
 	if err != nil {
 		return err
 	}
@@ -100,6 +138,55 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout 
 		return err
 	}
 	return os.WriteFile(*out, b, 0o600)
+}
+
+// modes are the values of -mode.
+var modes = []string{"labels", "finds", "importcheck", "subs", "help", "month"}
+
+// report is what a mode returns: a JSON document and a text summary.
+type report interface{ Summary() string }
+
+// runMode runs one of the measurement modes. A scripted run reads no pages
+// (the finds fetcher refuses), so it never touches the network.
+func runMode(ctx context.Context, mode string, env chefcanary.Env, scripted bool) (report, error) {
+	switch mode {
+	case "finds":
+		reqs, err := chefsets.LoadFinds()
+		if err != nil {
+			return nil, err
+		}
+		var fetcher finds.Fetcher = scriptedFetcher{}
+		if !scripted {
+			fetcher = httpfetch.NewPolite(httpfetch.New(httpfetch.WithDialGuard(nil, false)))
+		}
+		return chefcanary.RunFinds(ctx, chefcanary.FindsConfig{Env: env, Requests: reqs, Fetcher: fetcher})
+	case "importcheck":
+		set, err := chefsets.LoadImportCheck()
+		if err != nil {
+			return nil, err
+		}
+		return chefcanary.RunImportCheck(ctx, chefcanary.ImportCheckConfig{Env: env, Set: set})
+	case "subs":
+		cases, err := chefsets.LoadSubs()
+		if err != nil {
+			return nil, err
+		}
+		return chefcanary.RunSubs(ctx, chefcanary.SubsConfig{DB: env.DB, Cases: cases})
+	case "help":
+		set, err := chefsets.LoadHelp()
+		if err != nil {
+			return nil, err
+		}
+		return chefcanary.RunHelp(ctx, chefcanary.HelpConfig{Env: env, Set: set})
+	}
+	return chefcanary.RunMonth(ctx, chefcanary.MonthConfig{DB: env.DB})
+}
+
+// scriptedFetcher is the finds fetcher of a scripted run: no pages.
+type scriptedFetcher struct{}
+
+func (scriptedFetcher) Fetch(context.Context, string) (string, string, error) {
+	return "", "", errors.New("a scripted run reads no pages")
 }
 
 func loadSet(sealed bool) (chefsets.Set, error) {

@@ -1,0 +1,710 @@
+{
+ "allowed_changes": [
+  "keep",
+  "role"
+ ],
+ "recipes": [
+  {
+   "id": "chili",
+   "name": "Chili con Carne",
+   "language": "de",
+   "portions": 4,
+   "prep": 15,
+   "cook": 45,
+   "ingredients": [
+    {
+     "text": "500 g Rinderhackfleisch",
+     "amount": 500,
+     "unit": "g",
+     "name": "Rinderhackfleisch"
+    },
+    {
+     "text": "2 Zwiebeln",
+     "amount": 2,
+     "unit": "piece",
+     "name": "Zwiebel"
+    },
+    {
+     "text": "400 g Kidneybohnen",
+     "amount": 400,
+     "unit": "g",
+     "name": "Kidneybohnen"
+    },
+    {
+     "text": "400 g gehackte Tomaten",
+     "amount": 400,
+     "unit": "g",
+     "name": "gehackte Tomaten"
+    },
+    {
+     "text": "2 EL Tomatenmark",
+     "amount": 2,
+     "unit": "tbsp",
+     "name": "Tomatenmark"
+    },
+    {
+     "text": "1 TL Salz",
+     "amount": 1,
+     "unit": "tsp",
+     "name": "Salz"
+    }
+   ],
+   "steps": [
+    "Zwiebeln würfeln und in Öl anbraten.",
+    "Hackfleisch zugeben und krümelig braten, bis es durchgegart ist.",
+    "Tomatenmark, Tomaten und Bohnen zugeben.",
+    "45 Minuten köcheln lassen und mit Salz abschmecken."
+   ]
+  },
+  {
+   "id": "carbonara",
+   "name": "Spaghetti Carbonara",
+   "language": "de",
+   "portions": 4,
+   "prep": 10,
+   "cook": 15,
+   "ingredients": [
+    {
+     "text": "400 g Spaghetti",
+     "amount": 400,
+     "unit": "g",
+     "name": "Spaghetti"
+    },
+    {
+     "text": "150 g Speck",
+     "amount": 150,
+     "unit": "g",
+     "name": "Speck"
+    },
+    {
+     "text": "4 Eier",
+     "amount": 4,
+     "unit": "piece",
+     "name": "Eier"
+    },
+    {
+     "text": "80 g Parmesan",
+     "amount": 80,
+     "unit": "g",
+     "name": "Parmesan"
+    },
+    {
+     "text": "1 TL Pfeffer",
+     "amount": 1,
+     "unit": "tsp",
+     "name": "Pfeffer"
+    }
+   ],
+   "steps": [
+    "Spaghetti in Salzwasser kochen.",
+    "Speck knusprig braten.",
+    "Eier mit Parmesan und Pfeffer verrühren.",
+    "Nudeln mit Speck mischen, Eiermasse unterheben und sofort servieren."
+   ]
+  },
+  {
+   "id": "lentil_soup",
+   "name": "Linsensuppe",
+   "language": "de",
+   "portions": 4,
+   "prep": 10,
+   "cook": 35,
+   "ingredients": [
+    {
+     "text": "250 g rote Linsen",
+     "amount": 250,
+     "unit": "g",
+     "name": "rote Linsen"
+    },
+    {
+     "text": "1 Zwiebel",
+     "amount": 1,
+     "unit": "piece",
+     "name": "Zwiebel"
+    },
+    {
+     "text": "2 Karotten",
+     "amount": 2,
+     "unit": "piece",
+     "name": "Karotten"
+    },
+    {
+     "text": "1 l Gemüsebrühe",
+     "amount": 1000,
+     "unit": "ml",
+     "name": "Gemüsebrühe"
+    },
+    {
+     "text": "1 TL Kreuzkümmel",
+     "amount": 1,
+     "unit": "tsp",
+     "name": "Kreuzkümmel"
+    }
+   ],
+   "steps": [
+    "Zwiebel und Karotten würfeln und andünsten.",
+    "Linsen und Kreuzkümmel zugeben.",
+    "Mit Brühe aufgießen und 25 Minuten köcheln.",
+    "Pürieren und abschmecken."
+   ]
+  },
+  {
+   "id": "pancakes",
+   "name": "Pancakes",
+   "language": "en",
+   "portions": 4,
+   "prep": 10,
+   "cook": 15,
+   "ingredients": [
+    {
+     "text": "250 g flour",
+     "amount": 250,
+     "unit": "g",
+     "name": "flour"
+    },
+    {
+     "text": "300 ml milk",
+     "amount": 300,
+     "unit": "ml",
+     "name": "milk"
+    },
+    {
+     "text": "2 eggs",
+     "amount": 2,
+     "unit": "piece",
+     "name": "eggs"
+    },
+    {
+     "text": "2 tbsp sugar",
+     "amount": 2,
+     "unit": "tbsp",
+     "name": "sugar"
+    },
+    {
+     "text": "1 tsp baking powder",
+     "amount": 1,
+     "unit": "tsp",
+     "name": "baking powder"
+    }
+   ],
+   "steps": [
+    "Mix the flour, sugar and baking powder.",
+    "Whisk in the milk and eggs until smooth.",
+    "Fry 3 minutes per side in a hot pan.",
+    "Serve warm."
+   ]
+  },
+  {
+   "id": "tomato_soup",
+   "name": "Tomato soup",
+   "language": "en",
+   "portions": 4,
+   "prep": 5,
+   "cook": 25,
+   "ingredients": [
+    {
+     "text": "800 g tomatoes",
+     "amount": 800,
+     "unit": "g",
+     "name": "tomatoes"
+    },
+    {
+     "text": "1 tbsp olive oil",
+     "amount": 1,
+     "unit": "tbsp",
+     "name": "olive oil"
+    },
+    {
+     "text": "2 cloves garlic",
+     "amount": 2,
+     "unit": "piece",
+     "name": "garlic"
+    },
+    {
+     "text": "200 ml cream",
+     "amount": 200,
+     "unit": "ml",
+     "name": "cream"
+    }
+   ],
+   "steps": [
+    "Heat the oil and fry the garlic.",
+    "Add the tomatoes and simmer for 20 minutes.",
+    "Blend until smooth.",
+    "Stir in the cream."
+   ]
+  },
+  {
+   "id": "curry",
+   "name": "Hähnchencurry",
+   "language": "de",
+   "portions": 4,
+   "prep": 15,
+   "cook": 25,
+   "ingredients": [
+    {
+     "text": "600 g Hähnchenbrust",
+     "amount": 600,
+     "unit": "g",
+     "name": "Hähnchenbrust"
+    },
+    {
+     "text": "400 ml Kokosmilch",
+     "amount": 400,
+     "unit": "ml",
+     "name": "Kokosmilch"
+    },
+    {
+     "text": "2 EL Currypaste",
+     "amount": 2,
+     "unit": "tbsp",
+     "name": "Currypaste"
+    },
+    {
+     "text": "300 g Reis",
+     "amount": 300,
+     "unit": "g",
+     "name": "Reis"
+    },
+    {
+     "text": "1 Paprika",
+     "amount": 1,
+     "unit": "piece",
+     "name": "Paprika"
+    }
+   ],
+   "steps": [
+    "Reis nach Packungsanleitung kochen.",
+    "Hähnchen in Stücken anbraten, bis es durch ist.",
+    "Currypaste und Paprika zugeben.",
+    "Kokosmilch angießen und 10 Minuten köcheln lassen."
+   ]
+  },
+  {
+   "id": "risotto",
+   "name": "Pilzrisotto",
+   "language": "de",
+   "portions": 4,
+   "prep": 10,
+   "cook": 30,
+   "ingredients": [
+    {
+     "text": "300 g Risottoreis",
+     "amount": 300,
+     "unit": "g",
+     "name": "Risottoreis"
+    },
+    {
+     "text": "300 g Champignons",
+     "amount": 300,
+     "unit": "g",
+     "name": "Champignons"
+    },
+    {
+     "text": "1 Zwiebel",
+     "amount": 1,
+     "unit": "piece",
+     "name": "Zwiebel"
+    },
+    {
+     "text": "1 l Gemüsebrühe",
+     "amount": 1000,
+     "unit": "ml",
+     "name": "Gemüsebrühe"
+    },
+    {
+     "text": "50 g Parmesan",
+     "amount": 50,
+     "unit": "g",
+     "name": "Parmesan"
+    }
+   ],
+   "steps": [
+    "Pilze anbraten und beiseitestellen.",
+    "Zwiebel und Reis andünsten.",
+    "Nach und nach Brühe zugeben und 20 Minuten rühren.",
+    "Pilze und Parmesan unterrühren."
+   ]
+  },
+  {
+   "id": "salmon",
+   "name": "Ofenlachs mit Kartoffeln",
+   "language": "de",
+   "portions": 2,
+   "prep": 10,
+   "cook": 30,
+   "ingredients": [
+    {
+     "text": "2 Lachsfilets",
+     "amount": 2,
+     "unit": "piece",
+     "name": "Lachsfilet"
+    },
+    {
+     "text": "500 g Kartoffeln",
+     "amount": 500,
+     "unit": "g",
+     "name": "Kartoffeln"
+    },
+    {
+     "text": "1 Zitrone",
+     "amount": 1,
+     "unit": "piece",
+     "name": "Zitrone"
+    },
+    {
+     "text": "2 EL Olivenöl",
+     "amount": 2,
+     "unit": "tbsp",
+     "name": "Olivenöl"
+    },
+    {
+     "text": "1 TL Salz",
+     "amount": 1,
+     "unit": "tsp",
+     "name": "Salz"
+    }
+   ],
+   "steps": [
+    "Ofen auf 200 Grad vorheizen.",
+    "Kartoffeln in Spalten schneiden und 15 Minuten backen.",
+    "Lachs mit Zitrone und Öl dazulegen.",
+    "Weitere 12 Minuten backen."
+   ]
+  },
+  {
+   "id": "stirfry",
+   "name": "Gemüsepfanne mit Tofu",
+   "language": "de",
+   "portions": 2,
+   "prep": 15,
+   "cook": 15,
+   "ingredients": [
+    {
+     "text": "200 g Tofu",
+     "amount": 200,
+     "unit": "g",
+     "name": "Tofu"
+    },
+    {
+     "text": "300 g Brokkoli",
+     "amount": 300,
+     "unit": "g",
+     "name": "Brokkoli"
+    },
+    {
+     "text": "1 Karotte",
+     "amount": 1,
+     "unit": "piece",
+     "name": "Karotte"
+    },
+    {
+     "text": "3 EL Sojasauce",
+     "amount": 3,
+     "unit": "tbsp",
+     "name": "Sojasauce"
+    },
+    {
+     "text": "200 g Nudeln",
+     "amount": 200,
+     "unit": "g",
+     "name": "Nudeln"
+    }
+   ],
+   "steps": [
+    "Nudeln kochen und abgießen.",
+    "Tofu goldbraun braten.",
+    "Gemüse zugeben und 5 Minuten braten.",
+    "Mit Sojasauce und Nudeln vermengen."
+   ]
+  },
+  {
+   "id": "bread",
+   "name": "Bauernbrot",
+   "language": "de",
+   "portions": 10,
+   "prep": 20,
+   "cook": 50,
+   "ingredients": [
+    {
+     "text": "500 g Weizenmehl",
+     "amount": 500,
+     "unit": "g",
+     "name": "Weizenmehl"
+    },
+    {
+     "text": "350 ml Wasser",
+     "amount": 350,
+     "unit": "ml",
+     "name": "Wasser"
+    },
+    {
+     "text": "10 g Salz",
+     "amount": 10,
+     "unit": "g",
+     "name": "Salz"
+    },
+    {
+     "text": "7 g Trockenhefe",
+     "amount": 7,
+     "unit": "g",
+     "name": "Trockenhefe"
+    }
+   ],
+   "steps": [
+    "Alle Zutaten verkneten.",
+    "Teig 1 Stunde gehen lassen.",
+    "Zu einem Laib formen.",
+    "Bei 220 Grad 50 Minuten backen."
+   ]
+  },
+  {
+   "id": "potato_soup",
+   "name": "Kartoffelsuppe",
+   "language": "de",
+   "portions": 4,
+   "prep": 15,
+   "cook": 30,
+   "ingredients": [
+    {
+     "text": "800 g Kartoffeln",
+     "amount": 800,
+     "unit": "g",
+     "name": "Kartoffeln"
+    },
+    {
+     "text": "2 Karotten",
+     "amount": 2,
+     "unit": "piece",
+     "name": "Karotten"
+    },
+    {
+     "text": "1 Zwiebel",
+     "amount": 1,
+     "unit": "piece",
+     "name": "Zwiebel"
+    },
+    {
+     "text": "1 l Gemüsebrühe",
+     "amount": 1000,
+     "unit": "ml",
+     "name": "Gemüsebrühe"
+    },
+    {
+     "text": "100 ml Sahne",
+     "amount": 100,
+     "unit": "ml",
+     "name": "Sahne"
+    }
+   ],
+   "steps": [
+    "Gemüse würfeln.",
+    "Zwiebel andünsten, Gemüse zugeben.",
+    "Mit Brühe aufgießen und 25 Minuten garen.",
+    "Teilweise pürieren und Sahne einrühren."
+   ]
+  },
+  {
+   "id": "pasta_pesto",
+   "name": "Pasta mit Pesto",
+   "language": "en",
+   "portions": 2,
+   "prep": 5,
+   "cook": 12,
+   "ingredients": [
+    {
+     "text": "200 g penne",
+     "amount": 200,
+     "unit": "g",
+     "name": "penne"
+    },
+    {
+     "text": "4 tbsp basil pesto",
+     "amount": 4,
+     "unit": "tbsp",
+     "name": "basil pesto"
+    },
+    {
+     "text": "100 g cherry tomatoes",
+     "amount": 100,
+     "unit": "g",
+     "name": "cherry tomatoes"
+    },
+    {
+     "text": "30 g parmesan",
+     "amount": 30,
+     "unit": "g",
+     "name": "parmesan"
+    }
+   ],
+   "steps": [
+    "Cook the penne in salted water.",
+    "Halve the tomatoes.",
+    "Drain the pasta and toss with the pesto.",
+    "Top with tomatoes and parmesan."
+   ]
+  }
+ ],
+ "planted": [
+  {
+   "id": "chili-amount_x10-0",
+   "base": "chili",
+   "kind": "amount_x10",
+   "ingredient": 0
+  },
+  {
+   "id": "carbonara-amount_x10-2",
+   "base": "carbonara",
+   "kind": "amount_x10",
+   "ingredient": 2
+  },
+  {
+   "id": "lentil_soup-amount_x10-0",
+   "base": "lentil_soup",
+   "kind": "amount_x10",
+   "ingredient": 0
+  },
+  {
+   "id": "curry-amount_x10-1",
+   "base": "curry",
+   "kind": "amount_x10",
+   "ingredient": 1
+  },
+  {
+   "id": "salmon-amount_x10-1",
+   "base": "salmon",
+   "kind": "amount_x10",
+   "ingredient": 1
+  },
+  {
+   "id": "chili-wrong_unit-0",
+   "base": "chili",
+   "kind": "wrong_unit",
+   "ingredient": 0,
+   "to_unit": "ml"
+  },
+  {
+   "id": "pancakes-wrong_unit-0",
+   "base": "pancakes",
+   "kind": "wrong_unit",
+   "ingredient": 0,
+   "to_unit": "tbsp"
+  },
+  {
+   "id": "risotto-wrong_unit-0",
+   "base": "risotto",
+   "kind": "wrong_unit",
+   "ingredient": 0,
+   "to_unit": "piece"
+  },
+  {
+   "id": "potato_soup-wrong_unit-0",
+   "base": "potato_soup",
+   "kind": "wrong_unit",
+   "ingredient": 0,
+   "to_unit": "tbsp"
+  },
+  {
+   "id": "stirfry-wrong_unit-1",
+   "base": "stirfry",
+   "kind": "wrong_unit",
+   "ingredient": 1,
+   "to_unit": "ml"
+  },
+  {
+   "id": "chili-drop_step-1",
+   "base": "chili",
+   "kind": "drop_step",
+   "step": 1
+  },
+  {
+   "id": "curry-drop_step-1",
+   "base": "curry",
+   "kind": "drop_step",
+   "step": 1
+  },
+  {
+   "id": "salmon-drop_step-2",
+   "base": "salmon",
+   "kind": "drop_step",
+   "step": 2
+  },
+  {
+   "id": "risotto-drop_step-2",
+   "base": "risotto",
+   "kind": "drop_step",
+   "step": 2
+  },
+  {
+   "id": "potato_soup-drop_step-2",
+   "base": "potato_soup",
+   "kind": "drop_step",
+   "step": 2
+  },
+  {
+   "id": "chili-swap_ingredient-1",
+   "base": "chili",
+   "kind": "swap_ingredient",
+   "ingredient": 1,
+   "to_name": "Zucker"
+  },
+  {
+   "id": "curry-swap_ingredient-0",
+   "base": "curry",
+   "kind": "swap_ingredient",
+   "ingredient": 0,
+   "to_name": "Marzipan"
+  },
+  {
+   "id": "pancakes-swap_ingredient-0",
+   "base": "pancakes",
+   "kind": "swap_ingredient",
+   "ingredient": 0,
+   "to_name": "sawdust"
+  },
+  {
+   "id": "salmon-swap_ingredient-2",
+   "base": "salmon",
+   "kind": "swap_ingredient",
+   "ingredient": 2,
+   "to_name": "Honig"
+  },
+  {
+   "id": "stirfry-swap_ingredient-1",
+   "base": "stirfry",
+   "kind": "swap_ingredient",
+   "ingredient": 1,
+   "to_name": "Schokolade"
+  },
+  {
+   "id": "chili-scale_servings-",
+   "base": "chili",
+   "kind": "scale_servings",
+   "factor": 6
+  },
+  {
+   "id": "pancakes-scale_servings-",
+   "base": "pancakes",
+   "kind": "scale_servings",
+   "factor": 6
+  },
+  {
+   "id": "salmon-scale_servings-",
+   "base": "salmon",
+   "kind": "scale_servings",
+   "factor": 10
+  },
+  {
+   "id": "risotto-scale_servings-",
+   "base": "risotto",
+   "kind": "scale_servings",
+   "factor": 6
+  },
+  {
+   "id": "pasta_pesto-scale_servings-",
+   "base": "pasta_pesto",
+   "kind": "scale_servings",
+   "factor": 12
+  }
+ ]
+}

@@ -1,0 +1,674 @@
+{
+ "cases": [
+  {
+   "id": "butter-dairy",
+   "recipe": "Pfannkuchen",
+   "remove": "Butter",
+   "lines": [
+    {
+     "name": "Butter",
+     "grams": 30.0
+    },
+    {
+     "name": "Mehl",
+     "grams": 250.0
+    },
+    {
+     "name": "Milch",
+     "grams": 500.0
+    },
+    {
+     "name": "Eier",
+     "grams": 150.0
+    }
+   ],
+   "allergens": [
+    "dairy"
+   ]
+  },
+  {
+   "id": "butter-vegan",
+   "recipe": "Kartoffelpüree",
+   "remove": "Butter",
+   "lines": [
+    {
+     "name": "Butter",
+     "grams": 40.0
+    },
+    {
+     "name": "Kartoffeln",
+     "grams": 800.0
+    },
+    {
+     "name": "Salz",
+     "grams": 5.0
+    }
+   ],
+   "diet": "vegan"
+  },
+  {
+   "id": "butter-none",
+   "recipe": "Spritzgebäck",
+   "remove": "Butter",
+   "lines": [
+    {
+     "name": "Butter",
+     "grams": 100.0
+    },
+    {
+     "name": "Mehl",
+     "grams": 250.0
+    },
+    {
+     "name": "Zucker",
+     "grams": 80.0
+    }
+   ]
+  },
+  {
+   "id": "onion-never",
+   "recipe": "Chili sin Carne",
+   "remove": "Zwiebel",
+   "lines": [
+    {
+     "name": "Zwiebel",
+     "grams": 150.0
+    },
+    {
+     "name": "Kidneybohnen",
+     "grams": 400.0
+    },
+    {
+     "name": "Tomaten",
+     "grams": 400.0
+    },
+    {
+     "name": "Mais",
+     "grams": 150.0
+    }
+   ],
+   "never": [
+    "onion"
+   ]
+  },
+  {
+   "id": "onion-none",
+   "recipe": "Gulasch",
+   "remove": "Zwiebel",
+   "lines": [
+    {
+     "name": "Zwiebel",
+     "grams": 300.0
+    },
+    {
+     "name": "Rindfleisch",
+     "grams": 600.0
+    },
+    {
+     "name": "Paprika",
+     "grams": 200.0
+    },
+    {
+     "name": "Tomatenmark",
+     "grams": 30.0
+    }
+   ]
+  },
+  {
+   "id": "garlic-none",
+   "recipe": "Spaghetti aglio e olio",
+   "remove": "Knoblauch",
+   "lines": [
+    {
+     "name": "Knoblauch",
+     "grams": 12.0
+    },
+    {
+     "name": "Spaghetti",
+     "grams": 400.0
+    },
+    {
+     "name": "Olivenöl",
+     "grams": 60.0
+    },
+    {
+     "name": "Petersilie",
+     "grams": 10.0
+    }
+   ]
+  },
+  {
+   "id": "sugar-vegan",
+   "recipe": "Haferkekse",
+   "remove": "Zucker",
+   "lines": [
+    {
+     "name": "Zucker",
+     "grams": 100.0
+    },
+    {
+     "name": "Haferflocken",
+     "grams": 200.0
+    },
+    {
+     "name": "Mehl",
+     "grams": 150.0
+    },
+    {
+     "name": "Margarine",
+     "grams": 120.0
+    }
+   ],
+   "diet": "vegan"
+  },
+  {
+   "id": "sugar-none",
+   "recipe": "Rührkuchen",
+   "remove": "Zucker",
+   "lines": [
+    {
+     "name": "Zucker",
+     "grams": 150.0
+    },
+    {
+     "name": "Mehl",
+     "grams": 300.0
+    },
+    {
+     "name": "Eier",
+     "grams": 200.0
+    },
+    {
+     "name": "Margarine",
+     "grams": 150.0
+    }
+   ]
+  },
+  {
+   "id": "honey-vegan",
+   "recipe": "Müsliriegel",
+   "remove": "Honig",
+   "lines": [
+    {
+     "name": "Honig",
+     "grams": 80.0
+    },
+    {
+     "name": "Haferflocken",
+     "grams": 250.0
+    },
+    {
+     "name": "Mandeln",
+     "grams": 80.0
+    },
+    {
+     "name": "Rosinen",
+     "grams": 60.0
+    }
+   ],
+   "diet": "vegan"
+  },
+  {
+   "id": "beef_mince-never-pork",
+   "recipe": "Bolognese",
+   "remove": "Rinderhackfleisch",
+   "lines": [
+    {
+     "name": "Rinderhackfleisch",
+     "grams": 500.0
+    },
+    {
+     "name": "Tomaten",
+     "grams": 400.0
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100.0
+    },
+    {
+     "name": "Möhren",
+     "grams": 100.0
+    }
+   ],
+   "never": [
+    "pork"
+   ]
+  },
+  {
+   "id": "bacon-never-pork",
+   "recipe": "Kartoffelsuppe",
+   "remove": "Speck",
+   "lines": [
+    {
+     "name": "Speck",
+     "grams": 100.0
+    },
+    {
+     "name": "Kartoffeln",
+     "grams": 600.0
+    },
+    {
+     "name": "Möhren",
+     "grams": 150.0
+    },
+    {
+     "name": "Brühe",
+     "grams": 800.0
+    }
+   ],
+   "never": [
+    "pork"
+   ]
+  },
+  {
+   "id": "flour-gluten",
+   "recipe": "Soßenbinder-Soße",
+   "remove": "Weizenmehl",
+   "lines": [
+    {
+     "name": "Weizenmehl",
+     "grams": 30.0
+    },
+    {
+     "name": "Brühe",
+     "grams": 500.0
+    },
+    {
+     "name": "Butter",
+     "grams": 30.0
+    },
+    {
+     "name": "Pilze",
+     "grams": 200.0
+    }
+   ],
+   "allergens": [
+    "gluten"
+   ]
+  },
+  {
+   "id": "pasta-gluten",
+   "recipe": "Tomatenpasta",
+   "remove": "Spaghetti",
+   "lines": [
+    {
+     "name": "Spaghetti",
+     "grams": 320.0
+    },
+    {
+     "name": "Tomaten",
+     "grams": 400.0
+    },
+    {
+     "name": "Olivenöl",
+     "grams": 30.0
+    },
+    {
+     "name": "Basilikum",
+     "grams": 10.0
+    }
+   ],
+   "allergens": [
+    "gluten"
+   ]
+  },
+  {
+   "id": "soy_sauce-soy",
+   "recipe": "Gemüsewok",
+   "remove": "Sojasauce",
+   "lines": [
+    {
+     "name": "Sojasauce",
+     "grams": 45.0
+    },
+    {
+     "name": "Brokkoli",
+     "grams": 300.0
+    },
+    {
+     "name": "Karotte",
+     "grams": 150.0
+    },
+    {
+     "name": "Reis",
+     "grams": 300.0
+    }
+   ],
+   "allergens": [
+    "soy"
+   ]
+  },
+  {
+   "id": "mayonnaise-egg",
+   "recipe": "Kartoffelsalat",
+   "remove": "Mayonnaise",
+   "lines": [
+    {
+     "name": "Mayonnaise",
+     "grams": 120.0
+    },
+    {
+     "name": "Kartoffeln",
+     "grams": 800.0
+    },
+    {
+     "name": "Gurken",
+     "grams": 150.0
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 60.0
+    }
+   ],
+   "allergens": [
+    "egg"
+   ]
+  },
+  {
+   "id": "ghee-dairy",
+   "recipe": "Dal",
+   "remove": "Ghee",
+   "lines": [
+    {
+     "name": "Ghee",
+     "grams": 30.0
+    },
+    {
+     "name": "Linsen",
+     "grams": 250.0
+    },
+    {
+     "name": "Tomaten",
+     "grams": 200.0
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100.0
+    }
+   ],
+   "allergens": [
+    "dairy"
+   ]
+  },
+  {
+   "id": "white_wine-alcohol",
+   "recipe": "Risotto",
+   "remove": "Weißwein",
+   "lines": [
+    {
+     "name": "Weißwein",
+     "grams": 100.0
+    },
+    {
+     "name": "Risottoreis",
+     "grams": 300.0
+    },
+    {
+     "name": "Brühe",
+     "grams": 900.0
+    },
+    {
+     "name": "Parmesan",
+     "grams": 50.0
+    }
+   ]
+  },
+  {
+   "id": "red_wine-alcohol",
+   "recipe": "Rinderschmorbraten",
+   "remove": "Rotwein",
+   "lines": [
+    {
+     "name": "Rotwein",
+     "grams": 250.0
+    },
+    {
+     "name": "Rindfleisch",
+     "grams": 800.0
+    },
+    {
+     "name": "Möhren",
+     "grams": 200.0
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 150.0
+    }
+   ]
+  },
+  {
+   "id": "parmesan-vegetarian",
+   "recipe": "Pesto-Nudeln",
+   "remove": "Parmesan",
+   "lines": [
+    {
+     "name": "Parmesan",
+     "grams": 50.0
+    },
+    {
+     "name": "Penne",
+     "grams": 400.0
+    },
+    {
+     "name": "Basilikum",
+     "grams": 40.0
+    },
+    {
+     "name": "Pinienkerne",
+     "grams": 30.0
+    }
+   ],
+   "diet": "vegetarian"
+  },
+  {
+   "id": "chicken_breast-never",
+   "recipe": "Hähnchen-Curry",
+   "remove": "Hähnchenbrust",
+   "lines": [
+    {
+     "name": "Hähnchenbrust",
+     "grams": 500.0
+    },
+    {
+     "name": "Kokosmilch",
+     "grams": 400.0
+    },
+    {
+     "name": "Currypaste",
+     "grams": 30.0
+    },
+    {
+     "name": "Reis",
+     "grams": 300.0
+    }
+   ],
+   "never": [
+    "chicken"
+   ]
+  },
+  {
+   "id": "lemon_juice-none",
+   "recipe": "Hummus",
+   "remove": "Zitronensaft",
+   "lines": [
+    {
+     "name": "Zitronensaft",
+     "grams": 40.0
+    },
+    {
+     "name": "Kichererbsen",
+     "grams": 400.0
+    },
+    {
+     "name": "Tahini",
+     "grams": 60.0
+    },
+    {
+     "name": "Knoblauch",
+     "grams": 6.0
+    }
+   ]
+  },
+  {
+   "id": "tomato_paste-none",
+   "recipe": "Linsen-Bolognese",
+   "remove": "Tomatenmark",
+   "lines": [
+    {
+     "name": "Tomatenmark",
+     "grams": 40.0
+    },
+    {
+     "name": "Linsen",
+     "grams": 250.0
+    },
+    {
+     "name": "Möhren",
+     "grams": 150.0
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100.0
+    }
+   ]
+  },
+  {
+   "id": "parsley-none",
+   "recipe": "Kartoffeln mit Quark",
+   "remove": "Petersilie",
+   "lines": [
+    {
+     "name": "Petersilie",
+     "grams": 15.0
+    },
+    {
+     "name": "Kartoffeln",
+     "grams": 800.0
+    },
+    {
+     "name": "Quark",
+     "grams": 250.0
+    },
+    {
+     "name": "Schnittlauch",
+     "grams": 10.0
+    }
+   ]
+  },
+  {
+   "id": "rice-none",
+   "recipe": "Gemüsepfanne",
+   "remove": "Reis",
+   "lines": [
+    {
+     "name": "Reis",
+     "grams": 300.0
+    },
+    {
+     "name": "Paprika",
+     "grams": 200.0
+    },
+    {
+     "name": "Zucchini",
+     "grams": 200.0
+    },
+    {
+     "name": "Sojasauce",
+     "grams": 30.0
+    }
+   ]
+  },
+  {
+   "id": "mascarpone-none",
+   "recipe": "Tiramisu",
+   "remove": "Mascarpone",
+   "lines": [
+    {
+     "name": "Mascarpone",
+     "grams": 250.0
+    },
+    {
+     "name": "Löffelbiskuit",
+     "grams": 200.0
+    },
+    {
+     "name": "Eier",
+     "grams": 150.0
+    },
+    {
+     "name": "Zucker",
+     "grams": 60.0
+    }
+   ]
+  },
+  {
+   "id": "potato-none",
+   "recipe": "Bratkartoffeln",
+   "remove": "Kartoffeln",
+   "lines": [
+    {
+     "name": "Kartoffeln",
+     "grams": 800.0
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100.0
+    },
+    {
+     "name": "Öl",
+     "grams": 30.0
+    },
+    {
+     "name": "Speck",
+     "grams": 80.0
+    }
+   ]
+  },
+  {
+   "id": "bouillon_cube-none",
+   "recipe": "Gemüsereis",
+   "remove": "Brühwürfel",
+   "lines": [
+    {
+     "name": "Brühwürfel",
+     "grams": 10.0
+    },
+    {
+     "name": "Reis",
+     "grams": 300.0
+    },
+    {
+     "name": "Erbsen",
+     "grams": 150.0
+    },
+    {
+     "name": "Möhren",
+     "grams": 100.0
+    }
+   ]
+  },
+  {
+   "id": "vinegar-none",
+   "recipe": "Salatdressing",
+   "remove": "Essig",
+   "lines": [
+    {
+     "name": "Essig",
+     "grams": 30.0
+    },
+    {
+     "name": "Olivenöl",
+     "grams": 60.0
+    },
+    {
+     "name": "Senf",
+     "grams": 10.0
+    },
+    {
+     "name": "Honig",
+     "grams": 10.0
+    }
+   ]
+  }
+ ]
+}

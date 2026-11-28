@@ -1,0 +1,324 @@
+{
+ "requests": [
+  {
+   "id": "japanese-vegetarian",
+   "dish": "Japanese vegetable curry",
+   "theme": "japanese",
+   "constraint": "vegetarian",
+   "diet": "vegetarian"
+  },
+  {
+   "id": "japanese-no_pork",
+   "dish": "Japanese chicken katsu bowl",
+   "theme": "japanese",
+   "constraint": "no_pork",
+   "never": [
+    "pork"
+   ]
+  },
+  {
+   "id": "japanese-mild_child",
+   "dish": "Japanese chicken teriyaki, mild",
+   "theme": "japanese",
+   "constraint": "mild_child",
+   "rather_not": [
+    "spicy",
+    "chili"
+   ]
+  },
+  {
+   "id": "japanese-max_30min",
+   "dish": "Japanese miso noodle soup, quick",
+   "theme": "japanese",
+   "constraint": "max_30min",
+   "max_minutes": 30
+  },
+  {
+   "id": "japanese-german",
+   "dish": "Japanische Gyoza mit Gemüsefüllung",
+   "theme": "japanese",
+   "constraint": "german",
+   "lang": "de"
+  },
+  {
+   "id": "mexican-vegetarian",
+   "dish": "Mexican black bean tacos",
+   "theme": "mexican",
+   "constraint": "vegetarian",
+   "diet": "vegetarian"
+  },
+  {
+   "id": "mexican-no_pork",
+   "dish": "Mexican chicken fajitas",
+   "theme": "mexican",
+   "constraint": "no_pork",
+   "never": [
+    "pork"
+   ]
+  },
+  {
+   "id": "mexican-mild_child",
+   "dish": "Mexican quesadillas, mild and kid friendly",
+   "theme": "mexican",
+   "constraint": "mild_child",
+   "rather_not": [
+    "spicy",
+    "chili"
+   ]
+  },
+  {
+   "id": "mexican-max_30min",
+   "dish": "Mexican bean and corn soup, quick",
+   "theme": "mexican",
+   "constraint": "max_30min",
+   "max_minutes": 30
+  },
+  {
+   "id": "mexican-german",
+   "dish": "Mexikanische Gemüse-Enchiladas",
+   "theme": "mexican",
+   "constraint": "german",
+   "lang": "de"
+  },
+  {
+   "id": "one_pot-vegetarian",
+   "dish": "One-pot vegetable chili",
+   "theme": "one_pot",
+   "constraint": "vegetarian",
+   "diet": "vegetarian"
+  },
+  {
+   "id": "one_pot-no_pork",
+   "dish": "One-pot chicken and rice",
+   "theme": "one_pot",
+   "constraint": "no_pork",
+   "never": [
+    "pork"
+   ]
+  },
+  {
+   "id": "one_pot-mild_child",
+   "dish": "One-pot pasta, mild and kid friendly",
+   "theme": "one_pot",
+   "constraint": "mild_child",
+   "rather_not": [
+    "spicy",
+    "chili"
+   ]
+  },
+  {
+   "id": "one_pot-max_30min",
+   "dish": "One-pot lentil stew, quick",
+   "theme": "one_pot",
+   "constraint": "max_30min",
+   "max_minutes": 30
+  },
+  {
+   "id": "one_pot-german",
+   "dish": "Eintopf mit Kartoffeln und Möhren",
+   "theme": "one_pot",
+   "constraint": "german",
+   "lang": "de"
+  },
+  {
+   "id": "quick_weeknight-vegetarian",
+   "dish": "Quick vegetable stir-fry with noodles",
+   "theme": "quick_weeknight",
+   "constraint": "vegetarian",
+   "diet": "vegetarian"
+  },
+  {
+   "id": "quick_weeknight-no_pork",
+   "dish": "Quick garlic chicken with broccoli",
+   "theme": "quick_weeknight",
+   "constraint": "no_pork",
+   "never": [
+    "pork"
+   ]
+  },
+  {
+   "id": "quick_weeknight-mild_child",
+   "dish": "Quick tomato pasta, mild and kid friendly",
+   "theme": "quick_weeknight",
+   "constraint": "mild_child",
+   "rather_not": [
+    "spicy",
+    "chili"
+   ]
+  },
+  {
+   "id": "quick_weeknight-max_30min",
+   "dish": "Quick shrimp fried rice, under 30 minutes",
+   "theme": "quick_weeknight",
+   "constraint": "max_30min",
+   "max_minutes": 30
+  },
+  {
+   "id": "quick_weeknight-german",
+   "dish": "Schnelle Gemüsepfanne mit Reis",
+   "theme": "quick_weeknight",
+   "constraint": "german",
+   "lang": "de"
+  },
+  {
+   "id": "soup-vegetarian",
+   "dish": "Creamy roasted pumpkin soup",
+   "theme": "soup",
+   "constraint": "vegetarian",
+   "diet": "vegetarian"
+  },
+  {
+   "id": "soup-no_pork",
+   "dish": "Chicken noodle soup",
+   "theme": "soup",
+   "constraint": "no_pork",
+   "never": [
+    "pork"
+   ]
+  },
+  {
+   "id": "soup-mild_child",
+   "dish": "Mild carrot and potato soup for kids",
+   "theme": "soup",
+   "constraint": "mild_child",
+   "rather_not": [
+    "spicy",
+    "chili"
+   ]
+  },
+  {
+   "id": "soup-max_30min",
+   "dish": "Quick red lentil soup, 25 minutes",
+   "theme": "soup",
+   "constraint": "max_30min",
+   "max_minutes": 30
+  },
+  {
+   "id": "soup-german",
+   "dish": "Klassische Kartoffelsuppe",
+   "theme": "soup",
+   "constraint": "german",
+   "lang": "de"
+  },
+  {
+   "id": "indian-vegetarian",
+   "dish": "Chana masala",
+   "theme": "indian",
+   "constraint": "vegetarian",
+   "diet": "vegetarian"
+  },
+  {
+   "id": "indian-no_pork",
+   "dish": "Butter chicken",
+   "theme": "indian",
+   "constraint": "no_pork",
+   "never": [
+    "pork"
+   ]
+  },
+  {
+   "id": "indian-mild_child",
+   "dish": "Mild vegetable korma for kids",
+   "theme": "indian",
+   "constraint": "mild_child",
+   "rather_not": [
+    "spicy",
+    "chili"
+   ]
+  },
+  {
+   "id": "indian-max_30min",
+   "dish": "Quick dal tadka, under 30 minutes",
+   "theme": "indian",
+   "constraint": "max_30min",
+   "max_minutes": 30
+  },
+  {
+   "id": "indian-german",
+   "dish": "Indisches Linsen-Dal",
+   "theme": "indian",
+   "constraint": "german",
+   "lang": "de"
+  },
+  {
+   "id": "italian-vegetarian",
+   "dish": "Spinach and ricotta cannelloni",
+   "theme": "italian",
+   "constraint": "vegetarian",
+   "diet": "vegetarian"
+  },
+  {
+   "id": "italian-no_pork",
+   "dish": "Chicken cacciatore",
+   "theme": "italian",
+   "constraint": "no_pork",
+   "never": [
+    "pork"
+   ]
+  },
+  {
+   "id": "italian-mild_child",
+   "dish": "Mild pasta al forno for kids",
+   "theme": "italian",
+   "constraint": "mild_child",
+   "rather_not": [
+    "spicy",
+    "chili"
+   ]
+  },
+  {
+   "id": "italian-max_30min",
+   "dish": "Quick aglio e olio with vegetables, 20 minutes",
+   "theme": "italian",
+   "constraint": "max_30min",
+   "max_minutes": 30
+  },
+  {
+   "id": "italian-german",
+   "dish": "Gemüselasagne",
+   "theme": "italian",
+   "constraint": "german",
+   "lang": "de"
+  },
+  {
+   "id": "mediterranean-vegetarian",
+   "dish": "Greek vegetable moussaka",
+   "theme": "mediterranean",
+   "constraint": "vegetarian",
+   "diet": "vegetarian"
+  },
+  {
+   "id": "mediterranean-no_pork",
+   "dish": "Greek chicken souvlaki with rice",
+   "theme": "mediterranean",
+   "constraint": "no_pork",
+   "never": [
+    "pork"
+   ]
+  },
+  {
+   "id": "mediterranean-mild_child",
+   "dish": "Mild falafel plate for kids",
+   "theme": "mediterranean",
+   "constraint": "mild_child",
+   "rather_not": [
+    "spicy",
+    "chili"
+   ]
+  },
+  {
+   "id": "mediterranean-max_30min",
+   "dish": "Quick shakshuka, under 30 minutes",
+   "theme": "mediterranean",
+   "constraint": "max_30min",
+   "max_minutes": 30
+  },
+  {
+   "id": "mediterranean-german",
+   "dish": "Griechischer Bauernsalat mit Ofenfeta",
+   "theme": "mediterranean",
+   "constraint": "german",
+   "lang": "de"
+  }
+ ]
+}
