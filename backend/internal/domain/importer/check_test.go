@@ -65,6 +65,21 @@ var plantedRecipes = map[string]*importer.RawRecipe{
 		RecipeInstructions: []string{"Mix everything.", "Fry 3 minutes per side."},
 		PrepMinutes:        10, CookMinutes: 15,
 	},
+	// An oven temperature in the step, and a plural onion.
+	"oven_chicken": {
+		Name:               "Ofenhähnchen",
+		RecipeYieldNumber:  2,
+		RecipeIngredient:   []string{"4 Hähnchenschenkel", "Zwiebeln", "Wasser"},
+		RecipeInstructions: []string{"Hähnchenschenkel bei 200 °C im Ofen backen.", "Zwiebel anbraten.", "Wasser kochen."},
+		PrepMinutes:        5, CookMinutes: 40,
+	},
+	"oven_chicken_en": {
+		Name:               "Oven chicken",
+		RecipeYieldNumber:  2,
+		RecipeIngredient:   []string{"4 chicken thighs", "1 tbsp oil"},
+		RecipeInstructions: []string{"Bake the chicken thighs at 200 °C in the oven."},
+		PrepMinutes:        5, CookMinutes: 40,
+	},
 	// A foreign-language page.
 	"english": {
 		Name:               "Tomato soup",
@@ -350,4 +365,44 @@ func TestCheck_ASafetyCueUsesTheTableTemperature(t *testing.T) {
 	steps, check = edited(t, "curry", `{"step":0,"kind":"safety_cue","text":"Hähnchen in Stücken anbraten, bis es durch ist (nach 12 Minuten 74 °C)."}`)
 	assert.Equal(t, "Hähnchen in Stücken anbraten, bis es durch ist.", steps[0])
 	assert.Empty(t, check.Changes)
+}
+
+func TestCheck_ASafetyCueKeepsTheOvenTemperature(t *testing.T) {
+	want := "Hähnchenschenkel bei 200 °C im Ofen backen, bis die Kerntemperatur 74 °C erreicht."
+	steps, check := edited(t, "oven_chicken", `{"step":0,"kind":"safety_cue","text":"Hähnchenschenkel bei 200 °C im Ofen backen, bis die Kerntemperatur 75 °C erreicht."}`)
+	assert.Equal(t, want, steps[0])
+	assert.Len(t, check.Changes, 1)
+
+	r := newCheckRig(t, plantedRecipes["oven_chicken_en"], run,
+		checkTurn(`{"step_edits":[{"step":0,"kind":"safety_cue","text":"Bake the chicken thighs at 200 °C in the oven until the core temperature reaches 165 °C."}]}`))
+	d := r.draft(t)
+	check, err := r.svc.Check(context.Background(), d, "en")
+	require.NoError(t, err)
+	assert.Equal(t, "Bake the chicken thighs at 200 °C in the oven until the core temperature reaches 74 °C.", d.Instructions[0])
+	assert.Len(t, check.Changes, 1)
+}
+
+func TestCheck_ASplitSentenceIsAClarityRewrite(t *testing.T) {
+	steps, check := edited(t, "oven_chicken", `{"step":0,"kind":"clarity","reason":"zu lang","text":"Hähnchenschenkel im Ofen backen. Die Temperatur beträgt 200 °C."}`)
+	assert.Equal(t, "Hähnchenschenkel im Ofen backen. Die Temperatur beträgt 200 °C.", steps[0])
+	assert.Empty(t, check.Flags)
+	assert.Len(t, check.Changes, 1)
+
+	// A new ingredient in the extra sentence is flagged once, without the model's reason.
+	_, check = edited(t, "oven_chicken", `{"step":1,"kind":"clarity","reason":"missing","text":"Zwiebel anbraten. Dann Wasser zugeben."},
+		{"step":1,"kind":"clarity","reason":"missing","text":"Zwiebel anbraten. Dann Wasser zugeben und kochen."}`)
+	require.Len(t, check.Flags, 1)
+	assert.Equal(t, "Ein Schritt scheint zu fehlen", check.Flags[0].Text)
+}
+
+func TestCheck_IngredientMentionsCompareByStem(t *testing.T) {
+	steps, check := edited(t, "oven_chicken", `{"step":1,"kind":"clarity","text":"Zwiebeln anbraten."}`)
+	assert.Equal(t, "Zwiebeln anbraten.", steps[1])
+	assert.Empty(t, check.Flags)
+	assert.Len(t, check.Changes, 1)
+
+	steps, check = edited(t, "oven_chicken", `{"step":2,"kind":"clarity","text":"Salzwasser kochen."}`)
+	assert.Equal(t, "Salzwasser kochen.", steps[2])
+	assert.Empty(t, check.Flags)
+	assert.Len(t, check.Changes, 1)
 }

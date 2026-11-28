@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -311,13 +313,21 @@ func cueText(old, text string) (string, bool) {
 		return "", false
 	}
 	want := fmt.Sprint(temp)
-	text = cueTempRE.ReplaceAllStringFunc(text, func(m string) string {
-		return cueTempRE.ReplaceAllString(m, want+"$2")
-	})
 	have := map[string]int{}
 	for _, n := range numberRE.FindAllString(old, -1) {
 		have[strings.ReplaceAll(n, ",", ".")]++
 	}
+	// Only a temperature the step does not already carry (an oven
+	// temperature stays) is the core temperature to correct.
+	seen := maps.Clone(have)
+	text = cueTempRE.ReplaceAllStringFunc(text, func(m string) string {
+		sub := cueTempRE.FindStringSubmatch(m)
+		if seen[sub[1]] > 0 {
+			seen[sub[1]]--
+			return m
+		}
+		return want + sub[2]
+	})
 	for _, n := range numberRE.FindAllString(text, -1) {
 		n = strings.ReplaceAll(n, ",", ".")
 		if have[n] > 0 {
@@ -335,20 +345,37 @@ var sentenceEndRE = regexp.MustCompile(`[.!?](?:\s|$)`)
 // ingredient line without an amount the step did not, or brings a protein the
 // ingredient list lacks, is a missing step in disguise, not a clearer step.
 func addsContent(d *Draft, old, next string) bool {
-	if len(sentenceEndRE.FindAllString(next, -1)) > max(1, len(sentenceEndRE.FindAllString(old, -1))) {
-		return true
-	}
 	fo, fn := diet.Fold(old), diet.Fold(next)
+	extra := len(sentenceEndRE.FindAllString(next, -1)) > max(1, len(sentenceEndRE.FindAllString(old, -1)))
 	var names strings.Builder
 	for _, in := range d.Ingredients {
-		names.WriteString(diet.Fold(in.Name) + " ")
-		if n := diet.Fold(in.Name); len(n) >= 4 && in.Amount == 0 && !in.ToTaste && strings.Contains(fn, n) && !strings.Contains(fo, n) {
+		n := diet.Fold(in.Name)
+		names.WriteString(n + " ")
+		// A split sentence alone is no missing step: only a new mention is.
+		if (extra || in.Amount == 0 && !in.ToTaste) && newMention(fo, fn, n) {
 			return true
 		}
 	}
 	_, inNext := gates.CoreTempC(fn)
 	_, inOld := gates.CoreTempC(fo + " " + names.String())
 	return inNext && !inOld
+}
+
+// newMention: the folded ingredient name n is in next but not in old.
+// Names compare by stem (a plural or case ending dropped), and a name the
+// old step already holds as a word or compound part counts as present.
+func newMention(old, next, n string) bool {
+	stem := n
+	switch {
+	case strings.HasSuffix(stem, "en"):
+		stem = stem[:len(stem)-2]
+	case strings.HasSuffix(stem, "n"), strings.HasSuffix(stem, "s"), strings.HasSuffix(stem, "e"):
+		stem = stem[:len(stem)-1]
+	}
+	if len(stem) < 4 {
+		stem = n
+	}
+	return len(n) >= 4 && strings.Contains(next, stem) && !strings.Contains(old, stem)
 }
 
 // apply validates r against d and applies what is valid, in place. It
@@ -432,7 +459,9 @@ func apply(d *Draft, r checkReply, lang string) (*Check, []string) {
 			reject("step %d out of range", e.Step)
 		case kind == ChangeClarity && text != "" && addsContent(d, d.Instructions[e.Step], text):
 			reject("step %d: a rewrite adds content", e.Step)
-			out.Flags = append(out.Flags, Flag{Ingredient: -1, Step: e.Step, Text: missingStep(lang, e.Reason)})
+			if !slices.ContainsFunc(out.Flags, func(f Flag) bool { return f.Step == e.Step }) {
+				out.Flags = append(out.Flags, Flag{Ingredient: -1, Step: e.Step, Text: missingStep(lang)})
+			}
 		case text == "" || len(text) > 2000 || text == d.Instructions[e.Step]:
 			reject("step %d text", e.Step)
 		case !keepsNumbers(d.Instructions[e.Step], text):
@@ -534,15 +563,11 @@ func translation(d *Draft, name, desc string, steps []string) []Edit {
 	return edits
 }
 
-func missingStep(lang, reason string) string {
-	prefix := "A step seems to be missing"
+func missingStep(lang string) string {
 	if lang == "de" {
-		prefix = "Ein Schritt scheint zu fehlen"
+		return "Ein Schritt scheint zu fehlen"
 	}
-	if reason = strings.TrimSpace(reason); reason != "" {
-		return prefix + ": " + reason
-	}
-	return prefix
+	return "A step seems to be missing"
 }
 
 // proposable are the units a proposed amount may use.
