@@ -8,9 +8,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
 // R5 fix: a wish's maximum minutes is the whole cooking time of the plate's
@@ -155,4 +158,55 @@ func TestFixQuickSides_UnderFloorDayKeepsItsKcal(t *testing.T) {
 	got, notes := fixQuickSides(in, prop, map[int64]bool{})
 	assert.Empty(t, notes, "the lighter salad and a drop would both deepen the deficit")
 	assert.Len(t, got.Sessions, 2)
+}
+
+// R6 (planner-13): a side left out for the wish's minutes takes its kcal
+// with it; the balance pass lifts the day again within the limit.
+func TestFixQuickBalanced_LiftsTheDayAfterASideIsLeftOut(t *testing.T) {
+	t.Parallel()
+	mon := time.Date(2026, 11, 30, 0, 0, 0, 0, time.UTC)
+	const dinner, curry, roast int64 = 3, 7, 8
+	cell := plate.CellKey{Date: mon, SlotID: dinner}
+	k := 2400.0
+	s := State{
+		Window:    window.Window{Start: mon, End: mon},
+		Today:     mon.AddDate(0, 0, -3),
+		SlotOrder: plate.SlotOrder{dinner: 0},
+		Cells:     []Cell{{Date: mon, SlotID: dinner, Mode: availability.ModePlan}},
+		Foods: map[int64]FoodFacts{
+			curry: {ID: curry, Name: "Curry", Kind: food.KindComposed, Role: food.RoleMain, DietClass: "vegan", Minutes: 25, ReferencePortions: 1, NutritionComplete: true, Macros: nutrition.Macros{Kcal: 1900, Protein: 76, Fat: 44, Carbs: 250}},
+			roast: {ID: roast, Name: "Roasted vegetables", Kind: food.KindComposed, Role: food.RoleSideVeg, DietClass: "vegan", Minutes: 30, ReferencePortions: 1, NutritionComplete: true, Macros: nutrition.Macros{Kcal: 600, Protein: 12, Fat: 16, Carbs: 80}},
+		},
+		MaxMinutes: map[cellID]int{idOf(cell): 30},
+		Profile:    Profile{DietType: profile.DietOmnivore, HouseholdPortions: 1, KcalTarget: &k},
+		Settings:   Settings{MaxCookOccasionsPerDay: 1, VarietyWeeks: 3},
+	}
+	in := ChooseInput{State: s, Target: Target{Cells: []plate.CellKey{cell}}}
+	prop := Proposal{
+		Sessions: []ProposedSession{
+			{Key: "s1", FoodID: curry, CookDate: mon, CookSlotID: dinner, Portions: 1},
+			{Key: "s2", FoodID: roast, CookDate: mon, CookSlotID: dinner, Portions: 1},
+		},
+		Plates: []ProposedPlate{{Date: mon, SlotID: dinner, Components: []ProposedComponent{
+			{FoodID: curry, Portions: 1, SessionKey: "s1"}, {FoodID: roast, Portions: 1, SessionKey: "s2"},
+		}}},
+	}
+	dayKcal := func(p Proposal) (kcal, low float64) {
+		ev := evaluateLean(Merge(in.State, in.Target, p), in.Target)
+		require.Len(t, ev.Days, 1)
+		return ev.Days[0].Kcal, ev.Days[0].BandLow
+	}
+	before, low := dayKcal(prop)
+	require.GreaterOrEqual(t, before, low, "the fixture starts inside the band")
+
+	plain, _ := fixQuick(in, prop)
+	left, _ := dayKcal(plain)
+	require.Less(t, left, low, "leaving the side out drops the day under its band")
+
+	got, notes := fixQuickBalanced(in, prop)
+
+	require.NotEmpty(t, notes)
+	after, _ := dayKcal(got)
+	assert.GreaterOrEqual(t, after, low, "the day is lifted back into its band")
+	assert.LessOrEqual(t, Merge(in.State, in.Target, got).cellMinutes(cell, 0), 30, "within the wish's minutes")
 }

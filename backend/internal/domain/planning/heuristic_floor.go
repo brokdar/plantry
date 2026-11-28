@@ -124,6 +124,19 @@ func (h *planner) trimOvershoot() {
 	}
 }
 
+// trimKeeps reports whether the day after a trim step (now) is acceptable
+// against the day before it (was): at or above the band bottom and the H9
+// floor (which follows the normal target, never a light one), closer to the
+// band top, and no further under its protein target than before.
+func (h *planner) trimKeeps(was, now *DayKcal) bool {
+	pol := h.x.pol
+	if now.Kcal < now.Adjusted*pol.DayLow-epsilon || now.Kcal < now.Floor(pol)-epsilon || now.Kcal >= was.Kcal {
+		return false
+	}
+	t := pol.ProteinTargetG(now.Share())
+	return t <= 0 || now.ProteinG >= min(t, was.ProteinG)-epsilon
+}
+
 // trimStep lowers one raised component of dk's day by a quarter portion
 // when that keeps the day at or above its band bottom and brings it closer
 // to the band top; false when no component does.
@@ -148,7 +161,7 @@ func (h *planner) trimStep(dk *DayKcal) bool {
 			if ok {
 				h.prop.Sessions[si].Portions -= p.eaters(h.s) * roundPortions
 			}
-			if now := h.dayNow(dk.Date); now != nil && now.Kcal >= now.Adjusted*h.x.pol.DayLow-epsilon && now.Kcal < dk.Kcal {
+			if now := h.dayNow(dk.Date); now != nil && h.trimKeeps(dk, now) {
 				return true
 			}
 			c.Portions += roundPortions

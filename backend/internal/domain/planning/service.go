@@ -1170,7 +1170,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 				finishNotes = append(finishNotes, weekNotes...)
 				// A wish's time limit outlives the week guard's swaps (V72).
 				var quickNotes []string
-				prop, quickNotes = fixQuick(cin, prop)
+				prop, quickNotes = fixQuickBalanced(cin, prop)
 				finishNotes = append(finishNotes, quickNotes...)
 				// The finishing steps may leave a repeat the variety weeks forbid
 				// (H8); the repair keeps a wish's limit (h2-planner-00).

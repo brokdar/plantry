@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -162,5 +163,96 @@ func TestHeuristic_RoundedUpLiftDoesNotCarryADayPastTheBandTop(t *testing.T) {
 		d := ev.Days[i]
 		assert.LessOrEqual(t, d.Kcal, *d.TargetKcal*1.05+1, "the day stays at or under the band top")
 		assert.GreaterOrEqual(t, d.Kcal, *d.TargetKcal*0.9-1, "and does not fall under its bottom")
+	}
+}
+
+// dinnerOnly is a one-dinner Monday of a main and a starch, both lifted by
+// the lifts of topUpFloors (target 2400 kcal: the dinner's band is 720-880,
+// its floor 600).
+func dinnerOnly(mainKcal, starchKcal float64) (planning.State, planning.Target) {
+	s := baseState()
+	s.Profile.KcalTarget = f64(2400)
+	s.Settings.PlateFit = true
+	a := recipe(chili, "Main", food.RoleMain, "omnivore", mainKcal)
+	a.ReferencePortions = 1
+	b := recipe(rice, "Starch", food.RoleSideStarch, "vegan", starchKcal)
+	b.ReferencePortions = 1
+	s.Foods = map[int64]planning.FoodFacts{chili: a, rice: b}
+	setMode(&s, cell(mon, breakfast), "none")
+	setMode(&s, cell(mon, lunch), "none")
+	return s, targetCells(cell(mon, dinner))
+}
+
+func monday(t *testing.T, s planning.State, tgt planning.Target, p planning.Proposal) planning.DayEval {
+	t.Helper()
+	ev := planning.Evaluate(planning.Merge(s, tgt, p), tgt)
+	i := slices.IndexFunc(ev.Days, func(d planning.DayEval) bool { return d.Date == mon })
+	require.GreaterOrEqual(t, i, 0)
+	return ev.Days[i]
+}
+
+// R6 review: a light day's band bottom (0.9 of 85 %) can sit under the H9
+// floor, which follows the normal target; the trim must not take the day
+// under it (here the day is 450 kcal over a 437 band top, one quarter step
+// lands on 375 < floor 400).
+func TestHeuristic_TrimKeepsTheH9FloorOnALightDay(t *testing.T) {
+	s := baseState()
+	s.Profile.KcalTarget = f64(1400)
+	s.Settings.PlateFit = true
+	a := recipe(chili, "Main", food.RoleMain, "omnivore", 300)
+	a.ReferencePortions = 1
+	b := recipe(rice, "Starch", food.RoleSideStarch, "vegan", 60)
+	b.ReferencePortions = 1
+	s.Foods = map[int64]planning.FoodFacts{chili: a, rice: b}
+	setMode(&s, cell(mon, breakfast), "none")
+	setMode(&s, cell(mon, lunch), "none")
+	s.Light = []planning.LightIntent{{Date: mon, Scope: planning.LightScopeDay}}
+	tgt := targetCells(cell(mon, dinner))
+
+	d := monday(t, s, tgt, choose(t, planning.ChooseInput{State: s, Target: tgt}))
+
+	assert.GreaterOrEqual(t, d.Kcal, d.FloorKcal-1e-6, "the trim never takes a day under the H9 floor")
+}
+
+// R6 review: a quarter step that would take the day under its protein
+// target (it meets it before the trim) stays; the trim may only use a step
+// that keeps the protein.
+func TestHeuristic_TrimKeepsTheDayProteinTarget(t *testing.T) {
+	s, tgt := dinnerOnly(500, 100)
+	s.Profile.WeightKg = f64(126) // 1 g/kg over a third of the day: 42 g
+
+	d := monday(t, s, tgt, choose(t, planning.ChooseInput{State: s, Target: tgt}))
+
+	require.NotZero(t, d.ProteinTargetG)
+	assert.GreaterOrEqual(t, d.ProteinG, d.ProteinTargetG-1e-6, "the trim keeps the protein target")
+	assert.LessOrEqual(t, d.Kcal, *d.TargetKcal*1.1+1, "and the day still ends inside the band")
+}
+
+// R6 review: a trimmed component takes its share out of the batch it eats
+// from, so a session's portions stay the sum over its plates.
+func TestHeuristic_TrimKeepsBatchPortionsEqualToWhatIsEaten(t *testing.T) {
+	s, _ := dinnerOnly(500, 100)
+	s.Settings.BatchCooking = true
+	setMode(&s, cell(tue, breakfast), "none")
+	setMode(&s, cell(tue, lunch), "none")
+	tgt := targetCells(cell(mon, dinner), cell(tue, dinner))
+
+	p := choose(t, planning.ChooseInput{State: s, Target: tgt})
+
+	eaten := map[string]float64{}
+	for _, pl := range p.Plates {
+		e := pl.Eaters
+		if e == 0 {
+			e = s.Profile.HouseholdPortions
+		}
+		for _, c := range pl.Components {
+			if c.SessionKey != "" {
+				eaten[c.SessionKey] += e * c.Portions
+			}
+		}
+	}
+	require.NotEmpty(t, p.Sessions)
+	for _, ss := range p.Sessions {
+		assert.InDelta(t, eaten[ss.Key], ss.Portions, 1e-6, "session %s", ss.Key)
 	}
 }
