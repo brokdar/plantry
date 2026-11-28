@@ -104,6 +104,28 @@ type Check struct {
 	// CapWarning: the check ran at the monthly cap because the user asked
 	// for it (COST-2).
 	CapWarning bool `json:"cap_warning,omitempty"`
+	// RunID is the chef_import_check run; the client sends it back with the
+	// outcome when the recipe is saved.
+	RunID int64 `json:"run_id,omitempty"`
+}
+
+// CheckOutcome is what the user did with a check's findings when the recipe
+// was saved. Flags are never applied or dismissed, so Flags counts the ones
+// a saved recipe ignored.
+type CheckOutcome struct {
+	RunID  int64
+	FoodID int64
+	// Kept and Undone are the kinds of the applied changes the user kept and
+	// put back.
+	Kept, Undone []string
+	// Touch is "none" (no suggestion), "added" or "skipped".
+	Touch string
+	Flags int
+}
+
+// OutcomeStore keeps check outcomes (one per run, a resave replaces it).
+type OutcomeStore interface {
+	SaveCheckOutcome(ctx context.Context, o CheckOutcome, now time.Time) error
 }
 
 // CheckPermit is the Chef guard's answer for one import check.
@@ -195,6 +217,7 @@ func (c *Checker) run(ctx context.Context, d *Draft, lang string) (*Check, error
 	out, rejected := apply(d, reply, lang)
 	out.Ran = true
 	out.CapWarning = permit.Warn
+	out.RunID = run.ID()
 	if report, err := json.Marshal(struct {
 		Applied  int      `json:"applied"`
 		Flags    int      `json:"flags"`

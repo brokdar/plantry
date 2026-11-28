@@ -5,7 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
+	"time"
 
+	"github.com/go-chi/chi/v5"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/chefhelp"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
@@ -17,7 +22,8 @@ type helpService interface {
 
 // HelpHandler serves the cook-mode model-backed help (HELP-2).
 type HelpHandler struct {
-	svc helpService
+	svc      helpService
+	verdicts chefhelp.VerdictStore
 }
 
 // NewHelpHandler creates a HelpHandler.
@@ -51,6 +57,34 @@ func (h *HelpHandler) Help(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "error.ai.provider_missing")
 	case errors.Is(err, chefhelp.ErrModel):
 		writeError(w, http.StatusBadGateway, "error.ai.provider_error")
+	default:
+		writePlateError(w, err)
+	}
+}
+
+// WithVerdicts sets the store of the one-tap help verdicts.
+func (h *HelpHandler) WithVerdicts(v chefhelp.VerdictStore) *HelpHandler {
+	h.verdicts = v
+	return h
+}
+
+// Verdict handles PUT /api/chef/help/{runId}/verdict: the one-tap "Helped" /
+// "Didn't help" under an answer; a later call changes it.
+func (h *HelpHandler) Verdict(w http.ResponseWriter, r *http.Request) {
+	runID, err := strconv.ParseInt(chi.URLParam(r, "runId"), 10, 64)
+	var req struct {
+		Verdict string `json:"verdict"`
+	}
+	if err != nil || runID <= 0 || json.NewDecoder(r.Body).Decode(&req) != nil ||
+		(req.Verdict != chefhelp.VerdictHelped && req.Verdict != chefhelp.VerdictNotHelped) {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	switch err := h.verdicts.SetVerdict(r.Context(), runID, req.Verdict, time.Now().UTC()); {
+	case err == nil:
+		w.WriteHeader(http.StatusNoContent)
+	case errors.Is(err, domain.ErrNotFound):
+		writeError(w, http.StatusNotFound, "error.not_found")
 	default:
 		writePlateError(w, err)
 	}

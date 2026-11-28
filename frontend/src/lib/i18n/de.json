@@ -3090,6 +3090,11 @@
     "error": "Gerade kam keine Antwort zurück. Versuch es noch einmal.",
     "chef_off": "Der Küchenchef ist ausgeschaltet, deshalb kann ich nicht antworten. Schalte ihn in den Einstellungen ein.",
     "no_provider": "Der Assistent ist nicht eingerichtet, deshalb kann ich nicht antworten. Hinterlege in den Einstellungen einen Anbieter.",
+    "verdict": {
+      "label": "War das hilfreich?",
+      "helped": "Hat geholfen",
+      "not_helped": "Hat nicht geholfen"
+    },
     "problem": {
       "too_salty": "Zu salzig",
       "too_thin": "Zu dünn",

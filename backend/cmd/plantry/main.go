@@ -475,7 +475,8 @@ func run() error {
 			d, err := matchGuard.Check(ctx, airun.KindChefImportCheck, requested)
 			return importer.CheckPermit{Run: d.Run, Warn: d.Warn}, err
 		}))
-	importHandler := handlers.NewImportHandler(importSvc)
+	outcomeRepo := sqlite.NewOutcomeRepo(conn)
+	importHandler := handlers.NewImportHandler(importSvc).WithOutcomes(outcomeRepo)
 
 	// Discovery (D7): research → verify → annotate → store, one run
 	// at a time in the background. LLM-supplied URLs
@@ -724,7 +725,7 @@ func run() error {
 		Availability:  handlers.NewAvailabilityHandler(availabilitySvc).WithClock(clock.Now),
 		FoodEvents:    handlers.NewFoodEventHandler(foodEventSvc),
 		Substitutions: handlers.NewSubstitutionHandler(substitutionSvc),
-		Help:          handlers.NewHelpHandler(helpSvc),
+		Help:          handlers.NewHelpHandler(helpSvc).WithVerdicts(outcomeRepo),
 		RecipeChanges: handlers.NewRecipeChangeHandler(recipeChangeSvc),
 		Attributes:    handlers.NewAttributeHandler(flavorSvc),
 		Setup:         handlers.NewSetupHandler(setup.NewService(settingsSvc, foodRepo)),

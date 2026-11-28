@@ -238,6 +238,7 @@ func TestCheck_RejectsInvalidChanges(t *testing.T) {
 	assert.Nil(t, d.KeepDays)
 	assert.Equal(t, before.Role, d.Role)
 	assert.True(t, check.Ran, "an empty check still ran")
+	assert.NotZero(t, check.RunID, "the client sends the run id back with the outcome")
 }
 
 func TestCheck_ProposedAmountAndCupUnit(t *testing.T) {

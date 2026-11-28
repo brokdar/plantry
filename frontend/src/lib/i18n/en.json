@@ -3090,6 +3090,11 @@
     "error": "I couldn't get an answer just now. Try again.",
     "chef_off": "The Chef is switched off, so I can't answer. Turn it on in Settings.",
     "no_provider": "The assistant isn't set up, so I can't answer. Add a provider in Settings.",
+    "verdict": {
+      "label": "Was this helpful?",
+      "helped": "Helped",
+      "not_helped": "Didn't help"
+    },
     "problem": {
       "too_salty": "Too salty",
       "too_thin": "Too thin",

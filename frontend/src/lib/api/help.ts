@@ -30,3 +30,17 @@ export function askHelp(
 ): Promise<{ answer: string[]; run_id: number }> {
   return apiFetch("/help", { method: "POST", body: JSON.stringify(input) })
 }
+
+export type HelpVerdict = "helped" | "not_helped"
+
+/** PUT /api/chef/help/{runId}/verdict — the one-tap "Helped" / "Didn't help";
+ *  a later call changes it. */
+export function setHelpVerdict(
+  runId: number,
+  verdict: HelpVerdict
+): Promise<void> {
+  return apiFetch(`/chef/help/${runId}/verdict`, {
+    method: "PUT",
+    body: JSON.stringify({ verdict }),
+  })
+}

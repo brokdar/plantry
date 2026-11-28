@@ -16,11 +16,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import type {
-  Draft,
-  ImportCheck,
-  ImportChange,
-  IngredientEditValue,
+import {
+  postImportCheckOutcome,
+  type Draft,
+  type ImportCheck,
+  type ImportChange,
+  type IngredientEditValue,
 } from "@/lib/api/import"
 import { useExtractRecipe, useResolveImport } from "@/lib/queries/import"
 import type { FoodRole } from "@/lib/api/foods"
@@ -270,6 +271,25 @@ export function ImportWizard({
       })
       if (created.warnings?.includes("image_download_failed")) {
         toast.warning(t("import.review.image_download_failed"))
+      }
+      if (check?.ran && check.run_id) {
+        // Quiet: a failed signal never touches the save.
+        void postImportCheckOutcome({
+          run_id: check.run_id,
+          food_id: created.id,
+          kept: check.changes
+            .filter((c) => !undone.has(c.id))
+            .map((c) => c.kind),
+          undone: check.changes
+            .filter((c) => undone.has(c.id))
+            .map((c) => c.kind),
+          touch: !check.finishing_touch
+            ? "none"
+            : touchAdded
+              ? "added"
+              : "skipped",
+          flags: check.flags.length,
+        }).catch(() => {})
       }
       onSaved?.(created.id)
       navigate({

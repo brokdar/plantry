@@ -184,6 +184,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 		}
 		if h.Help != nil {
 			api.Post("/help", h.Help.Help)
+			api.Put("/chef/help/{runId}/verdict", h.Help.Verdict)
 		}
 
 		if h.PlanWrite != nil || h.PlanRead != nil || h.PlanGenerate != nil {
@@ -350,6 +351,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			api.Route("/import", func(r chi.Router) {
 				r.Post("/extract", h.Import.Extract)
 				r.Post("/check", h.Import.Check)
+				r.Post("/check/outcome", h.Import.CheckOutcome)
 				r.Post("/resolve", h.Import.Resolve)
 				r.Get("/lookup", h.Import.LookupLine)
 			})

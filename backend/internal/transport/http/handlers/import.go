@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
 
@@ -24,7 +25,8 @@ type ImportService interface {
 
 // ImportHandler is the HTTP transport for the recipe import pipeline.
 type ImportHandler struct {
-	svc ImportService
+	svc      ImportService
+	outcomes importer.OutcomeStore
 }
 
 // NewImportHandler constructs an ImportHandler.
@@ -151,6 +153,40 @@ func (h *ImportHandler) Check(w http.ResponseWriter, r *http.Request) {
 	}
 	check := h.check(r.Context(), req.Draft, req.Lang)
 	writeJSON(w, http.StatusOK, extractResponse{Draft: req.Draft, Check: check})
+}
+
+// WithOutcomes sets the store of import-check outcomes.
+func (h *ImportHandler) WithOutcomes(o importer.OutcomeStore) *ImportHandler {
+	h.outcomes = o
+	return h
+}
+
+type checkOutcomeRequest struct {
+	RunID  int64    `json:"run_id"`
+	FoodID int64    `json:"food_id"`
+	Kept   []string `json:"kept"`
+	Undone []string `json:"undone"`
+	Touch  string   `json:"touch"`
+	Flags  int      `json:"flags"`
+}
+
+// CheckOutcome handles POST /api/import/check/outcome: what the user did
+// with the check's findings, sent when the recipe is saved.
+func (h *ImportHandler) CheckOutcome(w http.ResponseWriter, r *http.Request) {
+	var req checkOutcomeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RunID <= 0 || req.Flags < 0 ||
+		(req.Touch != "none" && req.Touch != "added" && req.Touch != "skipped") {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	err := h.outcomes.SaveCheckOutcome(r.Context(), importer.CheckOutcome{
+		RunID: req.RunID, FoodID: req.FoodID, Kept: req.Kept, Undone: req.Undone, Touch: req.Touch, Flags: req.Flags,
+	}, time.Now().UTC())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "error.server")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func hostOf(raw string) string {

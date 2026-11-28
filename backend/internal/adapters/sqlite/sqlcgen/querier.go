@@ -388,7 +388,12 @@ type Querier interface {
 	UpsertCookSession(ctx context.Context, arg UpsertCookSessionParams) error
 	UpsertFoodAttributes(ctx context.Context, arg UpsertFoodAttributesParams) error
 	UpsertFoodPortion(ctx context.Context, arg UpsertFoodPortionParams) error
+	// Keeps the verdict of a chef_help run with its recipe (from the run's
+	// scope: the cook session) and request kind. No row is written for a run that
+	// is not a chef_help run.
+	UpsertHelpVerdict(ctx context.Context, arg UpsertHelpVerdictParams) (int64, error)
 	UpsertHiddenVariant(ctx context.Context, arg UpsertHiddenVariantParams) error
+	UpsertImportCheckOutcome(ctx context.Context, arg UpsertImportCheckOutcomeParams) error
 	UpsertPlateFeedback(ctx context.Context, arg UpsertPlateFeedbackParams) (PlateFeedback, error)
 	UpsertProfile(ctx context.Context, arg UpsertProfileParams) (UserProfile, error)
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
