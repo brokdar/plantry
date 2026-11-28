@@ -78,7 +78,7 @@ var containerWords = map[string]struct{}{
 
 // countWords are English words that count a food as a piece when no unit
 // precedes them ("1 package tofu", "2 servings rice").
-var countWords = setOf("package", "packages", "pkg", "serving", "servings")
+var countWords = setOf("package", "packages", "pkg", "serving", "servings", "box", "boxes", "batch", "batches")
 
 // dualUnitMetricFirstRE and dualUnitMetricSecondRE match a line that gives its
 // amount in two systems ("300g/12oz flour", "12oz/300g flour"); the metric
