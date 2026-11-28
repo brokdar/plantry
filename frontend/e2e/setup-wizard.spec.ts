@@ -83,6 +83,15 @@ test.describe("Setup wizard", () => {
       await expect(page.getByRole("main")).toBeFocused()
     })
 
+    await test.step("a new install starts with the Chef on (ON-3)", async () => {
+      const settings = await getJSON<{
+        items: { key: string; value: string }[]
+      }>("/api/settings")
+      expect(settings.items.find((i) => i.key === "chef.enabled")?.value).toBe(
+        "true"
+      )
+    })
+
     await test.step("the defaults are stored", async () => {
       const slots = await getJSON<{
         items: { id: number; name_key: string; active: boolean }[]
@@ -126,5 +135,10 @@ test.describe("Setup wizard", () => {
 
     // Plan D21: the planner specs seed plates on today's dates.
     await setSetting("plan.anchor", "today")
+    // The other specs expect the Chef off (their own setup turns it on): drop
+    // the stored override so the setting is back to its default, no DB badge.
+    const ctx = await apiRequest.newContext({ baseURL: API })
+    expect((await ctx.delete("/api/settings/chef.enabled")).ok()).toBe(true)
+    await ctx.dispose()
   })
 })

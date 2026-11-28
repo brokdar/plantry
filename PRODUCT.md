@@ -40,7 +40,7 @@ Success: within the first hour a new user deploys Plantry, finishes setup, build
 
 ## Capabilities and Constraints
 
-- Features: plan board (7 days × slots), availability (Plan / No plate / Routine), generation, draft vs confirmed, batch cooking and freezer, assistant panel, Today, cook mode, recipes and ingredients (barcode, OFF, FDC, URL import), Discover, shopping list with in-store mode, Settings, Insights.
+- Features: plan board (7 days × slots), availability (Plan / No plate / Routine), generation, draft vs confirmed, batch cooking and freezer, assistant panel, Today, cook mode, recipes and ingredients (barcode, OFF, FDC, URL import), Discover, the Chef (plate tips, substitutions and variants, Taste page, finds, themes and New dishes, help in cook mode, recipe sites, monthly library review), shopping list with in-store mode, Settings, Insights.
 - Out of scope: food log, pantry tracker, social features, grocery delivery, fitness tracker, SaaS or accounts, telling users what diet to follow.
 - One Go binary with the React SPA embedded and one SQLite file, cross-compiled to amd64, arm64 and arm/v7.
 - Vocabulary is fixed: Plate, Batch, Leftover, No plate, Routine, Draft/Confirmed, Assistant, Recipe/Ingredient (the en/de table is in UX_DESIGN_SPEC §7). Labels never use "AI", "LLM" or "agent".
