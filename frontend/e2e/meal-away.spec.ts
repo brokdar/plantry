@@ -164,13 +164,14 @@ test.describe("meal away", () => {
       await expect(cookEntries(page, s.days[1], s.stew)).toHaveCount(0)
       await expect(cookEntries(page, s.days[2], s.stew)).toHaveCount(1)
       await expect(nextLunch).toContainText("Cook")
-      // The away day is not flagged: no cell of it, empty or not, "needs
-      // attention" (an away day has no kcal floor to miss).
-      await expect(
-        page.locator(
-          `[data-cell-key^="${s.days[1]}|"] [aria-label*="needs attention"]`
-        )
-      ).toHaveCount(0)
+      // The away day is not flagged: neither of its cells "needs attention"
+      // (an away day has no kcal floor to miss). Only this test's own slots:
+      // a slot another spec seeds after the Away commit is not away.
+      for (const cell of [dinner, lunch]) {
+        await expect(
+          cell.locator('[aria-label*="needs attention"]')
+        ).toHaveCount(0)
+      }
 
       const back = page.waitForResponse(
         (r) =>
