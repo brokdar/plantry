@@ -129,7 +129,7 @@ The target file must not exist yet. When the report is not enough, `plantry back
 mkdir plantry && cd plantry
 curl -fsSLO https://raw.githubusercontent.com/brokdar/plantry/main/docker-compose.server.yml
 cat > .env <<'ENV'
-TZ=Europe/Berlin
+# TZ=<your time zone>            # set it: "today" follows it
 # PLANTRY_VERSION=1.2.3          # pin a release (tag without the "v"); default: latest
 # PLANTRY_AI_PROVIDER=anthropic  # optional, see Configuration
 # PLANTRY_AI_MODEL=
@@ -139,7 +139,7 @@ docker compose -f docker-compose.server.yml pull
 docker compose -f docker-compose.server.yml up -d
 ```
 
-Set `TZ` to your own zone: Plantry's "today" is the container's local date, so with the default (`Etc/UTC`) the day turns over at the wrong hour. If the package is private, log in once with a token that has `read:packages`: `docker login ghcr.io -u <github-user>`.
+Set `TZ` (in `.env`) to your own time zone: Plantry's "today" is the container's local date. If the package is private, log in once with a token that has `read:packages`: `docker login ghcr.io -u <github-user>`.
 
 **Update.** Back up first, then pull, restart, check:
 

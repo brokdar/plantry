@@ -4,12 +4,13 @@
 # backups, follows TZ and logs no secret. Runs on the dev machine (arm64
 # under QEMU) and on the server itself.
 #
-#   scripts/deploy-smoke.sh [-image ref] [-build] [-upgrade-db backup.db] [-keep]
+#   scripts/deploy-smoke.sh [-image ref] [-platform p] [-build] [-upgrade-db backup.db] [-keep]
 #
 #   -image ref         image to test (default: plantry-smoke-img:local, or
 #                      ghcr.io/brokdar/plantry:latest without -build)
-#   -build             build the image first for linux/arm64 (SMOKE_PLATFORM
-#                      overrides, e.g. linux/amd64 for a quick native run)
+#   -platform p        linux/amd64, linux/arm64 or linux/arm/v7 (default: the
+#                      host's; a foreign one runs under QEMU/binfmt)
+#   -build             build the image first for the platform
 #   -upgrade-db file   a `plantry backup` file; a secret.key beside it is used
 #                      too. Adds the upgrade check.
 #   -keep              keep the containers and volumes (names are printed)
@@ -22,10 +23,11 @@
 # never uses port 8080.
 set -u
 
-IMAGE="" BUILD=0 UPGRADE_DB="" KEEP=0
+IMAGE="" SMOKE_PLATFORM="${SMOKE_PLATFORM:-}" BUILD=0 UPGRADE_DB="" KEEP=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -image) IMAGE="${2:?-image needs a value}"; shift 2 ;;
+    -platform) SMOKE_PLATFORM="${2:?-platform needs a value}"; shift 2 ;;
     -build) BUILD=1; shift ;;
     -upgrade-db) UPGRADE_DB="${2:?-upgrade-db needs a value}"; shift 2 ;;
     -keep) KEEP=1; shift ;;
@@ -45,12 +47,12 @@ P="plantry-smoke-$ID"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/$P.XXXXXX")"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 PLATFORM_FLAG=()
-if [ "$BUILD" = 1 ]; then
-  SMOKE_PLATFORM="${SMOKE_PLATFORM:-linux/arm64}"
+if [ "$BUILD" = 1 ] && [ -z "$SMOKE_PLATFORM" ]; then
+  case "$(uname -m)" in aarch64|arm64) SMOKE_PLATFORM=linux/arm64 ;; armv7l|armv6l) SMOKE_PLATFORM=linux/arm/v7 ;; *) SMOKE_PLATFORM=linux/amd64 ;; esac
 fi
 [ -n "${SMOKE_PLATFORM:-}" ] && PLATFORM_FLAG=(--platform "$SMOKE_PLATFORM")
 if [ -z "$IMAGE" ]; then
-  if [ "$BUILD" = 1 ]; then IMAGE="plantry-smoke-img:local"; else IMAGE="ghcr.io/brokdar/plantry:latest"; fi
+  if [ "$BUILD" = 1 ]; then IMAGE="plantry-smoke-img:$(echo "$SMOKE_PLATFORM" | tr '/' '-')"; else IMAGE="ghcr.io/brokdar/plantry:latest"; fi
 fi
 EXPECT_VERSION=""
 CONTAINERS=() VOLUMES=()
@@ -62,7 +64,7 @@ cleanup() {
   fi
   for c in "${CONTAINERS[@]:-}"; do [ -n "$c" ] && docker rm -f "$c" >/dev/null 2>&1; done
   for v in "${VOLUMES[@]:-}"; do [ -n "$v" ] && docker volume rm "$v" >/dev/null 2>&1; done
-  [ "$BUILD" = 1 ] && [ "$IMAGE" = "plantry-smoke-img:local" ] && docker rmi "$IMAGE" >/dev/null 2>&1
+  [ "$BUILD" = 1 ] && [[ "$IMAGE" == plantry-smoke-img:* ]] && docker rmi "$IMAGE" >/dev/null 2>&1
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -91,8 +93,15 @@ put_in_volume() {
 # start NAME VOLUME [-e K=V ...]: runs a container on a free port; sets PORT.
 start() {
   local name="$P-$1" vol="$2"; shift 2
-  PORT="$(free_port)"
-  docker run -d "${PLATFORM_FLAG[@]}" --name "$name" -p "127.0.0.1:$PORT:8080" -v "$vol:/data" "$@" "$IMAGE" >/dev/null || return 1
+  # A free port can be taken between picking and binding (Docker Desktop's
+  # forwarder answers 500): try three.
+  local try ok=0
+  for try in 1 2 3; do
+    PORT="$(free_port)"
+    if docker run -d "${PLATFORM_FLAG[@]}" --name "$name" -p "127.0.0.1:$PORT:8080" -v "$vol:/data" "$@" "$IMAGE" >/dev/null; then ok=1; break; fi
+    docker rm -f "$name" >/dev/null 2>&1
+  done
+  [ $ok = 1 ] || return 1
   CONTAINERS+=("$name")
   wait_health "$name"
 }
@@ -429,7 +438,7 @@ else
   lv="$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$IMAGE" 2>/dev/null)"
   [ -n "$lv" ] && [ "$lv" != "<no value>" ] && EXPECT_VERSION="$lv"
 fi
-docker image inspect -f 'arch {{.Architecture}}/{{.Os}}' "$IMAGE" 2>/dev/null
+docker image inspect -f 'arch {{.Architecture}}{{.Variant}}/{{.Os}}' "$IMAGE" 2>/dev/null
 
 check "fresh volume: health, SPA, JSON logs" check_fresh
 check "startup line"                     check_startup_line
