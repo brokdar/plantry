@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"math"
 	"regexp"
 	"slices"
@@ -20,7 +19,7 @@ import (
 )
 
 // CheckVersion is the run log's prompt version of the import check.
-const CheckVersion = "c2"
+const CheckVersion = "c3"
 
 const (
 	// CheckTool is the forced tool of an import check call; the fake provider
@@ -301,42 +300,33 @@ func boundedRewrite(kind, old, next string) bool {
 
 var stepKinds = map[string]string{"safety_cue": ChangeSafetyCue, "clarity": ChangeClarity, "lead_time": ChangeLeadTime}
 
-var cueTempRE = regexp.MustCompile(`(\d{2,3})(\s*°)`)
+// cookVerbs: folded stems of the verbs that make a step cook; a safety cue
+// goes only on such a step.
+var cookVerbs = []string{"brat", "gar", "back", "koch", "schmor", "grill", "cook", "fry", "bake", "roast", "simmer", "sear"}
 
-// cueText corrects the core temperature of a safety cue to the gates' table
-// value of the protein the step names. False when the step names none, or
-// when the cue brings any other new number (a safety cue never changes or
-// adds a time).
-func cueText(old, text string) (string, bool) {
-	temp, ok := gates.CoreTempC(diet.Fold(old))
-	if !ok {
+// coreTempWords: a step that already states a core temperature.
+var coreTempWords = []string{"kerntemp", "core temp", "internal temp"}
+
+// cueText is the deterministic safety cue: the step plus a fixed localized
+// core-temperature note with the gates' table value of the protein the step
+// names. False when the step names no protein, does not cook, or already
+// states a core temperature. The model's own wording is never used.
+func cueText(old, lang string) (string, bool) {
+	folded := diet.Fold(old)
+	temp, ok := gates.CoreTempC(folded)
+	if !ok || !containsAnyOf(folded, cookVerbs) || containsAnyOf(folded, coreTempWords) {
 		return "", false
 	}
-	want := fmt.Sprint(temp)
-	have := map[string]int{}
-	for _, n := range numberRE.FindAllString(old, -1) {
-		have[strings.ReplaceAll(n, ",", ".")]++
+	note := fmt.Sprintf(" (core temperature at least %d °C)", temp)
+	if lang == "de" {
+		note = fmt.Sprintf(" (Kerntemperatur mindestens %d °C)", temp)
 	}
-	// Only a temperature the step does not already carry (an oven
-	// temperature stays) is the core temperature to correct.
-	seen := maps.Clone(have)
-	text = cueTempRE.ReplaceAllStringFunc(text, func(m string) string {
-		sub := cueTempRE.FindStringSubmatch(m)
-		if seen[sub[1]] > 0 {
-			seen[sub[1]]--
-			return m
-		}
-		return want + sub[2]
-	})
-	for _, n := range numberRE.FindAllString(text, -1) {
-		n = strings.ReplaceAll(n, ",", ".")
-		if have[n] > 0 {
-			have[n]--
-		} else if n != want {
-			return "", false
-		}
-	}
-	return text, true
+	trimmed := strings.TrimRight(old, ".!? ")
+	return trimmed + note + old[len(trimmed):], true
+}
+
+func containsAnyOf(s string, subs []string) bool {
+	return slices.ContainsFunc(subs, func(x string) bool { return strings.Contains(s, x) })
 }
 
 var sentenceEndRE = regexp.MustCompile(`[.!?](?:\s|$)`)
@@ -447,8 +437,8 @@ func apply(d *Draft, r checkReply, lang string) (*Check, []string) {
 		text := strings.TrimSpace(e.Text)
 		if kind == ChangeSafetyCue && e.Step >= 0 && e.Step < len(d.Instructions) {
 			var ok bool
-			if text, ok = cueText(d.Instructions[e.Step], text); !ok {
-				reject("step %d: a safety cue needs the protein in the step and only its table temperature", e.Step)
+			if text, ok = cueText(d.Instructions[e.Step], lang); !ok {
+				reject("step %d: a safety cue needs a cooked protein in the step and no core temperature yet", e.Step)
 				continue
 			}
 		}
@@ -611,7 +601,7 @@ const checkSystem = "You check an imported recipe by calling " + CheckTool + " o
 	"The text is the author's: change it only where the tool allows, and leave a field out when nothing is wrong. " +
 	"Fix: missing prep or cook minutes (only when the page gave none); keep days and freezable of the cooked dish (" +
 	"3 days for dishes with poultry or mince, 2 for fish, 1 for rice dishes, else up to 4); a core temperature on a step that names poultry, " +
-	"mince, pork or fish and has none (add it to the step, keep the step's words and times); lead times the steps forget (soak, marinate, thaw: add to the step); " +
+	"mince, pork or fish and has none; lead times the steps forget (soak, marinate, thaw: add to the step); " +
 	"a step that is unclear (rewrite only that step, keep every number, add no step or ingredient: if a step seems missing, only flag it); the role of the dish; a proposed amount for an ingredient line without one " +
 	"(kind proposed); a volume line with no weight written in grams (kind unit). " +
 	"Never change an amount the page gave and never change an ingredient: if a given amount looks wrong or an ingredient looks odd, only flag it. " +

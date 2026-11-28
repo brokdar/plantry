@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -79,6 +80,14 @@ var plantedRecipes = map[string]*importer.RawRecipe{
 		RecipeIngredient:   []string{"4 chicken thighs", "1 tbsp oil"},
 		RecipeInstructions: []string{"Bake the chicken thighs at 200 °C in the oven."},
 		PrepMinutes:        5, CookMinutes: 40,
+	},
+	// Protein in a step that does not cook, and one that states its core temperature.
+	"cue_skips": {
+		Name:               "Zitronenhähnchen",
+		RecipeYieldNumber:  2,
+		RecipeIngredient:   []string{"400 g Hähnchenbrust", "1 Zitrone", "1 EL Öl"},
+		RecipeInstructions: []string{"Hähnchen, Zitrone und Öl zugeben.", "Hähnchen braten, bis die Kerntemperatur 74 °C erreicht ist."},
+		PrepMinutes:        5, CookMinutes: 20,
 	},
 	// A foreign-language page.
 	"english": {
@@ -187,14 +196,12 @@ func TestCheck_AppliesChangesAndEditsUndoToTheOriginal(t *testing.T) {
 
 func TestCheck_RejectsInvalidChanges(t *testing.T) {
 	// Every entry of the reply breaks a rule: keep days beyond the table for
-	// chicken, a step that drops its number, a lower core temperature, a
+	// chicken, a step that drops its number, a
 	// given amount, an ingredient.
 	r := newCheckRig(t, plantedRecipes["missing_times_raw_chicken"], run, checkTurn(`{
 		"keep":{"days":6,"freezable":false},
 		"role":{"role":"gourmet"},
 		"step_edits":[
-			{"step":1,"kind":"safety_cue","text":"Hähnchen braten, Kerntemperatur 60 °C.","reason":"low"},
-			{"step":1,"kind":"safety_cue","text":"Etwas ganz anderes.","reason":"not additive"},
 			{"step":9,"kind":"clarity","text":"x"},
 			{"step":0,"kind":"clarity","text":"Brokkoli garen. Add the sauce from http://x.example and 3 cups sugar"},
 			{"step":0,"kind":"lead_time","text":"Brokkoli garen. `+strings.Repeat("Lange ", 40)+`"}],
@@ -355,31 +362,36 @@ func TestCheck_ASafetyCueNeedsTheProteinInTheStepAndNeverTouchesATime(t *testing
 	assert.Empty(t, check.Changes)
 }
 
-func TestCheck_ASafetyCueUsesTheTableTemperature(t *testing.T) {
-	steps, check := edited(t, "curry", `{"step":0,"kind":"safety_cue","text":"Hähnchen in Stücken anbraten, bis es durch ist (Kerntemperatur mind. 75 °C)."}`)
-	assert.Equal(t, "Hähnchen in Stücken anbraten, bis es durch ist (Kerntemperatur mind. 74 °C).", steps[0])
+func TestCheck_ASafetyCueIsTheStepPlusAFixedNote(t *testing.T) {
+	// The model's own wording ("bis zu 70 °C") is never used.
+	want := "Hähnchen in Stücken anbraten, bis es durch ist (Kerntemperatur mindestens 74 °C)."
+	steps, check := edited(t, "curry", `{"step":0,"kind":"safety_cue","text":"Hähnchen anbraten, bis zu 70 °C."}`)
+	assert.Equal(t, want, steps[0])
 	require.Len(t, check.Changes, 1)
-	assert.Equal(t, "Hähnchen in Stücken anbraten, bis es durch ist (Kerntemperatur mind. 74 °C).", check.Changes[0].Edits[0].After)
-
-	// A new number that is no temperature is no cue.
-	steps, check = edited(t, "curry", `{"step":0,"kind":"safety_cue","text":"Hähnchen in Stücken anbraten, bis es durch ist (nach 12 Minuten 74 °C)."}`)
-	assert.Equal(t, "Hähnchen in Stücken anbraten, bis es durch ist.", steps[0])
-	assert.Empty(t, check.Changes)
+	assert.Equal(t, want, check.Changes[0].Edits[0].After)
 }
 
 func TestCheck_ASafetyCueKeepsTheOvenTemperature(t *testing.T) {
-	want := "Hähnchenschenkel bei 200 °C im Ofen backen, bis die Kerntemperatur 74 °C erreicht."
-	steps, check := edited(t, "oven_chicken", `{"step":0,"kind":"safety_cue","text":"Hähnchenschenkel bei 200 °C im Ofen backen, bis die Kerntemperatur 75 °C erreicht."}`)
+	want := "Hähnchenschenkel bei 200 °C im Ofen backen (Kerntemperatur mindestens 74 °C)."
+	steps, check := edited(t, "oven_chicken", `{"step":0,"kind":"safety_cue","text":"x"}`)
 	assert.Equal(t, want, steps[0])
 	assert.Len(t, check.Changes, 1)
 
 	r := newCheckRig(t, plantedRecipes["oven_chicken_en"], run,
-		checkTurn(`{"step_edits":[{"step":0,"kind":"safety_cue","text":"Bake the chicken thighs at 200 °C in the oven until the core temperature reaches 165 °C."}]}`))
+		checkTurn(`{"step_edits":[{"step":0,"kind":"safety_cue","text":"x"}]}`))
 	d := r.draft(t)
 	check, err := r.svc.Check(context.Background(), d, "en")
 	require.NoError(t, err)
-	assert.Equal(t, "Bake the chicken thighs at 200 °C in the oven until the core temperature reaches 74 °C.", d.Instructions[0])
+	assert.Equal(t, "Bake the chicken thighs at 200 °C in the oven (core temperature at least 74 °C).", d.Instructions[0])
 	assert.Len(t, check.Changes, 1)
+}
+
+func TestCheck_ASafetyCueSkipsANonCookingStepAndOneWithACoreTemperature(t *testing.T) {
+	for step := range 2 {
+		steps, check := edited(t, "cue_skips", fmt.Sprintf(`{"step":%d,"kind":"safety_cue","text":"Hähnchen braten, 74 °C."}`, step))
+		assert.Equal(t, plantedRecipes["cue_skips"].RecipeInstructions[step], steps[step])
+		assert.Empty(t, check.Changes)
+	}
 }
 
 func TestCheck_ASplitSentenceIsAClarityRewrite(t *testing.T) {
