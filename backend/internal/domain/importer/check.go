@@ -454,6 +454,8 @@ func apply(d *Draft, r checkReply, lang string) (*Check, []string) {
 			reject("step %d out of range", e.Step)
 		case kind == ChangeClarity && text != "" && addsContent(d, d.Instructions[e.Step], text):
 			reject("step %d: a rewrite adds content", e.Step)
+			// The missing-step flag wins over a clarity flag of the same step.
+			out.Flags = slices.DeleteFunc(out.Flags, func(f Flag) bool { return f.Step == e.Step && f.Clarity })
 			if !slices.ContainsFunc(out.Flags, func(f Flag) bool { return f.Step == e.Step }) {
 				out.Flags = append(out.Flags, Flag{Ingredient: -1, Step: e.Step, Text: missingStep(lang)})
 			}
@@ -496,9 +498,18 @@ func apply(d *Draft, r checkReply, lang string) (*Check, []string) {
 		case a.Kind == "proposed" && ing.Amount == 0 && !ing.ToTaste && !ing.Proposed && proposable[a.Unit]:
 			ing.Amount, ing.Unit, ing.Proposed = a.Amount, a.Unit, true
 			add(ChangeAmount, a.Reason, Edit{Field: FieldIngredient, Index: a.Ingredient, Before: before, After: IngredientValue{Amount: a.Amount, Unit: a.Unit, Proposed: true}})
-		case a.Kind == "unit" && ing.Unit == "ml" && ing.OriginalUnit != "" && ing.Amount > 0 && densityOK(a.Amount/ing.Amount, a.Unit):
-			ing.Amount, ing.Unit = a.Amount, a.Unit
-			add(ChangeUnit, a.Reason, Edit{Field: FieldIngredient, Index: a.Ingredient, Before: before, After: IngredientValue{Amount: a.Amount, Unit: a.Unit}})
+		case a.Kind == "unit" && ing.Unit == "ml" && ing.OriginalUnit != "" && ing.Amount > 0 && a.Unit == "g":
+			// The grams are computed here, never the model's number: the food's
+			// density from the bundled table. Without one only a water-like
+			// 1 g per ml is kept; anything else is a flag.
+			grams, ok := volumeGrams(ing.Amount, ing.Name, ing.Note, a.Amount)
+			if !ok {
+				reject("ingredient %d: %v g for %v ml has no known density", a.Ingredient, a.Amount, ing.Amount)
+				out.Flags = append(out.Flags, Flag{Ingredient: a.Ingredient, Step: -1, Text: volumeFlag(lang)})
+				continue
+			}
+			ing.Amount, ing.Unit = grams, "g"
+			add(ChangeUnit, a.Reason, Edit{Field: FieldIngredient, Index: a.Ingredient, Before: before, After: IngredientValue{Amount: grams, Unit: "g"}})
 		default:
 			reject("ingredient %d: %s %v %s not allowed", a.Ingredient, a.Kind, a.Amount, a.Unit)
 		}
@@ -609,10 +620,23 @@ func missingStep(lang string) string {
 // proposable are the units a proposed amount may use.
 var proposable = map[string]bool{"g": true, "ml": true, "tbsp": true, "tsp": true, "piece": true}
 
-// densityOK: a volume line (the parser turns "2 cups flour" into 480 ml)
-// may be written in grams when that is 0.2-1.5 g per ml, the range of foods.
-func densityOK(perMl float64, unit string) bool {
-	return unit == "g" && perMl >= 0.2 && perMl <= 1.5
+// volumeGrams converts ml to grams by the food's density. Without a known
+// density the model's number is kept only when it equals ml x 1.0.
+func volumeGrams(ml float64, name, note string, proposed float64) (float64, bool) {
+	if d, ok := food.LineDensity(name, note); ok {
+		return math.Round(ml * d), true
+	}
+	if math.Abs(proposed-ml) <= 0.01*ml {
+		return ml, true
+	}
+	return 0, false
+}
+
+func volumeFlag(lang string) string {
+	if lang == "de" {
+		return "Menge prüfen: als Volumen angegeben"
+	}
+	return "Check the amount: given as volume"
 }
 
 // gatesOf runs the G1 gates over d with steps and keep days, without a

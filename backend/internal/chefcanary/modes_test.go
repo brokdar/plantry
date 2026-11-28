@@ -132,7 +132,10 @@ func TestRunImportCheck_ReportsDetectionWrongFixesAndCleanChanges(t *testing.T) 
 // A unit planted on line 0 of "a" (g to ml) and a clean recipe "m" with a ml line.
 func unitSet() chefsets.ImportCheckSet {
 	set := tinySet()
-	set.Recipes = []chefsets.CheckRecipe{set.Recipes[0], {
+	// Water: its 1 g per ml puts the line back to the same grams.
+	a := set.Recipes[0]
+	a.Ingredients = append([]chefsets.CheckIngredient{{Text: "100 g water", Amount: 100, Unit: "g", Name: "water"}}, a.Ingredients[1:]...)
+	set.Recipes = []chefsets.CheckRecipe{a, {
 		ID: "m", Name: "m", Language: "en", Portions: 2, Steps: []string{"Mix."},
 		Ingredients: []chefsets.CheckIngredient{{Text: "100 ml milk", Amount: 100, Unit: "ml", Name: "milk"}},
 	}}
@@ -159,14 +162,14 @@ func TestRunImportCheck_RestoringThePlantedLineIsACorrectFix(t *testing.T) {
 	assert.Equal(t, "wrong", byID["m-clean"].Changes[0].Verdict)
 }
 
-func TestRunImportCheck_AnotherValueOnThePlantedLineIsWrong(t *testing.T) {
+func TestRunImportCheck_TheModelsOwnNumberOnThePlantedLineIsNeverUsed(t *testing.T) {
 	e := env(t, toolTurn(importer.CheckTool, `{"amounts":[{"ingredient":0,"kind":"unit","amount":50,"unit":"g"}]}`, 100, 20))
 	rep, err := chefcanary.RunImportCheck(context.Background(), chefcanary.ImportCheckConfig{Env: e, Set: unitSet()})
 	require.NoError(t, err)
-	assert.Zero(t, metric(t, rep, "planted_fixed_correctly").Value)
+	assert.Equal(t, 1.0, metric(t, rep, "planted_fixed_correctly").Value, "the grams are computed from the density, not the model's 50")
 	for _, r := range rep.Results {
 		if r.ID == "a-unit" {
-			assert.Equal(t, "wrong", r.Changes[0].Verdict)
+			assert.Equal(t, "correct_fix", r.Changes[0].Verdict)
 		}
 	}
 }

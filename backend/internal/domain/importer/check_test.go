@@ -66,6 +66,13 @@ var plantedRecipes = map[string]*importer.RawRecipe{
 		RecipeInstructions: []string{"Mix everything.", "Fry 3 minutes per side."},
 		PrepMinutes:        10, CookMinutes: 15,
 	},
+	"volumes": {
+		Name:               "Volumen",
+		RecipeYieldNumber:  2,
+		RecipeIngredient:   []string{"300 ml Milch", "350 ml Wasser", "500 ml Hackfleisch", "1000 ml Gemüsebrühe"},
+		RecipeInstructions: []string{"Alles mischen."},
+		PrepMinutes:        10, CookMinutes: 15,
+	},
 	// An oven temperature in the step, and a plural onion.
 	"oven_chicken": {
 		Name:               "Ofenhähnchen",
@@ -254,11 +261,11 @@ func TestCheck_ProposedAmountAndCupUnit(t *testing.T) {
 	require.Equal(t, "ml", d.Ingredients[0].Unit)
 	check, err = cups.svc.Check(context.Background(), d, "en")
 	require.NoError(t, err)
-	require.Len(t, check.Changes, 1)
+	require.Len(t, check.Changes, 2)
 	assert.Equal(t, importer.ChangeUnit, check.Changes[0].Kind)
-	assert.Equal(t, 250.0, d.Ingredients[0].Amount)
+	assert.Equal(t, 254.0, d.Ingredients[0].Amount, "480 ml flour by its density, not the model's 250")
 	assert.Equal(t, "g", d.Ingredients[0].Unit)
-	assert.Equal(t, "ml", d.Ingredients[1].Unit)
+	assert.Equal(t, 247.0, d.Ingredients[1].Amount, "240 ml milk by its density, not the model's 20")
 }
 
 func TestCheck_TranslatesAForeignLanguageImport(t *testing.T) {
@@ -476,4 +483,32 @@ func TestCheck_ACueComesAfterTheTranslationInTheFinalLanguage(t *testing.T) {
 	_, err = r.svc.Check(context.Background(), d, "de")
 	require.NoError(t, err)
 	assert.Equal(t, "Fry the chicken for 20 minutes (core temperature at least 74 °C).", d.Instructions[0])
+}
+
+func TestCheck_AUnitChangeIsComputedFromTheDensity(t *testing.T) {
+	r := newCheckRig(t, plantedRecipes["volumes"], run, checkTurn(`{"amounts":[
+		{"ingredient":0,"kind":"unit","amount":300,"unit":"g"},
+		{"ingredient":1,"kind":"unit","amount":999,"unit":"g"},
+		{"ingredient":2,"kind":"unit","amount":250,"unit":"g"},
+		{"ingredient":3,"kind":"unit","amount":10,"unit":"g"}]}`))
+	d := r.draft(t)
+	check, err := r.svc.Check(context.Background(), d, "en")
+	require.NoError(t, err)
+	assert.Equal(t, 309.0, d.Ingredients[0].Amount, "milk at 1.03 g/ml, not the model's 300")
+	assert.Equal(t, 350.0, d.Ingredients[1].Amount, "water, not the model's 999")
+	assert.Equal(t, 500.0, d.Ingredients[2].Amount, "minced meat has no density: unchanged")
+	assert.Equal(t, "ml", d.Ingredients[2].Unit)
+	assert.Equal(t, 1000.0, d.Ingredients[3].Amount, "broth, not the model's 10")
+	assert.Len(t, check.Changes, 3)
+	require.Len(t, check.Flags, 1)
+	assert.Equal(t, 2, check.Flags[0].Ingredient)
+	assert.Contains(t, check.Flags[0].Text, "given as volume")
+}
+
+func TestCheck_AMissingStepFlagReplacesAClarityFlagOfTheSameStep(t *testing.T) {
+	_, check := edited(t, "oven_chicken", `{"step":1,"kind":"clarity","text":"Zwiebel gut anbraten."},
+		{"step":1,"kind":"clarity","text":"Zwiebel anbraten. Dann Wasser zugeben."}`)
+	require.Len(t, check.Flags, 1)
+	assert.Equal(t, "Ein Schritt scheint zu fehlen", check.Flags[0].Text)
+	assert.False(t, check.Flags[0].Clarity)
 }

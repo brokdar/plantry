@@ -200,6 +200,28 @@ var groupDensity = map[string]float64{
 // (research section 3.2 "Materiality").
 var seasoningGroups = map[string]bool{"spice": true, "herb": true}
 
+// LineDensity returns the grams per ml of a line's food from the bundled
+// table: the entry's own density, else its group's, 1 for water. False when
+// the table does not know the food or has no density for it.
+func LineDensity(name, note string) (float64, bool) {
+	keys := lineKeys(name, note)
+	e := synonyms.lookup(keys)
+	if e == nil && len(keys) > 0 {
+		e = synonyms.suffix(keys[0])
+	}
+	switch {
+	case e == nil:
+		return 0, false
+	case e.Density > 0:
+		return e.Density, true
+	case groupDensity[e.Group] > 0:
+		return groupDensity[e.Group], true
+	case e.Group == "water":
+		return 1, true
+	}
+	return 0, false
+}
+
 // LineGroup returns the bundled table's food group of a line ("spice",
 // "fat", ...), or "" when the table does not know the food.
 func LineGroup(name, note string) string {
