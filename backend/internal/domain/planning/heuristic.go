@@ -255,6 +255,15 @@ func (h *planner) plan() (Proposal, error) {
 			h.stranded = append(h.stranded, c)
 			continue
 		}
+		if h.s.Settings.BatchCooking && h.cookRepeats(c) {
+			// Every other main is out (a wish's time limit, the variety
+			// weeks): a batch the plan cooks anyway feeds c before a dish
+			// repeats (H8 is hard, the fresh cook only a preference).
+			if sup := h.growable(c); sup != nil {
+				h.eat(sup, c, eaters, true)
+				continue
+			}
+		}
 		if err := h.cook(c); err != nil {
 			return Proposal{}, err
 		}
@@ -456,6 +465,13 @@ func (h *planner) pickSupply(c plate.CellKey, eaters float64, skipAvoided bool) 
 		}
 	}
 	return best
+}
+
+// cookRepeats reports whether the main a cook on c would pick is a dish the
+// plan already cooks or one eaten within the variety weeks (H8).
+func (h *planner) cookRepeats(c plate.CellKey) bool {
+	id, ok := h.pickMain(c)
+	return ok && (h.usedDish[h.s.dish(id)] > 0 || h.recent(id, c.Date, 7*h.s.Settings.VarietyWeeks))
 }
 
 // growable is the most recent proposed session c could eat from as a

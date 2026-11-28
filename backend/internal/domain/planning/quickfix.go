@@ -47,6 +47,19 @@ func fixQuick(in ChooseInput, prop Proposal) (Proposal, []string) {
 	return prop, append(notes, sideNotes...)
 }
 
+// fixQuickBalanced is fixQuick followed, when it changed the plan, by the
+// balance pass: a side left out or a dish swapped for the limit takes its kcal
+// with it, and the days it left under their band are lifted again within the
+// limit (R6, planner-13: Tuesday at -24 %).
+func fixQuickBalanced(in ChooseInput, prop Proposal) (Proposal, []string) {
+	prop, notes := fixQuick(in, prop)
+	if len(notes) == 0 {
+		return prop, nil
+	}
+	prop, balNotes := balancePlan(in, prop)
+	return prop, append(notes, balNotes...)
+}
+
 // fixQuickSides keeps a wish's limit for the whole cooking time of a cell:
 // where the sides cooked there (put in by plate fit, add-ons or a swap) take
 // it past the limit, the longest side is replaced by one that fits (not in the
