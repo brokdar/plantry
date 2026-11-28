@@ -664,11 +664,15 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 		// Unknown minutes (0) never pass max_minutes, as in find_foods.
 		if !f.Composed() || req.Constraints.MaxMinutes <= 0 || (f.Minutes > 0 && f.Minutes <= req.Constraints.MaxMinutes) {
 			// GATE-2: a fresh cook over the cell's time allowance is no choice.
-			if !s.slotBlocked(f, p.Cell(), s.householdPlates(f)) {
+			var oldFood int64
+			if oldComp != nil {
+				oldFood = oldComp.FoodID
+			}
+			if !s.slotBlocked(f, p.Cell(), s.householdPlates(f)) && !s.cookCellOver(p.Cell(), f, oldFood) {
 				out = append(out, altCand{food: f, comp: comp})
 			}
 			if f.Composed() {
-				if k, ok := s.cookAtCell(x, p, id); ok && !s.slotBlocked(f, k, s.householdPlates(f)) {
+				if k, ok := s.cookAtCell(x, p, id); ok && !s.slotBlocked(f, k, s.householdPlates(f)) && !s.cookCellOver(k, f, oldFood) {
 					out = append(out, altCand{food: f, cookAt: &k, comp: comp})
 				}
 			}
@@ -1088,4 +1092,15 @@ func ptrVal(p *int64) int64 {
 		return 0
 	}
 	return *p
+}
+
+// cookCellOver reports whether cooking f in c would take the cell's whole
+// cooking time (main and sides) past a wish's time limit or, with the Chef
+// on, the slot's allowance; skip is the dish the choice replaces.
+func (s State) cookCellOver(c plate.CellKey, f FoodFacts, skip int64) bool {
+	if !f.Composed() || f.Minutes <= 0 {
+		return false
+	}
+	total := s.cellMinutes(c, skip) + f.Minutes
+	return s.wishOver(c, total) || (s.Settings.ChefOn && s.overAllowanceMin(total, c, s.householdPlates(f)))
 }

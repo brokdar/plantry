@@ -43,7 +43,116 @@ func fixQuick(in ChooseInput, prop Proposal) (Proposal, []string) {
 			notes = append(notes, note)
 		}
 	}
+	prop, sideNotes := fixQuickSides(in, prop, skip)
+	return prop, append(notes, sideNotes...)
+}
+
+// fixQuickSides keeps a wish's limit for the whole cooking time of a cell:
+// where the sides cooked there (put in by plate fit, add-ons or a swap) take
+// it past the limit, the longest side is replaced by one that fits (not in the
+// plan, closest in energy), else left out. A change that breaks a hard rule
+// the plan did not break before is not made.
+func fixQuickSides(in ChooseInput, prop Proposal, skip map[int64]bool) (Proposal, []string) {
+	var notes []string
+	tried := map[string]bool{}
+	for range maxGuardSteps {
+		key, limit := overSideCell(in, prop, tried)
+		if key == "" {
+			break
+		}
+		tried[key] = true
+		if next, note, ok := quickSide(in, prop, key, limit, skip); ok {
+			prop = next
+			notes = append(notes, note)
+		}
+	}
 	return prop, notes
+}
+
+// overSideCell is the longest side session (by key) of the first limited cook
+// cell whose whole cooking time is over its limit, and that limit.
+func overSideCell(in ChooseInput, prop Proposal, tried map[string]bool) (string, int) {
+	merged := Merge(in.State, in.Target, prop)
+	for _, ss := range prop.Sessions {
+		cell := plate.CellKey{Date: ss.CookDate, SlotID: ss.CookSlotID}
+		limit, ok := merged.MaxMinutes[idOf(cell)]
+		if !ok || merged.cellMinutes(cell, 0) <= limit {
+			continue
+		}
+		best, bestMin := "", 0
+		for _, o := range prop.Sessions {
+			f := merged.Foods[o.FoodID]
+			if o.CookSlotID != cell.SlotID || dayOf(o.CookDate) != dayOf(cell.Date) || tried[o.Key] || f.Role == food.RoleMain || !f.Composed() || f.Minutes <= bestMin {
+				continue
+			}
+			best, bestMin = o.Key, f.Minutes
+		}
+		if best != "" {
+			return best, limit
+		}
+	}
+	return "", 0
+}
+
+// quickSide replaces side session key by a side that fits the cell's limit, or
+// drops it.
+func quickSide(in ChooseInput, prop Proposal, key string, limit int, skip map[int64]bool) (Proposal, string, bool) {
+	si := slices.IndexFunc(prop.Sessions, func(s ProposedSession) bool { return s.Key == key })
+	if si < 0 {
+		return prop, "", false
+	}
+	merged := Merge(in.State, in.Target, prop)
+	old := merged.Foods[prop.Sessions[si].FoodID]
+	cell := plate.CellKey{Date: prop.Sessions[si].CookDate, SlotID: prop.Sessions[si].CookSlotID}
+	room := limit - (merged.cellMinutes(cell, 0) - old.Minutes)
+	before := evaluateLean(merged, in.Target)
+	hard := hardKeys(before.Issues)
+	inPlan := map[int64]bool{}
+	for _, ss := range prop.Sessions {
+		inPlan[merged.dish(ss.FoodID)] = true
+	}
+	household := merged.Profile.DietType
+	var cands []FoodFacts
+	for id, f := range merged.Foods {
+		if skip[id] || inPlan[merged.dish(id)] || !f.Composed() || f.Archived || f.Never || !sideRole(f.Role) || f.Role != old.Role || f.Minutes <= 0 || f.Minutes > room ||
+			f.Macros.Kcal <= 0 || !f.NutritionComplete || merged.RatherNot[id] || (DietRestricts(household) && !fitsDiet(f.DietClass, diet.Class(household))) {
+			continue
+		}
+		cands = append(cands, f)
+	}
+	slices.SortStableFunc(cands, func(a, b FoodFacts) int {
+		return cmp.Or(cmp.Compare(math.Abs(a.Macros.Kcal-old.Macros.Kcal), math.Abs(b.Macros.Kcal-old.Macros.Kcal)), cmp.Compare(a.ID, b.ID))
+	})
+	cookDate := cell.Date.Format(time.DateOnly)
+	for tries, f := range append(cands, FoodFacts{}) {
+		if tries >= maxGuardTries*3 {
+			break
+		}
+		next := cloneProposal(prop)
+		name := "left out"
+		if f.ID != 0 {
+			next.Sessions[si].FoodID = f.ID
+			for pi := range next.Plates {
+				for ci, c := range next.Plates[pi].Components {
+					if c.SessionKey == key {
+						next.Plates[pi].Components[ci].FoodID = f.ID
+					}
+				}
+			}
+			name = fmt.Sprintf("replaced by %s (%d min)", f.Name, f.Minutes)
+		} else {
+			next.Sessions = slices.Delete(next.Sessions, si, si+1)
+			for pi := range next.Plates {
+				next.Plates[pi].Components = slices.DeleteFunc(next.Plates[pi].Components, func(c ProposedComponent) bool { return c.SessionKey == key })
+			}
+		}
+		after := evaluateLean(Merge(in.State, in.Target, next), in.Target)
+		if newHard(hard, after) != "" {
+			continue
+		}
+		return next, fmt.Sprintf("Quick meals: side %s (%d min) %s on %s, the cooking time stays within %d min.", old.Name, old.Minutes, name, cookDate, limit), true
+	}
+	return prop, "", false
 }
 
 // slowBatch is the first proposed batch (by key) cooked in a limited cell

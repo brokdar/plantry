@@ -825,15 +825,21 @@ func (h *planner) overAllowance(f FoodFacts, c plate.CellKey) bool {
 // overAllowance is the planner-free form of the KIT-1 check: plates is the
 // number of plates the cook would feed.
 func (s State) overAllowance(f FoodFacts, c plate.CellKey, plates int) bool {
+	return f.Composed() && f.Minutes > 0 && s.overAllowanceMin(f.Minutes, c, plates)
+}
+
+// overAllowanceMin is the allowance check for a cook of minutes in c: the
+// whole plate's cooking time when it has sides.
+func (s State) overAllowanceMin(minutes int, c plate.CellKey, plates int) bool {
 	p := s.Profile
-	if !f.Composed() || f.Minutes <= 0 || p.MinutesWeekday == 0 {
+	if p.MinutesWeekday == 0 {
 		return false
 	}
 	limit := p.MinutesWeekday
 	if wd := c.Date.Weekday(); wd == time.Saturday || wd == time.Sunday || plates >= batchDayPlates {
 		limit = p.MinutesWeekend
 	}
-	return f.Minutes > limit
+	return minutes > limit
 }
 
 // slotBlocked is GATE-2: with the Chef on, a recipe over the slot's time
@@ -1001,8 +1007,19 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 			}
 		}
 	}
+	// The plate's cooking time so far: a side that takes it over a wish's
+	// limit or, with the Chef on, the slot's allowance is no choice.
+	plateMin := h.s.Foods[main].Minutes
+	for _, id := range others {
+		if o := h.s.Foods[id]; o.Composed() && o.Minutes > 0 {
+			plateMin += o.Minutes
+		}
+	}
 	var cands []candidate
 	for _, f := range h.s.Foods {
+		if f.Composed() && f.Minutes > 0 && h.sideTooLong(plateMin+f.Minutes, main, f, c) {
+			continue
+		}
 		if !f.Composed() || f.Archived || f.Never || !sideRole(f.Role) || f.ID == exclude || f.ID == main || slices.Contains(others, f.ID) || (fit && h.exclude[f.ID]) || h.s.RatherNot[f.ID] || !h.fits(f) || !h.reachesForced(f, c) || h.slotBlocked(f, c) || h.trialTaken(f) {
 			continue
 		}
@@ -1035,6 +1052,17 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 		)})
 	}
 	return best(cands)
+}
+
+// sideTooLong reports whether a plate cooking minutes in c breaks a wish's
+// time limit, or with the Chef on the slot's allowance (GATE-2 counts the
+// plate's sides, not the main alone).
+func (h *planner) sideTooLong(minutes int, main int64, side FoodFacts, c plate.CellKey) bool {
+	if h.s.wishOver(c, minutes) {
+		return true
+	}
+	plates := max(h.batchPlates(h.s.Foods[main], c), h.batchPlates(side, c))
+	return h.s.Settings.ChefOn && h.s.overAllowanceMin(minutes, c, plates)
 }
 
 // sideToday reports whether food id is on another plate of c's day than c:

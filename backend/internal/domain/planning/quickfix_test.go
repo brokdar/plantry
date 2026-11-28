@@ -28,6 +28,9 @@ func TestService_QuickWeekdayDinnersAreKept(t *testing.T) {
 			}
 			e.exec(`UPDATE foods SET prep_minutes = ? WHERE id = ?`, mins, id)
 		}
+		for _, id := range e.sides {
+			e.exec(`UPDATE foods SET prep_minutes = 20 WHERE id = ?`, id) // a quick main plus a side is over 30
+		}
 		e.deps.Extractor = &fakeExtractor{c: planning.Constraints{Quick: quick}}
 		e.deps.Choosers = map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: planning.Heuristic{}}
 		e.svc = planning.NewService(e.deps)
@@ -50,6 +53,16 @@ func TestService_QuickWeekdayDinnersAreKept(t *testing.T) {
 			slow = append(slow, d)
 		}
 		require.NoError(t, rows.Err())
+		// The limit is the whole cooking time of the dinner: main and sides.
+		if quick != nil {
+			var total int
+			var day string
+			require.NoError(t, e.db.QueryRow(`SELECT COALESCE(MAX(t), 0), COALESCE(MAX(d), '') FROM (SELECT cs.cook_date d, SUM(COALESCE(f.prep_minutes,0)+COALESCE(f.cook_minutes,0)) t
+				FROM cook_sessions cs JOIN foods f ON f.id = cs.food_id
+				WHERE cs.cook_slot_id = ? AND cs.cook_date BETWEEN ? AND ? AND strftime('%w', cs.cook_date) BETWEEN '1' AND '5' GROUP BY cs.cook_date)`,
+				e.dinner, e.start.Format(time.DateOnly), e.start.AddDate(0, 0, 6).Format(time.DateOnly)).Scan(&total, &day))
+			assert.LessOrEqual(t, total, 30, "the dinner cooked on %s takes longer than the wish with its sides", day)
+		}
 		var leftovers int
 		require.NoError(t, e.db.QueryRow(`SELECT COUNT(*) FROM plate_components pc JOIN plates p ON p.id = pc.plate_id
 			JOIN cook_sessions cs ON cs.id = pc.cook_session_id JOIN foods f ON f.id = pc.food_id
