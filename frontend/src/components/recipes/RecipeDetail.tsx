@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import { NotForMe } from "@/components/recipes/NotForMe"
+import { PrepAheadNote } from "@/components/recipes/PrepAheadNote"
 import { QuantityStepper } from "@/components/plan/QuantityStepper"
 import { useSettingField } from "@/components/settings/setting-field"
 import { Button } from "@/components/ui/button"
@@ -292,6 +293,12 @@ export function RecipeDetail({
             {minutes > 0 && (
               <Fact label={t("recipe_detail.time")}>
                 {t("recipe_detail.minutes", { count: minutes })}
+                {recipe.prep_ahead && (
+                  <PrepAheadNote
+                    prepAhead={recipe.prep_ahead}
+                    className="block text-small text-ink-muted"
+                  />
+                )}
               </Fact>
             )}
             <div className="flex flex-col gap-0.5">

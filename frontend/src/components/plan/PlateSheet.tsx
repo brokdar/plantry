@@ -58,6 +58,7 @@ import { AlternativesPanel, type AlternativesTarget } from "./AlternativesPanel"
 import { BatchSection } from "./BatchSection"
 import { CellChoiceDialog, useAlsoChangedConfirm } from "./MealActions"
 import type { PickerTarget } from "./FoodPicker"
+import { PrepAheadNote } from "@/components/recipes/PrepAheadNote"
 import { ToTryBadge } from "@/components/recipes/ToTryBadge"
 import { QuantityStepper } from "./QuantityStepper"
 import { UnlockDialog } from "./UnlockDialog"
@@ -535,6 +536,8 @@ function ComponentRow({
   const update = useUpdateComponent()
   const remove = useRemoveComponent()
   const [portions, setPortions] = useState<number | null>(null)
+  const recipe = useFood(c.kind === "composed" ? c.food_id : 0).data
+  const prepAhead = recipe?.kind === "composed" ? recipe.prep_ahead : undefined
 
   return (
     <div className="flex flex-col gap-2">
@@ -542,6 +545,10 @@ function ComponentRow({
         <span className="min-w-0 flex-1 font-heading text-h3 text-ink">
           {c.food_name}
           {c.to_try && <ToTryBadge className="ml-2 align-middle" />}
+          <PrepAheadNote
+            prepAhead={prepAhead}
+            className="font-body block text-small font-normal text-ink-muted"
+          />
         </span>
         {!readOnly && (
           <>

@@ -57,6 +57,14 @@ func TestMatch_OfflineCatalogueWithoutFDCKey(t *testing.T) {
 		{"de", food.MatchLine{Name: "Kokosmilch", Amount: 400, Unit: "ml"}, 170173, ""},
 		{"de", food.MatchLine{Name: "Knollensellerie", Amount: 300, Unit: "g"}, 170400, ""},
 		{"de", food.MatchLine{Name: "Kurkumapulver", Amount: 1, Unit: "TL"}, 172231, ""},
+		// R4-fixes: lines the CP3 verdict left unmatched. Mirin and adobo
+		// seasoning have no USDA food: the closest real one stands in.
+		{"en", food.MatchLine{Name: "mirin", Amount: 2, Unit: "tbsp"}, 167723, ""},
+		{"en", food.MatchLine{Name: "adobo seasoning", Amount: 1, Unit: "tsp"}, 171328, ""},
+		{"en", food.MatchLine{Name: "adobo sauce", Amount: 1, Unit: "tbsp"}, 171604, ""},
+		{"en", food.MatchLine{Name: "chipotle peppers in adobo sauce", Amount: 30, Unit: "g"}, 171604, ""},
+		{"en", food.MatchLine{Name: "diced green chiles", Amount: 4, Unit: "oz"}, 168577, ""},
+		{"en", food.MatchLine{Name: "canned green chilies", Amount: 1, Unit: "tbsp"}, 168577, ""},
 		{"en", food.MatchLine{Name: "glorbnax fizzwhip", Amount: 100, Unit: "g"}, 0, food.ReasonNoCandidate},
 	}
 	for _, tt := range tests {

@@ -97,6 +97,13 @@ interface FoodBase {
   updated_at: string
 }
 
+/** A night-before step a recipe's steps need (derived); hours when a step
+ *  states a same-day lead time. */
+export interface PrepAhead {
+  kind: "soak" | "marinate" | "thaw"
+  hours?: number
+}
+
 export interface LeafFood extends FoodBase {
   kind: "leaf"
   /** Grams of one serving when the planner adds the food; null = typical. */
@@ -153,6 +160,7 @@ export interface ComposedFood extends FoodBase {
   reference_portions?: number | null
   prep_minutes?: number | null
   cook_minutes?: number | null
+  prep_ahead?: PrepAhead
   notes?: string | null
   /** 1–7 days; null falls back to `plan.default_keep_days` (D15). */
   keep_days?: number | null

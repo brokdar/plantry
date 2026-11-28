@@ -2598,6 +2598,13 @@
       "remove_in_recipe": "Zeile im Rezept entfernen"
     },
     "to_try": "Zum Ausprobieren",
+    "prep_ahead": {
+      "day_before": "Am Vortag anfangen: {{what}}",
+      "hours": "{{count}} Std. vorher anfangen: {{what}}",
+      "soak": "einweichen",
+      "marinate": "marinieren",
+      "thaw": "auftauen"
+    },
     "fill": {
       "button": "Bibliothek füllen",
       "hint": "Zehn Rezepte, die zu eurem Haushalt passen, zum Ausprobieren.",

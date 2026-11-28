@@ -108,7 +108,7 @@
 {"id":"white_wine","group":"alcohol","state":"","en":["white wine","dry white wine"],"de":["weißwein","trockener weißwein"],"fdc":"white wine","density":0.99},
 {"id":"red_wine","group":"alcohol","state":"","en":["red wine","dry red wine"],"de":["rotwein","trockener rotwein"],"fdc":"alcoholic beverage wine table red","density":0.99},
 {"id":"sake","group":"alcohol","state":"","en":["sake","cooking sake"],"de":["sake","reiswein"],"fdc":"sake","density":1.0},
-{"id":"mirin","group":"condiment","state":"","en":["mirin"],"de":["mirin"],"off":"mirin","density":1.2},
+{"id":"mirin","group":"condiment","state":"","en":["mirin","sweet rice wine"],"de":["mirin","süßer reiswein"],"fdc":"alcoholic beverage rice sake","off":"mirin","density":1.2},
 {"id":"dashi","group":"broth","state":"","en":["dashi","dashi stock","dashi broth","japanese soup stock"],"de":["dashi","dashi-brühe","dashibrühe"],"fdc":"soup stock fish home-prepared","density":1.0},
 {"id":"nori","group":"veg","state":"","en":["nori","nori sheets","nori sheet","roasted seaweed","sushi nori"],"de":["nori","noriblätter","nori-blätter","algenblätter"],"fdc":"seaweed laver raw","piece_g":2.6},
 {"id":"kombu","group":"veg","state":"","en":["kombu","kelp","dried kelp"],"de":["kombu","seetang"],"fdc":"seaweed kelp raw","piece_g":5},
@@ -347,5 +347,8 @@
 {"id":"gelatine","group":"sugar","state":"","en":["gelatine","gelatin"],"de":["gelatine","blattgelatine","gelatinepulver"],"fdc":"gelatins dry powder unsweetened"},
 {"id":"marzipan","group":"chocolate","state":"","en":["marzipan","almond paste"],"de":["marzipan","marzipanrohmasse"],"fdc":"candies marzipan"},
 {"id":"cooking_cream_veg","group":"dairy_milk","state":"","en":["soy cream","oat cream","plant cream","oat milk","almond milk"],"de":["haferdrink","hafermilch","mandelmilch","sojadrink","reisdrink","pflanzenmilch","mandeldrink","kokosdrink"],"fdc":"soymilk original and vanilla unfortified","density":1.03},
+{"id":"green_chiles_canned","group":"veg","state":"canned","en":["canned green chiles","canned green chilies","diced green chiles","diced green chilies","green chiles","mild green chiles","chopped green chiles","green chile peppers"],"de":["grüne chilis aus der dose","grüne chilischoten aus der dose"],"fdc":"peppers chili green canned","fdc_prefer":"canned","density":1.0,"piece_g":113},
+{"id":"adobo_seasoning","group":"spice","state":"dried","en":["adobo seasoning","adobo spice","adobo spice blend"],"de":["adobo gewürz","adobo gewürzmischung"],"fdc":"spices oregano dried","density":0.7},
+{"id":"adobo_sauce","group":"condiment","state":"","en":["adobo sauce","adobo sauce from chipotles","chipotle in adobo","chipotle in adobo sauce","chipotle peppers in adobo","chipotles in adobo","chipotles in adobo sauce"],"de":["adobo sauce","adobosauce","chipotle in adobo"],"fdc":"peppers hot chili red canned","fdc_prefer":"canned","density":1.1},
 {"id":"barley","group":"grain_dry","state":"dry","en":["pearl barley","barley"],"de":["graupen","perlgraupen","gerste"],"fdc":"barley pearled raw","density":0.75}
 ]

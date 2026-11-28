@@ -2598,6 +2598,13 @@
       "remove_in_recipe": "Remove a line in the recipe"
     },
     "to_try": "To try",
+    "prep_ahead": {
+      "day_before": "Start the day before: {{what}}",
+      "hours": "Start {{count}} h ahead: {{what}}",
+      "soak": "soak",
+      "marinate": "marinate",
+      "thaw": "thaw"
+    },
     "fill": {
       "button": "Fill my library",
       "hint": "Ten recipes that fit your household, added for you to try.",

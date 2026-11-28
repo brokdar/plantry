@@ -505,3 +505,29 @@ func TestFoodHandler_Nutrition_CompletenessFields(t *testing.T) {
 		assert.InDelta(t, 145.0, got["kcal"].(float64), 0.01)
 	})
 }
+
+// TestFoodHandler_Get_PrepAhead: a recipe with a marinating step carries the
+// derived prep_ahead mark; one without carries none.
+func TestFoodHandler_Get_PrepAhead(t *testing.T) {
+	r := setupFoodRouter(t)
+	chickenID := createLeaf(t, r, "Chicken")
+	mk := func(name, step string) map[string]any {
+		body := fmt.Sprintf(`{"name":%q,"kind":"composed","role":"main","reference_portions":2,`+
+			`"children":[{"child_id":%d,"amount":300,"unit":"g"}],`+
+			`"instructions":[{"step_number":1,"text":%q}]}`, name, chickenID, step)
+		resp := httptest.NewRecorder()
+		r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/foods", bytes.NewBufferString(body)))
+		require.Equal(t, http.StatusCreated, resp.Code, resp.Body.String())
+		var got map[string]any
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+		resp = httptest.NewRecorder()
+		r.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/foods/%d", int64(got["id"].(float64))), nil))
+		require.Equal(t, http.StatusOK, resp.Code)
+		var read map[string]any
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&read))
+		return read
+	}
+	assert.Equal(t, map[string]any{"kind": "marinate"}, mk("Miso Chicken", "Marinate for 24 hours.")["prep_ahead"])
+	assert.Equal(t, map[string]any{"kind": "marinate", "hours": float64(4)}, mk("Quick Chicken", "Marinate for at least 4 hours.")["prep_ahead"])
+	assert.NotContains(t, mk("Plain Chicken", "Roast the chicken."), "prep_ahead")
+}
