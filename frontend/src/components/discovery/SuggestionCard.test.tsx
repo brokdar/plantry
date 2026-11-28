@@ -20,6 +20,17 @@ describe("SuggestionCard (F2-AC1)", () => {
     expect(screen.getByTestId("discovery-legend")).toBeInTheDocument()
   })
 
+  it("shows the prep-ahead note of a find that needs a step before the cook day", () => {
+    render(
+      <SuggestionCard
+        suggestion={{ ...mockSuggestion(), prep_ahead: { kind: "soak" } }}
+      />
+    )
+    expect(screen.getByTestId("prep-ahead")).toHaveTextContent(
+      "Start the day before: soak"
+    )
+  })
+
   it("shows the diet class as an icon", () => {
     render(
       <SuggestionCard

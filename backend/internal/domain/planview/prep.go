@@ -2,6 +2,8 @@ package planview
 
 import (
 	"context"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,9 +44,23 @@ func hasAny(s string, words []string) bool {
 // step, thaw for a frozen ingredient; "" for none. One kind per recipe, in
 // that order.
 func PrepKind(f *food.Food) string {
+	names := make([]string, len(f.Children))
+	for i, c := range f.Children {
+		names[i] = c.ChildName
+	}
+	steps := make([]string, len(f.Instructions))
+	for i, in := range f.Instructions {
+		steps[i] = in.Text
+	}
+	return PrepKindOf(names, steps)
+}
+
+// PrepKindOf is PrepKind for a recipe given as ingredient names and step
+// texts (a find is not a food yet).
+func PrepKindOf(ingredients, steps []string) string {
 	var soak, thaw bool
-	for _, c := range f.Children {
-		n := strings.ToLower(c.ChildName) + " "
+	for _, name := range ingredients {
+		n := strings.ToLower(name) + " "
 		if hasAny(n, driedWords) && hasAny(n, soakLegumes) {
 			soak = true
 		}
@@ -53,8 +69,8 @@ func PrepKind(f *food.Food) string {
 		}
 	}
 	marinate := false
-	for _, in := range f.Instructions {
-		if hasAny(strings.ToLower(in.Text), marinateWords) {
+	for _, st := range steps {
+		if hasAny(strings.ToLower(st), marinateWords) {
 			marinate = true
 		}
 	}
@@ -84,4 +100,81 @@ func prepReminder(sessions []plate.SessionView, tomorrow time.Time, recipes map[
 		}
 	}
 	return Reminder{}, false
+}
+
+// PrepAhead says how far ahead a recipe needs its prep step: Kind as
+// PrepKind; Hours is the lead time a step states ("marinate for at least 4
+// hours" is 4), 0 for the night before ("overnight", 12 hours or more, or no
+// time stated). Derived, never stored.
+type PrepAhead struct {
+	Kind  string `json:"kind"`
+	Hours int    `json:"hours,omitempty"`
+}
+
+var (
+	hoursRe     = regexp.MustCompile(`(\d+)(?:\s*[-–]\s*(\d+))?\s*(?:hours?|hrs?|h\b|stunden|std)`)
+	minutesRe   = regexp.MustCompile(`\d+\s*(?:minutes?|mins?|minuten)`)
+	overnightRe = regexp.MustCompile(`overnight|over night|night before|über nacht|nacht vorher`)
+)
+
+// prepSameDayMaxHours: a stated lead time above this is the night before.
+const prepSameDayMaxHours = 8
+
+// PrepAheadOf is the prep-ahead mark of a recipe given as ingredient names
+// and step texts; nil when it needs none. A marinade that states only
+// minutes needs no mark.
+func PrepAheadOf(ingredients, steps []string) *PrepAhead {
+	kind := PrepKindOf(ingredients, steps)
+	if kind == "" {
+		return nil
+	}
+	words := marinateWords
+	if kind == ReminderSoak {
+		words = []string{"soak", "einweich", "einlegen"}
+	}
+	if kind == ReminderThaw {
+		return &PrepAhead{Kind: kind}
+	}
+	hours, minutesOnly := 0, false
+	for _, st := range steps {
+		low := strings.ToLower(st)
+		if !hasAny(low, words) {
+			continue
+		}
+		if overnightRe.MatchString(low) {
+			return &PrepAhead{Kind: kind}
+		}
+		if m := hoursRe.FindStringSubmatch(low); m != nil {
+			h, _ := strconv.Atoi(m[1])
+			if m[2] != "" {
+				h, _ = strconv.Atoi(m[2])
+			}
+			if h > 0 && h <= prepSameDayMaxHours && (hours == 0 || h > hours) {
+				hours = h
+			} else if h > prepSameDayMaxHours {
+				return &PrepAhead{Kind: kind}
+			}
+			continue
+		}
+		if minutesRe.MatchString(low) {
+			minutesOnly = true
+		}
+	}
+	if hours == 0 && minutesOnly {
+		return nil
+	}
+	return &PrepAhead{Kind: kind, Hours: hours}
+}
+
+// PrepAheadFood is PrepAheadOf for a recipe food.
+func PrepAheadFood(f *food.Food) *PrepAhead {
+	names := make([]string, len(f.Children))
+	for i, c := range f.Children {
+		names[i] = c.ChildName
+	}
+	steps := make([]string, len(f.Instructions))
+	for i, in := range f.Instructions {
+		steps[i] = in.Text
+	}
+	return PrepAheadOf(names, steps)
 }

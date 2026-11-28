@@ -57,6 +57,20 @@ func TestMatch_OfflineCatalogueWithoutFDCKey(t *testing.T) {
 		{"de", food.MatchLine{Name: "Kokosmilch", Amount: 400, Unit: "ml"}, 170173, ""},
 		{"de", food.MatchLine{Name: "Knollensellerie", Amount: 300, Unit: "g"}, 170400, ""},
 		{"de", food.MatchLine{Name: "Kurkumapulver", Amount: 1, Unit: "TL"}, 172231, ""},
+		// R4-fixes: lines the CP3 verdict left unmatched. Mirin and adobo
+		// seasoning have no USDA food: the closest real one stands in.
+		// CP4 lines: garam masala has no USDA food; curry powder, a ground
+		// spice blend, is the closest real one.
+		{"en", food.MatchLine{Name: "garam masala", Amount: 1, Unit: "tsp"}, 170924, ""},
+		{"en", food.MatchLine{Name: "Mirin", Amount: 1, Unit: "tbsp"}, 167723, ""},
+		{"en", food.MatchLine{Name: "portobello mushroom caps", Amount: 200, Unit: "g"}, 169255, ""},
+		{"en", food.MatchLine{Name: "green chiles", Amount: 4, Unit: "oz"}, 168577, ""},
+		{"en", food.MatchLine{Name: "mirin", Amount: 2, Unit: "tbsp"}, 167723, ""},
+		{"en", food.MatchLine{Name: "adobo seasoning", Amount: 1, Unit: "tsp"}, 171328, ""},
+		{"en", food.MatchLine{Name: "adobo sauce", Amount: 1, Unit: "tbsp"}, 171604, ""},
+		{"en", food.MatchLine{Name: "chipotle peppers in adobo sauce", Amount: 30, Unit: "g"}, 171604, ""},
+		{"en", food.MatchLine{Name: "diced green chiles", Amount: 4, Unit: "oz"}, 168577, ""},
+		{"en", food.MatchLine{Name: "canned green chilies", Amount: 1, Unit: "tbsp"}, 168577, ""},
 		{"en", food.MatchLine{Name: "glorbnax fizzwhip", Amount: 100, Unit: "g"}, 0, food.ReasonNoCandidate},
 	}
 	for _, tt := range tests {
@@ -100,7 +114,7 @@ func TestEnsureLeaf_OfflineCandidateReusesLeafWithSameFdcID(t *testing.T) {
 }
 
 // TestMatch_StrictEntryNeedsOwnWords: a strict synonym entry whose FDC term
-// names another food (garam masala -> "spices cumin seed") is a review
+// names another food (ras el hanout -> "spices cumin seed") is a review
 // candidate, not a confident match.
 func TestMatch_StrictEntryNeedsOwnWords(t *testing.T) {
 	ctx := context.Background()
@@ -108,7 +122,7 @@ func TestMatch_StrictEntryNeedsOwnWords(t *testing.T) {
 	provider := fdc.NewDynamicProvider(settings.NewService(sqlite.NewAppSettingsRepo(db), settings.NewEnvSnapshot(nil), crypto.NilCipher{})).WithFallback(fdclocal.New())
 	m := food.NewMatcher(sqlite.NewFoodRepo(db), provider, nil)
 
-	res, err := m.Match(ctx, food.MatchRequest{Lang: "en", Lines: []food.MatchLine{{Name: "garam masala", Amount: 1, Unit: "tsp"}}})
+	res, err := m.Match(ctx, food.MatchRequest{Lang: "en", Lines: []food.MatchLine{{Name: "ras el hanout", Amount: 1, Unit: "tsp"}}})
 	require.NoError(t, err)
 	assert.NotEqual(t, food.MatchMatched, res.Lines[0].Status, "%v", res.Lines[0].Candidates)
 }

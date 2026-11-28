@@ -10,6 +10,7 @@ import { buildBoard, type BoardCell } from "@/lib/plan/board"
 import {
   mockAc1Plates,
   mockBrownRice,
+  mockChili,
   mockPlan,
   mockPlateComponent,
   mockRemovedBatch,
@@ -211,6 +212,17 @@ describe("PlateSheet", () => {
       expect(updatePlateComponent).toHaveBeenCalledWith(1, 9, {
         portions: 1.25,
       })
+    )
+  })
+
+  it("marks a recipe that needs a step before the cook day", async () => {
+    vi.mocked(getFood).mockResolvedValue({
+      ...mockChili,
+      prep_ahead: { kind: "marinate", hours: 4 },
+    })
+    await renderSheet()
+    expect((await screen.findAllByTestId("prep-ahead"))[0]).toHaveTextContent(
+      "Start 4 h ahead: marinate"
     )
   })
 

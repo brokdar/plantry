@@ -18,6 +18,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
@@ -180,6 +181,9 @@ type foodResponse struct {
 	Children          []foodChildResponse       `json:"children,omitempty"`
 	Instructions      []foodInstructionResponse `json:"instructions,omitempty"`
 	Tags              []string                  `json:"tags,omitempty"`
+
+	// PrepAhead marks a recipe whose steps need a step before the cook day.
+	PrepAhead *planview.PrepAhead `json:"prep_ahead,omitempty"`
 
 	// Shared
 	SourceURL   *string `json:"source_url,omitempty"`
@@ -445,6 +449,7 @@ func toFoodResponse(f *food.Food) foodResponse {
 	resp.ReferencePortions = f.ReferencePortions
 	resp.PrepMinutes = f.PrepMinutes
 	resp.CookMinutes = f.CookMinutes
+	resp.PrepAhead = planview.PrepAheadFood(f)
 	resp.Notes = f.Notes
 	resp.KeepDays = f.KeepDays
 	resp.Freezable = f.Freezable

@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next"
 import type { Suggestion } from "@/lib/api/discovery"
 
 import { DietIcon } from "@/components/recipes/DietIcon"
+import { PrepAheadNote } from "@/components/recipes/PrepAheadNote"
 import { NewLegend } from "./NewLegend"
 
 /** A discovery idea: photo, facts, why, ingredients and the source. */
@@ -37,6 +38,10 @@ export function SuggestionCard({ suggestion: s }: { suggestion: Suggestion }) {
           <DietIcon dietClass={s.diet_class} className="mt-0.5" />
           <span>{facts.join(" · ")}</span>
         </p>
+        <PrepAheadNote
+          prepAhead={s.prep_ahead}
+          className="text-small text-ink-muted"
+        />
         {s.nutrition_complete ? (
           <p className="text-small text-ink-muted">
             {t("discovery.card.macros", {

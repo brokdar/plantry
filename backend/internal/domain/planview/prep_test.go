@@ -68,3 +68,31 @@ func TestPrepReminder_OneLine(t *testing.T) {
 	_, ok = prepReminder([]plate.SessionView{view(12, 1, tomorrow)}, tomorrow, nil)
 	assert.False(t, ok, "Chef off: no recipes loaded")
 }
+
+func TestPrepAheadOf(t *testing.T) {
+	tests := []struct {
+		name  string
+		ing   []string
+		steps []string
+		want  *PrepAhead
+	}{
+		{"none", []string{"rice"}, []string{"Cook the rice."}, nil},
+		{"marinate no time", nil, []string{"Marinate the chicken in miso."}, &PrepAhead{Kind: "marinate"}},
+		{"marinate 24 hours", nil, []string{"Marinate for 24 hours."}, &PrepAhead{Kind: "marinate"}},
+		{"marinate overnight", nil, []string{"Marinate overnight in the fridge."}, &PrepAhead{Kind: "marinate"}},
+		{"marinate at least 4 hours", nil, []string{"Marinate for at least 4 hours."}, &PrepAhead{Kind: "marinate", Hours: 4}},
+		{"marinate range takes the long end", nil, []string{"Marinate 2-3 hours."}, &PrepAhead{Kind: "marinate", Hours: 3}},
+		{"de 24 Stunden", nil, []string{"24 Stunden marinieren."}, &PrepAhead{Kind: "marinate"}},
+		{"de 2 Stunden", nil, []string{"Das Fleisch 2 Stunden marinieren."}, &PrepAhead{Kind: "marinate", Hours: 2}},
+		{"marinate 15 minutes needs no mark", nil, []string{"Marinate for 15 minutes."}, nil},
+		{"soak dried chickpeas", []string{"dried chickpeas"}, []string{"Soak the chickpeas."}, &PrepAhead{Kind: "soak"}},
+		{"soak 6 hours", []string{"dried chickpeas"}, []string{"Soak for 6 hours."}, &PrepAhead{Kind: "soak", Hours: 6}},
+		{"soak 30 minutes needs no mark", []string{"dried chickpeas"}, []string{"Soak for 30 minutes."}, nil},
+		{"thaw", []string{"frozen peas"}, []string{"Cook."}, &PrepAhead{Kind: "thaw"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, PrepAheadOf(tt.ing, tt.steps))
+		})
+	}
+}

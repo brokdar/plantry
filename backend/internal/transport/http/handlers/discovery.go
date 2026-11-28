@@ -15,6 +15,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 )
 
 // discoveryService is the part of discovery.Service the endpoints use.
@@ -95,6 +96,7 @@ type suggestionResponse struct {
 	Name              string                         `json:"name"`
 	Cuisine           *string                        `json:"cuisine"`
 	TotalMinutes      *int                           `json:"total_minutes"`
+	PrepAhead         *planview.PrepAhead            `json:"prep_ahead,omitempty"`
 	ReferencePortions float64                        `json:"reference_portions"`
 	DietClass         diet.Class                     `json:"diet_class"`
 	PerPortion        suggestionMacrosResponse       `json:"per_portion"`
@@ -128,6 +130,11 @@ func toSuggestionResponse(s *discovery.Suggestion) suggestionResponse {
 		NutritionComplete: ann.NutritionComplete, Missing: ann.Missing, Why: ann.Why, KnownShare: ann.KnownShare,
 		Ingredients: make([]suggestionIngredientResponse, len(d.Ingredients)), Draft: d,
 	}
+	names := make([]string, len(d.Ingredients))
+	for i, ing := range d.Ingredients {
+		names[i] = ing.Name
+	}
+	out.PrepAhead = planview.PrepAheadOf(names, d.Instructions)
 	if out.Missing == nil {
 		out.Missing = []string{}
 	}

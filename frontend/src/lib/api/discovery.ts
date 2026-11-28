@@ -1,5 +1,5 @@
 import { apiFetch } from "./client"
-import type { EffectiveDietClass } from "./foods"
+import type { EffectiveDietClass, PrepAhead } from "./foods"
 import type { Draft } from "./import"
 
 export type DiscoveryMode = "daily" | "explore" | "known" | "find"
@@ -37,6 +37,7 @@ export interface Suggestion {
   name: string
   cuisine: string | null
   total_minutes: number | null
+  prep_ahead?: PrepAhead
   reference_portions: number
   diet_class: EffectiveDietClass
   per_portion: { kcal: number; protein: number; fat: number; carbs: number }

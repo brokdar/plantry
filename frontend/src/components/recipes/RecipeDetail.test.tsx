@@ -122,6 +122,39 @@ describe("RecipeDetail", () => {
     expect(screen.getByText("Add curry paste")).toBeInTheDocument()
   })
 
+  it("shows the prep-ahead note next to the minutes", async () => {
+    renderWithRouter(
+      <RecipeDetail
+        recipe={{ ...recipe, prep_ahead: { kind: "marinate", hours: 4 } }}
+      />
+    )
+    expect(await screen.findByTestId("prep-ahead")).toHaveTextContent(
+      "Start 4 h ahead: marinate"
+    )
+  })
+
+  it("shows the prep-ahead note for a recipe without minutes", async () => {
+    renderWithRouter(
+      <RecipeDetail
+        recipe={{
+          ...recipe,
+          prep_minutes: null,
+          cook_minutes: null,
+          prep_ahead: { kind: "marinate", hours: 4 },
+        }}
+      />
+    )
+    expect(await screen.findByTestId("prep-ahead")).toHaveTextContent(
+      "Start 4 h ahead: marinate"
+    )
+  })
+
+  it("shows no prep-ahead note for a recipe without one", async () => {
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+    await screen.findByText("Kidney beans")
+    expect(screen.queryByTestId("prep-ahead")).toBeNull()
+  })
+
   it("shows kcal and protein per portion from the nutrition endpoint", async () => {
     renderWithRouter(<RecipeDetail recipe={recipe} />)
 
