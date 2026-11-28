@@ -20,7 +20,7 @@ import (
 )
 
 // CheckVersion is the run log's prompt version of the import check.
-const CheckVersion = "c4"
+const CheckVersion = "c5"
 
 const (
 	// CheckTool is the forced tool of an import check call; the fake provider
@@ -537,6 +537,10 @@ func apply(d *Draft, r checkReply, lang string) (*Check, []string) {
 	if t := r.Translation; t != nil && d.Language != lang && (d.Language == "de" || d.Language == "en") {
 		if tr := translation(d, t.Name, t.Description, t.Steps); len(tr) > 0 {
 			add(ChangeTranslate, "", tr...)
+			// A clarity proposal was written for the source-language step.
+			out.Flags = slices.DeleteFunc(out.Flags, func(f Flag) bool {
+				return f.Clarity && slices.ContainsFunc(tr, func(e Edit) bool { return e.Field == FieldStep && e.Index == f.Step })
+			})
 		} else {
 			reject("translation")
 		}
@@ -672,7 +676,7 @@ const checkSystem = "You check an imported recipe by calling " + CheckTool + " o
 	"Fix: missing prep or cook minutes (only when the page gave none); keep days and freezable of the cooked dish (" +
 	"3 days for dishes with poultry or mince, 2 for fish, 1 for rice dishes, else up to 4); a core temperature on a step that names poultry, " +
 	"mince, pork or fish and has none; lead times the steps forget (soak, marinate, thaw: add to the step); " +
-	"a step that is unclear (give the clearer text of only that step, keeping every number and adding no step or ingredient; it is shown as a suggestion, not applied; if a step seems missing, only flag it); the role of the dish; a proposed amount for an ingredient line without one " +
+	"a step that is unclear (give its clearer text, shown as a suggestion; if a step seems missing, only flag it); the role of the dish; a proposed amount for an ingredient line without one " +
 	"(kind proposed); a volume line with no weight written in grams (kind unit). " +
 	"Never change an amount the page gave and never change an ingredient: if a given amount looks wrong or an ingredient looks odd, only flag it. " +
 	"Suggest at most one finishing touch (one optional last step). " +

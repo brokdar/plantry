@@ -512,3 +512,13 @@ func TestCheck_AMissingStepFlagReplacesAClarityFlagOfTheSameStep(t *testing.T) {
 	assert.Equal(t, "Ein Schritt scheint zu fehlen", check.Flags[0].Text)
 	assert.False(t, check.Flags[0].Clarity)
 }
+
+func TestCheck_ATranslatedStepKeepsNoSourceLanguageClarityFlag(t *testing.T) {
+	r := newCheckRig(t, plantedRecipes["english"], run, checkTurn(`{
+		"step_edits":[{"step":1,"kind":"clarity","text":"Stir the cream in well."},{"step":0,"kind":"clarity","text":"Simmer the tomatoes for 20 minutes, covered."}],
+		"translation":{"name":"Tomatensuppe","steps":["Die Tomaten 20 Minuten köcheln lassen.","Die Sahne einrühren."]}}`))
+	d := r.draft(t)
+	check, err := r.svc.Check(context.Background(), d, "de")
+	require.NoError(t, err)
+	assert.Empty(t, check.Flags, "both steps were translated")
+}
