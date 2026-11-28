@@ -135,7 +135,10 @@ test.describe("Setup wizard", () => {
 
     // Plan D21: the planner specs seed plates on today's dates.
     await setSetting("plan.anchor", "today")
-    // The other specs expect the Chef off (their own setup turns it on).
-    await setSetting("chef.enabled", "false")
+    // The other specs expect the Chef off (their own setup turns it on): drop
+    // the stored override so the setting is back to its default, no DB badge.
+    const ctx = await apiRequest.newContext({ baseURL: API })
+    expect((await ctx.delete("/api/settings/chef.enabled")).ok()).toBe(true)
+    await ctx.dispose()
   })
 })
