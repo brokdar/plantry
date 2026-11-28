@@ -68,6 +68,8 @@ type CaseResult struct {
 	Detail      string   `json:"detail,omitempty"`
 	// Changes are the applied changes of an import check case.
 	Changes []ChangeRecord `json:"changes,omitempty"`
+	// ClarityFlags are the clarity proposals of an import check case (flags, never applied).
+	ClarityFlags []string `json:"clarity_flags,omitempty"`
 }
 
 // ModeReport is a mode's outcome.

@@ -171,15 +171,16 @@ func TestRunImportCheck_AnotherValueOnThePlantedLineIsWrong(t *testing.T) {
 	}
 }
 
-func TestRunImportCheck_StepRewritesGoToTheJudgeFile(t *testing.T) {
+func TestRunImportCheck_ClarityProposalsAreListedAsFlags(t *testing.T) {
 	e := env(t, toolTurn(importer.CheckTool, `{"step_edits":[{"step":0,"kind":"clarity","text":"Stir the rice well.","reason":"clearer"}]}`, 100, 20))
 	rep, err := chefcanary.RunImportCheck(context.Background(), chefcanary.ImportCheckConfig{Env: e, Set: tinySet()})
 	require.NoError(t, err)
 	assert.Zero(t, metric(t, rep, "wrong_fix_rate").Value)
-	assert.Equal(t, 5.0, metric(t, rep, "changes_to_judge").Value)
+	assert.Zero(t, metric(t, rep, "changes_to_judge").Value)
+	assert.Zero(t, metric(t, rep, "clean_recipes_flagged").Value, "a clarity proposal is no false alarm")
 	md := rep.Artifacts["importcheck-changes.md"]
-	assert.Contains(t, md, "Before: Mix.")
-	assert.Contains(t, md, "After: Stir the rice well.")
+	assert.Contains(t, md, "Clarity proposals")
+	assert.Contains(t, md, "Could be clearer: Stir the rice well.")
 }
 
 func TestRunImportCheck_StopsAtTheSpendCap(t *testing.T) {

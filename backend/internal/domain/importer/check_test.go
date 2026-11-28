@@ -89,6 +89,14 @@ var plantedRecipes = map[string]*importer.RawRecipe{
 		RecipeInstructions: []string{"Hähnchen, Zitrone und Öl zugeben.", "Hähnchen braten, bis die Kerntemperatur 74 °C erreicht ist."},
 		PrepMinutes:        5, CookMinutes: 20,
 	},
+	"english_chicken": {
+		Name:               "Fried chicken",
+		Description:        "A crispy chicken dish for 2.",
+		RecipeYieldNumber:  2,
+		RecipeIngredient:   []string{"400 g chicken breast", "2 cloves garlic"},
+		RecipeInstructions: []string{"Fry the chicken for 20 minutes.", "Serve the chicken with the rice."},
+		PrepMinutes:        5, CookMinutes: 20,
+	},
 	// A foreign-language page.
 	"english": {
 		Name:               "Tomato soup",
@@ -394,27 +402,78 @@ func TestCheck_ASafetyCueSkipsANonCookingStepAndOneWithACoreTemperature(t *testi
 	}
 }
 
-func TestCheck_ASplitSentenceIsAClarityRewrite(t *testing.T) {
-	steps, check := edited(t, "oven_chicken", `{"step":0,"kind":"clarity","reason":"zu lang","text":"Hähnchenschenkel im Ofen backen. Die Temperatur beträgt 200 °C."}`)
-	assert.Equal(t, "Hähnchenschenkel im Ofen backen. Die Temperatur beträgt 200 °C.", steps[0])
-	assert.Empty(t, check.Flags)
-	assert.Len(t, check.Changes, 1)
+func TestCheck_AClarityRewriteIsOnlyAFlag(t *testing.T) {
+	steps, check := edited(t, "oven_chicken", `{"step":0,"kind":"clarity","reason":"zu lang","text":"Hähnchenschenkel im Ofen backen. Die Temperatur beträgt 200 °C."},
+		{"step":0,"kind":"clarity","text":"Hähnchenschenkel bei 200 °C backen."}`)
+	assert.Equal(t, plantedRecipes["oven_chicken"].RecipeInstructions[0], steps[0], "the step stays as written")
+	assert.Empty(t, check.Changes)
+	require.Len(t, check.Flags, 1, "one flag per step")
+	assert.True(t, check.Flags[0].Clarity)
+	assert.Equal(t, 0, check.Flags[0].Step)
+	assert.Equal(t, "Könnte klarer sein: Hähnchenschenkel im Ofen backen. Die Temperatur beträgt 200 °C.", check.Flags[0].Text)
 
-	// A new ingredient in the extra sentence is flagged once, without the model's reason.
+	// A new ingredient in the extra sentence is the missing-step flag, once, without the model's reason.
 	_, check = edited(t, "oven_chicken", `{"step":1,"kind":"clarity","reason":"missing","text":"Zwiebel anbraten. Dann Wasser zugeben."},
 		{"step":1,"kind":"clarity","reason":"missing","text":"Zwiebel anbraten. Dann Wasser zugeben und kochen."}`)
 	require.Len(t, check.Flags, 1)
 	assert.Equal(t, "Ein Schritt scheint zu fehlen", check.Flags[0].Text)
+	assert.False(t, check.Flags[0].Clarity)
 }
 
 func TestCheck_IngredientMentionsCompareByStem(t *testing.T) {
 	steps, check := edited(t, "oven_chicken", `{"step":1,"kind":"clarity","text":"Zwiebeln anbraten."}`)
-	assert.Equal(t, "Zwiebeln anbraten.", steps[1])
-	assert.Empty(t, check.Flags)
-	assert.Len(t, check.Changes, 1)
+	assert.Equal(t, "Zwiebel anbraten.", steps[1])
+	require.Len(t, check.Flags, 1)
+	assert.True(t, check.Flags[0].Clarity)
+	assert.Empty(t, check.Changes)
+}
 
-	steps, check = edited(t, "oven_chicken", `{"step":2,"kind":"clarity","text":"Salzwasser kochen."}`)
-	assert.Equal(t, "Salzwasser kochen.", steps[2])
-	assert.Empty(t, check.Flags)
-	assert.Len(t, check.Changes, 1)
+func TestCheck_ASafetyCueNeedsAWholeCookingWord(t *testing.T) {
+	for _, step := range []string{
+		"Hähnchen mit Petersilie garnieren.", "Hähnchen mit Kochsalz würzen.", "Serve the chicken with garlic bread.",
+		"Hähnchen in die Bratensauce legen.", "Hähnchen aus dem Backofen nehmen.", "Chicken with sugar, then search the pan.",
+		"Hähnchen auf das Kochfeld stellen.",
+	} {
+		_, ok := importer.CueText(step, "de")
+		assert.False(t, ok, step)
+	}
+	for _, step := range []string{
+		"Hähnchen anbraten.", "Das Hähnchen gebraten servieren.", "Hähnchen garen.", "Hähnchen durchgaren.", "Hähnchen kochen.",
+		"Hähnchen backen.", "Cook the chicken.", "Pan-fry the chicken.", "Roast chicken thighs.", "Simmer the chicken in broth.",
+	} {
+		_, ok := importer.CueText(step, "de")
+		assert.True(t, ok, step)
+	}
+}
+
+func TestCheck_ACueSkipsAStepWithACoreTemperatureInOtherWords(t *testing.T) {
+	for _, step := range []string{
+		"Hähnchen braten, bis der Kern 74 °C hat.", "Hähnchen braten bis zur Innentemperatur von 74 °C.",
+		"Roast the chicken to an internal temperature of 74 °C.",
+	} {
+		_, ok := importer.CueText(step, "de")
+		assert.False(t, ok, step)
+	}
+}
+
+func TestCheck_ACueComesAfterTheTranslationInTheFinalLanguage(t *testing.T) {
+	r := newCheckRig(t, plantedRecipes["english_chicken"], run, checkTurn(`{
+		"step_edits":[{"step":0,"kind":"safety_cue","text":"x"}],
+		"translation":{"name":"Hähnchen","steps":["Das Hähnchen 20 Minuten braten.","Das Hähnchen mit dem Reis servieren."]}}`))
+	d := r.draft(t)
+	require.Equal(t, "en", d.Language)
+	check, err := r.svc.Check(context.Background(), d, "de")
+	require.NoError(t, err)
+	assert.Equal(t, "Das Hähnchen 20 Minuten braten (Kerntemperatur mindestens 74 °C).", d.Instructions[0])
+	assert.Equal(t, "Das Hähnchen mit dem Reis servieren.", d.Instructions[1])
+	require.Len(t, check.Changes, 2)
+	assert.Equal(t, importer.ChangeTranslate, check.Changes[0].Kind)
+	assert.Equal(t, importer.ChangeSafetyCue, check.Changes[1].Kind)
+
+	// Untranslated, the cue is in the recipe's own language.
+	r = newCheckRig(t, plantedRecipes["english_chicken"], run, checkTurn(`{"step_edits":[{"step":0,"kind":"safety_cue","text":"x"}]}`))
+	d = r.draft(t)
+	_, err = r.svc.Check(context.Background(), d, "de")
+	require.NoError(t, err)
+	assert.Equal(t, "Fry the chicken for 20 minutes (core temperature at least 74 °C).", d.Instructions[0])
 }

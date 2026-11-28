@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"regexp"
 	"slices"
@@ -19,7 +20,7 @@ import (
 )
 
 // CheckVersion is the run log's prompt version of the import check.
-const CheckVersion = "c3"
+const CheckVersion = "c4"
 
 const (
 	// CheckTool is the forced tool of an import check call; the fake provider
@@ -87,6 +88,8 @@ type Flag struct {
 	Ingredient int    `json:"ingredient"` // -1 when about the recipe or a step
 	Step       int    `json:"step"`       // -1 when about an ingredient
 	Text       string `json:"text"`
+	// Clarity marks a proposed clearer step text: shown, never applied.
+	Clarity bool `json:"clarity,omitempty"`
 }
 
 // Check is the import check's answer for one draft. Ran is false when no
@@ -300,12 +303,14 @@ func boundedRewrite(kind, old, next string) bool {
 
 var stepKinds = map[string]string{"safety_cue": ChangeSafetyCue, "clarity": ChangeClarity, "lead_time": ChangeLeadTime}
 
-// cookVerbs: folded stems of the verbs that make a step cook; a safety cue
-// goes only on such a step.
-var cookVerbs = []string{"brat", "gar", "back", "koch", "schmor", "grill", "cook", "fry", "bake", "roast", "simmer", "sear"}
+// cookVerbRE: a folded whole word that makes a step cook (German with its
+// common prefixes and endings, English); "garnieren", "Kochsalz", "Bratensauce",
+// "Backofen", "garlic" and "search" are no cooking verb.
+var cookVerbRE = regexp.MustCompile(`\b(?:(?:an|durch|aus|ab)?(?:ge)?(?:brat|gar|back|koch|schmor|grill|duenst|pochier|daempf)(?:e|en|et|t|st)?|(?:an|durch)?braet(?:st|et)?|koecheln|koechle|koechelt|` +
+	`cook(?:s|ed|ing)?|fry|fries|fried|frying|pan-fry|pan-fried|bake|bakes|baked|baking|roast|roasts|roasted|simmer|simmers|simmered|grill|grills|grilled|sear|sears|seared|poach|poaches|poached|steam|steams|steamed)\b`)
 
-// coreTempWords: a step that already states a core temperature.
-var coreTempWords = []string{"kerntemp", "core temp", "internal temp"}
+// coreTempRE: a step that already states a core temperature.
+var coreTempRE = regexp.MustCompile(`kerntemp|core temp|(?:\bkern\b|innentemp\w*|internal temp\w*)[^.\d]{0,40}\d`)
 
 // cueText is the deterministic safety cue: the step plus a fixed localized
 // core-temperature note with the gates' table value of the protein the step
@@ -314,7 +319,7 @@ var coreTempWords = []string{"kerntemp", "core temp", "internal temp"}
 func cueText(old, lang string) (string, bool) {
 	folded := diet.Fold(old)
 	temp, ok := gates.CoreTempC(folded)
-	if !ok || !containsAnyOf(folded, cookVerbs) || containsAnyOf(folded, coreTempWords) {
+	if !ok || !cookVerbRE.MatchString(folded) || coreTempRE.MatchString(folded) {
 		return "", false
 	}
 	note := fmt.Sprintf(" (core temperature at least %d °C)", temp)
@@ -323,10 +328,6 @@ func cueText(old, lang string) (string, bool) {
 	}
 	trimmed := strings.TrimRight(old, ".!? ")
 	return trimmed + note + old[len(trimmed):], true
-}
-
-func containsAnyOf(s string, subs []string) bool {
-	return slices.ContainsFunc(subs, func(x string) bool { return strings.Contains(s, x) })
 }
 
 var sentenceEndRE = regexp.MustCompile(`[.!?](?:\s|$)`)
@@ -430,17 +431,21 @@ func apply(d *Draft, r checkReply, lang string) (*Check, []string) {
 		}
 	}
 
-	// Step edits: a cue or lead time only adds to the step, a rewrite keeps
-	// every number, none may add a food-safety block.
+	// Step edits: a lead time only adds to the step and may not add a
+	// food-safety block. A clarity rewrite is only proposed, as a flag, and
+	// keeps every number. A safety cue is checked here and added after the
+	// translation, in the language of the final step text.
+	cueSteps := map[int]bool{}
 	for _, e := range r.StepEdits {
 		kind := stepKinds[e.Kind]
 		text := strings.TrimSpace(e.Text)
 		if kind == ChangeSafetyCue && e.Step >= 0 && e.Step < len(d.Instructions) {
-			var ok bool
-			if text, ok = cueText(d.Instructions[e.Step], lang); !ok {
+			if _, ok := cueText(d.Instructions[e.Step], draftLang(d, lang)); !ok {
 				reject("step %d: a safety cue needs a cooked protein in the step and no core temperature yet", e.Step)
-				continue
+			} else {
+				cueSteps[e.Step] = true
 			}
+			continue
 		}
 		switch {
 		case kind == "":
@@ -458,7 +463,11 @@ func apply(d *Draft, r checkReply, lang string) (*Check, []string) {
 			reject("step %d loses a number", e.Step)
 		case !boundedRewrite(kind, d.Instructions[e.Step], text):
 			reject("step %d: edit too long or carries a link", e.Step)
-		case kind != ChangeClarity && !strings.Contains(diet.Fold(text), diet.Fold(strings.TrimRight(d.Instructions[e.Step], ".!? "))):
+		case kind == ChangeClarity:
+			if !slices.ContainsFunc(out.Flags, func(f Flag) bool { return f.Step == e.Step }) {
+				out.Flags = append(out.Flags, Flag{Ingredient: -1, Step: e.Step, Text: clearerFlag(lang, text), Clarity: true})
+			}
+		case !strings.Contains(diet.Fold(text), diet.Fold(strings.TrimRight(d.Instructions[e.Step], ".!? "))):
 			reject("step %d: a %s only adds", e.Step, e.Kind)
 		default:
 			next := append([]string{}, d.Instructions...)
@@ -521,7 +530,44 @@ func apply(d *Draft, r checkReply, lang string) (*Check, []string) {
 			reject("translation")
 		}
 	}
+
+	// Safety cues, on the final step text and in its language.
+	finalLang := draftLang(d, lang)
+	if len(out.Changes) > 0 && slices.ContainsFunc(out.Changes, func(c Change) bool { return c.Kind == ChangeTranslate }) {
+		finalLang = lang
+	}
+	for _, i := range slices.Sorted(maps.Keys(cueSteps)) {
+		text, ok := cueText(d.Instructions[i], finalLang)
+		if !ok {
+			reject("step %d: a safety cue needs a cooked protein in the step and no core temperature yet", i)
+			continue
+		}
+		next := append([]string{}, d.Instructions...)
+		next[i] = text
+		if !noNewBlocks(next, d.KeepDays) {
+			reject("step %d adds a safety block", i)
+			continue
+		}
+		add(ChangeSafetyCue, "", Edit{Field: FieldStep, Index: i, Before: d.Instructions[i], After: text})
+		d.Instructions = next
+	}
 	return out, rejected
+}
+
+// draftLang is the language the draft's own text is in: its recipe language,
+// else the user's.
+func draftLang(d *Draft, lang string) string {
+	if d.Language == "de" || d.Language == "en" {
+		return d.Language
+	}
+	return lang
+}
+
+func clearerFlag(lang, text string) string {
+	if lang == "de" {
+		return "Könnte klarer sein: " + text
+	}
+	return "Could be clearer: " + text
 }
 
 // translation applies a valid translation to d and returns its edits; nil
@@ -602,7 +648,7 @@ const checkSystem = "You check an imported recipe by calling " + CheckTool + " o
 	"Fix: missing prep or cook minutes (only when the page gave none); keep days and freezable of the cooked dish (" +
 	"3 days for dishes with poultry or mince, 2 for fish, 1 for rice dishes, else up to 4); a core temperature on a step that names poultry, " +
 	"mince, pork or fish and has none; lead times the steps forget (soak, marinate, thaw: add to the step); " +
-	"a step that is unclear (rewrite only that step, keep every number, add no step or ingredient: if a step seems missing, only flag it); the role of the dish; a proposed amount for an ingredient line without one " +
+	"a step that is unclear (give the clearer text of only that step, keeping every number and adding no step or ingredient; it is shown as a suggestion, not applied; if a step seems missing, only flag it); the role of the dish; a proposed amount for an ingredient line without one " +
 	"(kind proposed); a volume line with no weight written in grams (kind unit). " +
 	"Never change an amount the page gave and never change an ingredient: if a given amount looks wrong or an ingredient looks odd, only flag it. " +
 	"Suggest at most one finishing touch (one optional last step). " +

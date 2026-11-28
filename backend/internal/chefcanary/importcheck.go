@@ -106,6 +106,9 @@ func draftOf(r chefsets.CheckRecipe) *importer.Draft {
 // found reports whether a flag of the check is where the planted error is.
 func (c ImportCase) found(flags []importer.Flag) bool {
 	return slices.ContainsFunc(flags, func(f importer.Flag) bool {
+		if f.Clarity {
+			return false
+		}
 		if c.Expect.Recipe {
 			return f.Ingredient < 0
 		}
@@ -221,6 +224,17 @@ func judgeFile(results []CaseResult) string {
 	if n == 0 {
 		sb.WriteString("\nNo changes to judge.\n")
 	}
+	sb.WriteString("\n# Clarity proposals (shown to the user as flags, never applied)\n")
+	m := 0
+	for _, res := range results {
+		for _, t := range res.ClarityFlags {
+			m++
+			fmt.Fprintf(&sb, "\n## %d. %s\n\n- %s\n- Verdict: \n", m, res.ID, t)
+		}
+	}
+	if m == 0 {
+		sb.WriteString("\nNo clarity proposals.\n")
+	}
 	return sb.String()
 }
 
@@ -267,6 +281,16 @@ func RunImportCheck(ctx context.Context, cfg ImportCheckConfig) (ModeReport, err
 			continue
 		}
 		res.Changes = c.classify(chk.Changes, cfg.Set.AllowedChanges)
+		// A clarity proposal is a flag the reader judges, not a change and not a false alarm.
+		var flags []importer.Flag
+		for _, f := range chk.Flags {
+			if f.Clarity {
+				res.ClarityFlags = append(res.ClarityFlags, f.Text)
+			} else {
+				flags = append(flags, f)
+			}
+		}
+		chk.Flags = flags
 		ran++
 		wrong := countVerdict(res.Changes, verdictWrong)
 		toJudge += countVerdict(res.Changes, verdictToJudge)
@@ -307,7 +331,7 @@ func RunImportCheck(ctx context.Context, cfg ImportCheckConfig) (ModeReport, err
 	rep.add(Metric{Name: "wrong_fix_rate", Value: pct(wrongFix, ran), Unit: "%", Note: fmt.Sprintf("%d/%d checked recipes with a wrong change (an ingredient line changed other than back to the original); judged-wrong designed changes add to it", wrongFix, ran)}.target("<= 5 %", false, 5))
 	rep.add(Metric{Name: "wrong_fix_rate.legacy", Value: pct(legacyWrongFix, planted), Unit: "%", Note: fmt.Sprintf("%d/%d planted recipes with any change of a kind the set does not allow or any edit of the planted line (the first definition, for comparing earlier runs)", legacyWrongFix, planted)})
 	rep.add(Metric{Name: "planted_fixed_correctly", Value: float64(fixed), Note: fmt.Sprintf("of %d planted: the planted line was put back to its original", planted)})
-	rep.add(Metric{Name: "changes_to_judge", Value: float64(toJudge), Note: "clarity, safety cue and other designed changes, in " + judgeFileName})
+	rep.add(Metric{Name: "changes_to_judge", Value: float64(toJudge), Note: "safety cue and other designed changes, in " + judgeFileName})
 	byGroup(&rep, "detection_rate.kind.", func(c CaseResult) string {
 		if len(c.Groups) == 0 {
 			return ""
