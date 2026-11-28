@@ -41,6 +41,22 @@ var plantedRecipes = map[string]*importer.RawRecipe{
 		RecipeIngredient:   []string{"400 g Hähnchenbrust", "1 EL Öl", "200 g Brokkoli"},
 		RecipeInstructions: []string{"Brokkoli garen.", "Hähnchen in der Pfanne braten.", "Alles anrichten."},
 	},
+	// Chicken browned in step 1, then a coconut simmer with a stated time.
+	"curry": {
+		Name:               "Hähnchencurry",
+		RecipeYieldNumber:  2,
+		RecipeIngredient:   []string{"400 g Hähnchenbrust", "400 ml Kokosmilch", "2 EL Currypaste"},
+		RecipeInstructions: []string{"Hähnchen in Stücken anbraten, bis es durch ist.", "Kokosmilch angießen und 10 Minuten köcheln lassen."},
+		PrepMinutes:        10, CookMinutes: 20,
+	},
+	// A stock step is missing between the onions and the finish.
+	"risotto": {
+		Name:               "Risotto",
+		RecipeYieldNumber:  2,
+		RecipeIngredient:   []string{"200 g Reis", "1 Zwiebel", "Gemüsebrühe"},
+		RecipeInstructions: []string{"Zwiebel und Reis andünsten.", "Mit Käse servieren."},
+		PrepMinutes:        5, CookMinutes: 25,
+	},
 	// Cups with no grams.
 	"cups": {
 		Name:               "Pancakes",
@@ -288,4 +304,50 @@ func TestCheck_AtTheCapItRunsWithAWarning(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, check.Ran)
 	assert.True(t, check.CapWarning)
+}
+
+// edited runs one step edit through the check and returns the draft's steps
+// and the check.
+func edited(t *testing.T, recipe, edit string) ([]string, *importer.Check) {
+	t.Helper()
+	r := newCheckRig(t, plantedRecipes[recipe], run, checkTurn(`{"step_edits":[`+edit+`]}`))
+	d := r.draft(t)
+	check, err := r.svc.Check(context.Background(), d, "de")
+	require.NoError(t, err)
+	return d.Instructions, check
+}
+
+func TestCheck_ARewriteNeverAddsAStepOrAnIngredientMention(t *testing.T) {
+	steps, check := edited(t, "risotto", `{"step":0,"kind":"clarity","reason":"the stock step is missing",
+		"text":"Zwiebel und Reis andünsten, bis der Reis glasig ist. Dann nach und nach die Gemüsebrühe zugeben und rühren."}`)
+	assert.Equal(t, "Zwiebel und Reis andünsten.", steps[0])
+	assert.Empty(t, check.Changes)
+	require.Len(t, check.Flags, 1)
+	assert.Equal(t, 0, check.Flags[0].Step)
+	assert.Contains(t, check.Flags[0].Text, "Schritt scheint zu fehlen")
+
+	// One sentence, but it brings in an ingredient the step did not name.
+	steps, check = edited(t, "risotto", `{"step":0,"kind":"clarity","text":"Zwiebel und Reis in Gemüsebrühe andünsten."}`)
+	assert.Equal(t, "Zwiebel und Reis andünsten.", steps[0])
+	assert.Empty(t, check.Changes)
+	assert.Len(t, check.Flags, 1)
+}
+
+func TestCheck_ASafetyCueNeedsTheProteinInTheStepAndNeverTouchesATime(t *testing.T) {
+	steps, check := edited(t, "curry", `{"step":1,"kind":"safety_cue",
+		"text":"Kokosmilch angießen und 10 Minuten köcheln lassen, bis das Hähnchen innen 74 °C erreicht hat."}`)
+	assert.Equal(t, "Kokosmilch angießen und 10 Minuten köcheln lassen.", steps[1])
+	assert.Empty(t, check.Changes)
+}
+
+func TestCheck_ASafetyCueUsesTheTableTemperature(t *testing.T) {
+	steps, check := edited(t, "curry", `{"step":0,"kind":"safety_cue","text":"Hähnchen in Stücken anbraten, bis es durch ist (Kerntemperatur mind. 75 °C)."}`)
+	assert.Equal(t, "Hähnchen in Stücken anbraten, bis es durch ist (Kerntemperatur mind. 74 °C).", steps[0])
+	require.Len(t, check.Changes, 1)
+	assert.Equal(t, "Hähnchen in Stücken anbraten, bis es durch ist (Kerntemperatur mind. 74 °C).", check.Changes[0].Edits[0].After)
+
+	// A new number that is no temperature is no cue.
+	steps, check = edited(t, "curry", `{"step":0,"kind":"safety_cue","text":"Hähnchen in Stücken anbraten, bis es durch ist (nach 12 Minuten 74 °C)."}`)
+	assert.Equal(t, "Hähnchen in Stücken anbraten, bis es durch ist.", steps[0])
+	assert.Empty(t, check.Changes)
 }

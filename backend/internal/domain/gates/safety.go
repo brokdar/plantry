@@ -30,6 +30,29 @@ var proteins = []protein{
 	}, 70},
 }
 
+// CoreTempC is the core temperature in °C of the strictest protein group a
+// folded text names (the same table the G1 gates check against); false when
+// it names none.
+func CoreTempC(folded string) (int, bool) {
+	temp := 0
+	for _, p := range proteins {
+		n := folded
+		switch p.code {
+		case "fish":
+			n = notFish.Replace(n)
+		case "poultry":
+			n = notPoultry.Replace(n)
+		}
+		if p.code != "mince" && containsAny(n, proteins[0].keywords) {
+			continue
+		}
+		if containsAny(n, p.keywords) {
+			temp = max(temp, int(p.minC))
+		}
+	}
+	return temp, temp > 0
+}
+
 var notPoultry = strings.NewReplacer("huehnerbruehe", " ", "huehnerfond", " ")
 
 // fishSauce is cut out of ingredient names before the protein check.

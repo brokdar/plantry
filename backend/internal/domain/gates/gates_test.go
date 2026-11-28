@@ -144,3 +144,14 @@ func TestAllergens_RiceNoodlesAreGlutenFree(t *testing.T) {
 		t.Errorf("egg noodles: got %v", got)
 	}
 }
+
+func TestCoreTempC_IsTheGroupMinimumOfTheStrictestProtein(t *testing.T) {
+	for text, want := range map[string]int{"haehnchen in stuecken anbraten": 74, "hackfleisch braten": 71, "lachs und huehnchen": 74} {
+		if got, ok := CoreTempC(text); !ok || got != want {
+			t.Errorf("%q: got %d, %v; want %d", text, got, ok, want)
+		}
+	}
+	if _, ok := CoreTempC("kokosmilch angiessen"); ok {
+		t.Error("no protein named, yet a temperature")
+	}
+}
