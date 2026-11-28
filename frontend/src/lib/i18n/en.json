@@ -2382,6 +2382,7 @@
         "no_sites": "No enabled recipe site can be searched right now",
         "nothing_found": "Found no usable recipe",
         "duplicate": "Another find kept the same recipe page first",
+        "too_similar": "Skipped: too close to a recipe you already have",
         "no_search": "This provider can't search the web on its own",
         "no_provider": "No AI provider is set up",
         "off": "The assistant is switched off",

@@ -24,7 +24,7 @@ import (
 )
 
 // PromptVersion of the find run's model steps.
-const PromptVersion = "f5"
+const PromptVersion = "f6"
 
 const (
 	// fetchVersions is how many versions are fetched (FIND-11).
@@ -343,6 +343,12 @@ func (s *Service) attempt(ctx context.Context, client llm.Client, model string, 
 	o.Steps = append(o.Steps, Step{Key: "cross_checked", Params: map[string]string{
 		"site": base.Source.Site, "versions": strconv.Itoa(checked), "flags": strconv.Itoa(len(o.Flags)),
 	}})
+	if (f.Trigger == TriggerPlanning || f.Trigger == TriggerFill) && tooSimilar(base.Draft.Name, h.Recipes) {
+		// FIND-17: new to the household. The library has this dish.
+		o.Steps = append(o.Steps, Step{Key: "too_similar"})
+		o.State = StateFailed
+		return o, false, nil
+	}
 	a, err := s.adapt(ctx, client, model, base.Draft, h, o.Flags)
 	if err != nil {
 		return o, false, err
@@ -362,6 +368,7 @@ func (s *Service) attempt(ctx context.Context, client llm.Client, model string, 
 		"lines": strconv.Itoa(len(a.draft.Ingredients)), "unmatched": strconv.Itoa(unmatched),
 	}})
 	o.Gates = gates.Check(gateRecipe(a.draft, checked), h.Gates)
+	o.Gates.Blocks = append(o.Gates.Blocks, removedMentions(base.Draft, a)...)
 	for _, fl := range o.Gates.Flags {
 		o.Flags = append(o.Flags, Flag{Code: fl.Code, Reason: fl.Reason})
 	}
