@@ -16,10 +16,16 @@ import (
 // grams, counts in whole pieces, other units in halves.
 func kitchenAmount(amount float64, unit, name string) string {
 	base, u := units.ToBase(amount, unit)
-	if u == "ml" && base > 60 {
-		if g, ok := food.SolidGrams(name, base); ok {
+	if u == "ml" {
+		// A solid is never shown in ml: grams, or spoons below ~30 g.
+		if g, ok := food.SolidGrams(name, base); ok && g >= 30 {
 			q := units.Display(g, "g")
 			return number(q.Amount) + " " + q.Unit
+		} else if ok {
+			if base < 15 {
+				return spoon(base/5, "tsp")
+			}
+			return spoon(base/15, "tbsp")
 		}
 	}
 	switch {

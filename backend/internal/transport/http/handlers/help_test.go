@@ -141,7 +141,7 @@ func TestHelp_ExplainStepAnswersWithBatchContext(t *testing.T) {
 	var kind, version string
 	require.NoError(t, e.db.QueryRow(`SELECT kind, prompt_version FROM ai_runs WHERE id = ?`, out["run_id"]).Scan(&kind, &version))
 	assert.Equal(t, "chef_help", kind)
-	assert.Equal(t, "hp5", version)
+	assert.Equal(t, "hp6", version)
 }
 
 func TestHelp_PromptGivesKitchenAmountsAndFixTable(t *testing.T) {

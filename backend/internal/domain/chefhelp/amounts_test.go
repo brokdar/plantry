@@ -33,7 +33,13 @@ func TestKitchenAmount(t *testing.T) {
 		{0.25, "can", "0.5 can", "Tomatoes"},
 		{0.2, "slice", "1 slice", "Bacon"},
 		{440, "ml", "185 g", "Cheddar"},
+		{90, "ml", "86 g", "Butter"},
+		{15, "ml", "1 tbsp", "Butter"},
+		{68, "ml", "73 g", "Tomato paste"},
+		{22, "ml", "1.5 tbsp", "Butter"},
+		{200, "ml", "160 g", "Lentils"},
 		{480, "ml", "480 ml", "Beef broth"},
+		{90, "ml", "90 ml", "Olive oil"},
 		{480, "ml", "480 ml", "Milk"},
 	} {
 		assert.Equal(t, c.want, kitchenAmount(c.amount, c.unit, c.name), "%v %s", c.amount, c.unit)

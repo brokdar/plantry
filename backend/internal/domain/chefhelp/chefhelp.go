@@ -28,7 +28,7 @@ import (
 // Tool is the forced tool of a help run; Version its prompt version.
 const (
 	Tool    = "chef_help_answer"
-	Version = "hp5"
+	Version = "hp6"
 )
 
 // Help kinds.
