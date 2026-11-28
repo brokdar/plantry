@@ -374,6 +374,7 @@ export const mockSettingDefaults: Record<string, string> = {
   "chef.enabled": "false",
   "chef.monthly_cap": "5",
   "chef.batch_variation": "true",
+  "chef.library_review_enabled": "false",
 }
 
 const SECRET_KEYS = new Set(["ai.api_key", "fdc.api_key"])

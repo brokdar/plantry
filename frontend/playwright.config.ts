@@ -48,6 +48,7 @@ const AI_SERIAL_SPECS = [
 const GLOBAL_SETTINGS_SPECS = [
   "assistant-drafts.spec.ts",
   "chef-find.spec.ts",
+  "chef-sites-library.spec.ts",
   "chef-ready-finds.spec.ts",
   "chef-tips.spec.ts",
   "chef-themes.spec.ts",

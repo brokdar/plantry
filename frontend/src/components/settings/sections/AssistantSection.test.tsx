@@ -19,6 +19,11 @@ vi.mock("@/lib/api/chef", () => ({
   getChefSpend: vi.fn(),
   getLabellingEstimate: vi.fn(),
   startLibraryLabelling: vi.fn(),
+  listChefSites: vi.fn(),
+  addChefSite: vi.fn(),
+  setChefSiteEnabled: vi.fn(),
+  removeChefSite: vi.fn(),
+  retryChefSite: vi.fn(),
 }))
 
 vi.mock("@/lib/api/profile", async (orig) => ({
@@ -30,6 +35,7 @@ vi.mock("@/lib/api/profile", async (orig) => ({
 import {
   getChefSpend,
   getLabellingEstimate,
+  listChefSites,
   startLibraryLabelling,
 } from "@/lib/api/chef"
 import { getProfile, updateProfile, type Profile } from "@/lib/api/profile"
@@ -85,6 +91,7 @@ describe("AssistantSection", () => {
       minutes: 1,
     })
     vi.mocked(startLibraryLabelling).mockResolvedValue({ jobs: 3 })
+    vi.mocked(listChefSites).mockResolvedValue({ items: [] })
     vi.mocked(listAIModels).mockResolvedValue({
       models: [
         { id: "fake-default", display_name: "Fake (default)" },
@@ -222,6 +229,34 @@ describe("AssistantSection", () => {
       renderSection()
       expect(await screen.findByTestId("chef-spend")).toHaveTextContent(
         "The monthly limit is reached"
+      )
+    })
+  })
+
+  describe("library review (LIB-1)", () => {
+    it("is hidden while the Chef is off", async () => {
+      serveSettings([{ key: "ai.provider", value: "fake", source: "db" }])
+      renderSection()
+      await screen.findByLabelText("Chef")
+      expect(screen.queryByLabelText("Monthly library check-up")).toBeNull()
+      expect(listChefSites).not.toHaveBeenCalled()
+    })
+
+    it("is off by default and switches on with the Chef on", async () => {
+      serveSettings([
+        { key: "ai.provider", value: "fake", source: "db" },
+        { key: "chef.enabled", value: "true", source: "db" },
+      ])
+      const user = userEvent.setup()
+      renderSection()
+      const toggle = await screen.findByLabelText("Monthly library check-up")
+      expect(toggle).not.toBeChecked()
+      await user.click(toggle)
+      await waitFor(() =>
+        expect(setSetting).toHaveBeenCalledWith(
+          "chef.library_review_enabled",
+          "true"
+        )
       )
     })
   })

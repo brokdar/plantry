@@ -129,6 +129,7 @@ const (
 	KeyChefSites                  = "chef.sites"
 	KeyPlanPlateFit               = "plan.plate_fit"
 	KeyChefBatchVariation         = "chef.batch_variation"
+	KeyChefLibraryReview          = "chef.library_review_enabled"
 )
 
 // maxCuisines and maxCuisineLen bound discovery.cuisines (D19).
@@ -198,6 +199,16 @@ const defaultChefSites = `[` +
 	`{"domain":"seriouseats.com","lang":"en","enabled":false,"ai_groups_exempt":false},` +
 	`{"domain":"allrecipes.com","lang":"en","enabled":false,"ai_groups_exempt":false}` +
 	`]`
+
+// DefaultChefSites are FIND-7's built-in sites: they can be disabled, never
+// removed.
+func DefaultChefSites() []ChefSite {
+	sites, err := ParseChefSites(defaultChefSites)
+	if err != nil {
+		panic(err) // the constant is checked by a test
+	}
+	return sites
+}
 
 // ParseChefSites parses chef.sites: a JSON array of sites with unique,
 // lowercase, trimmed domains and lang en or de.

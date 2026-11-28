@@ -460,7 +460,22 @@
       "chef_on_confirm": "Einschalten",
       "chef_cap_label": "Monatslimit",
       "chef_cap_effect": "So viel gibt der Assistent höchstens pro Monat für seine eigene Arbeit aus. Planen und Chat zählen nicht.",
-      "chef_cap_unit": "USD"
+      "chef_cap_unit": "USD",
+      "sites_title": "Rezeptseiten",
+      "sites_effect": "Der Assistent sucht neue Rezepte nur auf den eingeschalteten Seiten. Ein Link, den du einfügst, wird immer importiert.",
+      "sites_lang_en": "Englisch",
+      "sites_lang_de": "Deutsch",
+      "sites_toggle": "{{domain}} durchsuchen",
+      "sites_blocked": "Nicht durchsuchbar bis {{date}}",
+      "sites_retry": "Nochmal versuchen",
+      "sites_remove": "{{domain}} entfernen",
+      "sites_add_label": "Rezeptseite hinzufügen",
+      "sites_placeholder": "Zum Beispiel: seriouseats.com",
+      "sites_lang_label": "Sprache der Seite",
+      "sites_add": "Seite hinzufügen",
+      "review_label": "Monatlicher Rezepte-Check",
+      "review_effect_on": "Einmal im Monat zeigt Rezepte eine kurze Karte mit dem, was in deiner Sammlung aufgeräumt werden könnte.",
+      "review_effect_off": "Rezepte zeigt keine Check-Karte."
     },
     "system_section": {
       "appearance_group": "Sprache und Design",
@@ -1460,6 +1475,10 @@
     },
     "theme": {
       "limit": "Eine Woche hat höchstens zwei Themen."
+    },
+    "site": {
+      "duplicate_name": "Diese Seite steht schon in der Liste.",
+      "in_use": "Eine mitgelieferte Seite kann nur ausgeschaltet werden."
     }
   },
   "common": {
@@ -2583,6 +2602,22 @@
       "button": "Bibliothek füllen",
       "hint": "Zehn Rezepte, die zu eurem Haushalt passen, zum Ausprobieren.",
       "started": "Ich suche zehn Rezepte. Sie erscheinen in der Bibliothek, sobald sie fertig sind."
+    },
+    "review": {
+      "title": "Rezepte-Check",
+      "intro": "Ein paar Dinge, die mir diesen Monat in deinen Rezepten aufgefallen sind.",
+      "dismiss_card": "Jetzt nicht",
+      "dismiss_finding": "Ausblenden",
+      "make_variants": "Als Varianten verbinden",
+      "hide": "Aus der Planung nehmen",
+      "and": "und",
+      "look_alike": "sind sich sehr ähnlich.",
+      "replaced_one": "wurde zuletzt {{count}}-mal aus einem Plan getauscht.",
+      "replaced_other": "wurde zuletzt {{count}}-mal aus Plänen getauscht.",
+      "data_one": "{{count}} Rezept hat Lücken:",
+      "data_other": "{{count}} Rezepte haben Lücken:",
+      "missing_times": "keine Zeiten",
+      "missing_steps": "keine Schritte"
     }
   },
   "substitute": {

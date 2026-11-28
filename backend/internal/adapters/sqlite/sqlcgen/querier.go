@@ -16,6 +16,7 @@ type Querier interface {
 	// or an agent update or delete made by another run.
 	AIRunCorrections(ctx context.Context, arg AIRunCorrectionsParams) ([]AIRunCorrectionsRow, error)
 	AddBasicAtHome(ctx context.Context, foodID int64) error
+	AddLibraryGap(ctx context.Context, arg AddLibraryGapParams) error
 	AddNeverItem(ctx context.Context, foodID int64) error
 	AddPresetTag(ctx context.Context, arg AddPresetTagParams) error
 	// D11: the agent runs that wrote to the given plates or sessions since the
@@ -88,6 +89,7 @@ type Querier interface {
 	DeleteFoodPortion(ctx context.Context, arg DeleteFoodPortionParams) (sql.Result, error)
 	DeleteFoodTags(ctx context.Context, foodID int64) error
 	DeleteHiddenVariant(ctx context.Context, foodID int64) error
+	DeleteLibraryGap(ctx context.Context, kind string) error
 	// D12: pending suggestions (not finds, which have a state) created before
 	// the cutoff go; their ids let the caller delete the images.
 	DeletePendingSuggestionsBefore(ctx context.Context, before string) ([]int64, error)
@@ -100,6 +102,7 @@ type Querier interface {
 	DeletePresetPlatesByPreset(ctx context.Context, presetID int64) (sql.Result, error)
 	DeletePresetTag(ctx context.Context, arg DeletePresetTagParams) error
 	DeletePresetTagsByPreset(ctx context.Context, presetID int64) error
+	DeleteSearchBlock(ctx context.Context, domain string) error
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTasteItem(ctx context.Context, id int64) error
 	DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, error)
@@ -126,6 +129,7 @@ type Querier interface {
 	// rated disliked or not_eaten (NEW-2). A hidden substitution variant's plates
 	// and sessions count for its base recipe.
 	FoodHistory(ctx context.Context, arg FoodHistoryParams) ([]FoodHistoryRow, error)
+	FreeLibraryGap(ctx context.Context, kind string) error
 	GetAIChange(ctx context.Context, id int64) (AiChange, error)
 	GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailRow, error)
 	GetAvailabilityDefault(ctx context.Context, arg GetAvailabilityDefaultParams) (GetAvailabilityDefaultRow, error)
@@ -140,6 +144,7 @@ type Querier interface {
 	GetFoodKind(ctx context.Context, id int64) (string, error)
 	GetHiddenVariant(ctx context.Context, foodID int64) (HiddenVariant, error)
 	GetLeafFoodIDByName(ctx context.Context, name string) (int64, error)
+	GetLibraryReview(ctx context.Context) (GetLibraryReviewRow, error)
 	// A generation run as GET /api/plan/runs/{id} shows it (B6).
 	GetPlanRun(ctx context.Context, id int64) (GetPlanRunRow, error)
 	GetPlanningSession(ctx context.Context) (string, error)
@@ -220,6 +225,7 @@ type Querier interface {
 	// The cuisines the library's recipes carry (FIND-15), neutral left out, the
 	// most recipes first.
 	ListLibraryCuisines(ctx context.Context) ([]string, error)
+	ListLibraryGaps(ctx context.Context) ([]ListLibraryGapsRow, error)
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	// Recipe lines whose leaf lacks a core macro (legacy data, B2b). A to-taste
 	// line counts no nutrition, so it is not a problem.
@@ -249,7 +255,11 @@ type Querier interface {
 	// Suggestions, optionally of one status and run, last decided (else newest)
 	// first.
 	ListRecipeSuggestions(ctx context.Context, arg ListRecipeSuggestionsParams) ([]RecipeSuggestion, error)
+	ListReplacedCounts(ctx context.Context, since string) ([]ListReplacedCountsRow, error)
+	ListReviewIngredients(ctx context.Context) ([]ListReviewIngredientsRow, error)
+	ListReviewRecipes(ctx context.Context) ([]ListReviewRecipesRow, error)
 	ListSearchBlocked(ctx context.Context, now string) ([]string, error)
+	ListSearchBlocks(ctx context.Context, now string) ([]FindSearchBlock, error)
 	ListSettings(ctx context.Context) ([]AppSetting, error)
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
 	ListSourcePenalties(ctx context.Context) ([]ListSourcePenaltiesRow, error)
@@ -289,6 +299,7 @@ type Querier interface {
 	MarkKitchenQuestionAsked(ctx context.Context, question string) error
 	MarkSubstitutionSwapOffered(ctx context.Context, arg MarkSubstitutionSwapOfferedParams) error
 	MatchBasicAtHome(ctx context.Context, foodID int64) error
+	NewGapSession(ctx context.Context) error
 	// A generation offered the ready find to the window starting on passed_on
 	// and did not use it.
 	PassFind(ctx context.Context, arg PassFindParams) error
@@ -310,6 +321,7 @@ type Querier interface {
 	RemoveBasicAtHome(ctx context.Context, foodID int64) error
 	RemoveNeverItem(ctx context.Context, foodID int64) error
 	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
+	SaveLibraryReview(ctx context.Context, arg SaveLibraryReviewParams) error
 	SetChefTipState(ctx context.Context, arg SetChefTipStateParams) error
 	SetConversationContainer(ctx context.Context, arg SetConversationContainerParams) (sql.Result, error)
 	// D11: any suggestion accepted -> accepted; all rejected -> discarded; else
@@ -322,6 +334,7 @@ type Querier interface {
 	SetFoodShopSection(ctx context.Context, arg SetFoodShopSectionParams) (Food, error)
 	// Opening a trial recipe clears its To try badge, not the trial (NEW-3).
 	SetFoodTrialSeen(ctx context.Context, id int64) error
+	SetFoodVariantGroup(ctx context.Context, arg SetFoodVariantGroupParams) error
 	SetPlatesState(ctx context.Context, arg SetPlatesStateParams) error
 	SetRecipeSuggestionImage(ctx context.Context, arg SetRecipeSuggestionImageParams) error
 	// D25: a run's outcome after its rows were accepted, discarded, un-accepted
@@ -346,6 +359,7 @@ type Querier interface {
 	SpendAIRuns(ctx context.Context, arg SpendAIRunsParams) (float64, error)
 	// A recipe the assistant added enters the library on trial (NEW-1).
 	StartFoodTrial(ctx context.Context, id int64) error
+	StartLibraryGap(ctx context.Context, arg StartLibraryGapParams) error
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
 	TouchPlanningSession(ctx context.Context, until string) error
 	TouchPlate(ctx context.Context, id int64) error

@@ -12,6 +12,7 @@ import { useSetSetting, useSettingItems } from "@/lib/queries/settings"
 
 import { AIProviderControls } from "../AIProviderControls"
 import { ChefOnDialog } from "../ChefOnDialog"
+import { ChefSites } from "../ChefSites"
 import { formatUSD } from "../insights/format"
 import { PricesEditor } from "../PricesEditor"
 import { NumberField, SettingsGroup, Switch } from "../controls"
@@ -30,6 +31,8 @@ export function AssistantSection() {
     provider === "fake" ||
     (provider !== "" && (data["ai.api_key"]?.source ?? "default") !== "default")
 
+  const chefOn = data["chef.enabled"]?.value === "true"
+
   return (
     <div className="flex flex-col gap-10">
       <SettingsGroup title={t("settings_page.assistant.connection_group")}>
@@ -41,6 +44,17 @@ export function AssistantSection() {
           <ChefRow />
           <ChefCapRow />
         </SettingsGroup>
+      )}
+
+      {hasKey && chefOn && (
+        <>
+          <SettingsGroup title={t("settings_page.assistant.sites_title")}>
+            <ChefSites />
+          </SettingsGroup>
+          <SettingsGroup>
+            <LibraryReviewRow />
+          </SettingsGroup>
+        </>
       )}
 
       <SettingsGroup>
@@ -129,6 +143,33 @@ function ChefRow() {
         onOpenChange={setAsking}
         pending={setSetting.isPending || startLabelling.isPending}
         onConfirm={() => void turnOn().catch(() => setAsking(false))}
+      />
+    </SettingRow>
+  )
+}
+
+/** `chef.library_review_enabled` (LIB-1): the monthly card on Recipes. */
+function LibraryReviewRow() {
+  const { t } = useTranslation()
+  const field = useSettingField("chef.library_review_enabled", "false")
+  const on = field.value === "true"
+  return (
+    <SettingRow
+      label={t("settings_page.assistant.review_label")}
+      description={t(
+        on
+          ? "settings_page.assistant.review_effect_on"
+          : "settings_page.assistant.review_effect_off"
+      )}
+      item={field.item}
+      onClearOverride={field.clear}
+      saved={field.saved}
+      htmlFor="setting-library-review"
+    >
+      <Switch
+        id="setting-library-review"
+        checked={on}
+        onChange={(next) => field.save(String(next))}
       />
     </SettingRow>
   )

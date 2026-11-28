@@ -460,7 +460,22 @@
       "chef_on_confirm": "Turn on",
       "chef_cap_label": "Monthly limit",
       "chef_cap_effect": "The most the assistant spends on its own work each month. Planning and chat don't count.",
-      "chef_cap_unit": "USD"
+      "chef_cap_unit": "USD",
+      "sites_title": "Recipe sites",
+      "sites_effect": "The assistant looks for new recipes only on the sites that are switched on. A link you paste always imports.",
+      "sites_lang_en": "English",
+      "sites_lang_de": "German",
+      "sites_toggle": "Search {{domain}}",
+      "sites_blocked": "Not searchable until {{date}}",
+      "sites_retry": "Try again",
+      "sites_remove": "Remove {{domain}}",
+      "sites_add_label": "Add a recipe site",
+      "sites_placeholder": "For example: seriouseats.com",
+      "sites_lang_label": "Language of the site",
+      "sites_add": "Add site",
+      "review_label": "Monthly library check-up",
+      "review_effect_on": "Once a month, Recipes shows a short card with what could be tidier in your library.",
+      "review_effect_off": "Recipes shows no check-up card."
     },
     "system_section": {
       "appearance_group": "Language and theme",
@@ -1433,6 +1448,10 @@
     },
     "theme": {
       "limit": "A week holds at most two themes."
+    },
+    "site": {
+      "duplicate_name": "That site is already in the list.",
+      "in_use": "A built-in site can only be switched off."
     }
   },
   "nutrition": {
@@ -2583,6 +2602,22 @@
       "button": "Fill my library",
       "hint": "Ten recipes that fit your household, added for you to try.",
       "started": "Looking for ten recipes. They appear in your library as they are ready."
+    },
+    "review": {
+      "title": "Library check-up",
+      "intro": "A few things I noticed in your recipes this month.",
+      "dismiss_card": "Not now",
+      "dismiss_finding": "Dismiss",
+      "make_variants": "Make variants",
+      "hide": "Hide from planning",
+      "and": "and",
+      "look_alike": "look a lot alike.",
+      "replaced_one": "was swapped out of a plan {{count}} time lately.",
+      "replaced_other": "was swapped out of plans {{count}} times lately.",
+      "data_one": "{{count}} recipe is missing details:",
+      "data_other": "{{count}} recipes are missing details:",
+      "missing_times": "no times",
+      "missing_steps": "no steps"
     }
   },
   "substitute": {

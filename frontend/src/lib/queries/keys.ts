@@ -113,6 +113,8 @@ export const chefKeys = {
   all: ["chef"] as const,
   spend: () => [...chefKeys.all, "spend"] as const,
   labelling: () => [...chefKeys.all, "labelling"] as const,
+  sites: () => [...chefKeys.all, "sites"] as const,
+  libraryReview: () => [...chefKeys.all, "library-review"] as const,
 }
 
 export const setupKeys = {

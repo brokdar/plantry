@@ -334,6 +334,21 @@ type KitchenQuestionsAsked struct {
 	AskedAt  string
 }
 
+type LibraryGap struct {
+	Kind      string
+	Dish      string
+	CreatedAt string
+	FindID    sql.NullInt64
+	Offered   int64
+}
+
+type LibraryReview struct {
+	ID            int64
+	Month         string
+	FindingsJson  string
+	CardDismissed int64
+}
+
 type NeverItem struct {
 	FoodID int64
 }

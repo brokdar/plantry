@@ -282,6 +282,16 @@ func (s *Service) ChefEnabled(ctx context.Context) (bool, error) {
 	return strconv.ParseBool(raw)
 }
 
+// ChefLibraryReviewEnabled reports whether the monthly library review is on
+// (LIB-1).
+func (s *Service) ChefLibraryReviewEnabled(ctx context.Context) (bool, error) {
+	raw, err := s.effectiveRaw(ctx, KeyChefLibraryReview)
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(raw)
+}
+
 // ChefMonthlyCap returns the monthly cap for capped work in USD (COST-1).
 func (s *Service) ChefMonthlyCap(ctx context.Context) (float64, error) {
 	raw, err := s.effectiveRaw(ctx, KeyChefMonthlyCap)
