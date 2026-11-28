@@ -57,6 +57,18 @@ Never run `go test -count=1` (it switches off the test cache, which is what runs
 - A serial Playwright project at the end of the run: give the specs their own server and data (global-settings has its own) instead of serializing them.
 - Polling a background job in a loop: the background task notifies when it ends.
 
+## Secrets
+
+No key, token, password, private key, `secret.key`, `.env` or credential-carrying DB may land in any branch, commit, tag or PR of this public repo. Layers, so one bypass is not enough:
+
+1. **prek pre-commit:** `gitleaks` over the staged diff (pinned in `mise.toml`, rules in `.gitleaks.toml`), blocked file names (`.env*` except `*.example`, `secret.key`, `*.pem`, `*.key`, ssh keys, `.claude/settings.local.json`), DBs outside `testdata/`, and `scripts/check-db-secrets.py` on every staged DB (patterns in `scripts/secret-patterns.txt`, shared with `TestFixtureDBsCarryNoCredentials`).
+2. **prek pre-push:** the same scans over every commit being pushed, which catches `--no-verify` commits.
+3. **`scripts/gate.sh`:** fails when the prek hooks are not installed, and scans `origin/main..HEAD` and every tracked DB.
+4. **CI `secrets.yml`:** full-history gitleaks (pinned, SHA-256 checked) plus the DB check, on every branch, PR and tag. GitHub push protection is the last layer.
+5. **Claude Code hook** `block-hook-bypass.js`: blocks `--no-verify`/`-n`, `SKIP=`, `core.hooksPath`, touching `.git/hooks`, `git add -f`.
+
+Install the hooks once per clone: `prek install --hook-type pre-commit --hook-type pre-push`. Never bypass a hook. If a scan fires: stop, remove the value from the commit (and from history if committed), rotate the credential, and never allowlist a real secret in `.gitleaks.toml` or `.gitleaksignore` (those are for reviewed false positives only). Fixture DBs must be built without real settings and `VACUUM`ed.
+
 ## Review
 
 [`REVIEW.md`](REVIEW.md) holds the rules every reviewer follows: what counts as Important, what not to report (anything `scripts/gate.sh` enforces), the nit cap, how a finding is written and verified. Review every PR with the `pr-reviewer` agent (`.claude/agents/pr-reviewer.md`: find, then try to refute each candidate); `go-reviewer` and `silent-failure-hunter` are specialists beside it. `/code-review` reads this file but not `REVIEW.md`, so when you run it, read `REVIEW.md` first and apply it. Keep `REVIEW.md` to review behavior; project rules stay here and in the backend and frontend files. When a finding recurs in review, add a rule to `REVIEW.md`; when a check moves into the gate, add it to "Do not report".

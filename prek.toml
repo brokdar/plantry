@@ -76,4 +76,42 @@ hooks = [
     pass_filenames = false,
   },
 
+  # ── Secret prevention (layer 1 of "Secrets" in CLAUDE.md) ──────────────────
+  # gitleaks over the staged diff, pinned in mise.toml, rules in .gitleaks.toml
+  {
+    id             = "gitleaks",
+    name           = "gitleaks (staged)",
+    language       = "system",
+    entry          = "scripts/secret-guard.sh staged",
+    stages         = ["pre-commit"],
+    always_run     = true,
+    pass_filenames = false,
+  },
+
+  # blocked file names (.env, secret.key, keys, local settings), DBs outside
+  # testdata, and the SQLite credential check on every staged DB
+  {
+    id             = "secret-files",
+    name           = "blocked files + DB credential check",
+    language       = "system",
+    entry          = "scripts/secret-guard.sh files",
+    stages         = ["pre-commit"],
+    pass_filenames = true,
+  },
+
+]
+
+# ── Push stage: scan every commit being pushed (catches --no-verify commits) ──
+[[repos]]
+repo = "local"
+hooks = [
+  {
+    id             = "secret-push-scan",
+    name           = "gitleaks + DB check over pushed commits",
+    language       = "system",
+    entry          = "scripts/secret-guard.sh push",
+    stages         = ["pre-push"],
+    always_run     = true,
+    pass_filenames = false,
+  },
 ]

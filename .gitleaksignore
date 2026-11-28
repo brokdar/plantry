@@ -1,0 +1,40 @@
+# gitleaks fingerprints (commit:file:rule:line) of reviewed false positives in
+# history, generated on 2026-11-28 from `gitleaks git --log-opts=--all`. Each was
+# inspected without printing values. Never add a real secret here: rotate it.
+#
+# test-fixture constants (fixed fake encryption keys and API keys in *_test.go,
+# playwright.config.ts) and example placeholders (.env.example, CLAUDE.md,
+# docs/ARCHITECTURE.md), the public site apiKey inside saved Chefkoch pages
+# (testdata/*.html), i18n label keys (labelKey), and a mock token in a vendored
+# skill doc.
+199948d5ccb4e4a57b34b18c1256d6e03213c99b:.agents/skills/playwright-best-practices/advanced/authentication-flows.md:generic-api-key:54
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:.env.example:plantry-env-secret:19
+199948d5ccb4e4a57b34b18c1256d6e03213c99b:CLAUDE.md:plantry-env-secret:115
+ca4c57f578a63afa77e6c4e38e7dac3a66c4ce6a:backend/cmd/plantry-chef-canary/main_test.go:generic-api-key:57
+eff67e7a36c064e7c8a0e33de44d36c6ff949c5f:backend/cmd/plantry-chef-canary/main_test.go:generic-api-key:58
+753e3e9cf89cb4cbc277bfbf478d161594dc3b7a:backend/cmd/plantry/startup_test.go:generic-api-key:27
+753e3e9cf89cb4cbc277bfbf478d161594dc3b7a:backend/cmd/plantry/startup_test.go:generic-api-key:65
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:backend/internal/adapters/crypto/aesgcm_test.go:generic-api-key:9
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:backend/internal/adapters/jsonld/testdata/chefkoch_bombay_real.html:generic-api-key:111
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:backend/internal/adapters/jsonld/testdata/chefkoch_hackauflauf_real.html:generic-api-key:111
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:backend/internal/adapters/jsonld/testdata/chefkoch_lasagna_real.html:generic-api-key:152
+3275bfc0ce99a23f536c15e7b5cedda7db40abeb:backend/internal/adapters/llmresolver/dynamic_test.go:generic-api-key:113
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:backend/internal/adapters/llmresolver/dynamic_test.go:generic-api-key:64
+3d1ef7c10c80f11cc790d61d30dcd6592995336f:backend/internal/config/secretkey_test.go:generic-api-key:87
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:backend/internal/domain/settings/service_test.go:generic-api-key:46
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:backend/internal/domain/settings/service_test.go:generic-api-key:107
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:backend/internal/domain/settings/service_test.go:generic-api-key:120
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:backend/internal/domain/settings/service_test.go:plantry-env-secret:191
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:backend/internal/domain/settings/service_test.go:generic-api-key:222
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:backend/internal/transport/http/handlers/settings_test.go:generic-api-key:61
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:backend/internal/transport/http/handlers/settings_test.go:generic-api-key:149
+199948d5ccb4e4a57b34b18c1256d6e03213c99b:docs/ARCHITECTURE.md:plantry-env-secret:107
+57d4973569ca8cd6e0ed45e782c982bdd1af982a:frontend/playwright.config.ts:plantry-env-secret:104
+5b5316766ccfb71c0bcd833223c6c3f064dec088:frontend/playwright.config.ts:plantry-env-secret:49
+5d05b5102a28cb9eead903d7b818b2b6d3d486fe:frontend/playwright.config.ts:plantry-env-secret:97
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:frontend/playwright.config.ts:plantry-env-secret:48
+c4227596fa8571aec2e611f397ba51ffb2c3e8e1:frontend/playwright.config.ts:plantry-env-secret:171
+f11392f9a163f997918f03550db7c3536be1bb97:frontend/playwright.config.ts:plantry-env-secret:161
+f11392f9a163f997918f03550db7c3536be1bb97:frontend/playwright.config.ts:plantry-env-secret:174
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:frontend/src/components/ingredients/ExtendedNutrientFieldSet.tsx:generic-api-key:135
+c39b6af6aea7a4790c2d1407f3a37b2577f29687:frontend/src/components/ingredients/NutritionDetail.tsx:generic-api-key:122

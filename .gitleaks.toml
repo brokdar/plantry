@@ -1,0 +1,44 @@
+# gitleaks config (version pinned in mise.toml). Extends the default rules and
+# adds Plantry-specific ones. Every allowlist entry says why it is safe; never
+# allowlist a real secret (see "Secrets" in CLAUDE.md). Binary files (SQLite
+# fixtures) are not scanned by gitleaks: scripts/check-db-secrets.py covers them.
+title = "plantry"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "plantry-env-secret"
+description = "PLANTRY_SECRET_KEY or PLANTRY_*API_KEY set to a real-looking value"
+regex = '''(?i)\bPLANTRY_(?:SECRET_KEY|[A-Z0-9_]*API_KEY)\b["']?\s*[=:]\s*["']?([A-Za-z0-9+/_\-=.]{16,})'''
+secretGroup = 1
+keywords = ["plantry_"]
+
+  [[rules.allowlists]]
+  description = "documented placeholders and shell/compose references, not values"
+  regexes = ['''(?i)(change.?me|your[-_]|example|placeholder|dummy|fake|xxxx|<[^>]*>|\$\{?[A-Z_]+)''']
+
+[[rules]]
+id = "plantry-anthropic-key"
+description = "Anthropic API key (sk-ant-...)"
+regex = '''\bsk-ant-[A-Za-z0-9_\-]{20,}'''
+keywords = ["sk-ant-"]
+
+[[rules]]
+id = "plantry-openai-key"
+description = "OpenAI API key (sk-... or sk-proj-...)"
+regex = '''\bsk-(?:proj-)?[A-Za-z0-9_\-]{32,}'''
+entropy = 3.5
+keywords = ["sk-"]
+
+[[rules]]
+id = "plantry-github-token"
+description = "GitHub token (ghp_, gho_, ghu_, ghs_, ghr_, github_pat_)"
+regex = '''\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})\b'''
+keywords = ["ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"]
+
+[allowlist]
+description = "global allowlist"
+# The deny-list of credential patterns lives in this file by design; it holds
+# regex text, not credentials.
+paths = ['''^scripts/secret-patterns\.txt$''']
