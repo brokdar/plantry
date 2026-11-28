@@ -33,6 +33,9 @@ var (
 	andSplitRE    = regexp.MustCompile(`(?i)\s*(?:,|\s&\s|\sand\s|\sund\s)\s*`)
 	// priceRE is a price a recipe site adds to a line: "($0.32)", "(1,20 €)".
 	priceRE = regexp.MustCompile(`(?i)\s*\(\s*(?:[$€£]\s?\d[\d.,]*|\d[\d.,]*\s?(?:[$€£]|usd|eur|euro))\s*\)`)
+	// barePriceRE is a price tag without brackets, trailing or inline:
+	// "onion $0.47", "Ghee 1,20 €".
+	barePriceRE = regexp.MustCompile(`(?i)\s+(?:[$€£]\s?\d+(?:[.,]\d+)*|\d+(?:[.,]\d+)*\s?(?:[$€£]|usd\b|eur\b|euro\b))(?:\s|$|[,;)])`)
 	// looseSeasoningRE is a seasoning measured in no unit: "a tiny pinch
 	// cayenne", "a few turns of black pepper", "eine Prise Salz".
 	looseSeasoningRE = regexp.MustCompile(`(?i)^(?:(?:an?|ein|eine)\s+)?(?:(?:tiny|small|little|big|kleine?|winzige)\s+)?(?:(?:pinch|dash|splash|sprinkle|prise|spritzer|hauch)|(?:few|ein paar|\d+)\s+(?:turns|grinds|twists|dashes|cranks?|umdrehungen))(?:\s+(?:of|von))?\s+(\S.*)$`)
@@ -99,7 +102,14 @@ func prepareLine(raw string) string {
 
 // StripPrice removes a price annotation such as "($0.32)" from a line.
 func StripPrice(s string) string {
-	return strings.TrimSpace(priceRE.ReplaceAllString(s, ""))
+	s = priceRE.ReplaceAllString(s, "")
+	s = barePriceRE.ReplaceAllStringFunc(s, func(m string) string {
+		if end := m[len(m)-1]; end == ',' || end == ';' || end == ')' {
+			return string(end)
+		}
+		return " "
+	})
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // ParseLines parses and cleans a recipe's ingredient lines (MATCH-1): one
@@ -180,6 +190,31 @@ func noAmount(r *DraftIngredient) {
 	if p, ok := proposedAmounts[group]; ok {
 		r.Amount, r.Unit, r.Proposed = p.amount, p.unit, true
 	}
+}
+
+// SettleQuantityless makes a matched line that Finalize would refuse (no
+// amount or unit and no matched grams) saveable the way the review does: a
+// seasoning or a food of no known group is "to taste", a fat, condiment or
+// sugar gets its proposed amount. It reports false when the line stays
+// unsaveable (the review must ask for the amount).
+func SettleQuantityless(ing *DraftIngredient) bool {
+	m := ing.Match
+	if m == nil || m.Status != food.MatchMatched || m.Pick < 0 || m.Pick >= len(m.Candidates) {
+		return true // an unmatched line is blocked on its own
+	}
+	if ing.ToTaste || (ing.Amount > 0 && ing.Unit != "") || m.Grams != nil {
+		return true
+	}
+	group := food.LineGroup(m.Candidates[m.Pick].Name, "")
+	if group == "" || food.IsToTasteGroup(group) {
+		ing.ToTaste = true
+		return true
+	}
+	if p, ok := proposedAmounts[group]; ok {
+		ing.Amount, ing.Unit, ing.Proposed = p.amount, p.unit, true
+		return true
+	}
+	return false
 }
 
 func splitCompound(p DraftIngredient, names string) []DraftIngredient {

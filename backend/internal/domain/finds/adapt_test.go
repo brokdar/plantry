@@ -11,7 +11,7 @@ import (
 )
 
 func adaptJSON(swaps string) string {
-	return `{"name":"Mild curry","portions":1,"steps":["Fry the onion until soft, about 5 minutes.","Simmer 20 minutes."],` +
+	return `{"name":"Mild curry","portions":1,"steps":["Fry the aromatics until soft, about 5 minutes.","Simmer 20 minutes."],` +
 		`"swaps":` + swaps + `,"requirements":` + fitsKitchen + `}`
 }
 
@@ -109,16 +109,19 @@ func TestAdapt_HeatFollowsTasteAndHotSpiceIsFlagged(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		rather    []string
+		first     bool
 		wantHeat  string
 		wantFlags int
 	}{
-		{"taste dislikes heat", []string{"heat"}, "Heat tolerance: mild.", 1},
-		{"kitchen heat stands", nil, "Heat tolerance: hot.", 0},
+		{"taste dislikes heat", []string{"heat"}, false, "Heat tolerance: mild.", 1},
+		{"kitchen heat stands", nil, false, "Heat tolerance: hot.", 0},
+		{"first week is mild whatever the kitchen says", nil, true, "Heat tolerance: mild.", 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newRig(t, true, lineMatcher{}, hotKitchen, searchTurn(curryURLs...),
 				toolTurn(finds.AdaptTool, adaptJSON(`[{"line":0,"to":"2 tsp hot curry powder","reason":"x"}]`)))
 			r.house.RatherNot = tc.rather
+			r.house.FirstWeek = tc.first
 			f := r.run(t, finds.TriggerPlanning)
 			reqs := r.client.Requests()
 			assert.Contains(t, reqs[1].Messages[0].Content[0].Text, tc.wantHeat)
@@ -136,7 +139,7 @@ func TestAdapt_HeatFollowsTasteAndHotSpiceIsFlagged(t *testing.T) {
 }
 
 func TestHotSpiceRE_OnlySpices(t *testing.T) {
-	hot := []string{"1 tbsp hot curry powder", "2 tsp hot paprika", "1 tsp cayenne pepper", "2 red chilies, sliced", "1 tbsp sriracha", "1 TL scharfes Currypulver"}
+	hot := []string{"1 tbsp hot curry powder", "2 tsp hot paprika", "1 tsp cayenne pepper", "2 red chilies, sliced", "1 tbsp sriracha", "1 TL scharfes Currypulver", "2 tsp curry powder hot", "1 tbsp curry powder (hot)", "1 tsp hot chili powder", "1 TL Paprika, scharf"}
 	notHot := []string{"1 cup hot water", "1 hot dog bun", "2 tbsp hot cocoa mix", "1 tsp mild curry powder", "1 tbsp sweet paprika"}
 	for _, l := range hot {
 		if !finds.HotSpiceRE.MatchString(l) {

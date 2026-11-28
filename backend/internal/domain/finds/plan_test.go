@@ -2,6 +2,8 @@ package finds_test
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/libreview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
@@ -275,4 +279,56 @@ func TestPrefetch_QueuedGapStartsOneFindPerSession(t *testing.T) {
 	require.NoError(t, off.gaps.QueueGap(ctx, libreview.Gap{Kind: "quick_main", Dish: "x"}, at))
 	require.NoError(t, off.svc.Opened(ctx, nextWindow, true, true))
 	assert.Empty(t, off.queued, "the Chef off queues nothing")
+}
+
+// refusingLibrary is a library whose recipe save refuses every draft.
+type refusingLibrary struct {
+	finds.Library
+	err error
+}
+
+func (refusingLibrary) Leaf(context.Context, food.Candidate, food.Origin) (int64, error) {
+	return 1, nil
+}
+
+func (l refusingLibrary) Finalize(context.Context, importer.FinalizeInput) (*importer.FinalizedFood, error) {
+	return nil, fmt.Errorf("%w: refused", l.err)
+}
+
+// CP4 fix: a ready find the recipe save refuses every time ends failed with
+// a reason; it is not offered again each week.
+func TestStage_RefusedSaveFailsTheFind(t *testing.T) {
+	for _, refusal := range []error{domain.ErrImportInvalidResolution, domain.ErrImportNoNutrition} {
+		t.Run(refusal.Error(), func(t *testing.T) { stageRefused(t, refusal) })
+	}
+}
+
+func stageRefused(t *testing.T, refusal error) {
+	t.Helper()
+	r := newSessionRig(t, true, 1)
+	r.svc = finds.NewService(finds.Deps{
+		Store:     r.store,
+		Household: func(context.Context) (finds.Household, error) { return r.house, nil },
+		Logger:    slog.New(slog.DiscardHandler),
+		Planning: finds.Planning{
+			Library: refusingLibrary{err: refusal},
+			ChefOn:  func(context.Context) (bool, error) { return true, nil },
+			Now:     func() time.Time { return r.now },
+		},
+	})
+	id := int64(1)
+	r.readyDraft(t, &importer.Draft{
+		Name: "Taco Casserole", Tags: []string{"Main Course"}, TotalMinutes: ptr(40), Instructions: []string{"Bake."},
+		Ingredients: []importer.DraftIngredient{{Name: "spray", Match: &food.LineMatch{Status: food.MatchMatched, Pick: 0, Candidates: []food.Candidate{{Name: "spray"}}}}},
+	})
+
+	ids, notes, err := r.svc.Stage(context.Background(), 1, nextWindow)
+	require.NoError(t, err)
+	assert.Empty(t, ids)
+	require.Len(t, notes, 1)
+	f, err := r.store.Get(context.Background(), id)
+	require.NoError(t, err)
+	assert.Equal(t, finds.StateFailed, f.State)
+	require.NotEmpty(t, f.Steps)
+	assert.Equal(t, "recipe_save_refused", f.Steps[len(f.Steps)-1].Key)
 }

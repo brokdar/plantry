@@ -81,6 +81,18 @@ func (r *FindRepo) Finish(ctx context.Context, id int64, o finds.Outcome) (*find
 	return mapFind(row)
 }
 
+// FailReady ends a ready find as failed with a step key as its reason.
+func (r *FindRepo) FailReady(ctx context.Context, id int64, key string) error {
+	_, err := r.queriesFor(ctx).FailReadyFind(ctx, sqlcgen.FailReadyFindParams{StepKey: key, ID: id})
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("%w: ready find %d", domain.ErrNotFound, id)
+	}
+	if err != nil {
+		return fmt.Errorf("fail find %d: %w", id, err)
+	}
+	return nil
+}
+
 // List returns finds, optionally of one state, newest first.
 func (r *FindRepo) List(ctx context.Context, state *finds.State, limit int) ([]finds.Find, error) {
 	var st sql.NullString

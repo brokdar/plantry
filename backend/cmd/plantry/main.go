@@ -556,10 +556,14 @@ func run() error {
 		stapleCuisines(tasteSvc.Staples, foodAttributeRepo.Many, time.Now), settingsSvc.DiscoveryCuisines, foodAttributeRepo.LibraryCuisines)
 	findRepo := sqlite.NewFindRepo(conn)
 	reviewRepo := sqlite.NewLibraryReviewRepo(conn)
+	politeFetcher := httpfetch.NewPolite(httpfetch.New(httpfetch.WithDialGuard(nil, cfg.DevMode)),
+		httpfetch.WithAIGroupsExempt(aiGroupsExempt(settingsSvc.ChefSites)))
 	findSvc = finds.NewService(finds.Deps{
 		Store: findRepo, LLM: llmResolver, Runs: runRecorder,
-		Fetcher: httpfetch.NewPolite(httpfetch.New(httpfetch.WithDialGuard(nil, cfg.DevMode)),
-			httpfetch.WithAIGroupsExempt(aiGroupsExempt(settingsSvc.ChefSites))),
+		Fetcher: politeFetcher,
+		Robots: func(ctx context.Context, domain string) bool {
+			return politeFetcher.AllowsRecipes(ctx, "https://"+domain)
+		},
 		Extractor: importSvc, Matcher: matcher,
 		Household: findHousehold(profileSvc.Get, sqlite.NewKitchenRepo(conn).NeverItems, tasteSvc.View, foodRepo.LeafNamesByRecipeUse, houseCuisines, foodRepo.HasCookHistory, foodRepo.RecipeNames),
 		Sites:     settingsSvc.ChefSites,

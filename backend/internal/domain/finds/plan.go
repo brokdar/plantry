@@ -352,6 +352,15 @@ func (s *Service) Stage(ctx context.Context, n int, windowStart time.Time) ([]in
 		if err != nil {
 			// The find stays ready; the run plans without it.
 			s.d.Logger.WarnContext(ctx, "finds.stage skipped", "find_id", f.ID, "error", err)
+			if errors.Is(err, domain.ErrImportInvalidResolution) || errors.Is(err, domain.ErrImportNoNutrition) {
+				// The recipe save refuses this draft every time: end the
+				// find instead of offering it each week.
+				if derr := s.d.Store.FailReady(ctx, f.ID, "recipe_save_refused"); derr != nil {
+					return ids, notes, derr
+				}
+				notes = append(notes, fmt.Sprintf("The ready new dish %s could not be added as a recipe.", findName(f)))
+				continue
+			}
 			if err := pass(f, "it could not be added as a recipe"); err != nil {
 				return ids, notes, err
 			}
@@ -641,4 +650,11 @@ func (s *Service) addToLibrary(ctx context.Context, f *Find) error {
 		_, err = s.d.Store.Decide(ctx, f.ID, StateInLibrary, nil, &r.ID)
 		return err
 	})
+}
+
+func findName(f *Find) string {
+	if f.Draft != nil {
+		return f.Draft.Name
+	}
+	return f.Dish
 }

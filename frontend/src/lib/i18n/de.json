@@ -2382,6 +2382,8 @@
         "no_sites": "Gerade lässt sich keine der aktivierten Rezeptseiten durchsuchen",
         "nothing_found": "Kein brauchbares Rezept gefunden",
         "duplicate": "Ein anderer Fund hat dieselbe Rezeptseite schon übernommen",
+        "too_similar": "Übersprungen: zu nah an einem Rezept, das du schon hast",
+        "recipe_save_refused": "Das Rezept ließ sich nicht speichern, deshalb wurde dieser Fund verworfen",
         "no_search": "Dieser Anbieter kann nicht selbst im Web suchen",
         "no_provider": "Kein KI-Anbieter eingerichtet",
         "off": "Der Assistent ist ausgeschaltet",

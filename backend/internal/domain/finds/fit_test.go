@@ -3,6 +3,7 @@ package finds_test
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -79,4 +80,36 @@ func TestRun_DuplicatePageFailsAndTriesAnotherDish(t *testing.T) {
 	}
 	require.Equal(t, finds.StateFailed, capped.run(t, finds.TriggerPlanning).State)
 	assert.Empty(t, searchingDishes(t, capped), "two failures in this session already: no further dish")
+}
+
+// CP4: a find that nearly duplicates a library dish (filler words ignored)
+// is dropped before adapting; a requested find may repeat a dish.
+func TestPipeline_TooSimilarToTheLibraryIsRejectedBeforeAdapting(t *testing.T) {
+	t.Parallel()
+	for _, trigger := range []finds.Trigger{finds.TriggerPlanning, finds.TriggerFill} {
+		r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...), adaptTurn(false, fitsKitchen))
+		r.house.Recipes = []string{"Easy chicken curry with rice"}
+		f := r.run(t, trigger)
+		require.Equal(t, finds.StateFailed, f.State, trigger)
+		assert.Equal(t, "too_similar", f.Steps[len(f.Steps)-1].Key, f.Steps)
+		assert.Len(t, r.client.Requests(), 1, "search only, no adapt call")
+	}
+	asked := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...), adaptTurn(false, fitsKitchen))
+	asked.house.Recipes = []string{"Easy chicken curry with rice"}
+	assert.Equal(t, finds.StateReady, asked.run(t, finds.TriggerChat).State)
+}
+
+// CP4: an adaptation that replaced the chicken but left "brown the chicken"
+// in a step never reaches the library (step_mentions_removed blocks).
+func TestPipeline_StepMentioningReplacedIngredientBlocks(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...), toolTurn(finds.AdaptTool,
+		`{"name":"Mild curry","steps":["Brown the chicken.","Simmer 20 minutes."],"swaps":[{"line":0,"to":"600 g firm tofu","reason":"vegetarian","protein":true}],"requirements":`+fitsKitchen+`}`))
+	f := r.run(t, finds.TriggerPlanning)
+	require.Equal(t, finds.StateFailed, f.State)
+	var failed bool
+	for _, s := range f.Steps {
+		failed = failed || (s.Key == "checks_failed" && strings.Contains(s.Params["codes"], "step_mentions_removed"))
+	}
+	assert.True(t, failed, f.Steps)
 }

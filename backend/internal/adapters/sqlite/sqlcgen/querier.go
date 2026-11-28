@@ -115,6 +115,9 @@ type Querier interface {
 	EnqueueChefJob(ctx context.Context, arg EnqueueChefJobParams) (int64, error)
 	// At startup no run is running: a row still 'running' was cut off by a stop.
 	FailInterruptedAIRuns(ctx context.Context, finishedAt sql.NullString) (int64, error)
+	// A ready find the recipe save refuses every time ends failed, with the
+	// step key as its reason.
+	FailReadyFind(ctx context.Context, arg FailReadyFindParams) (RecipeSuggestion, error)
 	// prompt_hash resolves to NULL when the hash is not in ai_prompts, so a failed
 	// UpsertPrompt never makes this UPDATE fail and leave the run 'running'.
 	FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.Result, error)
