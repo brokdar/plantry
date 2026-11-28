@@ -268,12 +268,14 @@ test.describe("plan wizard", () => {
       await expect(page.getByTestId("plan-summary")).toHaveText(
         /^Draft · \d+ plates · \d+ cook days?$/
       )
-      await expect(page.getByTestId("plan-warnings")).toHaveText(
-        "0 plates need attention"
-      )
+      // No warning count for the whole week: a slot another spec seeds
+      // during generation adds an empty (flagged) cell. Own cells only.
       for (const date of days) {
         for (const slotId of [breakfast, lunch, dinner]) {
           const cell = planCell(page, date, slotId)
+          await expect(
+            cell.locator('[aria-label*="needs attention"]')
+          ).toHaveCount(0)
           if (away.some((a) => a.date === date && a.slot === slotId)) {
             await expect(cell).toHaveAttribute("data-cell-mode", "none")
             await expect(cell).toHaveAttribute("data-cell-empty", "")
