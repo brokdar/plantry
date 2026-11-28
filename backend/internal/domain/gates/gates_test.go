@@ -131,3 +131,16 @@ func TestParamsTunable(t *testing.T) {
 		t.Fatalf("tuned: %v", got)
 	}
 }
+
+func TestAllergens_RiceNoodlesAreGlutenFree(t *testing.T) {
+	r := Recipe{Name: "Bowl", Portions: 2, Steps: []string{"Mix."}, Ingredients: []Ingredient{
+		{Name: "Rice noodles", Grams: 200, Matched: true}, {Name: "Rice flour", Grams: 20, Matched: true},
+	}}
+	if got := codes(Check(r, Household{Allergens: []string{"gluten"}}).Blocks); len(got) != 0 {
+		t.Errorf("rice products flagged: %v", got)
+	}
+	r.Ingredients[0].Name = "Egg noodles"
+	if got := codes(Check(r, Household{Allergens: []string{"gluten"}}).Blocks); !slices.Equal(got, []string{"allergen"}) {
+		t.Errorf("egg noodles: got %v", got)
+	}
+}

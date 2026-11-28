@@ -18,6 +18,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/foodevent"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/gates"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
@@ -71,6 +72,13 @@ type Service struct {
 	store    Store
 	recipes  Recipes
 	events   *foodevent.Service
+	// matcher and origins add a table substitute the catalogue lacks; both
+	// nil leaves the catalogue as it is.
+	matcher Matcher
+	origins food.OriginStore
+	// household is the diet, allergens and never items an option must fit;
+	// nil offers every option.
+	household func(ctx context.Context) (gates.Household, error)
 	// Now is the clock for the past-plate guard; time.Now unless a test sets it.
 	Now func() time.Time
 }
@@ -81,6 +89,27 @@ func NewService(foods food.Repository, sessions plate.SessionRepository, store S
 }
 
 var _ foodevent.Restorer = (*Service)(nil)
+
+// Matcher is the matching path (food.Matcher): it finds the external food a
+// name stands for.
+type Matcher interface {
+	Match(ctx context.Context, req food.MatchRequest) (*food.MatchResult, error)
+}
+
+// WithCatalogue lets Options add a table substitute that is not in the
+// catalogue yet, the way an import does (MATCH-3): matched, then created
+// with its origin.
+func (s *Service) WithCatalogue(m Matcher, origins food.OriginStore) *Service {
+	s.matcher, s.origins = m, origins
+	return s
+}
+
+// WithHousehold makes Options leave out what the household cannot eat: a
+// diet conflict, an allergen or a never item (SUB-3).
+func (s *Service) WithHousehold(h func(ctx context.Context) (gates.Household, error)) *Service {
+	s.household = h
+	return s
+}
 
 // Option is one offered substitute.
 type Option struct {
@@ -139,13 +168,29 @@ func (s *Service) Options(ctx context.Context, fromID int64, sessionIDs []int64)
 	if err != nil {
 		return nil, nil, err
 	}
+	var h *gates.Household
+	if s.household != nil {
+		hh, err := s.household(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("household: %w", err)
+		}
+		h = &hh
+	}
 	out := []Option{}
 	for _, row := range rows {
 		if len(out) == maxOptions {
 			break
 		}
+		if h != nil && !fitsHousehold(food.SynonymName(row.To), 0, *h) {
+			continue
+		}
 		to := catalogueLeaf(leaves, row.To)
-		if to == nil || to.ID == fromID {
+		if to == nil {
+			if to, err = s.provision(ctx, row.To); err != nil {
+				return nil, nil, err
+			}
+		}
+		if to == nil || to.ID == fromID || (h != nil && !fitsHousehold(to.Name, to.ID, *h)) {
 			continue
 		}
 		opt := Option{FoodID: to.ID, Name: to.Name, Ratio: row.Ratio, NoteEN: row.NoteEN, NoteDE: row.NoteDE}
@@ -180,7 +225,7 @@ func (s *Service) Apply(ctx context.Context, sessionID, fromID, toID int64) (App
 	if err != nil {
 		return Applied{}, err
 	}
-	ratio, ok := tableRatio(from.Name, to.Name)
+	ratio, ok := s.tableRatio(ctx, from.Name, to)
 	if !ok || !hasNutrition(to) {
 		return Applied{}, fmt.Errorf("%w: %s is not a substitute for %s", domain.ErrInvalidInput, to.Name, from.Name)
 	}
@@ -687,10 +732,16 @@ func catalogueLeaf(leaves []food.Food, id string) *food.Food {
 }
 
 // tableRatio is the table's ratio for swapping the food named from for the
-// one named to.
-func tableRatio(from, to string) (float64, bool) {
+// leaf to: by its name, or as the leaf Options added for the row's entry.
+func (s *Service) tableRatio(ctx context.Context, from string, to *food.Food) (float64, bool) {
 	for _, row := range food.SubstitutesOf(from) {
-		if food.IsSynonym(row.To, to) {
+		if food.IsSynonym(row.To, to.Name) {
+			return row.Ratio, true
+		}
+		if s.origins == nil {
+			continue
+		}
+		if ids, err := s.origins.OriginLeaves(ctx, substituteOrigin(row.To)); err == nil && slices.Contains(ids, to.ID) {
 			return row.Ratio, true
 		}
 	}
@@ -699,4 +750,68 @@ func tableRatio(from, to string) (float64, bool) {
 
 func hasNutrition(f *food.Food) bool {
 	return f.Kcal100g != nil && f.Protein100g != nil && f.Fat100g != nil && f.Carbs100g != nil
+}
+
+// substituteOrigin is the origin of the leaf added for synonym entry id: it
+// names the table substitute the leaf stands for whatever its USDA name is.
+func substituteOrigin(id string) food.Origin {
+	return food.Origin{Kind: food.OriginImport, Ref: "substitute:" + id}
+}
+
+// addedLeaf returns the leaf Options added earlier for synonym entry id, nil
+// when there is none.
+func (s *Service) addedLeaf(ctx context.Context, id string) (*food.Food, error) {
+	ids, err := s.origins.OriginLeaves(ctx, substituteOrigin(id))
+	if err != nil || len(ids) == 0 {
+		return nil, err
+	}
+	f, err := s.foods.Get(ctx, ids[0])
+	if errors.Is(err, domain.ErrNotFound) || (err == nil && !hasNutrition(f)) {
+		return nil, nil
+	}
+	return f, err
+}
+
+// provision adds the catalogue leaf of synonym entry id (a table substitute
+// the catalogue lacks) through the matching path, as an import does, and
+// reuses the one added before. It returns nil when nothing is configured or
+// the matching finds no food of its own (a pick that is another catalogue
+// food is no substitute).
+func (s *Service) provision(ctx context.Context, id string) (*food.Food, error) {
+	name := food.SynonymName(id)
+	if s.matcher == nil || s.origins == nil || name == "" {
+		return nil, nil
+	}
+	if f, err := s.addedLeaf(ctx, id); f != nil || err != nil {
+		return f, err
+	}
+	res, err := s.matcher.Match(ctx, food.MatchRequest{Lang: "en", Lines: []food.MatchLine{{Name: name, Amount: 100, Unit: "g"}}})
+	if err != nil {
+		return nil, fmt.Errorf("match substitute %s: %w", name, err)
+	}
+	if len(res.Lines) != 1 || res.Lines[0].Pick < 0 {
+		return nil, nil
+	}
+	m := res.Lines[0]
+	leafID, created, err := food.EnsureLeaf(ctx, s.foods, s.origins, m.Candidates[m.Pick], substituteOrigin(id))
+	if err != nil {
+		return nil, fmt.Errorf("add substitute %s: %w", name, err)
+	}
+	f, err := s.leaf(ctx, leafID)
+	if err != nil || !hasNutrition(f) || (!created && !food.IsSynonym(id, f.Name)) {
+		return nil, err
+	}
+	return f, nil
+}
+
+// fitsHousehold runs the household gates over a recipe of just the
+// substitute.
+func fitsHousehold(name string, foodID int64, h gates.Household) bool {
+	r := gates.Recipe{Name: "substitute", Portions: 1, Ingredients: []gates.Ingredient{{FoodID: foodID, Name: name, Grams: 100, Matched: true}}, Steps: []string{"Mix."}}
+	for _, b := range gates.Check(r, h).Blocks {
+		if b.Code == "never_item" || b.Code == "allergen" || b.Code == "diet_conflict" {
+			return false
+		}
+	}
+	return true
 }

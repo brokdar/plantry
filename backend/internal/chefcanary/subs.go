@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/fdclocal"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/chefsets"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -72,12 +73,11 @@ func RunSubs(ctx context.Context, cfg SubsConfig) (ModeReport, error) {
 	defer cleanup()
 	foods := sqlite.NewFoodRepo(cp)
 	sessions := sqlite.NewCookSessionRepo(cp)
-	svc := substitution.NewService(foods, sessions, sqlite.NewSubstitutionRepo(cp), nil, nil)
+	var current gates.Household
+	svc := substitution.NewService(foods, sessions, sqlite.NewSubstitutionRepo(cp), nil, nil).
+		WithCatalogue(food.NewMatcher(foods, fdclocal.New(), nil), sqlite.NewFoodOriginRepo(cp)).
+		WithHousehold(func(context.Context) (gates.Household, error) { return current, nil })
 	slotID, err := scratchSlot(ctx, cp)
-	if err != nil {
-		return ModeReport{}, err
-	}
-	leaves, err := leafIDs(ctx, foods)
 	if err != nil {
 		return ModeReport{}, err
 	}
@@ -85,6 +85,12 @@ func RunSubs(ctx context.Context, cfg SubsConfig) (ModeReport, error) {
 	rep := ModeReport{Mode: "subs", Cases: len(cfg.Cases)}
 	unsafeOffered := 0
 	for _, c := range cfg.Cases {
+		// Options adds leaves the catalogue lacks, so read it afresh.
+		leaves, err := leafIDs(ctx, foods)
+		if err != nil {
+			return ModeReport{}, err
+		}
+		current = gates.Household{Diet: diet.Class(c.Diet), Allergens: c.Allergens, NeverNames: c.Never}
 		res, unsafe, err := runSub(ctx, c, foods, sessions, svc, leaves, slotID)
 		if err != nil {
 			return ModeReport{}, fmt.Errorf("case %s: %w", c.ID, err)
