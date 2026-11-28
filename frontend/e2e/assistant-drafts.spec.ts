@@ -571,7 +571,17 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
 
     // A reload keeps the question: the card is rebuilt from the stored
     // preview and the conversation is the one that was open.
+    // The card is rebuilt from the stored conversation, which the reopened
+    // panel fetches after the page, the plan and the list have loaded. Wait
+    // for that response (no fixed 5 s race against a cold reload), then the
+    // card renders from it.
+    const reopened = page.waitForResponse(
+      (r) =>
+        /\/api\/ai\/conversations\/\d+$/.test(r.url()) &&
+        r.request().method() === "GET"
+    )
     await page.reload()
+    await reopened
     const card2 = panel3.getByTestId("assistant-unlock-card")
     await expect(card2).toBeVisible()
     await expect(card2).toContainText(chili.name)

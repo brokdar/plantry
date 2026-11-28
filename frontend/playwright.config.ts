@@ -45,6 +45,8 @@ const AI_SERIAL_SPECS = [
 // in its own `futureWindow()` band, and a revert skips a cell whose slot a
 // parallel spec has deleted since (availability.Service.Revert), so it runs
 // with the parallel chromium specs.
+// Slots are global: a spec's day view gains an empty cell when a parallel spec
+// seeds a slot, so assert on your own cells, never a whole day or week.
 const GLOBAL_SETTINGS_SPECS = [
   "assistant-drafts.spec.ts",
   "chef-find.spec.ts",
