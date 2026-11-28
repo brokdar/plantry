@@ -241,6 +241,16 @@ func TestPipeline_EveryState(t *testing.T) {
 		require.Empty(t, r.client.Requests())
 	})
 
+	t.Run("a search reply cut off at the token limit fails as an error, not as nothing found", func(t *testing.T) {
+		t.Parallel()
+		cut := toolTurn(finds.SearchTool, `{}`)
+		cut.StopReason = "max_tokens"
+		r := newRig(t, true, lineMatcher{}, kitchen, cut)
+		f := r.run(t, finds.TriggerChat)
+		require.Equal(t, finds.StateFailed, f.State)
+		require.Equal(t, "error", f.Steps[len(f.Steps)-1].Key, f.Steps)
+	})
+
 	t.Run("a missing tool asks once and keeps a requested find for a check", func(t *testing.T) {
 		t.Parallel()
 		r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...),
@@ -251,6 +261,30 @@ func TestPipeline_EveryState(t *testing.T) {
 		asked, err := r.store.Asked(ctx)
 		require.NoError(t, err)
 		require.Equal(t, []string{"equipment:wok", "skill"}, asked)
+		// The problem is a step in words, with no empty "checks_failed" line.
+		var keys []string
+		for _, s := range f.Steps {
+			keys = append(keys, s.Key)
+			require.NotEqual(t, "checks_failed", s.Key, "no gate block: %v", f.Steps)
+			if s.Key == "kitchen_equipment" {
+				require.Equal(t, "wok", s.Params["tool"])
+			}
+		}
+		require.Contains(t, keys, "kitchen_equipment")
+		require.Contains(t, keys, "kitchen_skill")
+	})
+
+	t.Run("a tool asked about before still shows as a step", func(t *testing.T) {
+		t.Parallel()
+		r := newRig(t, true, lineMatcher{}, kitchen, searchTurn(curryURLs...),
+			adaptTurn(false, `{"equipment":["wok"],"active_minutes":25,"advanced":false}`))
+		require.NoError(t, r.store.MarkAsked(ctx, "equipment:wok"))
+		f := r.run(t, finds.TriggerChat)
+		require.Equal(t, finds.StateNeedsCheck, f.State)
+		require.Empty(t, f.Questions)
+		last := f.Steps[len(f.Steps)-1]
+		require.Equal(t, "kitchen_equipment", last.Key, f.Steps)
+		require.Equal(t, "wok", last.Params["tool"])
 	})
 
 	t.Run("discarded as looks wrong lowers the source", func(t *testing.T) {
