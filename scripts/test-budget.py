@@ -121,23 +121,18 @@ def go_tests(path):
     return counts, leaves
 
 
-def cpu_share(elapsed, cpu):
-    """Leaf elapsed seconds scaled to CPU seconds. A test's elapsed time is
-    wall time: on a loaded machine (other gate lanes) it grows many times
-    while its CPU does not, and parallel subtests all show the full wall time
-    of the group. Per package the leaf times are scaled by CPU / sum of leaf
-    times (at most 1), the package's CPU per leaf-second, which does not
-    depend on how long the scheduler kept the tests waiting."""
-    total = {}
-    for name, secs in elapsed.items():
-        pkg = name.split(".", 1)[0]
-        total[pkg] = total.get(pkg, 0.0) + secs
-    out = {}
-    for name, secs in elapsed.items():
-        pkg = name.split(".", 1)[0]
-        f = min(1.0, cpu.get(pkg, total[pkg]) / total[pkg]) if total[pkg] else 1.0
-        out[name] = secs * f
-    return out
+PKG_SPEED = {}  # package -> slowdown measured right after its binary ran (1.0 = baseline)
+
+
+def leaf_wall(elapsed):
+    """Leaf elapsed seconds corrected for machine load. A test's elapsed time is
+    wall time and grows when other gate lanes load the machine. It is divided
+    by the measured slowdown of that machine (the package's own calibration
+    from scripts/cpu-exec.py, else the end-of-run FACTOR), never below 1, so
+    a load correction can only shrink a time by the slowdown measured. A test
+    that waits on a channel or I/O is not shrunk by what other tests do, and
+    with no calibration (CI) the raw wall time is checked."""
+    return {name: secs / max(1.0, PKG_SPEED.get(name.split(".", 1)[0], FACTOR)) for name, secs in elapsed.items()}
 
 
 def base_calib():
@@ -162,7 +157,9 @@ def go_cpu(path):
                 rel = r["dir"].split("/backend/", 1)[-1]
             v = r["cpu_s"]
             if r.get("calib_s") and base_calib():
-                v = v * FACTOR / min(max(r["calib_s"] / base_calib(), 0.33), 3.0)
+                own = min(max(r["calib_s"] / base_calib(), 0.33), 3.0)
+                v = v * FACTOR / own
+                PKG_SPEED[rel] = max(PKG_SPEED.get(rel, 0.0), own)
             cpu[rel] = cpu.get(rel, 0.0) + v
     return cpu
 
@@ -224,7 +221,7 @@ def cmd_go(args):
             budgets[pkg] = upd
     summary("Go test CPU per package, no race", table)
     cap, slow = b["single_test_max_s"].get(machine(), b["single_test_max_s"]["local"]), b.get("slow_tests", {})
-    elapsed = cpu_share(elapsed, {k: v / FACTOR for k, v in cpu.items()})
+    elapsed = leaf_wall(elapsed)
     for name, secs in sorted(elapsed.items(), key=lambda x: -x[1]):
         pkg, test = name.split(".", 1) if "." in name else ("", name)
         if secs > cap and f"{pkg}.{test.split('/', 1)[0]}" not in slow:

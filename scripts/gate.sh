@@ -78,7 +78,8 @@ checks_backend() {
     step build-armv7 env GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o /dev/null ./cmd/plantry &&
     step sqlc-usage bash scripts/check-sqlc-usage.sh &&
     step deadcode deadcode &&
-    step test-patterns bash "$ROOT/scripts/check-test-patterns.sh"
+    step test-patterns bash "$ROOT/scripts/check-test-patterns.sh" &&
+    step budget-unit python3 -I -m unittest discover -s "$ROOT/scripts" -p test_test_budget.py
 }
 deadcode() {
   local out

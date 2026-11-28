@@ -32,7 +32,7 @@ calib = None
 calib_bin = os.environ.get("CALIB_BIN")
 if calib_bin and cpu > 1.0:
     try:
-        calib = float(subprocess.check_output([calib_bin, "1"], text=True))
+        calib = float(subprocess.check_output([calib_bin, "quick"], text=True))
     except (OSError, ValueError, subprocess.CalledProcessError):
         calib = None
 log = os.environ.get("GO_TEST_CPU_LOG")
