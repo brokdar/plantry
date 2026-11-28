@@ -142,6 +142,14 @@ func (m *Matcher) WithPicker(resolver llm.Resolver, runs *airun.Recorder, guard 
 	return m
 }
 
+// WithoutPicker returns the matcher with the ladder only: no chef_match call,
+// so no AI run and no cap spend (rule-based callers such as substitutions).
+func (m *Matcher) WithoutPicker() *Matcher {
+	c := *m
+	c.llm, c.runs, c.guard = nil, nil, nil
+	return &c
+}
+
 // Match matches every line of one recipe.
 func (m *Matcher) Match(ctx context.Context, req MatchRequest) (*MatchResult, error) {
 	lines, err := m.Gather(ctx, req)

@@ -39,7 +39,8 @@ var plantDairy = strings.NewReplacer(
 )
 
 // glutenFree are gluten-free products named after gluten carriers.
-var glutenFree = strings.NewReplacer("reisnudel", " ", "glasnudel", " ", "reismehl", " ", "maismehl", " ", "kichererbsenmehl", " ", "kartoffelmehl", " ")
+var glutenFree = strings.NewReplacer("reisnudel", " ", "glasnudel", " ", "reismehl", " ", "maismehl", " ", "kichererbsenmehl", " ", "kartoffelmehl", " ",
+	"rice noodle", " ", "glass noodle", " ", "rice flour", " ", "corn flour", " ", "chickpea flour", " ", "potato flour", " ")
 
 // allergensOf lists the allergen codes an ingredient name states plainly.
 func allergensOf(folded string) []string {

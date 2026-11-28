@@ -45,6 +45,15 @@ var (
 	// inchGingerRE is fresh ginger measured in inches of root.
 	inchGingerRE = regexp.MustCompile(`(?i)^(\d+(?:\.\d+)?)[-\s]*inch(?:\s+piece)?(?:\s+of)?\s+((?:fresh\s+)?ginger\b.*)$`)
 	residueRE    = regexp.MustCompile(`^[\s)(*\-–,;]+|[\s)(*\-–,;]+$`)
+	// rangeToRE is a range written with a word: "3½ to 4 lbs.", "2 bis 3 EL".
+	rangeToRE = regexp.MustCompile(`(?i)\b(\d+(?:[.,]\d+)?[½¼¾⅓⅔⅛]?)\s+(?:to|bis)\s+(\d+(?:[.,]\d+)?(?:[½¼¾⅓⅔⅛]|\b))`)
+	// ozGramsRE is a weight stated in ounces and grams: "(5 oz, 140 g)"; the grams win.
+	ozGramsRE = regexp.MustCompile(`(?i)\(\s*\d+(?:[.,]\d+)?\s*oz\.?\s*,\s*(\d+(?:[.,]\d+)?\s*g)\s*\)`)
+	// gingerCmRE is fresh ginger counted as a piece and measured in cm: "1 Stück frischer Ingwer (ca. 2 cm)".
+	gingerCmRE = regexp.MustCompile(`(?i)^(?:(\d+)\s+)?(?:stück|stücke|stk\.?|piece|pieces)\s+((?:frische[rn]?\s+)?(?:ingwer|ginger)\b[^(]*?)\s*\(\s*(?:ca\.?|etwa|about)?\s*(\d+(?:[.,]\d+)?)\s*cm\s*\)$`)
+	// jeListRE is a German "je N a, b X" line: N of each of the listed kinds.
+	jeListRE    = regexp.MustCompile(`(?i)^je\s+(\d+(?:[.,]\d+)?)\s+(\S.*)$`)
+	listSplitRE = regexp.MustCompile(`(?i)\s*(?:,|\sund\s|\soder\s)\s*`)
 )
 
 const (
@@ -78,6 +87,24 @@ func prepareLine(raw string) string {
 		in, _ := strconv.ParseFloat(m[1], 64)
 		s = strconv.FormatFloat(math.Round(in*gramsPerInchGinger), 'f', -1, 64) + " g " + m[2]
 	}
+	if m := gingerCmRE.FindStringSubmatch(s); m != nil {
+		cm, _ := strconv.ParseFloat(strings.ReplaceAll(m[3], ",", "."), 64)
+		n := 1.0
+		if m[1] != "" {
+			n, _ = strconv.ParseFloat(m[1], 64)
+		}
+		s = strconv.FormatFloat(math.Round(n*cm/2.54*gramsPerInchGinger), 'f', -1, 64) + " g " + m[2]
+	}
+	s = ozGramsRE.ReplaceAllString(s, "($1)")
+	s = rangeToRE.ReplaceAllStringFunc(s, func(m string) string {
+		p := rangeToRE.FindStringSubmatch(m)
+		a, okA := mixedNumber(p[1])
+		b, okB := mixedNumber(p[2])
+		if !okA || !okB || b <= a {
+			return m
+		}
+		return strconv.FormatFloat((a+b)/2, 'f', -1, 64)
+	})
 	if m := looseSeasoningRE.FindStringSubmatch(s); m != nil {
 		s = m[1] + ", to taste"
 	}
@@ -127,6 +154,16 @@ func ParseLines(raw []string, lang string) []DraftIngredient {
 // ParseLine parses and cleans one ingredient line into one row per food.
 func ParseLine(raw, lang string) []DraftIngredient {
 	raw = StripPrice(raw)
+	if lines := expandJeList(raw); lines != nil {
+		var rows []DraftIngredient
+		for _, l := range lines {
+			for _, r := range ParseLine(l, lang) {
+				r.RawText = raw
+				rows = append(rows, r)
+			}
+		}
+		return rows
+	}
 	prepared := prepareLine(raw)
 	var p DraftIngredient
 	if lang == "en" {
@@ -164,6 +201,52 @@ func ParseLine(raw, lang string) []DraftIngredient {
 		rows[i].DietClass = diet.Classify(rows[i].Name)
 	}
 	return rows
+}
+
+// mixedNumber reads "4", "3,5" and "3½".
+func mixedNumber(tok string) (float64, bool) {
+	r := []rune(tok)
+	frac := 0.0
+	if f, ok := unicodeFractions[r[len(r)-1]]; ok && len(r) > 1 {
+		frac, tok = f, string(r[:len(r)-1])
+	}
+	v, ok := parseSingleNumber(tok)
+	return v + frac, ok
+}
+
+// expandJeList turns "je 1 kleine rote, gelbe Paprikaschote" into one line
+// per kind with the count each ("1 kleine rote Paprikaschote", "1 kleine
+// gelbe Paprikaschote"): a size word of the first kind and the noun at the
+// end are shared. nil when the line is not such a list.
+func expandJeList(raw string) []string {
+	m := jeListRE.FindStringSubmatch(strings.TrimSpace(raw))
+	if m == nil {
+		return nil
+	}
+	parts := listSplitRE.Split(m[2], -1)
+	if len(parts) < 2 {
+		return nil
+	}
+	last := strings.Fields(parts[len(parts)-1])
+	if len(last) < 2 {
+		return nil
+	}
+	noun := last[len(last)-1]
+	size := ""
+	if first := strings.Fields(parts[0]); len(first) > 1 {
+		if _, ok := sizeWords[strings.ToLower(first[0])]; ok {
+			size, parts[0] = first[0]+" ", strings.Join(first[1:], " ")
+		}
+	}
+	out := make([]string, 0, len(parts))
+	for i, p := range parts {
+		p = strings.TrimSpace(p)
+		if i < len(parts)-1 {
+			p += " " + noun
+		}
+		out = append(out, m[1]+" "+size+p)
+	}
+	return out
 }
 
 // proposedAmounts are the amounts a quantity-less line of a group that is

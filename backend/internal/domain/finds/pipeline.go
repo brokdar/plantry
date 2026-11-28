@@ -397,12 +397,19 @@ func (s *Service) attempt(ctx context.Context, client llm.Client, model string, 
 		o.Steps = append(o.Steps, Step{Key: "checks_passed"})
 		return o, true, nil
 	}
-	codes := make([]string, 0, len(o.Gates.Blocks)+len(problems))
-	for _, bl := range o.Gates.Blocks {
-		codes = append(codes, bl.Code)
+	if len(o.Gates.Blocks) > 0 {
+		codes := make([]string, 0, len(o.Gates.Blocks))
+		for _, bl := range o.Gates.Blocks {
+			codes = append(codes, bl.Code)
+		}
+		o.Steps = append(o.Steps, Step{Key: "checks_failed", Params: map[string]string{"codes": strings.Join(codes, ", ")}})
 	}
-	codes = append(codes, problems...)
-	o.Steps = append(o.Steps, Step{Key: "checks_failed", Params: map[string]string{"codes": strings.Join(codes, ", ")}})
+	// A kitchen problem is a step the user reads in words, not a code: it
+	// stays visible when its question was asked before.
+	for _, p := range problems {
+		kind, tool, _ := strings.Cut(p, ":")
+		o.Steps = append(o.Steps, Step{Key: "kitchen_" + kind, Params: map[string]string{"tool": tool}})
+	}
 	if f.Trigger.Requested() && userFixable(o.Gates.Blocks) {
 		o.State = StateNeedsCheck
 		return o, true, nil
@@ -723,6 +730,11 @@ func callTool(ctx context.Context, client llm.Client, req llm.Request, tool stri
 		}
 		for _, b := range resp.Message.Content {
 			if b.Type == llm.ContentTypeToolUse && b.ToolUseName == tool {
+				if resp.StopReason == llm.StopReasonMaxTokens {
+					// The tool input is cut off (an empty search reply read as
+					// "found nothing"): a failed call, not an answer.
+					return fmt.Errorf("%s: the reply was cut off at the token limit", tool)
+				}
 				if err := json.Unmarshal(b.ToolUseInput, into); err != nil {
 					return fmt.Errorf("%s: unreadable reply: %w", tool, err)
 				}

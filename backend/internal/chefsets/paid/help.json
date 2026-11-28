@@ -1,0 +1,213 @@
+{
+ "recipes": [
+  {
+   "id": "chili",
+   "name": "Chili con Carne",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Rinderhackfleisch",
+     "grams": 500
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 200
+    },
+    {
+     "name": "Kidneybohnen",
+     "grams": 400
+    },
+    {
+     "name": "Tomaten",
+     "grams": 400
+    },
+    {
+     "name": "Tomatenmark",
+     "grams": 30
+    }
+   ],
+   "steps": [
+    "Zwiebel würfeln und in Öl glasig anbraten.",
+    "Hackfleisch zugeben und krümelig anbraten.",
+    "Tomatenmark, Tomaten und Bohnen zugeben.",
+    "45 Minuten köcheln lassen und abschmecken."
+   ]
+  },
+  {
+   "id": "risotto",
+   "name": "Pilzrisotto",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Risottoreis",
+     "grams": 300
+    },
+    {
+     "name": "Champignons",
+     "grams": 300
+    },
+    {
+     "name": "Zwiebel",
+     "grams": 100
+    },
+    {
+     "name": "Gemüsebrühe",
+     "grams": 1000
+    },
+    {
+     "name": "Parmesan",
+     "grams": 50
+    }
+   ],
+   "steps": [
+    "Pilze kräftig anbraten und beiseitestellen.",
+    "Zwiebel und Reis in Butter andünsten.",
+    "Nach und nach heiße Brühe zugeben und rühren.",
+    "Pilze und Parmesan unterrühren."
+   ]
+  },
+  {
+   "id": "curry",
+   "name": "Hähnchencurry",
+   "portions": 4,
+   "ingredients": [
+    {
+     "name": "Hähnchenbrust",
+     "grams": 600
+    },
+    {
+     "name": "Kokosmilch",
+     "grams": 400
+    },
+    {
+     "name": "Currypaste",
+     "grams": 30
+    },
+    {
+     "name": "Reis",
+     "grams": 300
+    },
+    {
+     "name": "Paprika",
+     "grams": 150
+    }
+   ],
+   "steps": [
+    "Reis nach Packungsanleitung kochen.",
+    "Hähnchen in Stücken anbraten.",
+    "Currypaste und Paprika zugeben.",
+    "Kokosmilch angießen und köcheln lassen."
+   ]
+  }
+ ],
+ "questions": [
+  {
+   "recipe": "chili",
+   "step": 0,
+   "kind": "explain_step"
+  },
+  {
+   "recipe": "chili",
+   "step": 1,
+   "kind": "explain_step"
+  },
+  {
+   "recipe": "chili",
+   "step": 2,
+   "kind": "explain_step"
+  },
+  {
+   "recipe": "chili",
+   "step": 3,
+   "kind": "explain_step"
+  },
+  {
+   "recipe": "risotto",
+   "step": 0,
+   "kind": "explain_step"
+  },
+  {
+   "recipe": "risotto",
+   "step": 1,
+   "kind": "explain_step"
+  },
+  {
+   "recipe": "risotto",
+   "step": 2,
+   "kind": "explain_step"
+  },
+  {
+   "recipe": "risotto",
+   "step": 3,
+   "kind": "explain_step"
+  },
+  {
+   "recipe": "curry",
+   "step": 0,
+   "kind": "explain_step"
+  },
+  {
+   "recipe": "curry",
+   "step": 1,
+   "kind": "explain_step"
+  },
+  {
+   "recipe": "curry",
+   "step": 2,
+   "kind": "explain_step"
+  },
+  {
+   "recipe": "curry",
+   "step": 3,
+   "kind": "explain_step"
+  },
+  {
+   "recipe": "chili",
+   "step": 3,
+   "kind": "went_wrong",
+   "problem": "too_salty"
+  },
+  {
+   "recipe": "chili",
+   "step": 3,
+   "kind": "went_wrong",
+   "problem": "too_thin"
+  },
+  {
+   "recipe": "chili",
+   "step": 3,
+   "kind": "went_wrong",
+   "problem": "burnt"
+  },
+  {
+   "recipe": "risotto",
+   "step": 2,
+   "kind": "went_wrong",
+   "problem": "too_thick"
+  },
+  {
+   "recipe": "risotto",
+   "step": 2,
+   "kind": "went_wrong",
+   "problem": "not_cooking_through"
+  },
+  {
+   "recipe": "curry",
+   "step": 3,
+   "kind": "went_wrong",
+   "problem": "too_thin"
+  },
+  {
+   "recipe": "curry",
+   "step": 3,
+   "kind": "went_wrong",
+   "problem": "burnt"
+  },
+  {
+   "recipe": "curry",
+   "step": 3,
+   "kind": "went_wrong",
+   "problem": "too_salty"
+  }
+ ]
+}

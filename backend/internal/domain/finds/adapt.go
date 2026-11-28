@@ -21,7 +21,7 @@ const (
 
 const (
 	adaptMaxTokens  = 4096
-	searchMaxTokens = 1024
+	searchMaxTokens = 4096
 	searchMaxUses   = 3
 )
 

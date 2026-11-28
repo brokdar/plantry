@@ -73,3 +73,13 @@ func IsSynonym(id, leafName string) bool {
 	_, base := e.names[baseKey(leafName)]
 	return full || base
 }
+
+// SynonymName returns the English name of synonym entry id, "" when the
+// table has no such entry.
+func SynonymName(id string) string {
+	e := synonyms.byID[id]
+	if e == nil || len(e.EN) == 0 {
+		return ""
+	}
+	return e.EN[0]
+}

@@ -96,3 +96,42 @@ func TestNewClient_SettingsDBStillNeedsTheLiveFlag(t *testing.T) {
 	_, _, _, err := newClient(func(string) string { return "" }, "", "", path, "")
 	require.ErrorContains(t, err, "PLANTRY_CHEF_CANARY_LIVE=1")
 }
+
+func liveEnv() func(string) string {
+	env := map[string]string{"PLANTRY_CHEF_CANARY_LIVE": "1", "PLANTRY_AI_PROVIDER": "anthropic", "PLANTRY_AI_API_KEY": "k", "PLANTRY_AI_MODEL": "m"}
+	return func(k string) string { return env[k] }
+}
+
+func TestRun_ALiveMeasurementModeNeedsASpendCap(t *testing.T) {
+	for _, mode := range []string{"finds", "importcheck", "help"} {
+		err := run(context.Background(), []string{"-db", filepath.Join(t.TempDir(), "c.db"), "-mode", mode}, liveEnv(), &bytes.Buffer{})
+		require.ErrorContains(t, err, "-spend-cap", mode)
+	}
+	err := run(context.Background(), []string{"-db", filepath.Join(t.TempDir(), "c.db"), "-mode", "nope"}, liveEnv(), &bytes.Buffer{})
+	require.ErrorContains(t, err, "-mode must be one of")
+}
+
+func TestRun_ScriptedImportCheckWritesTheJSONReport(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "check.json")
+	require.NoError(t, os.WriteFile(script, []byte(`{"turns":[{"for_tool":"report_import_check","stop_reason":"tool_use",
+		"message":{"content":[{"type":"tool_use","tool_use_id":"t1","tool_name":"report_import_check","tool_input":{}}]}}]}`), 0o600))
+	out := filepath.Join(dir, "report.json")
+	var stdout bytes.Buffer
+	err := run(context.Background(), []string{"-db", filepath.Join(dir, "c.db"), "-mode", "importcheck", "-fake-script", script, "-out", out}, func(string) string { return "" }, &stdout)
+	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), "mode importcheck")
+	assert.Contains(t, stdout.String(), "detection_rate")
+	b, err := os.ReadFile(out)
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"mode": "importcheck"`)
+}
+
+func TestRun_SubsAndMonthNeedNoProvider(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "c.db")
+	for _, mode := range []string{"subs", "month"} {
+		var stdout bytes.Buffer
+		require.NoError(t, run(context.Background(), []string{"-db", db, "-mode", mode}, func(string) string { return "" }, &stdout), mode)
+		assert.Contains(t, stdout.String(), "mode "+mode)
+	}
+}

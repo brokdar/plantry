@@ -91,7 +91,7 @@ test("the import check shows one line, applies changes and Undo puts them back",
     await expect(pw.getByLabel("Prep (min)")).toHaveValue("10")
     await expect(pw.getByLabel("Cook (min)")).toHaveValue("20")
     await expect(pw.locator("textarea").first()).toHaveValue(
-      "Hähnchen in der Pfanne braten. Kerntemperatur 74 °C."
+      "Hähnchen in der Pfanne braten (Kerntemperatur mindestens 74 °C)."
     )
 
     // Undo the safety cue (the last change): the step is the author's again.
