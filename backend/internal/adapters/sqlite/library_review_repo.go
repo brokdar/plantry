@@ -155,8 +155,18 @@ func (r *LibraryReviewRepo) Gaps(ctx context.Context) ([]finds.QueuedGap, error)
 		return nil, fmt.Errorf("list library gaps: %w", err)
 	}
 	out := make([]finds.QueuedGap, 0, len(rows))
+	done := false
 	for _, row := range rows {
+		if row.Offered == 2 {
+			done = true // filled this session: hidden, but the session's one is used
+			continue
+		}
 		out = append(out, finds.QueuedGap{Kind: row.Kind, Dish: row.Dish, FindID: row.FindID.Int64, Offered: row.Offered != 0})
+	}
+	if done {
+		for i := range out {
+			out[i].Offered = true
+		}
 	}
 	return out, nil
 }
@@ -178,9 +188,14 @@ func (r *LibraryReviewRepo) FreeGap(ctx context.Context, kind string) error {
 	return nil
 }
 
-// DeleteGap removes a gap that was filled.
+// DeleteGap removes a gap that was filled. One started this session stays
+// hidden until the next, so the session's limit is not lost with the row.
 func (r *LibraryReviewRepo) DeleteGap(ctx context.Context, kind string) error {
-	if err := r.queriesFor(ctx).DeleteLibraryGap(ctx, kind); err != nil {
+	q := r.queriesFor(ctx)
+	if err := q.DoneLibraryGap(ctx, kind); err != nil {
+		return fmt.Errorf("finish library gap %s: %w", kind, err)
+	}
+	if err := q.DeleteLibraryGap(ctx, kind); err != nil {
 		return fmt.Errorf("delete library gap %s: %w", kind, err)
 	}
 	return nil
@@ -188,7 +203,11 @@ func (r *LibraryReviewRepo) DeleteGap(ctx context.Context, kind string) error {
 
 // NewGapSession lets one queued gap start again (a new planning session).
 func (r *LibraryReviewRepo) NewGapSession(ctx context.Context) error {
-	if err := r.queriesFor(ctx).NewGapSession(ctx); err != nil {
+	q := r.queriesFor(ctx)
+	if err := q.ClearDoneLibraryGaps(ctx); err != nil {
+		return fmt.Errorf("new gap session: %w", err)
+	}
+	if err := q.NewGapSession(ctx); err != nil {
 		return fmt.Errorf("new gap session: %w", err)
 	}
 	return nil

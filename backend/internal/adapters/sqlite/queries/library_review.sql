@@ -39,7 +39,10 @@ ON CONFLICT (kind) DO NOTHING;
 SELECT kind, dish, find_id, offered FROM library_gaps ORDER BY created_at, kind;
 
 -- name: DeleteLibraryGap :exec
-DELETE FROM library_gaps WHERE kind = sqlc.arg(kind);
+DELETE FROM library_gaps WHERE kind = sqlc.arg(kind) AND offered = 0;
+
+-- name: DoneLibraryGap :exec
+UPDATE library_gaps SET offered = 2 WHERE kind = sqlc.arg(kind) AND offered = 1;
 
 -- name: StartLibraryGap :exec
 UPDATE library_gaps SET find_id = sqlc.arg(find_id), offered = 1 WHERE kind = sqlc.arg(kind);
@@ -48,4 +51,7 @@ UPDATE library_gaps SET find_id = sqlc.arg(find_id), offered = 1 WHERE kind = sq
 UPDATE library_gaps SET find_id = NULL WHERE kind = sqlc.arg(kind);
 
 -- name: NewGapSession :exec
-UPDATE library_gaps SET offered = 0;
+UPDATE library_gaps SET offered = 0 WHERE offered = 1;
+
+-- name: ClearDoneLibraryGaps :exec
+DELETE FROM library_gaps WHERE offered = 2;

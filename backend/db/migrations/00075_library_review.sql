@@ -4,7 +4,9 @@
 -- with a dismissed flag) and whether the user dismissed the card.
 -- library_gaps queues the gaps the assistant fills itself at the next
 -- planning session (LIB-3, FIND-1b): dish is the find query, find_id the
--- find started for it, offered whether this planning session took one.
+-- find started for it, offered whether this planning session took one
+-- (1) and 2 when that gap is filled: kept, hidden, until the next session
+-- so the one-per-session limit survives the fill.
 CREATE TABLE library_review (
     id             INTEGER PRIMARY KEY CHECK (id = 1),
     month          TEXT    NOT NULL,
@@ -16,7 +18,7 @@ CREATE TABLE library_gaps (
     dish       TEXT    NOT NULL,
     created_at TEXT    NOT NULL,
     find_id    INTEGER REFERENCES recipe_suggestions(id) ON DELETE SET NULL,
-    offered    INTEGER NOT NULL DEFAULT 0 CHECK (offered IN (0, 1))
+    offered    INTEGER NOT NULL DEFAULT 0 CHECK (offered IN (0, 1, 2))
 );
 
 -- +goose Down

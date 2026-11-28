@@ -256,6 +256,8 @@ func TestPrefetch_QueuedGapStartsOneFindPerSession(t *testing.T) {
 	assert.Len(t, r.queued, 1, "still the same session: the next gap waits")
 	require.Len(t, queued(), 1, "the filled gap left the queue")
 	assert.Equal(t, "few_mains", queued()[0].Kind)
+	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))
+	assert.Len(t, r.queued, 1, "a later call of the same session still starts nothing")
 
 	r.now = r.now.Add(finds.SessionLength + time.Minute) // the session closed
 	require.NoError(t, r.svc.Opened(ctx, nextWindow, false, true))

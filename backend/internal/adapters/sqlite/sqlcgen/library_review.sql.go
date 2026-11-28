@@ -26,12 +26,30 @@ func (q *Queries) AddLibraryGap(ctx context.Context, arg AddLibraryGapParams) er
 	return err
 }
 
+const clearDoneLibraryGaps = `-- name: ClearDoneLibraryGaps :exec
+DELETE FROM library_gaps WHERE offered = 2
+`
+
+func (q *Queries) ClearDoneLibraryGaps(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, clearDoneLibraryGaps)
+	return err
+}
+
 const deleteLibraryGap = `-- name: DeleteLibraryGap :exec
-DELETE FROM library_gaps WHERE kind = ?1
+DELETE FROM library_gaps WHERE kind = ?1 AND offered = 0
 `
 
 func (q *Queries) DeleteLibraryGap(ctx context.Context, kind string) error {
 	_, err := q.db.ExecContext(ctx, deleteLibraryGap, kind)
+	return err
+}
+
+const doneLibraryGap = `-- name: DoneLibraryGap :exec
+UPDATE library_gaps SET offered = 2 WHERE kind = ?1 AND offered = 1
+`
+
+func (q *Queries) DoneLibraryGap(ctx context.Context, kind string) error {
+	_, err := q.db.ExecContext(ctx, doneLibraryGap, kind)
 	return err
 }
 
@@ -222,7 +240,7 @@ func (q *Queries) ListReviewRecipes(ctx context.Context) ([]ListReviewRecipesRow
 }
 
 const newGapSession = `-- name: NewGapSession :exec
-UPDATE library_gaps SET offered = 0
+UPDATE library_gaps SET offered = 0 WHERE offered = 1
 `
 
 func (q *Queries) NewGapSession(ctx context.Context) error {

@@ -27,6 +27,7 @@ type Querier interface {
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
 	BlockSearchDomain(ctx context.Context, arg BlockSearchDomainParams) error
 	ClaimChefJob(ctx context.Context, now string) (ClaimChefJobRow, error)
+	ClearDoneLibraryGaps(ctx context.Context) error
 	// Frees the session's slot for another variant.
 	ClearHiddenVariantSession(ctx context.Context, sessionID sql.NullInt64) error
 	ClearShownOn(ctx context.Context, shownOn sql.NullString) error
@@ -110,6 +111,7 @@ type Querier interface {
 	// B7: per discovery run with an id in [min_id, max_id], the suggestions it
 	// stored and how many of them the user accepted.
 	DiscoverySuggestionCounts(ctx context.Context, arg DiscoverySuggestionCountsParams) ([]DiscoverySuggestionCountsRow, error)
+	DoneLibraryGap(ctx context.Context, kind string) error
 	EnqueueChefJob(ctx context.Context, arg EnqueueChefJobParams) (int64, error)
 	// At startup no run is running: a row still 'running' was cut off by a stop.
 	FailInterruptedAIRuns(ctx context.Context, finishedAt sql.NullString) (int64, error)
