@@ -465,7 +465,11 @@ func recoverer(logger *slog.Logger) func(http.Handler) http.Handler {
 					"stack", string(debug.Stack()),
 					"request_id", middleware.GetReqID(r.Context()),
 				)
-				w.WriteHeader(http.StatusInternalServerError)
+				// Only before the reply started: a second header makes net/http
+				// print a plain-text line into the JSON log.
+				if ww, ok := w.(middleware.WrapResponseWriter); !ok || ww.Status() == 0 {
+					w.WriteHeader(http.StatusInternalServerError)
+				}
 			}()
 			next.ServeHTTP(w, r)
 		})

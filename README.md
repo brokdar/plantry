@@ -141,9 +141,10 @@ docker compose -f docker-compose.server.yml up -d
 
 Set `TZ` (in `.env`) to your own time zone: Plantry's "today" is the container's local date. If the package is private, log in once with a token that has `read:packages`: `docker login ghcr.io -u <github-user>`.
 
-**Update.** Back up first, then pull, restart, check:
+**Update.** Note the running version first (you need it to roll back, especially on `latest`), back up, then pull, restart, check:
 
 ```bash
+curl -s localhost:8080/api/health        # note the "version" before you pull
 docker compose -f docker-compose.server.yml exec plantry mkdir -p /data/backup
 docker compose -f docker-compose.server.yml exec plantry plantry backup -out /data/backup/plantry-$(date +%F).db
 docker compose -f docker-compose.server.yml pull
@@ -155,7 +156,7 @@ For a thorough check, `scripts/deploy-smoke.sh -image ghcr.io/brokdar/plantry:<t
 
 **Logs.** Everything goes to stdout as one JSON object per line: `docker compose -f docker-compose.server.yml logs --since 1h plantry`. The first line of a start is `server.start` (version, schema version, Chef on or off, provider and model, time zone and local time). Problems are `"level":"ERROR"` lines: a 5xx request (`http.request`, with `request_id`), a panic (`http.panic`, with the stack), a failed AI run (`ai.run.end`, with `run_id` and `request_id`, which match the `ai_runs` table) and a failed Chef job (`chef.jobs.failed`). Keys are never logged.
 
-**Roll back.** Set `PLANTRY_VERSION` in `.env` to the previous tag and run `up -d`. A newer version may have migrated the database, which the older one cannot read: restore the backup you took before the update (see "Backup and restore") together with the older image.
+**Roll back.** Set `PLANTRY_VERSION` in `.env` to the version you noted before the update (a server on `latest` records no previous tag) and run `up -d`. A newer version may have migrated the database, which the older one cannot read: restore the backup you took before the update (see "Backup and restore") together with the older image.
 
 ---
 

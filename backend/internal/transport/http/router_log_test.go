@@ -3,6 +3,7 @@ package http_test
 import (
 	"bytes"
 	"encoding/json"
+	stdlog "log"
 	"log/slog"
 	nethttp "net/http"
 	"net/http/httptest"
@@ -76,4 +77,28 @@ func TestRouter_5xxIsErrorLevel(t *testing.T) {
 		assert.Equal(t, level, lines[0]["level"], "status %d", code)
 		assert.NotEmpty(t, lines[0]["request_id"])
 	}
+}
+
+// A panic after the reply started must not write a second header: net/http
+// would print a plain-text "superfluous" line and break the JSON-lines log.
+func TestRouter_PanicAfterHeadersWritesNoSecondHeader(t *testing.T) {
+	var logBuf, serverErr bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, nil))
+	h := transport.NewRouter(logger, nethttp.HandlerFunc(func(w nethttp.ResponseWriter, _ *nethttp.Request) {
+		w.WriteHeader(nethttp.StatusOK)
+		_, _ = w.Write([]byte("partial"))
+		panic("late")
+	}), transport.Handlers{})
+	srv := httptest.NewUnstartedServer(h)
+	srv.Config.ErrorLog = stdlog.New(&serverErr, "", 0)
+	srv.Start()
+	defer srv.Close()
+
+	resp, err := nethttp.Get(srv.URL + "/boom")
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+
+	assert.Equal(t, nethttp.StatusOK, resp.StatusCode)
+	assert.NotContains(t, serverErr.String(), "superfluous")
+	assert.Contains(t, logBuf.String(), "http.panic")
 }

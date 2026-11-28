@@ -452,5 +452,16 @@ check "no secret in docker logs"         check_no_secrets
 
 echo
 printf '%s\n' "${SUMMARY[@]}"
-[ $FAILED -eq 0 ] && echo "SMOKE OK" || echo "SMOKE FAILED"
+SKIPPED=()
+for line in "${SUMMARY[@]}"; do
+  case "$line" in "SKIP "*) SKIPPED+=("${line#SKIP }") ;; esac
+done
+if [ $FAILED -ne 0 ]; then
+  echo "SMOKE FAILED"
+elif [ ${#SKIPPED[@]} -gt 0 ]; then
+  skipped_list="$(printf '%s, ' "${SKIPPED[@]}")"
+  echo "SMOKE OK (${#SKIPPED[@]} skipped: ${skipped_list%, })"
+else
+  echo "SMOKE OK"
+fi
 exit $FAILED

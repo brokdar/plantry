@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,7 +42,7 @@ func TestLogStartup(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, nil))
 	berlin := time.FixedZone("CET", 3600)
-	require.NoError(t, logStartup(ctx, logger, conn, svc, time.Date(2026, 11, 28, 23, 30, 0, 0, berlin)))
+	logStartup(ctx, logger, conn, svc, time.Date(2026, 11, 28, 23, 30, 0, 0, berlin))
 
 	var line map[string]any
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &line))
@@ -75,7 +76,7 @@ func TestLogs_NeverCarryKeys(t *testing.T) {
 
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	require.NoError(t, logStartup(ctx, logger, conn, svc, time.Now()))
+	logStartup(ctx, logger, conn, svc, time.Now())
 
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(conn), logger, time.Now)
 	resolver := llmresolver.New(svc, func(provider, apiKey, fakeScript string) (llm.Client, error) {
@@ -98,4 +99,37 @@ func TestLogs_NeverCarryKeys(t *testing.T) {
 	require.Contains(t, logs, "server.start")
 	assert.NotContains(t, logs, secretAPIKey)
 	assert.NotContains(t, logs, secretKey)
+}
+
+// A setting that cannot be read never stops the server: the line is still
+// written, with a warning and the fields that resolved.
+func TestLogStartup_MalformedSettingIsNotFatal(t *testing.T) {
+	ctx := context.Background()
+	conn := testhelper.NewTestDB(t)
+	cipher, err := crypto.New("0123456789abcdef0123456789abcdef")
+	require.NoError(t, err)
+	svc := settingsdom.NewService(sqlite.NewAppSettingsRepo(conn), settingsdom.NewEnvSnapshot(nil), cipher)
+	require.NoError(t, svc.Set(ctx, settingsdom.KeyAIProvider, "anthropic"))
+	_, err = conn.ExecContext(ctx, `INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)`, settingsdom.KeyChefEnabled, "not-a-bool")
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	logStartup(ctx, logger, conn, svc, time.Now())
+
+	var sawStart, sawWarn bool
+	for _, l := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		var m map[string]any
+		require.NoError(t, json.Unmarshal([]byte(l), &m))
+		switch m["msg"] {
+		case "server.start":
+			sawStart = true
+			assert.Equal(t, "anthropic", m["ai_provider"])
+			assert.NotContains(t, m, "chef_enabled")
+		case "server.start.incomplete":
+			sawWarn = true
+			assert.Equal(t, "WARN", m["level"])
+		}
+	}
+	assert.True(t, sawStart && sawWarn, buf.String())
 }
