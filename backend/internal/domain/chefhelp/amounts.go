@@ -33,11 +33,15 @@ func kitchenAmount(amount float64, unit, name string) string {
 	case u == "tsp" || u == "tbsp":
 		return spoon(amount, u)
 	}
-	if units.IsCount(units.Normalize(unit)) {
+	if wholePieces[units.Normalize(unit)] {
 		return number(math.Max(1, math.Round(amount))) + " " + unit
 	}
 	return strings.TrimSpace(number(halves(amount)) + " " + unit)
 }
+
+// wholePieces are the small countables a cook counts in whole pieces; a
+// fraction of a large unit (head, can, jar) stays in halves.
+var wholePieces = map[string]bool{"piece": true, "clove": true, "slice": true, "leaf": true, "leaves": true, "sprig": true, "pod": true}
 
 func spoon(v float64, u string) string { return number(halves(v)) + " " + u }
 

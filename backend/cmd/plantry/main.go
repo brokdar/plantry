@@ -779,9 +779,6 @@ const (
 // discovery run before cancelling it.
 const discoveryShutdownWait = 10 * time.Second
 
-// strconvOrEmpty renders a non-negative int as its decimal form, returning
-// "" for zero. Used when building the env snapshot so that an unset env-var
-// (zero rate limit) is distinguishable from a configured one.
 // loadRecipes loads the full recipes (ingredients and steps) of ids, each once.
 func loadRecipes(ctx context.Context, repo *sqlite.FoodRepo, ids []int64) (map[int64]*food.Food, error) {
 	out := make(map[int64]*food.Food, len(ids))
@@ -798,6 +795,9 @@ func loadRecipes(ctx context.Context, repo *sqlite.FoodRepo, ids []int64) (map[i
 	return out, nil
 }
 
+// strconvOrEmpty renders a non-negative int as its decimal form, returning
+// "" for zero. Used when building the env snapshot so that an unset env-var
+// (zero rate limit) is distinguishable from a configured one.
 func strconvOrEmpty(n int) string {
 	if n <= 0 {
 		return ""
