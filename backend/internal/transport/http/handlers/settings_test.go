@@ -77,7 +77,7 @@ func newSettingsRouter(t *testing.T) (*chi.Mux, *settings.Service) {
 		r.Put("/{key}", h.Set)
 		r.Delete("/{key}", h.Delete)
 		r.Get("/system", h.System)
-		r.Get("/ai/models", h.Models)
+		r.Post("/ai/models", h.Models)
 	})
 	return r, svc
 }
@@ -159,7 +159,7 @@ func TestListSecretsMasked(t *testing.T) {
 
 func TestModels_FakeProviderReturnsHardcoded(t *testing.T) {
 	r, _ := newSettingsRouter(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai/models?provider=fake", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/ai/models", strings.NewReader(`{"provider":"fake"}`))
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
@@ -178,7 +178,7 @@ func TestModels_FakeProviderReturnsHardcoded(t *testing.T) {
 
 func TestModels_UnknownProvider(t *testing.T) {
 	r, _ := newSettingsRouter(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai/models?provider=bogus", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/ai/models", strings.NewReader(`{"provider":"bogus"}`))
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)

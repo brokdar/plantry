@@ -57,3 +57,16 @@ plantry-eval-dbs/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Local Claude Code settings (may hold tokens)
+.claude/settings.local.json
+
+# SQLite databases: only reviewed, secret-free fixtures are tracked
+# (guarded by TestFixtureDBsCarryNoCredentials)
+*.db
+*.sqlite*
+!backend/internal/spectest/testdata/*.db
+!backend/internal/domain/agent/testdata/*.db
+!backend/internal/adapters/sqlite/testdata/*.db
+__pycache__/
+*.pyc

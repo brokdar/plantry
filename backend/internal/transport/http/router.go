@@ -342,7 +342,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Delete("/{key}", h.Settings.Delete)
 				r.Get("/system", h.Settings.System)
 				r.Get("/ai", h.Settings.AISummary)
-				r.Get("/ai/models", h.Settings.Models)
+				r.Post("/ai/models", h.Settings.Models)
 			})
 		}
 

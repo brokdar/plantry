@@ -94,6 +94,19 @@ checks_frontend() {
     step legacy bun run check:legacy
 }
 
+# Secret prevention (see "Secrets" in CLAUDE.md): prek hooks installed, gitleaks
+# (merges included) and the file/binary/DB checks over the commits this branch
+# adds, every tracked file, the bypass-hook tests, and the self-test that
+# replays every known bypass in a throwaway repo.
+checks_secrets() {
+  cd "$ROOT" &&
+    step secret-hooks bash scripts/secret-guard.sh hooks &&
+    step secret-scan bash scripts/secret-guard.sh range origin/main HEAD &&
+    step secret-dbs python3 -I scripts/check-db-secrets.py --tracked &&
+    step secret-hook-tests node --test .claude/hooks/block-hook-bypass.test.js &&
+    step secret-selftest bash scripts/secret-guard-selftest.sh
+}
+
 # --- tests ------------------------------------------------------------------
 tests_backend() {
   cd "$ROOT/backend" || return 1
@@ -163,7 +176,7 @@ status=0
 parts=()
 [ -z "${GATE_SKIP_BACKEND:-}" ] && parts+=(checks_backend)
 [ -z "${GATE_SKIP_FRONTEND:-}" ] && parts+=(checks_frontend)
-parts+=(timeouts)
+parts+=(timeouts checks_secrets)
 run_parts "${parts[@]}" || status=1
 
 # Backend tests, frontend tests and e2e in parallel: 126 s together against

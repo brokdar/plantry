@@ -1,0 +1,11 @@
+# SHA-256 of the pinned gitleaks binary (mise.toml: gitleaks), per platform, as
+# `<uname -s lowercase>-<uname -m> <sha256>`. scripts/secret-guard.sh runs only a
+# binary with this hash, never one that merely prints the right version.
+# Verified by hand against the release tarballs of v8.30.1: each tarball matched
+# the release gitleaks_8.30.1_checksums.txt, and the hash below is of the
+# extracted `gitleaks`. A new pin means re-verifying all of them.
+linux-x86_64 88f91962aa2f93ac6ab281d553b9e125f5197bbbce38f9f2437f7299c32e5509
+linux-aarch64 00e91bbe655bd7c47753e8cfe61cb76ea1a5d7e7702fe161ee40102b46b3823b
+linux-armv7l 14d7b3e2e5e4cd8fa6b4d16a3f06146c81246394164a16b63af9f296b4678c02
+darwin-arm64 ba52fb1bfabbcde42f032afad3d6e0b19dff8ed105229a16e7caa338bbc0e84f
+darwin-x86_64 cee01fea7173f1b779dff188e1c26ecbcb4027d394acc573b23aaf0be260e291

@@ -168,6 +168,15 @@ For a thorough check, `scripts/deploy-smoke.sh -image ghcr.io/brokdar/plantry:<t
 - [Bun](https://bun.sh/) (frontend package manager)
 - [Docker](https://www.docker.com/) (for end-to-end testing)
 
+### Git hooks (once per clone)
+
+```bash
+mise install                                              # pinned tools, incl. prek and gitleaks
+scripts/install-hooks.sh                                   # prek pre-commit/commit-msg hooks + the pre-push secret scan
+```
+
+Never bypass them (`--no-verify`, `SKIP=`); see "Secrets" in `CLAUDE.md`.
+
 ### Backend
 
 ```bash

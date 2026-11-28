@@ -73,9 +73,8 @@ type Value struct {
 	ReadOnly      bool
 }
 
-// Mask renders a secret with only the first and last few chars visible. The
-// full value is replaced with a fixed-width mask when too short to safely
-// preview.
+// Mask renders a secret with only its last 4 chars visible. The full value is
+// replaced with a fixed-width mask when too short to safely preview.
 func Mask(raw string) string {
 	if raw == "" {
 		return ""
@@ -83,7 +82,7 @@ func Mask(raw string) string {
 	if len(raw) < 8 {
 		return "********"
 	}
-	return raw[:3] + "****" + raw[len(raw)-4:]
+	return "****" + raw[len(raw)-4:]
 }
 
 // AIConfig is the effective AI configuration the resolver needs to build an

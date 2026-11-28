@@ -499,7 +499,7 @@ PUT    /api/settings/{key}                          body: {value} — DB overrid
 DELETE /api/settings/{key}                          remove the override
 GET    /api/settings/system                         read-only runtime info: port, paths, log level, version, cipher_available
 GET    /api/settings/ai                             read current AI config: {enabled, provider, model}
-GET    /api/settings/ai/models                      provider model list
+POST   /api/settings/ai/models                      provider model list (key in body)
 ```
 
 Keys live in the registry in `domain/settings/specs.go`; `backend/CLAUDE.md` lists them. AI provider, model and API key resolve DB → `PLANTRY_AI_*` env var → default at request time, so no restart is needed.

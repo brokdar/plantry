@@ -61,7 +61,8 @@ export function getSystemInfo() {
 }
 
 export function listAIModels(provider: string, apiKey?: string) {
-  const params = new URLSearchParams({ provider })
-  if (apiKey) params.set("api_key", apiKey)
-  return apiFetch<AIModelList>(`/settings/ai/models?${params.toString()}`)
+  return apiFetch<AIModelList>("/settings/ai/models", {
+    method: "POST",
+    body: JSON.stringify({ provider, ...(apiKey ? { api_key: apiKey } : {}) }),
+  })
 }

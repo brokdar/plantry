@@ -1,7 +1,9 @@
 minimum_prek_version = "0.3.8"
 
-# Vendored third-party skills stay byte-identical to upstream (see skills-lock.json)
-exclude = "^\\.claude/skills/"
+# No global `exclude`: it would also filter the secret hooks. Vendored
+# third-party skills stay byte-identical to upstream (see skills-lock.json), so
+# only the formatting/lint hooks below skip ^\.claude/skills/; every secret hook
+# and detect-private-key sees those files.
 
 # ── Builtin (Rust-native, instant, zero deps) ─────────────────────────────────
 [[repos]]
@@ -9,14 +11,14 @@ repo = "builtin"
 hooks = [
   { id = "no-commit-to-branch", args = ["-b", "main"] },
   { id = "detect-private-key" },
-  { id = "check-added-large-files", args = ["--maxkb=500"] },
-  { id = "check-merge-conflict" },
-  { id = "trailing-whitespace" },
-  { id = "end-of-file-fixer" },
-  { id = "check-yaml" },
-  { id = "check-toml" },
+  { id = "check-added-large-files", args = ["--maxkb=500"], exclude = "^\\.claude/skills/" },
+  { id = "check-merge-conflict", exclude = "^\\.claude/skills/" },
+  { id = "trailing-whitespace", exclude = "^\\.claude/skills/" },
+  { id = "end-of-file-fixer", exclude = "^\\.claude/skills/" },
+  { id = "check-yaml", exclude = "^\\.claude/skills/" },
+  { id = "check-toml", exclude = "^\\.claude/skills/" },
   # tsconfig files use JSONC (comments) — exclude them
-  { id = "check-json", exclude = "tsconfig" },
+  { id = "check-json", exclude = "tsconfig|^\\.claude/skills/" },
 ]
 
 # Full test suites run in scripts/gate.sh (once per PR), not on every commit.
@@ -76,4 +78,43 @@ hooks = [
     pass_filenames = false,
   },
 
+  # ── Secret prevention (layer 1 of "Secrets" in CLAUDE.md) ──────────────────
+  # gitleaks over the staged diff, pinned in mise.toml, rules in .gitleaks.toml
+  {
+    id             = "gitleaks",
+    name           = "gitleaks (staged)",
+    language       = "system",
+    entry          = "bash scripts/secret-guard.sh staged",
+    stages         = ["pre-commit"],
+    always_run     = true,
+    pass_filenames = false,
+  },
+
+  # blocked file names (.env, secret.key, keys, local settings), DBs outside
+  # testdata, and the SQLite credential check on every staged DB
+  {
+    id             = "secret-files",
+    name           = "blocked files + DB credential check",
+    language       = "system",
+    entry          = "bash scripts/secret-guard.sh files",
+    stages         = ["pre-commit"],
+    pass_filenames = true,
+  },
+
+  # commit message (a pasted key or an error that contains one)
+  {
+    id             = "secret-commit-msg",
+    name           = "commit message credential scan",
+    language       = "system",
+    entry          = "bash scripts/secret-guard.sh msg",
+    stages         = ["commit-msg"],
+    always_run     = true,
+    pass_filenames = true,
+  },
 ]
+
+# ── Push stage: NOT a prek hook ───────────────────────────────────────────────
+# prek does not forward git's pre-push stdin (the refs and shas being pushed), so
+# the push scan is .git/hooks/pre-push = scripts/pre-push-hook.sh, installed by
+# scripts/install-hooks.sh, which calls `scripts/secret-guard.sh push` with that
+# stdin and chains prek's own pre-push hooks. scripts/gate.sh checks it.
