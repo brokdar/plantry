@@ -36,6 +36,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/chef"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/chefhelp"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/finds"
@@ -513,6 +514,9 @@ func run() error {
 	foodRestorers[foodevent.KindSubstitution] = substitutionSvc
 	chefGuard := &chef.Guard{Settings: settingsSvc, Spend: aiRunRepo, Prices: priceOverrides, Now: time.Now}
 	matchGuard = chefGuard
+	// Cook-mode help (HELP-2): explain a step, what went wrong; always runs,
+	// its cost counts against the cap (HELP-8).
+	helpSvc := chefhelp.NewService(sessionRepo, foodRepo, profileSvc, settingsSvc, chefGuard, llmResolver, runRecorder)
 	// Attribute labelling (ATTR-2): a chef_attributes job per saved recipe
 	// and the one-time library pass, each a capped run.
 	var labelling *flavor.Labelling
@@ -693,6 +697,7 @@ func run() error {
 		Availability:  handlers.NewAvailabilityHandler(availabilitySvc).WithClock(clock.Now),
 		FoodEvents:    handlers.NewFoodEventHandler(foodEventSvc),
 		Substitutions: handlers.NewSubstitutionHandler(substitutionSvc),
+		Help:          handlers.NewHelpHandler(helpSvc),
 		RecipeChanges: handlers.NewRecipeChangeHandler(recipeChangeSvc),
 		Attributes:    handlers.NewAttributeHandler(flavorSvc),
 		Setup:         handlers.NewSetupHandler(setup.NewService(settingsSvc, foodRepo)),

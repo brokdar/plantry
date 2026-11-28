@@ -257,6 +257,19 @@ describe("cook pages", () => {
     expect(getPlate).not.toHaveBeenCalled()
   })
 
+  it("offers the Help sheet with the Chef on, today's substitute button with it off", async () => {
+    renderWithRouter(<CookSessionPage sessionId={7} />)
+    expect(await screen.findByTestId("help-open")).toBeInTheDocument()
+    expect(screen.queryByTestId("substitute-open")).toBeNull()
+  })
+
+  it("keeps today's substitute button while the Chef is off", async () => {
+    vi.mocked(listSettings).mockResolvedValue(mockSettingsList())
+    renderWithRouter(<CookSessionPage sessionId={7} />)
+    expect(await screen.findByTestId("substitute-open")).toBeInTheDocument()
+    expect(screen.queryByTestId("help-open")).toBeNull()
+  })
+
   it("shows no finish list without garnishes", async () => {
     renderWithRouter(<CookSessionPage sessionId={7} />)
     await screen.findAllByTestId("cook-ingredient")

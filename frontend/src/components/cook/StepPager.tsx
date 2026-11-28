@@ -17,6 +17,8 @@ interface StepPagerProps {
   finish: ReactNode
   /** Shown on the last step only, e.g. "Freeze 2 portions". */
   lastStepNote?: ReactNode
+  /** The step on screen changed (0-based); also called once on mount. */
+  onStepChange?: (step: number) => void
 }
 
 function isTyping(target: EventTarget | null) {
@@ -39,12 +41,17 @@ export function StepPager({
   onStartTimer,
   finish,
   lastStepNote,
+  onStepChange,
 }: StepPagerProps) {
   const { t } = useTranslation()
   const [index, setIndex] = useState(0)
   const touch = useRef<{ x: number; y: number } | null>(null)
   const total = steps.length
   const last = index >= total - 1
+
+  useEffect(() => {
+    onStepChange?.(index)
+  }, [index, onStepChange])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

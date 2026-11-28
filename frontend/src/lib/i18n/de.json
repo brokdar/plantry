@@ -3026,5 +3026,27 @@
       "missing_name": "Das Rezept hat keinen Namen.",
       "missing_yield": "Das Rezept nennt keine Portionenzahl."
     }
+  },
+  "help": {
+    "open": "Hilfe",
+    "title": "Was brauchst du?",
+    "description": "Hilfe beim Kochen: eine fehlende Zutat, diesen Schritt erklärt oder etwas, das schiefgelaufen ist.",
+    "back": "Zurück",
+    "explain": "Diesen Schritt erklären",
+    "wrong": "Etwas ist schiefgelaufen",
+    "wrong_hint": "Wähle, was passiert ist, oder schreib es in eigenen Worten.",
+    "wrong_text": "Oder in ein paar Worten beschreiben",
+    "wrong_send": "Hilfe holen",
+    "loading": "Ich überlege",
+    "retry": "Nochmal versuchen",
+    "error": "Gerade kam keine Antwort zurück. Versuch es noch einmal.",
+    "no_provider": "Der Assistent ist nicht eingerichtet, deshalb kann ich nicht antworten. Hinterlege in den Einstellungen einen Anbieter.",
+    "problem": {
+      "too_salty": "Zu salzig",
+      "too_thin": "Zu dünn",
+      "too_thick": "Zu dick",
+      "burnt": "Angebrannt",
+      "not_cooking_through": "Wird nicht gar"
+    }
   }
 }

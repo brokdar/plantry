@@ -47,6 +47,7 @@ type Handlers struct {
 	Availability  *handlers.AvailabilityHandler
 	FoodEvents    *handlers.FoodEventHandler
 	Substitutions *handlers.SubstitutionHandler
+	Help          *handlers.HelpHandler
 	RecipeChanges *handlers.RecipeChangeHandler
 	Attributes    *handlers.AttributeHandler
 	Setup         *handlers.SetupHandler
@@ -178,6 +179,9 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 
 		if h.Substitutions != nil {
 			api.Get("/substitutes", h.Substitutions.Options)
+		}
+		if h.Help != nil {
+			api.Post("/help", h.Help.Help)
 		}
 
 		if h.PlanWrite != nil || h.PlanRead != nil || h.PlanGenerate != nil {

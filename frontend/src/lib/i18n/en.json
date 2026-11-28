@@ -3026,5 +3026,27 @@
       "missing_name": "The recipe has no name.",
       "missing_yield": "The recipe does not say how many portions it makes."
     }
+  },
+  "help": {
+    "open": "Help",
+    "title": "What do you need?",
+    "description": "Help while cooking: a missing ingredient, this step explained, or something that went wrong.",
+    "back": "Back",
+    "explain": "Explain this step",
+    "wrong": "Something went wrong",
+    "wrong_hint": "Pick what happened, or say it in your own words.",
+    "wrong_text": "Or tell me in a few words",
+    "wrong_send": "Get help",
+    "loading": "Thinking it through",
+    "retry": "Try again",
+    "error": "I couldn't get an answer just now. Try again.",
+    "no_provider": "The assistant isn't set up, so I can't answer. Add a provider in Settings.",
+    "problem": {
+      "too_salty": "Too salty",
+      "too_thin": "Too thin",
+      "too_thick": "Too thick",
+      "burnt": "Burnt",
+      "not_cooking_through": "Not cooking through"
+    }
   }
 }

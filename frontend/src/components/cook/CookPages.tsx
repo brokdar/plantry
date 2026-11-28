@@ -17,6 +17,7 @@ import { useTimeSlots } from "@/lib/queries/slots"
 import { slotLabel } from "@/lib/slot-label"
 
 import { CookMode } from "./CookMode"
+import { HelpButton } from "./HelpSheet"
 import { SubstituteButton } from "./SubstituteDialog"
 import { useSessionPortions } from "./useSessionPortions"
 
@@ -80,6 +81,8 @@ export function CookSessionPage({ sessionId }: { sessionId: number }) {
   const scaled = useScaled(session.data?.food_id ?? 0, portions)
   const cooked = useSetSessionCooked()
   const finish = useFinishingTouches(session.data?.links ?? [])
+  // Chef off keeps today's substitute button exactly (ON-1).
+  const chefOn = useSettingItems().data?.["chef.enabled"]?.value === "true"
 
   if (!valid || session.isError || food.isError) {
     return <CookShell message={t("cook.missing")} />
@@ -110,10 +113,20 @@ export function CookSessionPage({ sessionId }: { sessionId: number }) {
       onPortionsChange={change}
       coverage={coverage}
       help={
-        <SubstituteButton
-          sessionId={s.id}
-          ingredients={scaled.data?.ingredients}
-        />
+        chefOn ? (
+          (step) => (
+            <HelpButton
+              sessionId={s.id}
+              step={step}
+              ingredients={scaled.data?.ingredients}
+            />
+          )
+        ) : (
+          <SubstituteButton
+            sessionId={s.id}
+            ingredients={scaled.data?.ingredients}
+          />
+        )
       }
       freezePortions={s.frozen_portions}
       close={
