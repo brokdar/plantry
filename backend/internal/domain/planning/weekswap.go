@@ -536,7 +536,7 @@ func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instructi
 	var notes []string
 	step := func(mode swapMode) bool {
 		merged := Merge(base, t, out)
-		ev := Evaluate(merged, t)
+		ev := evaluateLean(merged, t) // the guard reads codes and figures, never options
 		w := ev.Week
 		if w == nil || w.Days < minDGEDays {
 			return false
@@ -574,7 +574,7 @@ func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instructi
 		return false
 	}
 	budget := func() bool {
-		ev := Evaluate(Merge(base, t, out), t)
+		ev := evaluateLean(Merge(base, t, out), t)
 		return ev.Week != nil && ev.Week.Days >= minDGEDays && meatAllowed(base) && ev.Week.MeatG > DGEMeatMaxG*float64(ev.Week.Days)/weekDays+1e-9
 	}
 	for i := 0; i < maxGuardSteps && budget(); i++ {
@@ -582,7 +582,7 @@ func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instructi
 			break
 		}
 	}
-	if ev := Evaluate(Merge(base, t, out), t); fishAllowed(base) && !noFish.MatchString(instruction) && ev.Week != nil && ev.Week.Days >= minDGEDays && ev.Week.FishMeals == 0 {
+	if ev := evaluateLean(Merge(base, t, out), t); fishAllowed(base) && !noFish.MatchString(instruction) && ev.Week != nil && ev.Week.Days >= minDGEDays && ev.Week.FishMeals == 0 {
 		step(swapFish)
 	}
 	return out, notes
