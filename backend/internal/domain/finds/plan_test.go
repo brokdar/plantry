@@ -282,26 +282,36 @@ func TestPrefetch_QueuedGapStartsOneFindPerSession(t *testing.T) {
 }
 
 // refusingLibrary is a library whose recipe save refuses every draft.
-type refusingLibrary struct{ finds.Library }
+type refusingLibrary struct {
+	finds.Library
+	err error
+}
 
 func (refusingLibrary) Leaf(context.Context, food.Candidate, food.Origin) (int64, error) {
 	return 1, nil
 }
 
-func (refusingLibrary) Finalize(context.Context, importer.FinalizeInput) (*importer.FinalizedFood, error) {
-	return nil, fmt.Errorf("%w: amount must be > 0", domain.ErrImportInvalidResolution)
+func (l refusingLibrary) Finalize(context.Context, importer.FinalizeInput) (*importer.FinalizedFood, error) {
+	return nil, fmt.Errorf("%w: refused", l.err)
 }
 
 // CP4 fix: a ready find the recipe save refuses every time ends failed with
 // a reason; it is not offered again each week.
 func TestStage_RefusedSaveFailsTheFind(t *testing.T) {
+	for _, refusal := range []error{domain.ErrImportInvalidResolution, domain.ErrImportNoNutrition} {
+		t.Run(refusal.Error(), func(t *testing.T) { stageRefused(t, refusal) })
+	}
+}
+
+func stageRefused(t *testing.T, refusal error) {
+	t.Helper()
 	r := newSessionRig(t, true, 1)
 	r.svc = finds.NewService(finds.Deps{
 		Store:     r.store,
 		Household: func(context.Context) (finds.Household, error) { return r.house, nil },
 		Logger:    slog.New(slog.DiscardHandler),
 		Planning: finds.Planning{
-			Library: refusingLibrary{},
+			Library: refusingLibrary{err: refusal},
 			ChefOn:  func(context.Context) (bool, error) { return true, nil },
 			Now:     func() time.Time { return r.now },
 		},

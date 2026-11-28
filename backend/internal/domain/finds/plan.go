@@ -352,7 +352,7 @@ func (s *Service) Stage(ctx context.Context, n int, windowStart time.Time) ([]in
 		if err != nil {
 			// The find stays ready; the run plans without it.
 			s.d.Logger.WarnContext(ctx, "finds.stage skipped", "find_id", f.ID, "error", err)
-			if errors.Is(err, domain.ErrImportInvalidResolution) {
+			if errors.Is(err, domain.ErrImportInvalidResolution) || errors.Is(err, domain.ErrImportNoNutrition) {
 				// The recipe save refuses this draft every time: end the
 				// find instead of offering it each week.
 				if derr := s.d.Store.FailReady(ctx, f.ID, "recipe_save_refused"); derr != nil {

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -42,7 +43,7 @@ var Problems = []string{"too_salty", "too_thin", "too_thick", "burnt", "not_cook
 const (
 	// MaxLines and MaxLineRunes bound an answer (HELP-2: three lines).
 	MaxLines     = 3
-	MaxLineRunes = 220
+	MaxLineRunes = 200
 	maxTextRunes = 500
 	maxTokens    = 600
 )
@@ -293,8 +294,7 @@ const system = "You help one person cooking right now, standing at the stove, by
 	"Put the amount first on a line where one applies (\"2 tbsp soy sauce: stir in now\"); " +
 	"copy an amount exactly as listed below, only for an ingredient the current step uses, and never calculate, split or convert one. " +
 	"A fix that adds something not listed (a pinch of sugar, a splash of vinegar) gets no number. " +
-	"Keep each line under 160 characters and end it as a complete sentence. " +
-	"Every line is the final instruction to the cook: never reasoning, a correction of yourself or a reply to the user (no \"No, ...\", \"Wait\", \"Actually\"). " +
+	"Lines are final instructions, never reasoning. " +
 	"No greeting, no apology, no lists of options: the single best fix first. " +
 	"For \"something went wrong\" the problem is about the dish cooked so far, not literally the current step; if it cannot have happened yet at this step, say what to check and the fix for the dish as a whole. " +
 	"Fixes by problem: too salty: add more of the unsalted base or a liquid that fits the dish, a little acid; never water into eggs. " +
@@ -352,7 +352,7 @@ func buildRequest(model string, req Request, recipe *food.Food, portions float64
 			Name:        Tool,
 			Description: "Record the answer: at most three short lines, amount first.",
 			Schema: json.RawMessage(`{"type":"object","required":["lines"],"properties":{` +
-				`"lines":{"type":"array","maxItems":3,"items":{"type":"string","maxLength":160}}}}`),
+				`"lines":{"type":"array","maxItems":3,"items":{"type":"string","maxLength":` + strconv.Itoa(MaxLineRunes) + `}}}}`),
 		}},
 		ToolChoice: &llm.ToolChoice{Name: Tool},
 		MaxTokens:  maxTokens,
