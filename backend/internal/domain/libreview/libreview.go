@@ -184,16 +184,16 @@ func (s *Service) Dismiss(ctx context.Context, key string) error {
 // MakeVariants groups the two recipes of a duplicates finding as variants
 // of one dish and dismisses the finding.
 func (s *Service) MakeVariants(ctx context.Context, key string) error {
-	st, err := s.d.Store.State(ctx)
-	if err != nil {
-		return err
-	}
-	i := slices.IndexFunc(st.Findings, func(f Finding) bool { return f.Key == key && f.Kind == KindDuplicates })
-	if i < 0 {
-		return fmt.Errorf("%w: library review finding %q", domain.ErrNotFound, key)
-	}
-	f := st.Findings[i]
 	return s.d.Tx.InTx(ctx, func(ctx context.Context) error {
+		st, err := s.d.Store.State(ctx)
+		if err != nil {
+			return err
+		}
+		i := slices.IndexFunc(st.Findings, func(f Finding) bool { return f.Key == key && f.Kind == KindDuplicates })
+		if i < 0 {
+			return fmt.Errorf("%w: library review finding %q", domain.ErrNotFound, key)
+		}
+		f := st.Findings[i]
 		if err := s.d.Store.GroupVariants(ctx, f.Recipes[0].ID, f.Recipes[1].ID); err != nil {
 			return err
 		}
