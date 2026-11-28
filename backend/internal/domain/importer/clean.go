@@ -86,7 +86,7 @@ var prepWords = setOf(
 
 // sizeWords are size adjectives dropped from the front of a name.
 var sizeWords = setOf(
-	"small", "medium", "large", "big", "medium-sized", "large-sized", "small-sized",
+	"small", "medium", "large", "big", "center-cut", "centre-cut", "thick-cut", "thin-cut", "medium-sized", "large-sized", "small-sized",
 	"kleine", "kleiner", "kleines", "große", "großer", "großes", "grosse", "mittelgroße",
 	"mittelgroßer", "mittelgroßes", "mittlere", "mittlerer", "mittleres", "dicke",
 )

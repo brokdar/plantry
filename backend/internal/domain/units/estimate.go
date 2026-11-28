@@ -23,7 +23,9 @@ var pieceWeights = []struct {
 	units    []string
 	keywords []string
 }{
-	{3, []string{"piece", "clove"}, []string{"knoblauch", "garlic"}}, // a counted garlic "piece" is a clove
+	{397, []string{"piece"}, []string{"tofu"}},                                              // a 14 oz package
+	{158, []string{"piece"}, []string{"steamed rice", "cooked rice", "steamed white rice"}}, // a serving: USDA 1 cup cooked
+	{3, []string{"piece", "clove"}, []string{"knoblauch", "garlic"}},                        // a counted garlic "piece" is a clove
 	{15, []string{"piece"}, []string{"frühlingszwiebel", "lauchzwiebel", "spring onion", "scallion"}},
 	{110, []string{"piece"}, []string{"zwiebel", "onion"}},
 	{18, []string{"piece"}, []string{"eigelb", "egg yolk", "=yolk", "=yolks"}},

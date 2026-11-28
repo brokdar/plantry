@@ -44,6 +44,14 @@ func TestParseAndMatch_CP3Run4Lines(t *testing.T) {
 		{"1 inch fresh ginger", "ginger", 5, 20, false, true},
 		{"2-inch piece ginger", "ginger", 10, 40, false, true},
 		{"1 tsp italian seasoning", "italian seasoning", 0.5, 4, false, true},
+		// CP4 finds that failed on these lines.
+		{"1 package extra-firm tofu", "extra-firm tofu", 390, 400, false, true},
+		{"2 servings steamed white rice", "steamed white rice", 310, 320, false, true},
+		{"1 lb center-cut salmon fillets", "salmon fillets", 450, 460, false, true},
+		{"1 tsp garam masala", "garam masala", 1, 4, false, true},
+		{"2 portobello mushroom caps", "portobello", 20, 300, false, true},
+		{"1 tbsp Mirin", "Mirin", 10, 25, false, true},
+		{"2 tbsp green chiles", "green chiles", 20, 60, false, true},
 		{"a few cranks freshly ground pepper", "pepper", 0, 0, true, true},
 		{"3 cranks freshly ground pepper", "pepper", 0, 0, true, true},
 	}
