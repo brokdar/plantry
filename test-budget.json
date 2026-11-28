@@ -203,7 +203,7 @@
           "tests": 6
         },
         "cmd/plantry-eval": {
-          "cpu_s": 9.4,
+          "cpu_s": 11.0,
           "tests": 6
         },
         "db/migrations": {
@@ -251,7 +251,7 @@
           "tests": 12
         },
         "internal/adapters/sqlite": {
-          "cpu_s": 5.1,
+          "cpu_s": 5.3,
           "tests": 240
         },
         "internal/config": {
@@ -267,7 +267,7 @@
           "tests": 4
         },
         "internal/domain/agent": {
-          "cpu_s": 74.4,
+          "cpu_s": 100.9,
           "tests": 479
         },
         "internal/domain/airun": {
@@ -299,7 +299,7 @@
           "tests": 6
         },
         "internal/domain/planning": {
-          "cpu_s": 14.9,
+          "cpu_s": 16.5,
           "tests": 514
         },
         "internal/domain/planview": {
@@ -307,7 +307,7 @@
           "tests": 23
         },
         "internal/domain/plate": {
-          "cpu_s": 1.8,
+          "cpu_s": 2.1,
           "tests": 185
         },
         "internal/domain/preset": {
@@ -343,7 +343,7 @@
           "tests": 6
         },
         "internal/eval": {
-          "cpu_s": 14.7,
+          "cpu_s": 14.9,
           "tests": 14
         },
         "internal/testhelper": {
@@ -355,7 +355,7 @@
           "tests": 4
         },
         "internal/transport/http/handlers": {
-          "cpu_s": 2.5,
+          "cpu_s": 2.7,
           "tests": 323
         },
         "internal/transport/http/middleware": {
