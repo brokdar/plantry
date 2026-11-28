@@ -2,21 +2,31 @@
 # Secret prevention checks shared by the prek hooks, scripts/gate.sh and CI.
 #
 #   secret-guard.sh staged            gitleaks over the staged diff
-#   secret-guard.sh files PATH...     blocked-file names + SQLite credential check
-#   secret-guard.sh range FROM TO     gitleaks over FROM..TO, plus blocked files
-#                                     and DB checks on every file added or
-#                                     changed in that range
-#   secret-guard.sh push              range for a pre-push hook: prek exports
-#                                     PRE_COMMIT_FROM_REF/PRE_COMMIT_TO_REF;
-#                                     new branches fall back to origin/main
+#   secret-guard.sh files PATH...     name + content checks (scripts/check-db-secrets.py)
+#   secret-guard.sh range FROM TO     history scan of FROM..TO
+#   secret-guard.sh push              history scan for a pre-push hook: every
+#                                     ref git is pushing (read from stdin),
+#                                     else every local branch and tag, minus
+#                                     what the remotes already have
+#   secret-guard.sh ci                CI: gitleaks over every ref, the file
+#                                     checks on every tracked file and on the
+#                                     commits not in $CI_BASE (default origin/main)
 #   secret-guard.sh hooks             fail unless pre-commit and pre-push are prek's
+#
+# A history scan is gitleaks with -m (merge commits are diffed against each
+# parent; without it an evil merge is invisible) plus the name/binary/DB checks
+# on every file added or changed, merges included. gitleaks reads THIS script's
+# .gitleaks.toml and .gitleaksignore, never the scanned repo's, and ignores
+# `gitleaks:allow` comments. SECRET_GUARD_REPO names the repo to scan when the
+# script is a trusted copy outside it (CI runs origin/main's copy).
 #
 # Never prints a secret value (gitleaks runs with --redact). Never bypass; if a
 # check fires, stop, rotate the credential, and see "Secrets" in CLAUDE.md.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT" || exit 1
+REPO="${SECRET_GUARD_REPO:-$ROOT}"
+cd "$REPO" || exit 1
 ZERO=0000000000000000000000000000000000000000
 
 fail=0
@@ -35,73 +45,58 @@ gitleaks_bin() {
   return 1
 }
 
-# is_testdata PATH: SQLite fixtures are allowed only under a testdata dir.
-is_testdata() { case "$1" in testdata/*|*/testdata/*) return 0 ;; esac; return 1; }
+GL_ARGS=(--config "$ROOT/.gitleaks.toml" --gitleaks-ignore-path "$ROOT/.gitleaksignore"
+  --ignore-gitleaks-allow --redact --no-banner --log-level warn)
 
-# check_name PATH: block credential-carrying file names (and DBs outside testdata).
-check_name() {
-  local p=$1 b
-  b="$(basename "$p")"
-  case "$b" in
-    *.example) ;;
-    .env|.env.*|secret.key|*.pem|*.p12|*.pfx|*.key|id_rsa*|id_ed25519*)
-      bad "$p is a credential file name; never commit it" ;;
-  esac
-  case "$p" in .claude/settings.local.json) bad "$p is local-only settings" ;; esac
-  case "$b" in
-    *.db|*.sqlite|*.sqlite[0-9]*)
-      is_testdata "$p" || bad "$p is a database outside a testdata directory" ;;
-  esac
-}
-
-is_db() { case "$1" in *.db|*.sqlite|*.sqlite[0-9]*) return 0 ;; esac; return 1; }
-
-cmd_files() {
-  local dbs=() p
-  for p in "$@"; do
-    check_name "$p"
-    if is_db "$p" && [ -f "$p" ]; then dbs+=("$p"); fi
-  done
-  if [ ${#dbs[@]} -gt 0 ]; then
-    python3 -I "$ROOT/scripts/check-db-secrets.py" "${dbs[@]}" || fail=1
-  fi
-}
+check_files() { python3 -I "$ROOT/scripts/check-db-secrets.py" "$@" || fail=1; }
 
 cmd_staged() {
   local g
   g="$(gitleaks_bin)" || { fail=1; return; }
-  "$g" git --staged --redact --no-banner --log-level warn "$ROOT" || fail=1
+  "$g" git --staged "${GL_ARGS[@]}" "$REPO" || fail=1
 }
 
-cmd_range() {
-  local from=$1 to=$2 g tmp sha p
+# GitHub skips every push/pull_request workflow when a head commit message
+# carries one of these, so a commit that does is a way to skip the CI scan.
+SKIP_CI_RE='\[(skip ci|ci skip|no ci|skip actions|actions skip)\]|^skip-checks: *true'
+
+check_skip_ci() {
+  if git log --format=%B "$@" | grep -qiE "$SKIP_CI_RE"; then
+    bad "a commit message in the scanned range asks GitHub to skip workflows (skip-ci marker); CI would not scan it"
+  fi
+}
+
+# scan_history REVARG...: the REVARGs are `git rev-list` arguments.
+scan_history() {
+  local g
+  check_skip_ci "$@"
   g="$(gitleaks_bin)" || { fail=1; return; }
-  "$g" git --redact --no-banner --log-level warn --log-opts="$from..$to" "$ROOT" || fail=1
-  tmp="$(mktemp -d)"
-  for sha in $(git rev-list "$from..$to"); do
-    while IFS= read -r -d '' p; do
-      check_name "$p"
-      if is_db "$p"; then
-        mkdir -p "$tmp/$sha"
-        # keep the base name: the check reports the path, never the content
-        if git show "$sha:$p" >"$tmp/$sha/$(basename "$p")" 2>/dev/null; then
-          python3 -I "$ROOT/scripts/check-db-secrets.py" "$tmp/$sha/$(basename "$p")" 2>&1 | sed "s#$tmp/$sha/#$sha:$(dirname "$p")/#" >&2
-          [ "${PIPESTATUS[0]}" -eq 0 ] || fail=1
-        fi
-      fi
-    done < <(git diff-tree --no-commit-id --name-only -r -z --diff-filter=AM -m "$sha")
-  done
-  rm -rf "$tmp"
+  "$g" git "${GL_ARGS[@]}" --log-opts="-m $*" "$REPO" || fail=1
+  python3 -I "$ROOT/scripts/check-db-secrets.py" --history "$@" || fail=1
 }
 
 cmd_push() {
-  local from="${PRE_COMMIT_FROM_REF:-}" to="${PRE_COMMIT_TO_REF:-HEAD}"
-  if [ -z "$from" ] || [ "$from" = "$ZERO" ]; then
-    # new remote branch: everything not yet on origin/main
-    from="$(git merge-base origin/main "$to" 2>/dev/null || true)"
-    if [ -z "$from" ]; then from="$(git rev-list --max-parents=0 "$to" | tail -1)"; fi
+  local tips=() lname lsha rname rsha
+  if [ ! -t 0 ]; then
+    while read -r lname lsha rname rsha; do
+      [ -n "${lsha:-}" ] && [ "$lsha" != "$ZERO" ] && tips+=("$lsha")
+    done
   fi
-  cmd_range "$from" "$to"
+  if [ ${#tips[@]} -eq 0 ]; then
+    # prek does not forward git's ref list: scan every local branch and tag
+    scan_history HEAD --branches --tags --not --remotes
+  else
+    scan_history "${tips[@]}" --not --remotes
+  fi
+}
+
+cmd_ci() {
+  local g
+  g="$(gitleaks_bin)" || { fail=1; return; }
+  check_skip_ci HEAD --not "${CI_BASE:-origin/main}"
+  "$g" git "${GL_ARGS[@]}" --log-opts="-m --all" "$REPO" || fail=1
+  python3 -I "$ROOT/scripts/check-db-secrets.py" --tracked || fail=1
+  python3 -I "$ROOT/scripts/check-db-secrets.py" --history HEAD --not "${CI_BASE:-origin/main}" || fail=1
 }
 
 cmd_hooks() {
@@ -119,10 +114,11 @@ mode=${1:-}
 shift || true
 case "$mode" in
   staged) cmd_staged ;;
-  files) cmd_files "$@" ;;
-  range) cmd_range "$1" "$2" ;;
+  files) check_files "$@" ;;
+  range) scan_history "$1..$2" ;;
   push) cmd_push ;;
+  ci) cmd_ci ;;
   hooks) cmd_hooks ;;
-  *) echo "usage: $0 staged|files PATH...|range FROM TO|push|hooks" >&2; exit 2 ;;
+  *) echo "usage: $0 staged|files PATH...|range FROM TO|push|ci|hooks" >&2; exit 2 ;;
 esac
 exit $fail

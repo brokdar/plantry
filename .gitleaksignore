@@ -38,3 +38,4 @@ f11392f9a163f997918f03550db7c3536be1bb97:frontend/playwright.config.ts:plantry-e
 f11392f9a163f997918f03550db7c3536be1bb97:frontend/playwright.config.ts:plantry-env-secret:174
 c39b6af6aea7a4790c2d1407f3a37b2577f29687:frontend/src/components/ingredients/ExtendedNutrientFieldSet.tsx:generic-api-key:135
 c39b6af6aea7a4790c2d1407f3a37b2577f29687:frontend/src/components/ingredients/NutritionDetail.tsx:generic-api-key:122
+95f5072b5d8e70dd6bcec0a41e6be44f14e95bab:frontend/playwright.config.ts:plantry-env-secret:171

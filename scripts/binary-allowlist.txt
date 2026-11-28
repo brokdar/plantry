@@ -1,0 +1,5 @@
+# Binary files that scripts/check-db-secrets.py accepts although they are
+# archives or unknown binaries. Format: <glob on the repo path><TAB><reason>.
+# Every entry needs a reason; add an entry only after looking at the file.
+backend/internal/adapters/fdclocal/foods.tsv.gz	embedded nutrition table built from public FoodData Central data, gzip of a TSV, reviewed
+backend/internal/adapters/httpfetch/testdata/robots/malformed.txt	robots.txt parser fixture holding deliberately malformed bytes, no credentials

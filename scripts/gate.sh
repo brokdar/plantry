@@ -95,13 +95,16 @@ checks_frontend() {
 }
 
 # Secret prevention (see "Secrets" in CLAUDE.md): prek hooks installed, gitleaks
-# over the commits this branch adds, every tracked fixture DB, the bypass-hook tests.
+# (merges included) and the file/binary/DB checks over the commits this branch
+# adds, every tracked file, the bypass-hook tests, and the self-test that
+# replays every known bypass in a throwaway repo.
 checks_secrets() {
   cd "$ROOT" &&
-    step secret-hooks scripts/secret-guard.sh hooks &&
-    step secret-scan scripts/secret-guard.sh range origin/main HEAD &&
+    step secret-hooks bash scripts/secret-guard.sh hooks &&
+    step secret-scan bash scripts/secret-guard.sh range origin/main HEAD &&
     step secret-dbs python3 -I scripts/check-db-secrets.py --tracked &&
-    step secret-hook-tests node --test .claude/hooks/block-hook-bypass.test.js
+    step secret-hook-tests node --test .claude/hooks/block-hook-bypass.test.js &&
+    step secret-selftest bash scripts/secret-guard-selftest.sh
 }
 
 # --- tests ------------------------------------------------------------------
