@@ -123,22 +123,37 @@ func quantitiesIn(line string) []quantity {
 }
 
 // allowedNumbers are the amounts a help answer may state: the batch's
-// listed amounts and the numbers of the recipe's own steps.
-func allowedNumbers(recipe *food.Food, portions float64) []float64 {
+// listed amounts and the numbers of the recipe's own steps. A "went wrong"
+// answer adds a correction, never a whole line: only the kitchen-size
+// listed amounts (a splash, up to two tablespoons, a piece or two) stay.
+func allowedNumbers(recipe *food.Food, portions float64, wentWrong bool) []float64 {
 	scale := 1.0
 	if recipe.ReferencePortions != nil && *recipe.ReferencePortions > 0 {
 		scale = portions / *recipe.ReferencePortions
 	}
 	var out []float64
 	for _, c := range recipe.Children {
-		if !toTaste(c, scale) {
+		if !toTaste(c, scale) && (!wentWrong || smallAmount(c.Amount*scale, c.Unit)) {
 			out = append(out, parseQuantity(strings.Fields(kitchenAmount(c.Amount*scale, c.Unit, c.ChildName))[0]))
 		}
+	}
+	if wentWrong {
+		return out
 	}
 	for _, st := range recipe.Instructions {
 		out = append(out, quantities(st.Text)...)
 	}
 	return out
+}
+
+// smallAmount is a kitchen-size amount: 30 g or ml at most, or two spoons,
+// pinches or pieces.
+func smallAmount(amount float64, unit string) bool {
+	base, u := units.ToBase(amount, unit)
+	if u == "g" || u == "ml" {
+		return base <= 30
+	}
+	return amount <= 2
 }
 
 var smallSpoonRE = regexp.MustCompile(`(?i)^\s*(?:tsp|teaspoons?|tbsp|tablespoons?|tl\b|el\b|prise)`)

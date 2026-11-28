@@ -91,7 +91,7 @@ func TestBuildRequestIngredientList(t *testing.T) {
 	assert.Contains(t, text, "- 540 ml Water\n")
 	assert.NotContains(t, text, "bottled")
 	assert.False(t, toTaste(food.FoodComponent{Amount: 1, Unit: "pinch"}, 2), "2 pinches stay an amount")
-	assert.NotContains(t, allowedNumbers(recipe, 6), 3.0)
+	assert.NotContains(t, allowedNumbers(recipe, 6, false), 3.0)
 }
 
 // The help call keeps headroom for reasoning before the tool call: a 600
@@ -100,4 +100,33 @@ func TestBuildRequestTokenHeadroom(t *testing.T) {
 	t.Parallel()
 	req := buildRequest("m", Request{Kind: KindExplainStep}, &food.Food{Name: "Soup"}, 2, nil, "")
 	assert.GreaterOrEqual(t, req.MaxTokens, 2000)
+}
+
+// F3b: a "went wrong" answer once told the cook to add the recipe's whole
+// scaled amounts ("add 600 g peas and 660 ml coconut milk" for too salty).
+func TestAllowedNumbers_WentWrongIsACorrection(t *testing.T) {
+	t.Parallel()
+	ref := 2.0
+	recipe := &food.Food{
+		Name: "Curry", ReferencePortions: &ref,
+		Instructions: []food.Instruction{{Text: "Add 600 g peas."}},
+		Children: []food.FoodComponent{
+			{ChildName: "Peas", Amount: 200, Unit: "g"},
+			{ChildName: "Coconut milk", Amount: 220, Unit: "ml"},
+			{ChildName: "Soy sauce", Amount: 10, Unit: "ml"},
+		},
+	}
+	explain := allowedNumbers(recipe, 6, false)
+	wrong := allowedNumbers(recipe, 6, true)
+	assert.Contains(t, explain, 600.0, "explaining a step may state the listed amounts")
+	assert.NotContains(t, wrong, 600.0)
+	assert.NotContains(t, wrong, 660.0, "a whole line is no correction")
+	assert.Contains(t, wrong, 2.0, "a spoon-size amount stays (30 ml soy sauce is 2 tbsp)")
+
+	line := "600 g Peas: add to the pot."
+	names := ingredientWords(recipe)
+	assert.True(t, amountsListed(line, explain, names...))
+	assert.False(t, amountsListed(line, wrong, names...))
+	assert.False(t, amountsListed("660 ml Coconut milk: stir in.", wrong, names...))
+	assert.True(t, amountsListed("A splash of coconut milk, 1 tsp sugar.", wrong, names...))
 }

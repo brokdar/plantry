@@ -776,6 +776,11 @@ func guardKeeps(before, after Evaluation, hard, soft map[string]bool, mode swapM
 	if mode == swapFish {
 		return a.FishMeals > b.FishMeals
 	}
+	// Less meat is not worth a fish week: a swap never takes the fish
+	// meals past the DGE limit (one already past it never grows).
+	if a.FishMeals > b.FishMeals && a.FishMeals > DGEFishMaxMeals {
+		return false
+	}
 	return a.MeatG < b.MeatG-1e-9
 }
 

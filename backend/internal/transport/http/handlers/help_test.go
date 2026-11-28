@@ -141,12 +141,12 @@ func TestHelp_ExplainStepAnswersWithBatchContext(t *testing.T) {
 	var kind, version string
 	require.NoError(t, e.db.QueryRow(`SELECT kind, prompt_version FROM ai_runs WHERE id = ?`, out["run_id"]).Scan(&kind, &version))
 	assert.Equal(t, "chef_help", kind)
-	assert.Equal(t, "hp4", version)
+	assert.Equal(t, "hp5", version)
 }
 
 func TestHelp_PromptGivesKitchenAmountsAndFixTable(t *testing.T) {
 	t.Parallel()
-	e := newHelpEnv(t, true, true, 0, helpTurn(`{"lines":["3 Zwiebel: dice them."]}`))
+	e := newHelpEnv(t, true, true, 0, helpTurn(`{"lines":["Dice the onions."]}`))
 	code, out := e.ask(t, map[string]any{"kind": "went_wrong", "step_index": 0, "problem": "burnt"})
 	require.Equal(t, http.StatusOK, code, out)
 	req := e.client.Requests()[0]

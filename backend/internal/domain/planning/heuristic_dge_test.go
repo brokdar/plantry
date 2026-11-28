@@ -118,3 +118,28 @@ func TestEvaluate_FishAboveTwoMealsIsASoftIssue(t *testing.T) {
 	assert.Equal(t, ev.Week.FishMeals > 2, has)
 	assert.Greater(t, ev.Week.FishMeals, 2, "a fish-only library goes past two")
 }
+
+// A batch counts as the meals it feeds: with batch cooking on, two fish
+// batches of two meals each are already the limit (final trial: a family
+// week planned three fish batches, six meals).
+func TestHeuristic_FishBatchesCountTheirMeals(t *testing.T) {
+	s := batchCooker()
+	s.Profile.KcalTarget = f64(1800)
+	s.Settings.MaxCookOccasionsPerDay = 3
+	for id := int64(101); id <= 110; id++ {
+		f := s.Foods[id]
+		f.LastEaten = nil
+		s.Foods[id] = f
+	}
+	for id := int64(104); id <= 106; id++ {
+		withGroups(s, id, planning.FoodGroups{FishG: 120})
+		f := s.Foods[id]
+		f.Favorite = true
+		s.Foods[id] = f
+	}
+	target := windowTarget(s)
+	p := choose(t, planning.ChooseInput{State: s, Target: target})
+	ev := planning.Evaluate(planning.Merge(s, target, p), target)
+	require.NotNil(t, ev.Week)
+	assert.LessOrEqual(t, ev.Week.FishMeals, planning.DGEFishMaxMeals)
+}

@@ -467,7 +467,7 @@ func (h *planner) growable(c plate.CellKey) *supply {
 		if sup.proposed < 0 {
 			continue
 		}
-		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) || h.supplyAtDishCap(sup, c) || h.exclude[sup.food] {
+		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) || h.supplyAtDishCap(sup, c) || h.supplyAtFishCap(sup) || h.exclude[sup.food] {
 			continue
 		}
 		if best == nil || plate.Before(best.cook.CookCell(), sup.cook.CookCell(), h.order) {
@@ -483,6 +483,12 @@ func (h *planner) growable(c plate.CellKey) *supply {
 // already has are eaten regardless.
 func (h *planner) supplyAtDishCap(sup *supply, c plate.CellKey) bool {
 	return !h.allowMeat && h.x.mealOf(c.SlotID) == mealFull && h.dishFull(sup.food)
+}
+
+// supplyAtFishCap reports whether growing a fish sup would pass the week's
+// fish limit (soft like S8: not while eatAnyway fills a cell nothing else can).
+func (h *planner) supplyAtFishCap(sup *supply) bool {
+	return !h.allowMeat && h.s.Foods[sup.food].Groups.FishG >= minMealG && h.dgeState().fishMeals >= DGEFishMaxMeals
 }
 
 // eat places a plate on c eating from sup (and its side); grow cooks the
@@ -674,8 +680,14 @@ func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freez
 	if h.x.mealOf(c.SlotID) == mealFull {
 		dishes++
 	}
+	// A fish batch stops growing at the week's fish limit (at least the cook's
+	// own meal): it is soft, so the next cell takes another main instead.
+	fishLeft := math.MaxInt
+	if h.s.Foods[cook.FoodID].Groups.FishG >= minMealG {
+		fishLeft = max(1, DGEFishMaxMeals-h.dgeState().fishMeals)
+	}
 	for _, o := range h.open {
-		if total+epsilon >= ref {
+		if total+epsilon >= ref || len(out) >= fishLeft {
 			break
 		}
 		if h.done[idOf(o)] || !plate.Before(c, o, h.order) || h.isForced(o) {
@@ -878,10 +890,7 @@ func (h *planner) dgeState() dgeState {
 	d := dgeState{needFish: t == "" || diet.Compatible(diet.Pescetarian, t), needLegume: true, limitG: h.meatLimitG}
 	// note takes the groups of one portion eaten (g) and the portions of
 	// meat that count against the week.
-	note := func(g FoodGroups, meatPortions float64, meals int) {
-		if g.FishG >= minMealG {
-			d.fishMeals += meals
-		}
+	note := func(g FoodGroups, meatPortions float64) {
 		d.needFish = d.needFish && g.FishG < minMealG
 		d.needLegume = d.needLegume && g.LegumeG < minMealG
 		d.meatG += g.MeatG * meatPortions
@@ -894,11 +903,23 @@ func (h *planner) dgeState() dgeState {
 		for _, c := range p.Components {
 			pg = pg.add(h.s.Foods[c.FoodID].Groups.times(c.Multiplier()))
 		}
-		note(pg, 1, 1)
+		note(pg, 1)
+		d.fishMeals += int(b2f(pg.FishG >= minMealG))
 	}
 	for _, id := range slices.Sorted(maps.Keys(h.used)) { // sorted: float sums are order-dependent
 		f := h.s.Foods[id]
-		note(f.Groups, float64(h.used[id])*f.ReferencePortions, h.used[id]*max(1, h.s.householdPlates(f)))
+		note(f.Groups, float64(h.used[id])*f.ReferencePortions)
+	}
+	// A fish meal is a plate: a batch feeds as many as it has placed plates
+	// (a session counts once however many meals it feeds).
+	for _, pp := range h.prop.Plates {
+		var pg FoodGroups
+		for _, c := range pp.Components {
+			if c.Portions > 0 {
+				pg = pg.add(h.s.Foods[c.FoodID].Groups.times(c.Portions))
+			}
+		}
+		d.fishMeals += int(b2f(pg.FishG >= minMealG))
 	}
 	return d
 }

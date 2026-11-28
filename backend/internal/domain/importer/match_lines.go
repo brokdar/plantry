@@ -9,6 +9,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
 
 // WarningChefCap: the month's Chef cap is reached; the import's chef_match
@@ -35,7 +36,7 @@ var (
 	priceRE = regexp.MustCompile(`(?i)\s*\(\s*(?:[$€£]\s?\d[\d.,]*|\d[\d.,]*\s?(?:[$€£]|usd|eur|euro))\s*\)`)
 	// barePriceRE is a price tag without brackets, trailing or inline:
 	// "onion $0.47", "Ghee 1,20 €".
-	barePriceRE = regexp.MustCompile(`(?i)\s+(?:[$€£]\s?\d+(?:[.,]\d+)*|\d+(?:[.,]\d+)*\s?(?:[$€£]|usd\b|eur\b|euro\b))(?:\s|$|[,;)])`)
+	barePriceRE = regexp.MustCompile(`(?i)\s+(?:[$€£]\s?\d+(?:[.,]\d+)*|\d+(?:[.,]\d+)*\s?(?:[$€£]|usd\b|eur\b|euro\b))(?:\s*/\s*[a-z]+\b|\*)*(?:\s|$|[,;)])`)
 	// looseSeasoningRE is a seasoning measured in no unit: "a tiny pinch
 	// cayenne", "a few turns of black pepper", "eine Prise Salz".
 	looseSeasoningRE = regexp.MustCompile(`(?i)^(?:(?:an?|ein|eine)\s+)?(?:(?:tiny|small|little|big|kleine?|winzige)\s+)?(?:(?:pinch|dash|splash|sprinkle|prise|spritzer|hauch)|(?:few|ein paar|\d+)\s+(?:turns|grinds|twists|dashes|cranks?|umdrehungen))(?:\s+(?:of|von))?\s+(\S.*)$`)
@@ -68,7 +69,8 @@ var spoonCupUnits = setOf("cup", "cups", "tbsp", "tsp", "el", "tl")
 // headNouns complete a one-word alternative: "sunflower or vegetable oil"
 // is sunflower oil or vegetable oil.
 var headNouns = setOf("oil", "broth", "stock", "bread", "chillies", "chilies", "peppers", "pepper",
-	"cheese", "vinegar", "sugar", "flour", "rice", "tortillas", "öl", "brühe")
+	"cheese", "vinegar", "sugar", "flour", "rice", "tortillas", "öl", "brühe",
+	"tomatoes", "tomato", "onions", "potatoes", "mushrooms", "beans", "lentils", "tomaten", "zwiebeln")
 
 // prepareLine rewrites what the line parser cannot read (MATCH-1):
 // doubled parentheses and note references, a range as its midpoint,
@@ -129,6 +131,7 @@ func prepareLine(raw string) string {
 
 // StripPrice removes a price annotation such as "($0.32)" from a line.
 func StripPrice(s string) string {
+	s = strings.ReplaceAll(s, "\u00a0", " ") // a site's &nbsp; before the tag
 	s = priceRE.ReplaceAllString(s, "")
 	s = barePriceRE.ReplaceAllStringFunc(s, func(m string) string {
 		if end := m[len(m)-1]; end == ',' || end == ';' || end == ')' {
@@ -298,6 +301,21 @@ func SettleQuantityless(ing *DraftIngredient) bool {
 		return true
 	}
 	return false
+}
+
+// SettlePinches makes a seasoning of more than two pinches ("10-15 dashes hot
+// sauce" parses to 12.5 pinch) "to taste": a count of pinches that large is
+// no amount. A matched food of a non-seasoning group keeps its line.
+func SettlePinches(ing *DraftIngredient) {
+	if ing.ToTaste || units.Normalize(ing.Unit) != "pinch" || ing.Amount <= 2 {
+		return
+	}
+	if m := ing.Match; m != nil && m.Status == food.MatchMatched && m.Pick >= 0 && m.Pick < len(m.Candidates) {
+		if g := food.LineGroup(m.Candidates[m.Pick].Name, ""); g != "" && !food.IsToTasteGroup(g) {
+			return
+		}
+	}
+	ing.ToTaste = true
 }
 
 func splitCompound(p DraftIngredient, names string) []DraftIngredient {
