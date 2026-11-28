@@ -59,15 +59,18 @@ func TestParseLine_LooseSeasoningsAndPrices(t *testing.T) {
 func TestStripPrice_BareTags(t *testing.T) {
 	t.Parallel()
 	for in, want := range map[string]string{
-		"1 onion $0.47":             "1 onion",
-		"8 oz cheddar cheese $1.72": "8 oz cheddar cheese",
-		"1 green bell pepper $0.78": "1 green bell pepper",
-		"1 cheddar $1.72, grated":   "1 cheddar, grated",
-		"2 Tbsp Ghee 1,20 €":        "2 Tbsp Ghee",
-		"1 onion €0.50 diced":       "1 onion diced",
-		"1 tomato (€0.50)":          "1 tomato",
-		"2 cups rice":               "2 cups rice",
-		"1 can beans, 15 oz":        "1 can beans, 15 oz",
+		"1 onion $0.47":                  "1 onion",
+		"8 oz cheddar cheese $1.72":      "8 oz cheddar cheese",
+		"1 green bell pepper $0.78":      "1 green bell pepper",
+		"1 cheddar $1.72, grated":        "1 cheddar, grated",
+		"2 Tbsp Ghee 1,20 €":             "2 Tbsp Ghee",
+		"1 onion €0.50 diced":            "1 onion diced",
+		"1 tomato (€0.50)":               "1 tomato",
+		"8 oz cheddar cheese\u00a0$1.72": "8 oz cheddar cheese",
+		"8 oz cheddar cheese $1.72*":     "8 oz cheddar cheese",
+		"8 oz cheddar cheese $1.72/oz":   "8 oz cheddar cheese",
+		"2 cups rice":                    "2 cups rice",
+		"1 can beans, 15 oz":             "1 can beans, 15 oz",
 	} {
 		assert.Equal(t, want, importer.StripPrice(in), in)
 	}
@@ -94,4 +97,25 @@ func TestSettleQuantityless(t *testing.T) {
 	assert.False(t, importer.SettleQuantityless(&chicken), "a main food without amount stays blocked")
 	ok := line("chicken breast", func(i *importer.DraftIngredient) { i.Amount, i.Unit = 2, "g" })
 	assert.True(t, importer.SettleQuantityless(&ok))
+}
+
+// F3b: "grape or cherry tomatoes" is two tomatoes, not a food called grape.
+func TestParseLine_OrAlternativeSharesHeadNoun(t *testing.T) {
+	t.Parallel()
+	rows := importer.ParseLine("2 cups grape or cherry tomatoes", "en")
+	require.Len(t, rows, 1)
+	assert.Equal(t, "grape tomatoes", rows[0].Name)
+	assert.Equal(t, []string{"cherry tomatoes"}, rows[0].Alternatives)
+	assert.Equal(t, "cheddar cheese", importer.ParseLine("8 oz cheddar cheese\u00a0$1.72", "en")[0].Name)
+}
+
+// F3b: "10-15 dashes hot sauce" is 12.5 pinch; that is no amount.
+func TestSettlePinches(t *testing.T) {
+	t.Parallel()
+	hot := importer.ParseLine("10-15 dashes mild hot sauce", "en")[0]
+	importer.SettlePinches(&hot)
+	assert.True(t, hot.ToTaste, "%+v", hot)
+	one := importer.ParseLine("1 pinch of salt", "en")[0]
+	importer.SettlePinches(&one)
+	assert.False(t, one.ToTaste)
 }

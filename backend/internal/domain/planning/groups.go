@@ -15,6 +15,9 @@ import (
 const (
 	// DGEMeatMaxG is the weekly meat and sausage limit per eater.
 	DGEMeatMaxG = 300
+	// DGEFishMaxMeals is the weekly fish meals past which fish is too much (the
+	// DGE asks for fish once or twice a week).
+	DGEFishMaxMeals = 2
 	// weekDays prorates the meat limit to the counted days of a window.
 	weekDays = 7
 	// minDGEDays is how many complete days the DGE week issues need.

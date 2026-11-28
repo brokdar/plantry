@@ -467,7 +467,7 @@ func (h *planner) growable(c plate.CellKey) *supply {
 		if sup.proposed < 0 {
 			continue
 		}
-		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) || h.supplyAtDishCap(sup, c) || h.exclude[sup.food] {
+		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) || h.supplyAtDishCap(sup, c) || h.supplyAtFishCap(sup) || h.exclude[sup.food] {
 			continue
 		}
 		if best == nil || plate.Before(best.cook.CookCell(), sup.cook.CookCell(), h.order) {
@@ -483,6 +483,12 @@ func (h *planner) growable(c plate.CellKey) *supply {
 // already has are eaten regardless.
 func (h *planner) supplyAtDishCap(sup *supply, c plate.CellKey) bool {
 	return !h.allowMeat && h.x.mealOf(c.SlotID) == mealFull && h.dishFull(sup.food)
+}
+
+// supplyAtFishCap reports whether growing a fish sup would pass the week's
+// fish limit (soft like S8: not while eatAnyway fills a cell nothing else can).
+func (h *planner) supplyAtFishCap(sup *supply) bool {
+	return !h.allowMeat && h.s.Foods[sup.food].Groups.FishG >= minMealG && h.dgeState().fishMeals >= DGEFishMaxMeals
 }
 
 // eat places a plate on c eating from sup (and its side); grow cooks the
@@ -674,8 +680,14 @@ func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freez
 	if h.x.mealOf(c.SlotID) == mealFull {
 		dishes++
 	}
+	// A fish batch stops growing at the week's fish limit (at least the cook's
+	// own meal): it is soft, so the next cell takes another main instead.
+	fishLeft := math.MaxInt
+	if h.s.Foods[cook.FoodID].Groups.FishG >= minMealG {
+		fishLeft = max(1, DGEFishMaxMeals-h.dgeState().fishMeals)
+	}
 	for _, o := range h.open {
-		if total+epsilon >= ref {
+		if total+epsilon >= ref || len(out) >= fishLeft {
 			break
 		}
 		if h.done[idOf(o)] || !plate.Before(c, o, h.order) || h.isForced(o) {
@@ -771,7 +783,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		}
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
 			b2f(h.s.tooSlow(f, c)), b2f(h.overAllowance(f, c)), b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.usedDish[h.s.dish(f.ID)]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(!f.NutritionComplete), b2f(f.Role != food.RoleMain),
-			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), themeKey, b2f(!f.Staple), float64(overMonotony(f, expo)), -tasteKey(f), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
+			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), themeKey, b2f(!f.Staple), float64(overMonotony(f, expo)), dge.overFish(f), -tasteKey(f), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), b2f(h.nearFamily(f, c)), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
 	return best(cands)
@@ -813,15 +825,21 @@ func (h *planner) overAllowance(f FoodFacts, c plate.CellKey) bool {
 // overAllowance is the planner-free form of the KIT-1 check: plates is the
 // number of plates the cook would feed.
 func (s State) overAllowance(f FoodFacts, c plate.CellKey, plates int) bool {
+	return f.Composed() && f.Minutes > 0 && s.overAllowanceMin(f.Minutes, c, plates)
+}
+
+// overAllowanceMin is the allowance check for a cook of minutes in c: the
+// whole plate's cooking time when it has sides.
+func (s State) overAllowanceMin(minutes int, c plate.CellKey, plates int) bool {
 	p := s.Profile
-	if !f.Composed() || f.Minutes <= 0 || p.MinutesWeekday == 0 {
+	if p.MinutesWeekday == 0 {
 		return false
 	}
 	limit := p.MinutesWeekday
 	if wd := c.Date.Weekday(); wd == time.Saturday || wd == time.Sunday || plates >= batchDayPlates {
 		limit = p.MinutesWeekend
 	}
-	return f.Minutes > limit
+	return minutes > limit
 }
 
 // slotBlocked is GATE-2: with the Chef on, a recipe over the slot's time
@@ -866,6 +884,7 @@ type dgeState struct {
 	needFish, needLegume bool
 	meatG                float64
 	limitG               float64
+	fishMeals            int
 }
 
 // dgeState counts what the fixed plates and the recipes cooked so far hold:
@@ -891,16 +910,35 @@ func (h *planner) dgeState() dgeState {
 			pg = pg.add(h.s.Foods[c.FoodID].Groups.times(c.Multiplier()))
 		}
 		note(pg, 1)
+		d.fishMeals += int(b2f(pg.FishG >= minMealG))
 	}
 	for _, id := range slices.Sorted(maps.Keys(h.used)) { // sorted: float sums are order-dependent
 		f := h.s.Foods[id]
 		note(f.Groups, float64(h.used[id])*f.ReferencePortions)
+	}
+	// A fish meal is a plate: a batch feeds as many as it has placed plates
+	// (a session counts once however many meals it feeds).
+	for _, pp := range h.prop.Plates {
+		var pg FoodGroups
+		for _, c := range pp.Components {
+			if c.Portions > 0 {
+				pg = pg.add(h.s.Foods[c.FoodID].Groups.times(c.Portions))
+			}
+		}
+		d.fishMeals += int(b2f(pg.FishG >= minMealG))
 	}
 	return d
 }
 
 // fish is 0 for a fish main (a fish meal, see minMealG) while the week has none (1 otherwise).
 func (d dgeState) fish(f FoodFacts) float64 { return b2f(!(d.needFish && f.Groups.FishG >= minMealG)) }
+
+// overFish is 1 for a fish main once the week holds DGEFishMaxMeals fish meals
+// (a batch counts as the meals it feeds): soft, so a library of fish mains
+// only still plans.
+func (d dgeState) overFish(f FoodFacts) float64 {
+	return b2f(f.Groups.FishG >= minMealG && d.fishMeals >= DGEFishMaxMeals)
+}
 
 // legume is 0 for a legume main while the week has none.
 func (d dgeState) legume(f FoodFacts) float64 {
@@ -969,8 +1007,15 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 			}
 		}
 	}
+	// The plate's cooking time so far, counting only what is cooked in c: a
+	// side that takes it over a wish's limit or, with the Chef on, the slot's
+	// allowance is no choice.
+	plateMin := h.cellCookMinutes(c, main, exclude)
 	var cands []candidate
 	for _, f := range h.s.Foods {
+		if f.Composed() && f.Minutes > 0 && h.sideTooLong(plateMin+f.Minutes, main, f, c) {
+			continue
+		}
 		if !f.Composed() || f.Archived || f.Never || !sideRole(f.Role) || f.ID == exclude || f.ID == main || slices.Contains(others, f.ID) || (fit && h.exclude[f.ID]) || h.s.RatherNot[f.ID] || !h.fits(f) || !h.reachesForced(f, c) || h.slotBlocked(f, c) || h.trialTaken(f) {
 			continue
 		}
@@ -1003,6 +1048,39 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 		)})
 	}
 	return best(cands)
+}
+
+// cellCookMinutes is the cooking time already in cell c for a plate with the
+// given main: every session cooked there (state and proposal; none of the
+// food skip), plus the main's own minutes when it has no session yet (it is
+// cooked here, not a leftover of an earlier cook).
+func (h *planner) cellCookMinutes(c plate.CellKey, main, skip int64) int {
+	total := h.s.cellMinutes(c, skip)
+	cooked := false
+	for _, ss := range h.s.Sessions {
+		cooked = cooked || ss.FoodID == main
+	}
+	for _, ss := range h.prop.Sessions {
+		cooked = cooked || ss.FoodID == main
+		if f := h.s.Foods[ss.FoodID]; ss.FoodID != skip && dayOf(ss.CookDate) == dayOf(c.Date) && ss.CookSlotID == c.SlotID && f.Composed() && f.Minutes > 0 {
+			total += f.Minutes
+		}
+	}
+	if m := h.s.Foods[main]; !cooked && m.Composed() && m.Minutes > 0 {
+		total += m.Minutes
+	}
+	return total
+}
+
+// sideTooLong reports whether a plate cooking minutes in c breaks a wish's
+// time limit, or with the Chef on the slot's allowance (GATE-2 counts the
+// plate's sides, not the main alone).
+func (h *planner) sideTooLong(minutes int, main int64, side FoodFacts, c plate.CellKey) bool {
+	if h.s.wishOver(c, minutes) {
+		return true
+	}
+	plates := max(h.batchPlates(h.s.Foods[main], c), h.batchPlates(side, c))
+	return h.s.Settings.ChefOn && h.s.overAllowanceMin(minutes, c, plates)
 }
 
 // sideToday reports whether food id is on another plate of c's day than c:

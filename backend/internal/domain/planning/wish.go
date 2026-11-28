@@ -256,3 +256,24 @@ func (s State) tooSlow(f FoodFacts, c plate.CellKey) bool {
 	limit, ok := s.MaxMinutes[idOf(c)]
 	return ok && f.Composed() && (f.Minutes <= 0 || f.Minutes > limit)
 }
+
+// wishOver reports whether a cook of minutes in c exceeds a wish's time limit.
+func (s State) wishOver(c plate.CellKey, minutes int) bool {
+	limit, ok := s.MaxMinutes[idOf(c)]
+	return ok && minutes > limit
+}
+
+// cellMinutes is the cooking time of cell c: the minutes of every recipe
+// cooked there (main and sides), none of the food skip (a dish being replaced).
+func (s State) cellMinutes(c plate.CellKey, skip int64) int {
+	total := 0
+	for _, ss := range s.Sessions {
+		if ss.FoodID == skip || dayOf(ss.CookDate) != dayOf(c.Date) || ss.CookSlotID != c.SlotID {
+			continue
+		}
+		if f := s.Foods[ss.FoodID]; f.Composed() && f.Minutes > 0 {
+			total += f.Minutes
+		}
+	}
+	return total
+}

@@ -1107,6 +1107,7 @@ var issueMessageDE = map[string]string{
 	planning.CodeTrialRepeat:         "Dieses Rezept ist auf Probe und wird diese Woche schon gekocht.",
 	planning.CodeMealOutsideSlotBand: "Eine Mahlzeit hat mehr oder weniger von der Tagesenergie, als für diese Zeit gedacht ist.",
 	planning.CodeWeekFishBelowDGE:    "In der Woche gibt es keine Fischmahlzeit.",
+	planning.CodeWeekFishAboveDGE:    "In der Woche gibt es mehr als zwei Fischmahlzeiten.",
 	planning.CodeWeekLegumesBelow:    "In der Woche gibt es keine Mahlzeit mit Hülsenfrüchten.",
 	planning.CodeDietIncompatible:    "Ein Lebensmittel passt nicht zur Ernährungsweise.",
 	planning.CodeDietUnknown:         "Bei einem Lebensmittel ist die Ernährungsweise unbekannt.",

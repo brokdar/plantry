@@ -47,6 +47,28 @@ describe("PlateCell", () => {
     expect(screen.getByText("cook here")).toBeInTheDocument()
   })
 
+  it("marks the cook cell of a recipe that needs a step before the day, not its leftovers", () => {
+    const plan = {
+      ...mockPlan,
+      sessions: mockPlan.sessions.map((s) => ({
+        ...s,
+        prep_ahead: { kind: "marinate" as const },
+      })),
+    }
+    renderCell(cell("2026-11-01|3", plan))
+    expect(screen.getByTestId("prep-ahead")).toHaveTextContent(
+      "Start the day before: marinate"
+    )
+    cleanup()
+    renderCell(cell("2026-11-02|3", plan))
+    expect(screen.queryByTestId("prep-ahead")).not.toBeInTheDocument()
+  })
+
+  it("shows no mark without a prep-ahead step", () => {
+    renderCell(cell("2026-11-01|3"))
+    expect(screen.queryByTestId("prep-ahead")).not.toBeInTheDocument()
+  })
+
   it("keeps a leftover cell on the plain panel with its badge", () => {
     const button = renderCell(cell("2026-11-02|3"))
     expect(button.className).toMatch(/bg-panel/)

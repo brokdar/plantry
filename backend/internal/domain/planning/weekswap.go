@@ -536,7 +536,7 @@ func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instructi
 	var notes []string
 	step := func(mode swapMode) bool {
 		merged := Merge(base, t, out)
-		ev := Evaluate(merged, t)
+		ev := evaluateLean(merged, t) // the guard reads codes and figures, never options
 		w := ev.Week
 		if w == nil || w.Days < minDGEDays {
 			return false
@@ -574,7 +574,7 @@ func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instructi
 		return false
 	}
 	budget := func() bool {
-		ev := Evaluate(Merge(base, t, out), t)
+		ev := evaluateLean(Merge(base, t, out), t)
 		return ev.Week != nil && ev.Week.Days >= minDGEDays && meatAllowed(base) && ev.Week.MeatG > DGEMeatMaxG*float64(ev.Week.Days)/weekDays+1e-9
 	}
 	for i := 0; i < maxGuardSteps && budget(); i++ {
@@ -582,7 +582,7 @@ func guardWeek(base State, t Target, in Proposal, skip map[int64]bool, instructi
 			break
 		}
 	}
-	if ev := Evaluate(Merge(base, t, out), t); fishAllowed(base) && !noFish.MatchString(instruction) && ev.Week != nil && ev.Week.Days >= minDGEDays && ev.Week.FishMeals == 0 {
+	if ev := evaluateLean(Merge(base, t, out), t); fishAllowed(base) && !noFish.MatchString(instruction) && ev.Week != nil && ev.Week.Days >= minDGEDays && ev.Week.FishMeals == 0 {
 		step(swapFish)
 	}
 	return out, notes
@@ -642,7 +642,8 @@ func (x *index) swapBatch(base State, t Target, in Proposal, before Evaluation, 
 		var cands []FoodFacts
 		for _, id := range ids {
 			f := x.s.Foods[id]
-			if id == ss.FoodID || skip[id] || !f.Composed() || f.Archived || f.Never || f.Macros.Kcal <= 0 || !isMain(f.Role, mealFull) || !fitsDiet(f.DietClass, household) {
+			if id == ss.FoodID || skip[id] || !f.Composed() || f.Archived || f.Never || f.Macros.Kcal <= 0 || !isMain(f.Role, mealFull) || !fitsDiet(f.DietClass, household) ||
+				x.s.slotBlocked(f, plate.CellKey{Date: ss.CookDate, SlotID: ss.CookSlotID}, x.s.householdPlates(f)) { // GATE-2 at the batch's cook cell
 				continue
 			}
 			switch {
@@ -774,6 +775,11 @@ func guardKeeps(before, after Evaluation, hard, soft map[string]bool, mode swapM
 	}
 	if mode == swapFish {
 		return a.FishMeals > b.FishMeals
+	}
+	// Less meat is not worth a fish week: a swap never takes the fish
+	// meals past the DGE limit (one already past it never grows).
+	if a.FishMeals > b.FishMeals && a.FishMeals > DGEFishMaxMeals {
+		return false
 	}
 	return a.MeatG < b.MeatG-1e-9
 }

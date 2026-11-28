@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/gates"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 )
@@ -114,4 +115,25 @@ func tooSimilar(name string, library []string) bool {
 		}
 	}
 	return false
+}
+
+// CodeMeatInMeatFree blocks a find asked for a meat-free main whose adapted
+// recipe still has a meat or fish line.
+const CodeMeatInMeatFree = "meat_in_meat_free"
+
+// meatInMeatFree is the block for the first meat or fish line of a draft
+// the dish asked meat-free (planningDishes), if any.
+func meatInMeatFree(dish string, d *importer.Draft) []gates.Finding {
+	if !strings.Contains(" "+dish+" ", " meat-free ") {
+		return nil
+	}
+	for i, in := range d.Ingredients {
+		if g := diet.GroupOf(in.Name); g == diet.GroupMeat || g == diet.GroupFish {
+			return []gates.Finding{{
+				Code: CodeMeatInMeatFree, Ingredient: i, Step: -1,
+				Reason: in.Name + " is not meat-free",
+			}}
+		}
+	}
+	return nil
 }

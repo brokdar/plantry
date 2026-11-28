@@ -196,6 +196,40 @@ var groupDensity = map[string]float64{
 	"veg": 0.6, "legume_canned": 0.7,
 }
 
+// solidGroups are the groups whose food is no liquid: a volume of it is a
+// scoop or a handful, which a cook weighs.
+var solidGroups = map[string]bool{"cheese": true, "veg": true, "grain_dry": true, "sugar": true, "spice": true, "herb": true, "legume_canned": true, "legume_dry": true, "nuts": true, "chocolate": true}
+
+// solidEntries are the entries of liquid-looking groups that are solid at
+// kitchen temperature: spreadable fats and pastes.
+var solidEntries = map[string]bool{
+	"butter": true, "ghee": true, "margarine": true, "lard": true, "butterschmalz": true, "coconut_oil": true,
+	"tomato_paste": true, "tikka_paste": true, "green_curry_paste": true, "lemongrass_paste": true,
+}
+
+// SolidGrams is the weight of ml millilitres of the named ingredient when the
+// bundled table knows it as a solid (cheese, vegetables, dry grains, sugar,
+// spices, herbs), by the entry's density; false for liquids, fats and foods
+// the table does not know.
+func SolidGrams(name string, ml float64) (float64, bool) {
+	keys := lineKeys(name, "")
+	e := synonyms.lookup(keys)
+	if e == nil && len(keys) > 0 {
+		e = synonyms.suffix(keys[0])
+	}
+	if e == nil || (!solidGroups[e.Group] && !solidEntries[e.ID]) {
+		return 0, false
+	}
+	d := e.Density
+	if d <= 0 {
+		d = groupDensity[e.Group]
+	}
+	if d <= 0 {
+		return 0, false
+	}
+	return ml * d, true
+}
+
 // seasoningGroups may use the closest same-kind food when immaterial
 // (research section 3.2 "Materiality").
 var seasoningGroups = map[string]bool{"spice": true, "herb": true}

@@ -216,6 +216,9 @@ func (x *index) dgeIssues(w *WeekEval) []Issue {
 		is := issue("S7", CodeWeekFishBelowDGE, SeveritySoft).with("days", w.Days).with("fish_meals", 0).with("min_meals", 1)
 		out = append(out, is)
 	}
+	if fishOK && w.FishMeals > DGEFishMaxMeals {
+		out = append(out, issue("S7", CodeWeekFishAboveDGE, SeveritySoft).with("days", w.Days).with("fish_meals", w.FishMeals).with("max_meals", DGEFishMaxMeals))
+	}
 	if w.LegumeMeals == 0 {
 		out = append(out, issue("S7", CodeWeekLegumesBelow, SeveritySoft).with("days", w.Days).with("legume_meals", 0).with("min_meals", 1))
 	}

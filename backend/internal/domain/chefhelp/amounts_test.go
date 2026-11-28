@@ -14,20 +14,35 @@ func TestKitchenAmount(t *testing.T) {
 		amount float64
 		unit   string
 		want   string
+		name   string
 	}{
-		{1200, "g", "1.2 kg"},
-		{85.05, "g", "85 g"},
-		{37.5, "ml", "2.5 tbsp"},
-		{60, "ml", "4 tbsp"},
-		{75, "ml", "75 ml"},
-		{1.88, "ml", "0.5 tsp"},
-		{28.12, "ml", "2 tbsp"},
-		{12, "ml", "2.5 tsp"},
-		{0.75, "piece", "1 piece"},
-		{2.2, "clove", "2 clove"},
-		{1.3, "tbsp", "1.5 tbsp"},
+		{1200, "g", "1.2 kg", ""},
+		{85.05, "g", "85 g", ""},
+		{37.5, "ml", "2.5 tbsp", ""},
+		{60, "ml", "4 tbsp", ""},
+		{75, "ml", "75 ml", ""},
+		{1.88, "ml", "0.5 tsp", ""},
+		{28.12, "ml", "2 tbsp", ""},
+		{12, "ml", "2.5 tsp", ""},
+		{0.75, "piece", "1 piece", ""},
+		{2.2, "clove", "2 clove", ""},
+		{1.3, "tbsp", "1.5 tbsp", ""},
+		{3.5, "piece", "4 piece", "Spring onions"},
+		{2.5, "piece", "3 piece", ""},
+		{0.5, "head", "0.5 head", "Cabbage"},
+		{0.25, "can", "0.5 can", "Tomatoes"},
+		{0.2, "slice", "1 slice", "Bacon"},
+		{440, "ml", "185 g", "Cheddar"},
+		{90, "ml", "86 g", "Butter"},
+		{15, "ml", "1 tbsp", "Butter"},
+		{68, "ml", "73 g", "Tomato paste"},
+		{22, "ml", "1.5 tbsp", "Butter"},
+		{200, "ml", "160 g", "Lentils"},
+		{480, "ml", "480 ml", "Beef broth"},
+		{90, "ml", "90 ml", "Olive oil"},
+		{480, "ml", "480 ml", "Milk"},
 	} {
-		assert.Equal(t, c.want, kitchenAmount(c.amount, c.unit), "%v %s", c.amount, c.unit)
+		assert.Equal(t, c.want, kitchenAmount(c.amount, c.unit, c.name), "%v %s", c.amount, c.unit)
 	}
 }
 
@@ -64,4 +79,81 @@ func TestBuildRequestRetryHint(t *testing.T) {
 	}
 	assert.NotContains(t, text(""), "not in the list above")
 	assert.Contains(t, text(retryHint), "not in the list above")
+}
+
+// The ingredient list a help request offers: pinches above two and catalogue
+// qualifiers never reach the answer.
+func TestBuildRequestIngredientList(t *testing.T) {
+	t.Parallel()
+	ref := 2.0
+	recipe := &food.Food{Name: "Soup", ReferencePortions: &ref, Children: []food.FoodComponent{
+		{ChildName: "Salt", Amount: 1, Unit: "pinch"},
+		{ChildName: "Pepper", Amount: 0.5, Unit: "pinch"},
+		{ChildName: "Water, bottled, generic", Amount: 180, Unit: "ml"},
+	}}
+	text := buildRequest("m", Request{Kind: KindExplainStep}, recipe, 6, nil, "").Messages[0].Content[0].Text
+	assert.Contains(t, text, "- Salt (to taste)")
+	assert.Contains(t, text, "- 1.5 pinch Pepper", "two pinches or fewer stay an amount")
+	assert.Contains(t, text, "- 540 ml Water\n")
+	assert.NotContains(t, text, "bottled")
+	assert.False(t, toTaste(food.FoodComponent{Amount: 1, Unit: "pinch"}, 2), "2 pinches stay an amount")
+	assert.NotContains(t, allowedNumbers(recipe, 6, false), 3.0)
+}
+
+// The help call keeps headroom for reasoning before the tool call: a 600
+// token cap was spent on thinking and ended in an empty answer.
+func TestBuildRequestTokenHeadroom(t *testing.T) {
+	t.Parallel()
+	req := buildRequest("m", Request{Kind: KindExplainStep}, &food.Food{Name: "Soup"}, 2, nil, "")
+	assert.GreaterOrEqual(t, req.MaxTokens, 2000)
+}
+
+// F3b: a "went wrong" answer once told the cook to add the recipe's whole
+// scaled amounts ("add 600 g peas and 660 ml coconut milk" for too salty).
+func TestAllowedNumbers_WentWrongIsACorrection(t *testing.T) {
+	t.Parallel()
+	ref := 2.0
+	recipe := &food.Food{
+		Name: "Curry", ReferencePortions: &ref,
+		Instructions: []food.Instruction{{Text: "Add 600 g peas."}},
+		Children: []food.FoodComponent{
+			{ChildName: "Peas", Amount: 200, Unit: "g"},
+			{ChildName: "Coconut milk", Amount: 220, Unit: "ml"},
+			{ChildName: "Soy sauce", Amount: 10, Unit: "ml"},
+		},
+	}
+	explain := allowedNumbers(recipe, 6, false)
+	wrong := allowedNumbers(recipe, 6, true)
+	assert.Contains(t, explain, 600.0, "explaining a step may state the listed amounts")
+	assert.NotContains(t, wrong, 600.0)
+	assert.NotContains(t, wrong, 660.0, "a whole line is no correction")
+	assert.Contains(t, wrong, 2.0, "a spoon-size amount stays (30 ml soy sauce is 2 tbsp)")
+
+	line := "600 g Peas: add to the pot."
+	names := ingredientWords(recipe)
+	assert.True(t, amountsListed(line, explain, names...))
+	assert.False(t, amountsListed(line, wrong, names...))
+	assert.False(t, amountsListed("660 ml Coconut milk: stir in.", wrong, names...))
+	assert.True(t, amountsListed("A splash of coconut milk, 1 tsp sugar.", wrong, names...))
+}
+
+func TestSmallAmountUnits(t *testing.T) {
+	for _, c := range []struct {
+		amount float64
+		unit   string
+		want   bool
+	}{
+		{2, "cup", false},
+		{1, "can", false},
+		{2, "head", false},
+		{1, "tbsp", true},
+		{2, "cloves", true},
+		{1, "pinch", true},
+		{40, "g", false},
+		{20, "ml", true},
+	} {
+		if got := smallAmount(c.amount, c.unit); got != c.want {
+			t.Errorf("smallAmount(%v, %q) = %v, want %v", c.amount, c.unit, got, c.want)
+		}
+	}
 }

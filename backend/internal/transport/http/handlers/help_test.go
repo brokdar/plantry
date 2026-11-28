@@ -141,19 +141,18 @@ func TestHelp_ExplainStepAnswersWithBatchContext(t *testing.T) {
 	var kind, version string
 	require.NoError(t, e.db.QueryRow(`SELECT kind, prompt_version FROM ai_runs WHERE id = ?`, out["run_id"]).Scan(&kind, &version))
 	assert.Equal(t, "chef_help", kind)
-	assert.Equal(t, "hp3", version)
+	assert.Equal(t, "hp6", version)
 }
 
 func TestHelp_PromptGivesKitchenAmountsAndFixTable(t *testing.T) {
 	t.Parallel()
-	e := newHelpEnv(t, true, true, 0, helpTurn(`{"lines":["3 Zwiebel: dice them."]}`))
+	e := newHelpEnv(t, true, true, 0, helpTurn(`{"lines":["Dice the onions."]}`))
 	code, out := e.ask(t, map[string]any{"kind": "went_wrong", "step_index": 0, "problem": "burnt"})
 	require.Equal(t, http.StatusOK, code, out)
 	req := e.client.Requests()[0]
 	prompt := req.Messages[0].Content[0].Text
 	assert.Contains(t, prompt, "- 600 g Kidneybohnen (Dose)")
 	assert.Contains(t, prompt, "- 3 piece Zwiebel", "counts in halves")
-	assert.Contains(t, prompt, "call an ingredient by the word the steps use")
 	assert.Contains(t, req.System, "never calculate")
 	assert.Contains(t, req.System, "not literally the current step")
 	assert.Contains(t, req.System, "Burnt: stop, do not scrape")

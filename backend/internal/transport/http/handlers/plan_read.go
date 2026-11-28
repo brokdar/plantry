@@ -172,6 +172,7 @@ func toPlanResponse(p *planview.Plan) planResponse {
 	}
 	for i := range p.Sessions {
 		resp.Sessions[i] = toSessionResponse(&p.Sessions[i])
+		resp.Sessions[i].PrepAhead = p.PrepAhead[p.Sessions[i].ID]
 	}
 	for i, d := range p.Days {
 		resp.Days[i] = planDayResponse{

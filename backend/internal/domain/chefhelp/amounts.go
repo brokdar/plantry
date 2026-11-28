@@ -10,11 +10,24 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
 
-// kitchenAmount renders an amount as a cook measures it: grams and ml
-// rounded as units.Display does, small volumes as spoons in halves, counts
-// and other units in halves.
-func kitchenAmount(amount float64, unit string) string {
+// kitchenAmount renders an amount of the named ingredient as a cook measures
+// it: grams and ml rounded as units.Display does, small volumes as spoons in
+// halves, a large volume of a solid (cheese, vegetables, dry grains) in
+// grams, counts in whole pieces, other units in halves.
+func kitchenAmount(amount float64, unit, name string) string {
 	base, u := units.ToBase(amount, unit)
+	if u == "ml" {
+		// A solid is never shown in ml: grams, or spoons below ~30 g.
+		if g, ok := food.SolidGrams(name, base); ok && g >= 30 {
+			q := units.Display(g, "g")
+			return number(q.Amount) + " " + q.Unit
+		} else if ok {
+			if base < 15 {
+				return spoon(base/5, "tsp")
+			}
+			return spoon(base/15, "tbsp")
+		}
+	}
 	switch {
 	case u == "ml" && base < 15:
 		return spoon(base/5, "tsp")
@@ -26,8 +39,28 @@ func kitchenAmount(amount float64, unit string) string {
 	case u == "tsp" || u == "tbsp":
 		return spoon(amount, u)
 	}
+	if wholePieces[units.Normalize(unit)] {
+		return number(math.Max(1, math.Round(amount))) + " " + unit
+	}
 	return strings.TrimSpace(number(halves(amount)) + " " + unit)
 }
+
+// toTaste is an ingredient a cook seasons by eye: marked so, or more than two
+// pinches once scaled ("6 pinch salt" is not an amount).
+func toTaste(c food.FoodComponent, scale float64) bool {
+	return c.ToTaste || (units.Normalize(c.Unit) == "pinch" && c.Amount*scale > 2)
+}
+
+// plainName is a catalogue name without its qualifiers ("Water, bottled,
+// generic" is water).
+func plainName(name string) string {
+	n, _, _ := strings.Cut(name, ",")
+	return strings.TrimSpace(n)
+}
+
+// wholePieces are the small countables a cook counts in whole pieces; a
+// fraction of a large unit (head, can, jar) stays in halves.
+var wholePieces = map[string]bool{"piece": true, "clove": true, "slice": true, "leaf": true, "leaves": true, "sprig": true, "pod": true}
 
 func spoon(v float64, u string) string { return number(halves(v)) + " " + u }
 
@@ -96,22 +129,42 @@ func quantitiesIn(line string) []quantity {
 }
 
 // allowedNumbers are the amounts a help answer may state: the batch's
-// listed amounts and the numbers of the recipe's own steps.
-func allowedNumbers(recipe *food.Food, portions float64) []float64 {
+// listed amounts and the numbers of the recipe's own steps. A "went wrong"
+// answer adds a correction, never a whole line: only the kitchen-size
+// listed amounts (a splash, up to two tablespoons, a piece or two) stay.
+func allowedNumbers(recipe *food.Food, portions float64, wentWrong bool) []float64 {
 	scale := 1.0
 	if recipe.ReferencePortions != nil && *recipe.ReferencePortions > 0 {
 		scale = portions / *recipe.ReferencePortions
 	}
 	var out []float64
 	for _, c := range recipe.Children {
-		if !c.ToTaste {
-			out = append(out, parseQuantity(strings.Fields(kitchenAmount(c.Amount*scale, c.Unit))[0]))
+		if !toTaste(c, scale) && (!wentWrong || smallAmount(c.Amount*scale, c.Unit)) {
+			out = append(out, parseQuantity(strings.Fields(kitchenAmount(c.Amount*scale, c.Unit, c.ChildName))[0]))
 		}
+	}
+	if wentWrong {
+		return out
 	}
 	for _, st := range recipe.Instructions {
 		out = append(out, quantities(st.Text)...)
 	}
 	return out
+}
+
+// smallAmount is a kitchen-size amount: 30 g or ml at most, or two spoons,
+// pinches or pieces.
+func smallAmount(amount float64, unit string) bool {
+	base, u := units.ToBase(amount, unit)
+	if u == "g" || u == "ml" {
+		return base <= 30
+	}
+	// Only spoons, pinches and whole pieces count by the piece; cups, cans,
+	// heads and other units have no kitchen-size rule.
+	if u == "tsp" || u == "tbsp" || u == "pinch" || wholePieces[u] {
+		return amount <= 2
+	}
+	return false
 }
 
 var smallSpoonRE = regexp.MustCompile(`(?i)^\s*(?:tsp|teaspoons?|tbsp|tablespoons?|tl\b|el\b|prise)`)

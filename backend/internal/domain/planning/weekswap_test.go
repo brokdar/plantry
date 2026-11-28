@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -352,4 +353,37 @@ func TestGuardWeek_NewDishOverTheMeatGuidelineStays(t *testing.T) {
 	got, notes := planning.GuardWeek(s, target, prop, nil, "")
 	assert.True(t, slices.ContainsFunc(got.Sessions, func(ss planning.ProposedSession) bool { return ss.FoodID == 101 }), "the new dish stays: %v", notes)
 	assert.False(t, slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, "Weekly meat") }), "%v", notes)
+}
+
+// TestGuardWeek_ChefOnSwapsNoSlowRecipeOntoAWeekday: GATE-2 holds for the
+// guard's swaps: a replacement over the weekday time allowance never lands on
+// a weekday cook (CP4b: a 380-minute chili came in as a meat swap).
+func TestGuardWeek_ChefOnSwapsNoSlowRecipeOntoAWeekday(t *testing.T) {
+	over := meatyWeek()
+	for id := int64(108); id <= 116; id++ {
+		withGroups(over, id, planning.FoodGroups{MeatG: 150})
+	}
+	prop := choose(t, planning.ChooseInput{State: over, Target: windowTarget(over)})
+
+	s := meatyWeek()
+	s.Settings.ChefOn = true
+	s.Profile.MinutesWeekday, s.Profile.MinutesWeekend = 30, 60
+	planned := map[int64]bool{}
+	for _, ss := range prop.Sessions {
+		planned[ss.FoodID] = true
+	}
+	slow := map[int64]bool{}
+	for id := int64(108); id <= 116; id++ {
+		f := s.Foods[id]
+		f.Minutes = 380
+		s.Foods[id] = f
+		slow[id] = !planned[id]
+	}
+	got, _ := planning.GuardWeek(s, windowTarget(s), prop, nil, "")
+	for _, ss := range planning.Merge(s, windowTarget(s), got).Sessions {
+		wd := ss.CookDate.Weekday()
+		if slow[ss.FoodID] && wd != time.Saturday && wd != time.Sunday {
+			t.Errorf("slow recipe %d cooked on %s", ss.FoodID, ss.CookDate.Format(time.DateOnly))
+		}
+	}
 }

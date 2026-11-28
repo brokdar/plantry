@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
@@ -73,6 +74,9 @@ type sessionResponse struct {
 	Warnings       []sessionWarningResponse `json:"warnings"`
 	// Routine marks a session cooking on a routine cell: not a cooking occasion.
 	Routine bool `json:"routine"`
+	// PrepAhead is set on the plan read only: the recipe needs a step before
+	// the cook day.
+	PrepAhead *planview.PrepAhead `json:"prep_ahead,omitempty"`
 }
 
 func toSessionResponse(v *plate.SessionView) sessionResponse {

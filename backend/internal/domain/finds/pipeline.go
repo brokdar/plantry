@@ -378,7 +378,9 @@ func (s *Service) attempt(ctx context.Context, client llm.Client, model string, 
 	}})
 	o.Gates = gates.Check(gateRecipe(a.draft, checked), h.Gates)
 	o.Gates.Blocks = append(o.Gates.Blocks, removedMentions(base.Draft, a)...)
+	o.Gates.Blocks = append(o.Gates.Blocks, meatInMeatFree(f.Dish, a.draft)...)
 	for i := range a.draft.Ingredients {
+		importer.SettlePinches(&a.draft.Ingredients[i])
 		if !importer.SettleQuantityless(&a.draft.Ingredients[i]) {
 			o.Gates.Blocks = append(o.Gates.Blocks, gates.Finding{
 				Code: "missing_amount", Ingredient: i, Step: -1,

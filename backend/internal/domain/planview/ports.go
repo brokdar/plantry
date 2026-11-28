@@ -117,6 +117,9 @@ type Deps struct {
 	// Prep loads tomorrow's recipes for the Chef's prep reminder (PRO-1);
 	// nil: none.
 	Prep PrepRecipes
+	// Steps loads the full recipes of the window's sessions for the board's
+	// prep-ahead mark, Chef on or off as on the recipe page; nil: no marks.
+	Steps PrepRecipes
 	// Tx runs each read model's reads in one transaction, so a concurrent
 	// write cannot produce an inconsistent view.
 	Tx domain.Transactor

@@ -3,6 +3,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core"
 import { Lock, Plus, RefreshCw, Shuffle, TriangleAlert } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
+import { PrepAheadNote } from "@/components/recipes/PrepAheadNote"
 import { BatchBadge } from "@/components/batch/BatchBadge"
 import {
   useBatchCell,
@@ -279,6 +280,10 @@ function CellContent({
         </span>
         <span className="mt-auto flex min-w-0 items-center gap-1.5">
           {cell.badge && <BatchBadge {...cell.badge} inCell />}
+          <PrepAheadNote
+            prepAhead={cell.prepAhead}
+            className="min-w-0 truncate text-caption text-ink-muted"
+          />
           {cell.sideText ? (
             <span className="min-w-0 truncate text-caption text-ink-muted">
               {cell.sideText}

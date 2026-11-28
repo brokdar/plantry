@@ -1,5 +1,6 @@
 import { apiFetch } from "./client"
 import type { PlanState, RemovedResponse, StateChange } from "./plates"
+import type { PrepAhead } from "./foods"
 
 /** Where a linked component sits relative to the cook cell (D12). */
 export type SessionLinkKind = "fresh" | "leftover" | "frozen"
@@ -53,6 +54,8 @@ export interface Session {
   state: PlanState
   ai_run_id: number | null
   reason: string | null
+  /** The recipe needs a step before the cook day (plan read only). */
+  prep_ahead?: PrepAhead
 }
 
 export interface Cell {

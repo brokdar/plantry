@@ -51,6 +51,9 @@ type Plan struct {
 	Draft *Draft
 	// RunningRunID is the generation running for the window, nil when none.
 	RunningRunID *int64
+	// PrepAhead is the prep-ahead mark of a session's recipe by session id
+	// (only the sessions whose recipe needs one).
+	PrepAhead map[int64]*PrepAhead
 }
 
 // Draft summarises the window's draft rows (D26). RunID is the newest run
@@ -193,7 +196,40 @@ func (s *Service) plan(ctx context.Context, start *time.Time, today time.Time) (
 			p.RunningRunID = &id
 		}
 	}
+	if p.PrepAhead, err = s.prepAhead(ctx, sessions); err != nil {
+		return nil, err
+	}
 	return p, nil
+}
+
+// prepAhead marks the sessions whose recipe needs a step before the cook day
+// (PrepAheadFood), by session id; nil without any.
+func (s *Service) prepAhead(ctx context.Context, sessions []plate.SessionView) (map[int64]*PrepAhead, error) {
+	if s.d.Steps == nil || len(sessions) == 0 {
+		return nil, nil
+	}
+	ids := make([]int64, 0, len(sessions))
+	for _, v := range sessions {
+		ids = append(ids, v.FoodID)
+	}
+	recipes, err := s.d.Steps(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("prep-ahead recipes: %w", err)
+	}
+	var out map[int64]*PrepAhead
+	for _, v := range sessions {
+		f, ok := recipes[v.FoodID]
+		if !ok {
+			continue
+		}
+		if pa := PrepAheadFood(f); pa != nil {
+			if out == nil {
+				out = map[int64]*PrepAhead{}
+			}
+			out[v.ID] = pa
+		}
+	}
+	return out, nil
 }
 
 // markRoutine sets Routine on every session whose cook cell is a routine cell

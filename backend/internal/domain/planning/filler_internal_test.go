@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
@@ -60,6 +61,7 @@ func fillerState(plateFit bool) State {
 		main(14, "Shakshuka", FoodGroups{}, 20),
 		main(15, "Potato gratin", FoodGroups{}, 12),
 		main(16, "Greek salad", FoodGroups{}, 12),
+		main(17, "Einfaches Kürbisgulasch", FoodGroups{}, 12),
 		{ID: 41, Name: "Steamed rice", Kind: food.KindComposed, Role: food.RoleSideStarch},
 		{ID: 42, Name: "Carrot salad", Kind: food.KindComposed, Role: food.RoleSideVeg},
 		{ID: 40, Name: "Fruit salad", Kind: food.KindComposed, Role: food.RoleDessert, NoCook: true},
@@ -106,6 +108,8 @@ func TestFillerFits(t *testing.T) {
 		{"smoked salmon on a hot tomato soup", 20, fillerPlate(3), "lunch", false},
 		{"smoked salmon on a pesto pasta", 20, fillerPlate(1), "lunch", false},
 		{"smoked salmon on a salad bowl", 20, fillerPlate(7), "lunch", true},
+		{"smoked salmon on a warm potato gratin", 20, fillerPlate(15), "dinner", false},
+		{"smoked salmon on a goulash", 20, fillerPlate(17), "dinner", false},
 		{"tofu on a tomato soup", 21, fillerPlate(3), "dinner", false},
 		{"tofu on a vegetable stir-fry", 21, fillerPlate(6), "dinner", true},
 		{"egg on a salad bowl", 31, fillerPlate(7), "lunch", true},
@@ -180,4 +184,41 @@ func TestDropMisfitAdds(t *testing.T) {
 	off := fillerState(false)
 	off.SlotNames = s.SlotNames
 	assert.Len(t, dropMisfitAdds(off, Target{}, prop()).Plates[0].Components, 3, "plate fit off: the proposal as it is")
+}
+
+// A fish or meat filler makes a fish or meat meal: it counts against the
+// week's fish meals and meat limit like a main would.
+func TestFillerFitsWeekLimits(t *testing.T) {
+	day := time.Date(2031, 3, 10, 0, 0, 0, 0, time.UTC)
+	one := 1.0
+	s := fillerState(true)
+	s.Window.Start, s.Window.End = day, day.AddDate(0, 0, 6)
+	plate := func(id int64, main int64) Plate {
+		return Plate{ID: id, Date: day, Components: []Component{{FoodID: main, Portions: &one}}}
+	}
+	for i := int64(1); i <= DGEFishMaxMeals; i++ {
+		s.Plates = append(s.Plates, plate(i, 11)) // salmon with broccoli
+	}
+	salad := Plate{ID: 99, Date: day, Components: []Component{{FoodID: 7, Portions: &one}}}
+	assert.False(t, s.fillerFits(salad, s.Foods[20], "lunch"), "fish meals already at the limit")
+	assert.True(t, s.fillerFits(salad, s.Foods[27], "lunch"), "a vegetable is no fish meal")
+
+	s.Plates = s.Plates[:DGEFishMaxMeals-1]
+	assert.True(t, s.fillerFits(salad, s.Foods[20], "lunch"), "one fish meal below the limit")
+
+	m := s.Foods[20]
+	m.Name, m.Groups = "Chicken strips", FoodGroups{MeatG: 100}
+	s.Foods[50] = m
+	s.Plates = []Plate{plate(1, 4), plate(2, 4), plate(3, 4), plate(4, 4), plate(5, 4)} // 5 x 150 g pork
+	assert.False(t, s.fillerFits(salad, s.Foods[50], "lunch"), "meat limit reached")
+
+	// A short window: 3 plan days prorate the limit to 3/7 of it (128 g).
+	s.Plates = []Plate{plate(1, 4)} // 150 g pork
+	s.Cells = nil
+	for i := 0; i < 3; i++ {
+		s.Cells = append(s.Cells, Cell{Date: day.AddDate(0, 0, i), Mode: availability.ModePlan})
+	}
+	assert.False(t, s.fillerFits(salad, s.Foods[50], "lunch"), "short window: 150 g already past its limit")
+	s.Plates = nil
+	assert.True(t, s.fillerFits(salad, s.Foods[50], "lunch"), "short window: 100 g fits 128 g")
 }
