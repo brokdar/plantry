@@ -39,6 +39,19 @@ func kitchenAmount(amount float64, unit, name string) string {
 	return strings.TrimSpace(number(halves(amount)) + " " + unit)
 }
 
+// toTaste is an ingredient a cook seasons by eye: marked so, or more than two
+// pinches once scaled ("6 pinch salt" is not an amount).
+func toTaste(c food.FoodComponent, scale float64) bool {
+	return c.ToTaste || (units.Normalize(c.Unit) == "pinch" && c.Amount*scale > 2)
+}
+
+// plainName is a catalogue name without its qualifiers ("Water, bottled,
+// generic" is water).
+func plainName(name string) string {
+	n, _, _ := strings.Cut(name, ",")
+	return strings.TrimSpace(n)
+}
+
 // wholePieces are the small countables a cook counts in whole pieces; a
 // fraction of a large unit (head, can, jar) stays in halves.
 var wholePieces = map[string]bool{"piece": true, "clove": true, "slice": true, "leaf": true, "leaves": true, "sprig": true, "pod": true}
@@ -118,7 +131,7 @@ func allowedNumbers(recipe *food.Food, portions float64) []float64 {
 	}
 	var out []float64
 	for _, c := range recipe.Children {
-		if !c.ToTaste {
+		if !toTaste(c, scale) {
 			out = append(out, parseQuantity(strings.Fields(kitchenAmount(c.Amount*scale, c.Unit, c.ChildName))[0]))
 		}
 	}

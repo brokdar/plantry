@@ -74,3 +74,22 @@ func TestBuildRequestRetryHint(t *testing.T) {
 	assert.NotContains(t, text(""), "not in the list above")
 	assert.Contains(t, text(retryHint), "not in the list above")
 }
+
+// The ingredient list a help request offers: pinches above two and catalogue
+// qualifiers never reach the answer.
+func TestBuildRequestIngredientList(t *testing.T) {
+	t.Parallel()
+	ref := 2.0
+	recipe := &food.Food{Name: "Soup", ReferencePortions: &ref, Children: []food.FoodComponent{
+		{ChildName: "Salt", Amount: 1, Unit: "pinch"},
+		{ChildName: "Pepper", Amount: 0.5, Unit: "pinch"},
+		{ChildName: "Water, bottled, generic", Amount: 180, Unit: "ml"},
+	}}
+	text := buildRequest("m", Request{Kind: KindExplainStep}, recipe, 6, nil, "").Messages[0].Content[0].Text
+	assert.Contains(t, text, "- Salt (to taste)")
+	assert.Contains(t, text, "- 1.5 pinch Pepper", "two pinches or fewer stay an amount")
+	assert.Contains(t, text, "- 540 ml Water\n")
+	assert.NotContains(t, text, "bottled")
+	assert.False(t, toTaste(food.FoodComponent{Amount: 1, Unit: "pinch"}, 2), "2 pinches stay an amount")
+	assert.NotContains(t, allowedNumbers(recipe, 6), 3.0)
+}

@@ -312,13 +312,13 @@ func buildRequest(model string, req Request, recipe *food.Food, portions float64
 	}
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Recipe: %s\nPortions cooked in this batch: %s\n", recipe.Name, number(portions))
-	sb.WriteString("Ingredients for this batch (amounts rounded for the kitchen; the names are catalogue names, so call an ingredient by the word the steps use):\n")
+	sb.WriteString("Ingredients for this batch (amounts rounded for the kitchen):\n")
 	for _, c := range recipe.Children {
-		if c.ToTaste {
-			fmt.Fprintf(&sb, "- %s (to taste)\n", c.ChildName)
+		if toTaste(c, scale) {
+			fmt.Fprintf(&sb, "- %s (to taste)\n", plainName(c.ChildName))
 			continue
 		}
-		fmt.Fprintf(&sb, "- %s %s\n", kitchenAmount(c.Amount*scale, c.Unit, c.ChildName), c.ChildName)
+		fmt.Fprintf(&sb, "- %s %s\n", kitchenAmount(c.Amount*scale, c.Unit, c.ChildName), plainName(c.ChildName))
 	}
 	sb.WriteString("Steps:\n")
 	for i, st := range recipe.Instructions {
