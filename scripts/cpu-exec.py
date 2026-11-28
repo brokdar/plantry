@@ -11,30 +11,54 @@ scripts/test-budget.py.
 """
 import json
 import os
-import resource
 import subprocess
 import sys
+import time
 
 # CI's runner has 4 vCPUs and is the reference machine. On a many-core machine
 # under load every test binary otherwise starts one scheduler thread per core;
 # the idle ones spin and the CPU seconds grow with the machine's load.
 env = dict(os.environ)
 env.setdefault("GOMAXPROCS", "4")
-rc = subprocess.call(sys.argv[1:], env=env)
-use = resource.getrusage(resource.RUSAGE_CHILDREN)
-cpu = round(use.ru_utime + use.ru_stime, 2)
-# CPU seconds depend on the machine's speed at that moment (hyperthreads shared
-# with other lanes' work run each instruction up to 2x slower). With CALIB_BIN
-# set (scripts/calibrate.go, built once by the gate), a binary that used over a
-# second also records the speed right after its run, under the same load, and
-# scripts/test-budget.py scales that package's CPU by it.
-calib = None
+# CPU seconds depend on the machine's speed while the binary ran (hyperthreads
+# shared with other lanes' work run each instruction up to 2x slower). With
+# CALIB_BIN set (scripts/calibrate.go, built once by the gate) the speed is
+# probed DURING the run, under the load the tests ran in (one probe of 0.5
+# CPU-s every PROBE_EVERY seconds from PROBE_FROM on; the best one counts, as
+# the baseline is a best-of-3), and scripts/test-budget.py scales that package
+# by it. A probe after the run would see the machine quieter than it was. A run
+# that ends before the first probe is probed once afterwards if it used over a
+# second of CPU.
+PROBE_FROM, PROBE_EVERY = 4.0, 8.0
 calib_bin = os.environ.get("CALIB_BIN")
-if calib_bin and cpu > 1.0:
+
+
+def probe():
     try:
-        calib = float(subprocess.check_output([calib_bin, "quick"], text=True))
+        return float(subprocess.check_output([calib_bin, "1"], text=True))
     except (OSError, ValueError, subprocess.CalledProcessError):
-        calib = None
+        return None
+
+
+proc = subprocess.Popen(sys.argv[1:], env=env)
+# wait4 on the test binary alone: its rusage does not include the probes.
+start, next_probe, samples = time.monotonic(), PROBE_FROM, []
+while True:
+    pid, status, use = os.wait4(proc.pid, os.WNOHANG)
+    if pid:
+        break
+    if calib_bin and time.monotonic() - start >= next_probe:
+        v = probe()
+        if v:
+            samples.append(v)
+        next_probe += PROBE_EVERY
+    else:
+        time.sleep(0.1)
+rc = os.waitstatus_to_exitcode(status)
+cpu = round(use.ru_utime + use.ru_stime, 2)
+calib = min(samples) if samples else None
+if calib_bin and calib is None and cpu > 1.0:
+    calib = probe()
 log = os.environ.get("GO_TEST_CPU_LOG")
 if log:
     with open(log, "a", encoding="utf-8") as f:

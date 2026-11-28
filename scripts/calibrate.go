@@ -51,8 +51,8 @@ func work() {
 func main() {
 	best := time.Duration(1 << 62)
 	rounds := 3
-	if len(os.Args) > 1 && os.Args[1] == "quick" { // scripts/cpu-exec.py: best of two (0.9 s CPU), the baseline is best of three
-		rounds = 2
+	if len(os.Args) > 1 && os.Args[1] == "1" { // scripts/cpu-exec.py: one quick round
+		rounds = 1
 	}
 	for range rounds {
 		start := cpu()
