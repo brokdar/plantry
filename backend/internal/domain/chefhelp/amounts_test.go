@@ -93,3 +93,11 @@ func TestBuildRequestIngredientList(t *testing.T) {
 	assert.False(t, toTaste(food.FoodComponent{Amount: 1, Unit: "pinch"}, 2), "2 pinches stay an amount")
 	assert.NotContains(t, allowedNumbers(recipe, 6), 3.0)
 }
+
+// The help call keeps headroom for reasoning before the tool call: a 600
+// token cap was spent on thinking and ended in an empty answer.
+func TestBuildRequestTokenHeadroom(t *testing.T) {
+	t.Parallel()
+	req := buildRequest("m", Request{Kind: KindExplainStep}, &food.Food{Name: "Soup"}, 2, nil, "")
+	assert.GreaterOrEqual(t, req.MaxTokens, 2000)
+}

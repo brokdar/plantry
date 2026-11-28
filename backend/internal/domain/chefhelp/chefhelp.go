@@ -45,7 +45,10 @@ const (
 	MaxLines     = 3
 	MaxLineRunes = 200
 	maxTextRunes = 500
-	maxTokens    = 600
+	// maxTokens leaves room for the model's reasoning before the tool call:
+	// the canary's run 39 spent 508 of 600 tokens thinking and was cut off
+	// before the call (empty answer). Only tokens used are billed.
+	maxTokens = 2500
 )
 
 var (
