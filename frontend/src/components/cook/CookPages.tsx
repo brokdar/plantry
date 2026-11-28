@@ -82,7 +82,10 @@ export function CookSessionPage({ sessionId }: { sessionId: number }) {
   const cooked = useSetSessionCooked()
   const finish = useFinishingTouches(session.data?.links ?? [])
   // Chef off keeps today's substitute button exactly (ON-1).
-  const chefOn = useSettingItems().data?.["chef.enabled"]?.value === "true"
+  const settings = useSettingItems()
+  const chefOn = settings.data?.["chef.enabled"]?.value === "true"
+  // No button until the switch is known, so it never swaps in place.
+  const settled = settings.isSuccess || settings.isError
 
   if (!valid || session.isError || food.isError) {
     return <CookShell message={t("cook.missing")} />
@@ -113,7 +116,7 @@ export function CookSessionPage({ sessionId }: { sessionId: number }) {
       onPortionsChange={change}
       coverage={coverage}
       help={
-        chefOn ? (
+        !settled ? undefined : chefOn ? (
           (step) => (
             <HelpButton
               sessionId={s.id}

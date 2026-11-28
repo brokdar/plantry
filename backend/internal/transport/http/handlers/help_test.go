@@ -79,6 +79,7 @@ func newHelpEnv(t *testing.T, chefOn, provider bool, spent float64, turns ...fak
 	svc := chefhelp.NewService(se.sessions, se.foods, profile.NewService(sqlite.NewProfileRepo(se.db)), set, guard, resolver, rec)
 	r := chi.NewRouter()
 	r.Post("/api/help", handlers.NewHelpHandler(svc).Help)
+	r.Handle("/api/cook-sessions/*", se.api) // the substitution routes
 	se.api = r
 	return &helpEnv{subEnv: se, client: client}
 }
@@ -197,4 +198,17 @@ func TestHelp_BodyNotJSON(t *testing.T) {
 	e := newHelpEnv(t, true, true, 0)
 	code, _ := e.do(t, http.MethodPost, "/api/help", "not an object")
 	assert.Equal(t, http.StatusBadRequest, code)
+}
+
+// A substitution applied to the batch re-points the session at its variant,
+// so the help prompt names the swapped ingredient, not the original.
+func TestHelp_PromptUsesTheSubstitutedIngredient(t *testing.T) {
+	t.Parallel()
+	e := newHelpEnv(t, true, true, 0, helpTurn(`{"lines":["Stir."]}`))
+	e.swap(t, e.a)
+	code, out := e.ask(t, map[string]any{"kind": "explain_step", "step_index": 0})
+	require.Equal(t, http.StatusOK, code, out)
+	prompt := e.client.Requests()[0].Messages[0].Content[0].Text
+	assert.Contains(t, prompt, "Schalotte")
+	assert.NotContains(t, prompt, e.onion.Name)
 }

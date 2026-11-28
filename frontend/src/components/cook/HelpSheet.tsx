@@ -71,8 +71,10 @@ export function HelpButton({
 
   const trimmed = text.trim()
   const error = ask.error
-  const errorText =
-    error instanceof ApiError && error.status === 503
+  const chefOff = error instanceof ApiError && error.status === 409
+  const errorText = chefOff
+    ? t("help.chef_off")
+    : error instanceof ApiError && error.status === 503
       ? t("help.no_provider")
       : t("help.error")
 
@@ -230,14 +232,16 @@ export function HelpButton({
                   <p className="text-body text-ink" data-testid="help-error">
                     {errorText}
                   </p>
-                  <Button
-                    variant="outline"
-                    className="h-14 w-full text-h3"
-                    data-testid="help-retry"
-                    onClick={() => last && send(last)}
-                  >
-                    {t("help.retry")}
-                  </Button>
+                  {!chefOff && (
+                    <Button
+                      variant="outline"
+                      className="h-14 w-full text-h3"
+                      data-testid="help-retry"
+                      onClick={() => last && send(last)}
+                    >
+                      {t("help.retry")}
+                    </Button>
+                  )}
                 </div>
               )}
             </div>

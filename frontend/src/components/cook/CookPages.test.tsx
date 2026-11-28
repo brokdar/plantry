@@ -270,6 +270,14 @@ describe("cook pages", () => {
     expect(screen.queryByTestId("help-open")).toBeNull()
   })
 
+  it("shows no help button until the Chef switch has loaded", async () => {
+    vi.mocked(listSettings).mockReturnValue(new Promise(() => {}))
+    renderWithRouter(<CookSessionPage sessionId={7} />)
+    await screen.findAllByTestId("cook-ingredient")
+    expect(screen.queryByTestId("substitute-open")).toBeNull()
+    expect(screen.queryByTestId("help-open")).toBeNull()
+  })
+
   it("shows no finish list without garnishes", async () => {
     renderWithRouter(<CookSessionPage sessionId={7} />)
     await screen.findAllByTestId("cook-ingredient")

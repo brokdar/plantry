@@ -116,6 +116,18 @@ describe("HelpButton", () => {
     )
   })
 
+  it("says the Chef is off on a 409, with no retry", async () => {
+    vi.mocked(askHelp).mockRejectedValue(new ApiError(409, "error.chef.off"))
+    const user = userEvent.setup()
+    renderHelp()
+    await user.click(await screen.findByTestId("help-open"))
+    await user.click(screen.getByTestId("help-tile-explain"))
+    expect(await screen.findByTestId("help-error")).toHaveTextContent(
+      "switched off"
+    )
+    expect(screen.queryByTestId("help-retry")).not.toBeInTheDocument()
+  })
+
   it("I don't have an ingredient opens the existing substitute flow", async () => {
     const user = userEvent.setup()
     renderHelp()

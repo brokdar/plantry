@@ -3040,6 +3040,7 @@
     "loading": "Thinking it through",
     "retry": "Try again",
     "error": "I couldn't get an answer just now. Try again.",
+    "chef_off": "The Chef is switched off, so I can't answer. Turn it on in Settings.",
     "no_provider": "The assistant isn't set up, so I can't answer. Add a provider in Settings.",
     "problem": {
       "too_salty": "Too salty",
