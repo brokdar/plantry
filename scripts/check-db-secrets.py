@@ -152,6 +152,10 @@ def check_db(display, data, raw_pats, value_pats):
 
 def check_blob(path, data, raw_pats, value_pats, allow):
     """All problems for one file; `path` is the repo-relative display path."""
+    # a key inside the file NAME: report it, but never print the path
+    hits = [p for p in raw_pats if p.search(path.encode("utf-8", "surrogateescape"))]
+    if hits:
+        return [f"a file name matches credential pattern {p.pattern.decode()!r} (path not shown)" for p in hits]
     problems = name_problems(path)
     if data.startswith(SQLITE_MAGIC):
         if not is_testdata(path.lower()) and not DB_NAME_RE.search(os.path.basename(path).lower()):

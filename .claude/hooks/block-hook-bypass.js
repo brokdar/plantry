@@ -29,9 +29,15 @@
  *     gh workflow disable, gh api writes to labels, rulesets, branches, protection,
  *     actions, workflows, hooks
  *  9. publish-time scan: the title/body text (flags, heredocs, --body-file, -F,
- *     --notes-file files) of gh pr/issue create|edit|comment and gh release
- *     create|edit is matched against scripts/secret-patterns.txt (the raw
- *     patterns); a hit blocks the command, nothing is sent to GitHub
+ *     --notes-file files, $(cat file) / `cat file` with a literal path) of gh pr/issue
+ *     create|edit|comment, gh pr review, gh release create|edit, gh gist
+ *     create|edit (file contents) and gh api -f/-F/--field/--raw-field/--input on
+ *     comments, reviews, issues, pulls, releases, gists and graphql paths (field
+ *     values, @file, --input files) is matched against scripts/secret-patterns.txt
+ *     (the raw patterns); a hit blocks the command, nothing is sent to GitHub. A
+ *     gh publish command with a command substitution it cannot resolve is blocked
+ *     (use --body-file). Unscanned: script files, other API clients (curl),
+ *     $VARIABLE text, files made earlier in the same command line.
  *
  * THREAT MODEL. (a) Every accidental route is closed completely: a careless human
  * or agent following normal git and gh workflows (a key pasted into a PR body, a
@@ -462,7 +468,31 @@ function secretIn(text) {
 }
 
 const GH_API_SENSITIVE = /(^|\/)(labels?|rulesets?|rules|branches|protection|actions|workflows?|hooks|environments|secrets|variables|collaborators|keys|dispatches|settings)(\/|$|\?)/i;
-const GH_PUBLISH = { pr: ['create', 'edit', 'comment'], issue: ['create', 'edit', 'comment'], release: ['create', 'edit'] };
+const GH_PUBLISH = { pr: ['create', 'edit', 'comment', 'review'], issue: ['create', 'edit', 'comment'], release: ['create', 'edit'], gist: ['create', 'edit'] };
+const GH_API_PUBLISH = /(comments|reviews|issues|pulls|releases|gists|graphql)/i;
+
+function readCapped(ctx, f) {
+  try {
+    const q = path.resolve(ctx.cwd && !ctx.cwd.startsWith('~') ? ctx.cwd : '.', f);
+    if (fs.statSync(q).size < 4 * 1024 * 1024) return fs.readFileSync(q, 'utf8');
+  } catch {}
+  return null;
+}
+
+// $(cat <literal file>) and `cat <literal file>` bodies: read the file; count
+// the substitutions that were resolved (a cat heredoc is already in the raw text)
+const CAT_SUB = /\$\(\s*cat\s+(?:<<-?\s*['"]?\w+|(['"]?)([^\s'"$`()<>|;&\\]+)\1\s*\))|`\s*cat\s+(['"]?)([^\s'"$`()<>|;&\\]+)\3\s*`/g;
+function resolveCatSubs(ctx) {
+  let text = '';
+  let resolved = 0;
+  for (const m of (ctx.raw || '').matchAll(CAT_SUB)) {
+    const f = m[2] || m[4];
+    if (!f) { resolved++; continue; }
+    const c = readCapped(ctx, f);
+    if (c !== null) { text += '\n' + c; resolved++; }
+  }
+  return { text, resolved };
+}
 
 function ghAnalyze(words, ctx) {
   const a = words.map(w => w.t);
@@ -494,20 +524,41 @@ function ghAnalyze(words, ctx) {
     if (/graphql/i.test(apiPath) && /mutation/i.test(rest.join(' ')) && /(label|ruleset|protection|workflow|admin|branch)/i.test(rest.join(' '))) return 'a gh api graphql mutation on labels, rulesets, protection or workflows';
     if (writes && GH_API_SENSITIVE.test(apiPath)) return `gh api ${method || 'POST'} ${apiPath} changes labels, rulesets, branch protection, actions or workflows`;
   }
-  if ((GH_PUBLISH[group] || []).includes(sub)) {
-    let text = a.join('\n') + '\n' + (ctx.heredocs || []).join('\n') + '\n' + (ctx.raw || '');
-    for (let k = i + 2; k < a.length; k++) {
-      let f = null;
-      if (/^(--body-file|--notes-file|-F)$/.test(a[k]) && a[k + 1] && a[k + 1] !== '-') f = a[k + 1];
-      else if (/^--(body|notes)-file=/.test(a[k])) f = a[k].split('=').slice(1).join('=');
-      if (!f) continue;
-      try {
-        const q = path.resolve(ctx.cwd && !ctx.cwd.startsWith('~') ? ctx.cwd : '.', f);
-        if (fs.statSync(q).size < 4 * 1024 * 1024) text += '\n' + fs.readFileSync(q, 'utf8');
-      } catch {}
+  const apiFiles = [];
+  let apiPublish = false;
+  if (group === 'api') {
+    const rest = a.slice(i + 1);
+    const apiPath = rest.find((t, k) => !t.startsWith('-') && !['-X', '--method', '-H', '--header', '-q', '--jq', '-t', '--template', '--hostname', '--cache', '-f', '-F', '--field', '--raw-field', '--input'].includes(rest[k - 1] || ''));
+    for (let k = 0; k < rest.length; k++) {
+      const t = rest[k];
+      let flag = null;
+      let val = null;
+      if (/^(-f|-F|--field|--raw-field|--input)$/.test(t)) { flag = t; val = rest[k + 1] || ''; k++; }
+      else if (/^(--field|--raw-field|--input)=/.test(t)) { flag = t.split('=')[0]; val = t.slice(flag.length + 1); }
+      else if (/^-[fF]./.test(t)) { flag = t.slice(0, 2); val = t.slice(2); }
+      if (flag === null) continue;
+      apiPublish = true;
+      if (flag === '--input') { if (val !== '-') apiFiles.push(val); }
+      else if (val.includes('=@')) apiFiles.push(val.slice(val.indexOf('=@') + 2));
     }
+    apiPublish = apiPublish && !!apiPath && GH_API_PUBLISH.test(apiPath);
+  }
+  if ((GH_PUBLISH[group] || []).includes(sub) || apiPublish) {
+    let text = a.join('\n') + '\n' + (ctx.heredocs || []).join('\n') + '\n' + (ctx.raw || '');
+    const files = [...apiFiles];
+    for (let k = i + 2; k < a.length; k++) {
+      if (/^(--body-file|--notes-file|-F)$/.test(a[k]) && a[k + 1] && a[k + 1] !== '-') files.push(a[k + 1]);
+      else if (/^--(body|notes)-file=/.test(a[k])) files.push(a[k].split('=').slice(1).join('='));
+      else if (group === 'gist' && !a[k].startsWith('-') && !words[k].dyn) files.push(a[k]);
+    }
+    for (const f of files) { const c = readCapped(ctx, f); if (c !== null) text += '\n' + c; }
+    const cat = resolveCatSubs(ctx);
+    text += cat.text;
     const hit = secretIn(text);
     if (hit) return `the text of gh ${group} ${sub} (title, body or body file) matches the credential pattern ${hit}; nothing was sent`;
+    let subsInCmd = 0;
+    for (let k = i + 1; k < words.length; k++) subsInCmd += (words[k].t.match(/\$\(\)/g) || []).length;
+    if (subsInCmd > cat.resolved) return `gh ${group} ${sub} has a command substitution in its text that cannot be scanned for credentials; write the text to a file and pass it with --body-file (or -F)`;
   }
   return null;
 }

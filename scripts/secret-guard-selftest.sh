@@ -325,6 +325,20 @@ expect_blocked "13 CI: key in a commit message" "message or author fields" run_c
 expect_blocked "13 CI: key in a -diff file" "a\.dat: content matches" run_ci ciattr
 ( cd "$R" && git checkout -q main && git branch -q -D cimsg ciattr )
 
+# ── 13b. a key in a FILE NAME (content is clean) ──────────────────────────────
+R="$T/fname"; new_repo "$R"
+( cd "$R" && echo clean > "tok-$K_ANT.txt" && git add -A )
+expect_blocked "13b staged: key in a file name" "file name matches credential pattern" guard "$R" staged
+R="$T/msg"
+( cd "$R" && git checkout -q -b w6 main && echo clean > "n-$K_GH.txt" && git add -A && git commit -q --no-verify -m clean6 )
+expect_push_blocked "13b push: key in a file name" "file name matches credential pattern" "$R" refs/heads/w6 w6
+R="$T/ci"
+( cd "$R" && git checkout -q main && git checkout -q -b cifname main && echo clean > "n-$K_ANT.txt" && git add -A && git commit -q --no-verify -m fname )
+expect_blocked "13b CI: key in a file name" "file name matches credential pattern" run_ci cifname
+( cd "$R" && git checkout -q main && git branch -q -D cifname )
+out="$(guard "$T/fname" staged 2>&1)"
+if grep -qF -- "$K_ANT" <<<"$out"; then no "13b the message never prints the file name" "key echoed"; else ok "13b the message never prints the file name"; fi
+
 # ── 14. the gitleaks binary is pinned by SHA-256, not by `version` output ─────
 R="$T/pin"; new_repo "$R"
 ( cd "$R" && printf 'token=%s\n' "$K_ANT" > k.txt && git add k.txt )

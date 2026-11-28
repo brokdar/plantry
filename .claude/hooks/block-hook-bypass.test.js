@@ -161,6 +161,20 @@ const BLOCK = [
   `gh pr create --title t --body-file - <<'EOF'\nsecret ${FAKE}\nEOF`,
   `gh pr create --title t --body "$(cat <<'EOF'\n## Summary\nleaked ${FAKE}\nEOF\n)"`,
   `bash -c 'gh pr comment 3 --body "${FAKE}"'`,
+  `gh pr review 3 --approve --body "${FAKE}"`,
+  `gh pr review 3 -b "${FAKE}"`,
+  `gh api repos/o/r/issues/3/comments -f body="${FAKE}"`,
+  `gh api repos/o/r/pulls/3/reviews -F body="${FAKE}"`,
+  `gh api repos/o/r/pulls/3/comments --raw-field body="${FAKE}"`,
+  `gh api repos/o/r/pulls/3/comments --field=body="${FAKE}"`,
+  `gh api graphql -f query="mutation { x(body: \\"${FAKE}\\") }"`,
+  `gh api repos/o/r/releases -f body="${FAKE}"`,
+  `gh api gists -f description="${FAKE}"`,
+  `gh api repos/o/r/issues/3/comments -f body="$(date)"`,
+  'gh pr comment 3 --body "$(some-tool)"',
+  'gh pr create --title t --body "$(cat "$F")"',
+  'gh pr comment 3 --body `ls`',
+  'gh pr comment 3 --body "$(cat /nonexistent/body.md)"',
   // fail closed on unparseable input that mentions a bypass
   'git commit -m "unterminated --no-verify',
 ];
@@ -276,6 +290,28 @@ test('blocks a --body-file whose content carries a key (publish-time scan)', () 
   }
   fs.writeFileSync(f, '## Summary\nnothing secret here\n');
   assert.strictEqual(decide(`gh pr create --title t --body-file ${f}`), null);
+  fs.rmSync(d, { recursive: true });
+});
+
+test('scans files behind gh api, gist and $(cat file) bodies', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'hookbody2-'));
+  const f = path.join(d, 'b.txt');
+  fs.writeFileSync(f, `token ${FAKE}\n`);
+  const cmds = [
+    `gh api repos/o/r/issues/3/comments -F body=@${f}`,
+    `gh api repos/o/r/issues/3/comments --input ${f}`,
+    `gh api repos/o/r/issues/3/comments --input=${f}`,
+    `gh gist create ${f}`,
+    `gh gist edit abc ${f}`,
+    `gh pr comment 3 --body "$(cat ${f})"`,
+    `gh pr review 3 --comment --body "$(cat '${f}')"`,
+    'gh pr comment 3 --body `cat ' + f + '`',
+    `gh pr review 3 --comment --body-file ${f}`,
+  ];
+  for (const c of cmds) assert.match(decide(c) || '', /credential pattern/, c);
+  fs.writeFileSync(f, 'nothing secret\n');
+  for (const c of cmds) assert.strictEqual(decide(c), null, c + ' -> ' + decide(c));
+  assert.match(decide('gh pr comment 3 --body "$(some-tool)"') || '', /--body-file/);
   fs.rmSync(d, { recursive: true });
 });
 
