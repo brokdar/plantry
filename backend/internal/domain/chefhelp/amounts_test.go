@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
 func TestKitchenAmount(t *testing.T) {
@@ -15,7 +17,9 @@ func TestKitchenAmount(t *testing.T) {
 	}{
 		{1200, "g", "1.2 kg"},
 		{85.05, "g", "85 g"},
-		{37.5, "ml", "38 ml"},
+		{37.5, "ml", "2.5 tbsp"},
+		{60, "ml", "4 tbsp"},
+		{75, "ml", "75 ml"},
 		{1.88, "ml", "0.5 tsp"},
 		{28.12, "ml", "2 tbsp"},
 		{12, "ml", "2.5 tsp"},
@@ -39,9 +43,25 @@ func TestAmountsListed(t *testing.T) {
 		"Move it to a clean pan, see step 5.":       true,
 		"1.88 ml oil: add.":                         false,
 		"0.75 Zwiebel: add.":                        false,
+		"Simmer 3 to 4 minutes more.":               true,
+		"Cook 5 bis 6 Minuten.":                     true,
+		"Wait 2 more minutes.":                      true,
+		"Cut into 4 pieces.":                        true,
+		"Set to level 3.":                           true,
+		"1200 g lentils: add.":                      false,
 		"85.05 g cheddar on top.":                   false,
 		"+100 ml water: add and simmer 5 min.":      false,
 	} {
-		assert.Equal(t, want, amountsListed(line, allowed), line)
+		assert.Equal(t, want, amountsListed(line, allowed, "Zwiebel", "lentils"), line)
 	}
+}
+
+func TestBuildRequestRetryHint(t *testing.T) {
+	t.Parallel()
+	recipe := &food.Food{Name: "Soup"}
+	text := func(hint string) string {
+		return buildRequest("m", Request{Kind: KindExplainStep}, recipe, 2, nil, hint).Messages[0].Content[0].Text
+	}
+	assert.NotContains(t, text(""), "not in the list above")
+	assert.Contains(t, text(retryHint), "not in the list above")
 }

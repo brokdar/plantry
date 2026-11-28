@@ -40,10 +40,13 @@ func TestRemovedMentions_ChipotleLime(t *testing.T) {
 
 func TestTooSimilar(t *testing.T) {
 	t.Parallel()
-	library := []string{"Speedy lentil coconut curry", "Chili", "Pasta Bolognese"}
+	library := []string{"Speedy lentil coconut curry", "Chili", "Pasta Bolognese", "Chicken Ramen Soup"}
 	for name, want := range map[string]bool{
 		"Creamy Coconut Curry Lentils with Spinach": true,
 		"Easy Chili":                     true,
+		"Ramen":                          false,
+		"Pasta":                          false,
+		"Lentil":                         false,
 		"Chicken Curry":                  false,
 		"Coconut Rice":                   false,
 		"Spaghetti Bolognese":            false,

@@ -93,7 +93,7 @@ func dishWords(name string) map[string]bool {
 
 // tooSimilar reports whether a dish name nearly duplicates a library name:
 // the dish words (filler like creamy or easy ignored) of the shorter one
-// are all but at most one in the other, with at least two shared.
+// are all but at most one in the other, with at least two dish words on the smaller side.
 func tooSimilar(name string, library []string) bool {
 	a := dishWords(name)
 	for _, l := range library {
@@ -105,7 +105,11 @@ func tooSimilar(name string, library []string) bool {
 			}
 		}
 		small := min(len(a), len(b))
-		if small > 0 && (shared >= 2 || shared == small) && float64(shared) >= 0.75*float64(small) {
+		// One word is a match only against the same single word.
+		if small < 2 && (len(a) != len(b) || shared != 1) {
+			continue
+		}
+		if (shared >= 2 || shared == small) && float64(shared) >= 0.75*float64(small) {
 			return true
 		}
 	}

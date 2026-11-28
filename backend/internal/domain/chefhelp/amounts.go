@@ -16,9 +16,9 @@ import (
 func kitchenAmount(amount float64, unit string) string {
 	base, u := units.ToBase(amount, unit)
 	switch {
-	case u == "ml" && base < 30 && base < 15:
+	case u == "ml" && base < 15:
 		return spoon(base/5, "tsp")
-	case u == "ml" && base < 30:
+	case u == "ml" && base <= 60:
 		return spoon(base/15, "tbsp")
 	case u == "g" || u == "ml":
 		q := units.Display(amount, unit)
@@ -116,11 +116,40 @@ func allowedNumbers(recipe *food.Food, portions float64) []float64 {
 
 var smallSpoonRE = regexp.MustCompile(`(?i)^\s*(?:tsp|teaspoons?|tbsp|tablespoons?|tl\b|el\b|prise)`)
 
+// amountUnitRE is a measuring unit right after a number: only such numbers
+// (and numbers before a listed ingredient word) are amounts; times, ranges,
+// pieces and levels are not checked.
+var amountUnitRE = regexp.MustCompile(`(?i)^\s*(?:kg|g|gr|gramm?|ml|l|liters?|litres?|tsp|teaspoons?|tbsp|tablespoons?|tl|el|cups?|tassen?|prise)\b`)
+
+// namedAfter reports whether the text after a number starts with one of the
+// ingredient words (a plural or German ending still counts).
+func namedAfter(rest string, names []string) bool {
+	rest = strings.ToLower(strings.TrimSpace(rest))
+	for _, n := range names {
+		if len([]rune(n)) >= 3 && strings.HasPrefix(rest, strings.ToLower(n)) {
+			return true
+		}
+	}
+	return false
+}
+
+// ingredientWords are the words of the recipe's ingredient names.
+func ingredientWords(recipe *food.Food) []string {
+	var out []string
+	for _, c := range recipe.Children {
+		out = append(out, strings.Fields(c.ChildName)...)
+	}
+	return out
+}
+
 // amountsListed reports whether every amount in the line is one of the
 // listed amounts (HELP-2: amounts are copied, never computed). One spoon or
 // less of a spoon passes: a small fix such as "1 tsp sugar" is not in the recipe.
-func amountsListed(line string, allowed []float64) bool {
+func amountsListed(line string, allowed []float64, names ...string) bool {
 	for _, q := range quantitiesIn(line) {
+		if !amountUnitRE.MatchString(q.rest) && !namedAfter(q.rest, names) {
+			continue
+		}
 		if q.v <= 1 && smallSpoonRE.MatchString(q.rest) {
 			continue
 		}
