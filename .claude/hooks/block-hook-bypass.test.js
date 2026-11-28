@@ -6,6 +6,9 @@ const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const { decide } = require('./block-hook-bypass.js');
 
+// a fake key built at run time (never a real credential, never in the source)
+const FAKE = 'sk-ant-api03-' + 'Ab3dE6gH9jK2mN5pQ8sT1vW4yZ7Qa';
+
 const BLOCK = [
   // plain bypasses
   'git commit --no-verify -m "x"',
@@ -107,6 +110,57 @@ const BLOCK = [
   'git -c alias.ci="!git commit --no-verify" ci',
   'HOME=/tmp/h git commit -m x',
   'export GIT_DIR=/tmp/other',
+  // second review: aliases, env, interpreters, attributes, remote-tracking refs
+  "git config alias.pn 'push --no-verify'",
+  "git config --global alias.ci 'commit -n'",
+  "git config --global alias.x '!git commit --no-verify'",
+  'git config core.attributesFile /x',
+  'git config --global core.attributesfile /x',
+  'PATH=$PWD/fake:$PATH git commit -m x',
+  'PATH=./fake:$PATH git push origin x',
+  'PATH="$(pwd)/fake:$PATH" scripts/secret-guard.sh staged',
+  'export PATH=./fake:$PATH',
+  'export PATH=/tmp/fake:$PATH',
+  'PREK_HOME=/tmp/x prek run',
+  'GIT_ATTR_SOURCE=x git commit -m x',
+  'GIT_CONFIG_GLOBAL=/tmp/g git commit -m x',
+  'PYTHONPATH=/tmp/p bash scripts/secret-guard.sh range a b',
+  'BASH_ENV=/tmp/e git commit -m x',
+  "python3 -c \"import subprocess;subprocess.run(['git','push','--no-verify'])\"",
+  "node -e \"require('child_process').execFileSync('git',['push','--no-verify'])\"",
+  "python3 - <<'E'\nopen('prek.toml','w').write('')\nE",
+  "python3 -c \"open('.git/info/attributes','w').write('*.dat -diff')\"",
+  "echo '*.dat -diff' >> .git/info/attributes",
+  "echo '[alias]' >> ~/.gitconfig",
+  "sed -i 's/x/y/' .git/config",
+  'git update-ref refs/remotes/origin/leak HEAD',
+  'git update-ref -m x refs/remotes/origin/leak $(git rev-parse HEAD)',
+  'git fetch . leak:refs/remotes/origin/x',
+  'git fetch . +leak:refs/remotes/origin/x',
+  // gh: labels, rulesets, admin, workflows
+  'gh pr edit 5 --add-label secret-guard-change',
+  'gh pr edit 5 --add-label "secret-guard-change"',
+  'gh label create secret-guard-change',
+  'gh label delete x',
+  'gh api -X POST repos/o/r/labels -f name=x',
+  'gh api repos/o/r/issues/5/labels -f labels[]=secret-guard-change',
+  'gh api repos/o/r/rulesets/1 -X DELETE',
+  'gh api --method PUT repos/o/r/branches/main/protection',
+  'gh api -X PUT repos/o/r/actions/workflows/1/disable',
+  'gh workflow disable secrets.yml',
+  'gh pr merge 5 --admin',
+  'gh pr merge 5 --squash --admin',
+  // publish-time scan: the text of what is sent to GitHub
+  `gh pr create --title t --body "token ${FAKE}"`,
+  `gh pr create --title "x ${FAKE}" --body ok`,
+  `gh pr edit 5 --body "key: ${FAKE}"`,
+  `gh pr comment 3 --body "${FAKE}"`,
+  `gh issue create -t t -b "${FAKE}"`,
+  `gh issue comment 3 --body "${FAKE}"`,
+  `gh release create v1 --notes "${FAKE}"`,
+  `gh pr create --title t --body-file - <<'EOF'\nsecret ${FAKE}\nEOF`,
+  `gh pr create --title t --body "$(cat <<'EOF'\n## Summary\nleaked ${FAKE}\nEOF\n)"`,
+  `bash -c 'gh pr comment 3 --body "${FAKE}"'`,
   // fail closed on unparseable input that mentions a bypass
   'git commit -m "unterminated --no-verify',
 ];
@@ -160,6 +214,28 @@ const ALLOW = [
   'export PATH="$HOME/bin:$PATH"',
   'HOME=/tmp/x go build ./...',
   'echo "git commit --no-verify"',
+  'git config alias.st status',
+  'git config --global alias.co checkout',
+  'GIT_AUTHOR_NAME=x GIT_COMMITTER_NAME=x git commit -m x',
+  'GIT_SEQUENCE_EDITOR=true git rebase -i HEAD~2',
+  'PATH=$HOME/.local/bin:$PATH go build ./...',
+  'export PATH="$HOME/.bun/bin:$PATH"',
+  'python3 -c "print(1)"',
+  'node -e "console.log(1)"',
+  'git update-ref refs/heads/x HEAD',
+  'git fetch origin',
+  'git fetch origin main:refs/heads/main',
+  'gh pr create --title "feat: x" --body "A normal body"',
+  'gh pr comment 3 --body "sk-ant- prefixes are scanned"',
+  'gh pr view 5',
+  'gh pr list --label bug',
+  'gh pr merge 5 --squash',
+  'gh pr checks 5 --watch',
+  'gh api repos/o/r/pulls/5/comments',
+  'gh api -X GET repos/o/r/labels',
+  'gh api repos/o/r/actions/runs',
+  'gh run list --workflow secrets.yml',
+  'gh release view v1',
 ];
 
 for (const c of BLOCK) {
@@ -184,4 +260,42 @@ test('hook process exits 0 on a normal commit', () => {
     encoding: 'utf8',
   });
   assert.strictEqual(r.status, 0);
+});
+
+// hook process cases that need files or git config
+
+const fs = require('node:fs');
+const os = require('node:os');
+
+test('blocks a --body-file whose content carries a key (publish-time scan)', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'hookbody-'));
+  const f = path.join(d, 'body.md');
+  fs.writeFileSync(f, `## Summary\nhere is the token ${FAKE}\n`);
+  for (const cmd of [`gh pr create --title t --body-file ${f}`, `gh pr comment 3 -F ${f}`, `gh release create v1 --notes-file ${f}`, `gh pr edit 3 --body-file=${f}`]) {
+    assert.match(decide(cmd) || '', /credential pattern/, cmd);
+  }
+  fs.writeFileSync(f, '## Summary\nnothing secret here\n');
+  assert.strictEqual(decide(`gh pr create --title t --body-file ${f}`), null);
+  fs.rmSync(d, { recursive: true });
+});
+
+test('the block message names the pattern, never the secret', () => {
+  const r = decide(`gh pr create --title t --body "${FAKE}"`);
+  assert.ok(r);
+  assert.ok(!r.includes(FAKE), 'the message must not echo the key');
+});
+
+test('blocks invoking a configured alias that runs --no-verify', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'hookalias-'));
+  const cfg = path.join(d, 'gitconfig');
+  fs.writeFileSync(cfg, '[alias]\n\tpn = push --no-verify\n\tst = status\n');
+  const old = process.env.GIT_CONFIG_GLOBAL;
+  process.env.GIT_CONFIG_GLOBAL = cfg;
+  try {
+    assert.match(decide('git pn origin leak') || '', /alias pn/);
+    assert.strictEqual(decide('git st'), null);
+  } finally {
+    if (old === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = old;
+    fs.rmSync(d, { recursive: true });
+  }
 });

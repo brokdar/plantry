@@ -18,6 +18,31 @@
  *  5. Bash writes (rm mv cp sed -i tee redirects ...) to the guard files listed
  *     in scripts/secret-guard-files.txt; Edit/Write tool changes are fine
  *  6. git add -f / --force
+ *  7. git aliases whose value carries verify/hooksPath/attributesFile (and
+ *     invoking such an alias), PATH, PYTHON-prefixed, LD-prefixed and BASH_ENV variables next to git, prek or a
+ *     guard script, GIT- and PREK-prefixed overrides (identity, editor and pager variables
+ *     are fine), git config core.attributesFile, writes to .git/config,
+ *     ~/.gitconfig and .git/info/attributes, git update-ref / fetch into
+ *     refs/remotes, python -c / node -e / heredoc code that mentions --no-verify,
+ *     .git/hooks, hooksPath, attributesFile or a guard file
+ *  8. gh: --admin, the secret-guard-change label (the owner applies it), gh label,
+ *     gh workflow disable, gh api writes to labels, rulesets, branches, protection,
+ *     actions, workflows, hooks
+ *  9. publish-time scan: the title/body text (flags, heredocs, --body-file, -F,
+ *     --notes-file files) of gh pr/issue create|edit|comment and gh release
+ *     create|edit is matched against scripts/secret-patterns.txt (the raw
+ *     patterns); a hit blocks the command, nothing is sent to GitHub
+ *
+ * THREAT MODEL. (a) Every accidental route is closed completely: a careless human
+ * or agent following normal git and gh workflows (a key pasted into a PR body, a
+ * stash pushed, a forgotten --no-verify). (b) Deliberate local evasion is hardened
+ * where practical, but a local actor who is determined (a script file that runs
+ * the commands, an interpreter building the command from pieces, editing the
+ * guard files by a route this tokenizer cannot see, installing another git) can
+ * always get past a local hook; that residual risk is stated, not denied.
+ * (c) GitHub push protection (server side, on for this repo) is the layer no
+ * local actor can switch off; the main ruleset (see "Secrets" in CLAUDE.md)
+ * is the second server-side layer once the owner enables it.
  *
  * It is a shell tokenizer, not a regex over text: quotes are removed, command
  * substitutions and `bash -c`/`sh -c`/`eval`/shell heredocs are scanned
@@ -37,6 +62,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const ALT =
   'Do not bypass the secret checks: fix what they flag. If a scan fired on a real ' +
@@ -65,8 +91,15 @@ const INTERP_INLINE = { python: 'c', python3: 'c', node: 'e', nodejs: 'e', perl:
 const RUNNERS = new Set(['eval', 'su', 'ssh', 'xargs', 'sudo', 'env', 'time', 'nohup', 'watch', 'timeout', 'script',
   'alias', 'source', '.', 'command', 'exec', 'setsid', 'nice', 'flock', 'busybox', 'stdbuf', 'ionice', 'doas', 'parallel']);
 const KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'do', 'while', 'until', '!', '{', '}', 'time', 'coproc']);
-const ENV_BLOCK = /^(SKIP|PREK_SKIP|PRE_COMMIT_SKIP|PREK_ALLOW_NO_CONFIG|PRE_COMMIT_ALLOW_NO_CONFIG|GIT_DIR|GIT_WORK_TREE|GIT_COMMON_DIR|GIT_INDEX_FILE|GIT_EXEC_PATH|GIT_TEMPLATE_DIR|GIT_CONFIG.*|GIT_NAMESPACE)$/;
-const ENV_BLOCK_NEAR_GIT = /^(HOME|XDG_CONFIG_HOME)$/;
+// always blocked (hooks off, git redirected): GIT_* except identity/editor/pager/
+// ssh/trace variables, SKIP, PREK_*, PRE_COMMIT_*
+const ENV_BLOCK = /^(SKIP|PREK_[A-Z0-9_]*|PRE_COMMIT_[A-Z0-9_]*|GIT_(?!AUTHOR_|COMMITTER_|EDITOR$|SEQUENCE_EDITOR$|PAGER$|TERMINAL_PROMPT$|SSH_COMMAND$|SSH$|ASKPASS$|TRACE[A-Z0-9_]*$|PROGRESS_DELAY$|CURL_VERBOSE$)[A-Z0-9_]*)$/;
+// blocked next to git, prek or a guard script: they replace a binary, a config or code
+const ENV_BLOCK_NEAR_GIT = /^(PATH|HOME|XDG_CONFIG_HOME|PYTHON[A-Z0-9_]*|LD_PRELOAD|LD_LIBRARY_PATH|BASH_ENV|ENV|NODE_OPTIONS|PERL5LIB|RUBYOPT|SHELL)$/;
+const GUARD_CMDS = new Set(['secret-guard.sh', 'secret-ci.sh', 'secret-guard-selftest.sh', 'check-db-secrets.py', 'gate.sh', 'install-hooks.sh', 'pre-push-hook.sh', 'mise', 'gitleaks']);
+// git subcommands that need no alias lookup
+const GIT_BUILTIN = new Set(['add', 'am', 'apply', 'archive', 'bisect', 'blame', 'branch', 'checkout', 'cherry-pick', 'clean', 'clone', 'commit', 'config', 'describe', 'diff', 'fetch', 'grep', 'init', 'log', 'ls-files', 'ls-remote', 'ls-tree', 'merge', 'mv', 'pull', 'push', 'rebase', 'reflog', 'remote', 'reset', 'restore', 'revert', 'rev-list', 'rev-parse', 'rm', 'show', 'stash', 'status', 'switch', 'tag', 'update-index', 'update-ref', 'worktree', 'cat-file', 'hash-object', 'for-each-ref', 'symbolic-ref', 'gc', 'prune', 'fsck', 'shortlog', 'version', 'help']);
+const ALIAS_BAD = /no-v|verify|hookspath|attributesfile|(^|\s)(push|commit)\b.*\s-[a-z]*n\b/i;
 // commands that write/remove their path arguments
 const DESTRUCT_ANY = new Set(['rm', 'mv', 'chmod', 'chown', 'chgrp', 'unlink', 'truncate', 'shred', 'rmdir', 'tee', 'touch', 'patch', 'sed', 'perl', 'dd', 'find']);
 const DESTRUCT_DEST = new Set(['cp', 'install', 'rsync', 'ln', 'scp', 'curl', 'wget']);
@@ -269,6 +302,8 @@ function touchesProtected(q, rawWord, { ancestors } = {}) {
   const segs = (q || rawWord).split('/').filter(Boolean);
   for (let k = 0; k + 1 < segs.length; k++) if (segs[k] === '.git' && segs[k + 1] === 'hooks') return 'git hooks';
   if (/(^|\/)\.git\/hooks(\/|$)/.test(rawWord)) return 'git hooks';
+  const target = q || rawWord;
+  if (/(^|\/)\.git\/(config|info\/attributes)$/.test(target) || /(^|\/)\.gitconfig$/.test(target) || /(^|\/)\.config\/git\/(config|attributes)$/.test(target)) return 'git config or attributes (alias, hooksPath, attributes)';
   if (ancestors && q && /(^|\/)\.git$/.test(q)) return 'the .git directory';
   const re = hasGlob && q ? globRe(q) : null;
   for (const g of GUARD) {
@@ -291,6 +326,7 @@ function touchesProtected(q, rawWord, { ancestors } = {}) {
 
 function mentionsProtected(code) {
   if (/\.git['"\s,\/\\+)\]\[]*hooks/.test(code)) return 'git hooks';
+  if (/no[-_]verify|hookspath|attributesfile|info\/attributes|\.git\/config|\.gitconfig/i.test(code)) return 'a git hook bypass (no-verify, hooksPath, attributes, git config)';
   for (const g of GUARD) {
     const b = base(g);
     if (code.includes(b) && (b !== 'settings.json' || code.includes('.claude'))) return 'guard file ' + g;
@@ -343,10 +379,19 @@ function gitAnalyze(words, ctx) {
 
   if (args.some(a => /core\.hookspath/i.test(a.t))) return 'core.hooksPath redirects the git hooks away from prek';
   if (sub === 'config') {
+    if (args.some(a => /attributesfile/i.test(a.t))) return 'git config core.attributesFile can hide content from the scans';
+    const key = args.find(a => !a.t.startsWith('-'));
+    if (key && /^alias\./i.test(key.t) && args.some(a => a !== key && ALIAS_BAD.test(a.t))) return 'a git alias that carries --no-verify, hooksPath or attributesFile';
     if (args.some(a => /^(include|includeif)\b/i.test(a.t))) return 'git config include can redirect the hooks';
     for (const a of args) {
       if (/\s/.test(a.t)) { const r = decideText(a.t.replace(/^!/, ''), ctx, 1); if (r) return r; }
     }
+  }
+  if (sub === 'update-ref' && args.some(a => /(^|\s)refs\/remotes\//.test(a.t) || a.dyn)) return 'git update-ref on refs/remotes forges what the remote is believed to have';
+  if (sub === 'fetch' && args.some(a => /:\+?refs\/remotes\//.test(a.t) || a.dyn && /:/.test(a.t))) return 'git fetch into refs/remotes forges what the remote is believed to have';
+  if (!GIT_BUILTIN.has(sub) && !sub.startsWith('-')) {
+    const r = spawnSync('git', ['config', '--get', 'alias.' + sub], { encoding: 'utf8', timeout: 3000 });
+    if (r.status === 0 && ALIAS_BAD.test(r.stdout)) return `the git alias ${sub} runs --no-verify, hooksPath or attributesFile`;
   }
   if (sub === 'update-index' && args.some(a => /^--(assume-unchanged|skip-worktree)$/.test(a.t))) {
     return 'git update-index --assume-unchanged/--skip-worktree hides changes from the scans';
@@ -396,24 +441,101 @@ function gitAnalyze(words, ctx) {
   return null;
 }
 
+// ── gh: label/ruleset/admin changes and the publish-time scan ───────────────
+let RAW_PATTERNS = null;
+function rawPatterns() {
+  if (RAW_PATTERNS) return RAW_PATTERNS;
+  RAW_PATTERNS = [];
+  try {
+    const f = path.join(__dirname, '..', '..', 'scripts', 'secret-patterns.txt');
+    for (const line of fs.readFileSync(f, 'utf8').split('\n')) {
+      if (!line.trim() || line.startsWith('#')) continue;
+      const [scope, pat] = line.split('\t');
+      if (scope === 'raw' && pat) { try { RAW_PATTERNS.push(new RegExp(pat)); } catch {} }
+    }
+  } catch {}
+  return RAW_PATTERNS;
+}
+function secretIn(text) {
+  for (const re of rawPatterns()) if (re.test(text)) return re.source;
+  return null;
+}
+
+const GH_API_SENSITIVE = /(^|\/)(labels?|rulesets?|rules|branches|protection|actions|workflows?|hooks|environments|secrets|variables|collaborators|keys|dispatches|settings)(\/|$|\?)/i;
+const GH_PUBLISH = { pr: ['create', 'edit', 'comment'], issue: ['create', 'edit', 'comment'], release: ['create', 'edit'] };
+
+function ghAnalyze(words, ctx) {
+  const a = words.map(w => w.t);
+  let i = 0;
+  while (i < a.length && a[i].startsWith('-')) i += (a[i] === '-R' || a[i] === '--repo') ? 2 : 1;
+  const group = a[i] || '';
+  const sub = a[i + 1] || '';
+  if (a.some(t => t === '--admin')) return 'gh --admin bypasses the merge requirements';
+  if (a.some(t => t.includes('secret-guard-change'))) return 'the secret-guard-change label is applied by the owner, never by an agent';
+  if (group === 'label') return 'gh label changes repository labels';
+  if (group === 'workflow' && sub === 'disable') return 'gh workflow disable switches off a CI check';
+  if (group === 'ruleset' && sub !== 'list' && sub !== 'view' && sub !== 'check') return 'gh ruleset changes branch rules';
+  if (group === 'api') {
+    const rest = a.slice(i + 1);
+    let method = null;
+    let fields = false;
+    let apiPath = '';
+    for (let k = 0; k < rest.length; k++) {
+      const t = rest[k];
+      if (t === '-X' || t === '--method') { method = (rest[k + 1] || '').toUpperCase(); k++; }
+      else if (/^--method=/.test(t)) method = t.slice(9).toUpperCase();
+      else if (/^-X./.test(t)) method = t.slice(2).toUpperCase();
+      else if (/^(-f|-F|--field|--raw-field|--input)$/.test(t)) { fields = true; k++; }
+      else if (/^(--field|--raw-field|--input)=/.test(t)) fields = true;
+      else if (['-H', '--header', '-q', '--jq', '-t', '--template', '--hostname', '--cache'].includes(t)) k++;
+      else if (!t.startsWith('-') && !apiPath) apiPath = t;
+    }
+    const writes = (method && method !== 'GET') || (!method && fields);
+    if (/graphql/i.test(apiPath) && /mutation/i.test(rest.join(' ')) && /(label|ruleset|protection|workflow|admin|branch)/i.test(rest.join(' '))) return 'a gh api graphql mutation on labels, rulesets, protection or workflows';
+    if (writes && GH_API_SENSITIVE.test(apiPath)) return `gh api ${method || 'POST'} ${apiPath} changes labels, rulesets, branch protection, actions or workflows`;
+  }
+  if ((GH_PUBLISH[group] || []).includes(sub)) {
+    let text = a.join('\n') + '\n' + (ctx.heredocs || []).join('\n') + '\n' + (ctx.raw || '');
+    for (let k = i + 2; k < a.length; k++) {
+      let f = null;
+      if (/^(--body-file|--notes-file|-F)$/.test(a[k]) && a[k + 1] && a[k + 1] !== '-') f = a[k + 1];
+      else if (/^--(body|notes)-file=/.test(a[k])) f = a[k].split('=').slice(1).join('=');
+      if (!f) continue;
+      try {
+        const q = path.resolve(ctx.cwd && !ctx.cwd.startsWith('~') ? ctx.cwd : '.', f);
+        if (fs.statSync(q).size < 4 * 1024 * 1024) text += '\n' + fs.readFileSync(q, 'utf8');
+      } catch {}
+    }
+    const hit = secretIn(text);
+    if (hit) return `the text of gh ${group} ${sub} (title, body or body file) matches the credential pattern ${hit}; nothing was sent`;
+  }
+  return null;
+}
+
 function analyzeCommand(cmd, ctx, depth) {
   const words = cmd.words;
   let i = 0;
   while (i < words.length && KEYWORDS.has(words[i].t)) i++;
   const assignNames = [];
-  const gitNear = words.some(w => base(w.t) === 'git' || base(w.t) === 'prek' || w.t === 'pre-commit');
-  while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i].t)) { assignNames.push(words[i].t.split('=')[0]); i++; }
+  const assignVals = {};
+  const gitNear = words.some(w => ['git', 'prek', 'pre-commit', 'gh'].includes(base(w.t)) || GUARD_CMDS.has(base(w.t)));
+  const noteAssign = (w, k) => { const n = w.t.split('=')[0]; assignNames.push(n); assignVals[n] = k; };
+  while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i].t)) { noteAssign(words[i], words[i]); i++; }
   const first = i < words.length ? base(words[i].t) : '';
   if (['export', 'declare', 'typeset', 'readonly', 'local', 'env'].includes(first)) {
     for (let k = i + 1; k < words.length; k++) {
       const w = words[k].t;
-      if (/^[A-Za-z_][A-Za-z0-9_]*(=|$)/.test(w)) assignNames.push(w.split('=')[0]);
+      if (/^[A-Za-z_][A-Za-z0-9_]*(=|$)/.test(w)) noteAssign(words[k], words[k]);
       else if (first === 'env' && w === '-u') k++;
     }
   }
   for (const n of assignNames) {
     if (ENV_BLOCK.test(n)) return `${n}= disables hooks or redirects git away from this repository`;
-    if (ENV_BLOCK_NEAR_GIT.test(n) && gitNear) return `${n}= next to git can load another git config (hooksPath)`;
+    if (ENV_BLOCK_NEAR_GIT.test(n) && gitNear) return `${n}= next to git, prek or a guard script can swap a binary, a config or code (hooksPath, a fake gitleaks)`;
+    if (n === 'PATH') {
+      const v = (assignVals[n].t.split('=').slice(1).join('=') || '').split(':')[0];
+      if (/^(\.|\.\.|[^/$~"'])/.test(v) || /^\$(PWD|\{PWD\}|\(\))/.test(v) || /^\/(var\/)?tmp\//.test(v)) return 'PATH= starting with a relative, $PWD or /tmp directory can put a fake git, prek or gitleaks first';
+    }
   }
 
   // cd tracking
@@ -437,6 +559,12 @@ function analyzeCommand(cmd, ctx, depth) {
   for (let k = i; k < words.length; k++) {
     if (base(words[k].t) === 'git' && !words[k].dyn) {
       const r = gitAnalyze(words.slice(k + 1), ctx);
+      if (r) return r;
+    }
+  }
+  for (let k = i; k < words.length; k++) {
+    if (base(words[k].t) === 'gh' && !words[k].dyn) {
+      const r = ghAnalyze(words.slice(k + 1), { cwd: ctx.cwd, raw: ctx.raw, heredocs: cmd.heredocs });
       if (r) return r;
     }
   }
@@ -541,7 +669,7 @@ function decideText(src, ctx, depth) {
 }
 
 function decide(raw) {
-  const reason = decideText(raw, { cwd: '.' }, 0);
+  const reason = decideText(raw, { cwd: '.', raw }, 0);
   return reason ? 'Blocked: ' + reason + '. ' + ALT : null;
 }
 

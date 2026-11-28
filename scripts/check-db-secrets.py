@@ -4,9 +4,12 @@
 Run as `python3 -I scripts/check-db-secrets.py MODE`, MODE being one of
   FILE...              working-tree files (pre-commit: the staged files)
   --tracked            every file in the index (gate, CI)
+  --staged             every file added or changed in the index (pre-commit)
   --history REVARGS... every file added or changed in `git log -m REVARGS`
                        (pre-push, gate, CI); merge commits are included, so a
                        file only an evil merge touches is checked
+  --messages REVARGS.. commit messages and author/committer fields of the range
+  --text LABEL         stdin (a ref name, a tag message, a commit message file)
 
 Per file (the repo path decides, never trust a name alone):
   * blocked names, case-insensitive: .env*, secret.key, keys, ssh keys, local
@@ -15,10 +18,13 @@ Per file (the repo path decides, never trust a name alone):
   * SQLite magic on ANY file: must sit under testdata, then the DB checks run
     (encrypted app_settings row, key-like value, credential pattern in the raw
     bytes which covers deleted rows, non-empty freelist);
+  * the raw credential patterns run over EVERY added or changed blob, text or
+    binary, whatever .gitattributes says (gitleaks reads the diff, and a
+    `-diff`/`binary` attribute makes git print "Binary files differ" instead);
   * other binary files (a NUL in the first 8000 bytes): credential patterns in
     the raw bytes (also with NULs removed, which reads UTF-16), archives
-    rejected, unknown binaries rejected unless the path is listed, with a
-    reason, in scripts/binary-allowlist.txt. PNG/JPEG/GIF/WebP/ICO/fonts pass.
+    rejected, unknown binaries rejected unless the blob's SHA-256 is listed,
+    with a reason, in scripts/binary-allowlist.txt. PNG/JPEG/GIF/WebP/ICO/fonts pass.
 
 Patterns live in scripts/secret-patterns.txt, shared with the Go guard test.
 Never prints a secret value, only file, key and pattern.
@@ -26,7 +32,7 @@ Never prints a secret value, only file, key and pattern.
 SECRET_GUARD_REPO names the repo to scan when the script runs from a trusted
 copy of the guard files outside it (CI runs the scripts from origin/main).
 """
-import fnmatch
+import hashlib
 import os
 import re
 import sqlite3
@@ -83,17 +89,21 @@ def load_patterns():
 
 
 def load_allowlist():
-    """binary-allowlist.txt: `<glob>\\t<reason>`; a missing reason is an error."""
-    entries = []
+    """binary-allowlist.txt: `<sha256 of the blob>\\t<reason>`; a missing reason is an error.
+    The hash pins the content: replacing the file, or copying it under another
+    name, changes nothing an entry covers."""
+    entries = set()
     with open(os.path.join(ROOT, "scripts", "binary-allowlist.txt"), encoding="utf-8") as f:
         for n, line in enumerate(f, 1):
             line = line.rstrip("\n")
             if not line.strip() or line.startswith("#"):
                 continue
-            glob, _, reason = line.partition("\t")
+            digest, _, reason = line.partition("\t")
+            if not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise SystemExit(f"scripts/binary-allowlist.txt:{n}: first column must be the blob's SHA-256")
             if not reason.strip():
                 raise SystemExit(f"scripts/binary-allowlist.txt:{n}: entry needs a reason after a TAB")
-            entries.append(glob)
+            entries.add(digest)
     return entries
 
 
@@ -147,20 +157,22 @@ def check_blob(path, data, raw_pats, value_pats, allow):
         if not is_testdata(path.lower()) and not DB_NAME_RE.search(os.path.basename(path).lower()):
             problems.append(f"{path}: a SQLite database under a non-database name, outside testdata")
         return problems + check_db(path, data, raw_pats, value_pats)
-    if b"\x00" not in data[:8000]:
-        return problems
+    binary = b"\x00" in data[:8000]
     for p in raw_pats:
-        if p.search(data) or p.search(data.replace(b"\x00", b"")):
-            problems.append(f"{path}: binary content matches credential pattern {p.pattern.decode()!r}")
-    if any(fnmatch.fnmatchcase(path, g) for g in allow):
+        if p.search(data) or (binary and p.search(data.replace(b"\x00", b""))):
+            what = "binary content" if binary else "content"
+            problems.append(f"{path}: {what} matches credential pattern {p.pattern.decode()!r}")
+    if not binary:
+        return problems
+    if hashlib.sha256(data).hexdigest() in allow:
         return problems
     for magic, kind in ARCHIVES:
         if data.startswith(magic):
-            problems.append(f"{path}: {kind} archive can hide credentials; list it in scripts/binary-allowlist.txt with a reason if it is reviewed")
+            problems.append(f"{path}: {kind} archive can hide credentials; list its SHA-256 in scripts/binary-allowlist.txt with a reason if it is reviewed")
             return problems
     if (data[:4] == b"RIFF" and data[8:12] == b"WEBP") or any(data.startswith(m) for m in SAFE_MAGIC):
         return problems
-    problems.append(f"{path}: unknown binary file; list it in scripts/binary-allowlist.txt with a reason if it is reviewed")
+    problems.append(f"{path}: unknown binary file; list its SHA-256 in scripts/binary-allowlist.txt with a reason if it is reviewed")
     return problems
 
 
@@ -228,12 +240,47 @@ def entries_history(revargs):
     return entries
 
 
+def scan_text(label, data, raw_pats):
+    return [f"{label}: matches credential pattern {p.pattern.decode()!r}" for p in raw_pats if p.search(data)]
+
+
+def entries_staged():
+    out = git("diff", "--cached", "--raw", "--no-abbrev", "--no-renames", "-z", "--diff-filter=AM")
+    toks = out.split(b"\0")
+    entries, i = [], 0
+    while i + 1 < len(toks):
+        if not toks[i].startswith(b":"):
+            i += 1
+            continue
+        meta = toks[i].decode().split()
+        path = toks[i + 1].decode("utf-8", "surrogateescape")
+        i += 2
+        if meta[1] != "160000":
+            entries.append((meta[3], path))
+    return entries
+
+
+def messages_problems(revargs, raw_pats):
+    """Commit messages, author and committer name/email of `git log -m REVARGS`."""
+    out = git("log", "-m", "-z", "--format=%H%n%an <%ae>%n%cn <%ce>%n%B", *revargs)
+    problems = []
+    for rec in out.split(b"\0"):
+        if rec.strip():
+            sha = rec.split(b"\n", 1)[0].decode()[:12]
+            problems += scan_text(f"commit {sha} message or author fields", rec, raw_pats)
+    return problems
+
+
 def main(argv):
     raw_pats, value_pats = load_patterns()
     allow = load_allowlist()
     problems = []
-    if argv == ["--tracked"] or (argv and argv[0] == "--history"):
-        entries = entries_index() if argv == ["--tracked"] else entries_history(argv[1:])
+    if argv[:1] == ["--text"] and len(argv) == 2:
+        problems = scan_text(argv[1], sys.stdin.buffer.read(), raw_pats)
+    elif argv[:1] == ["--messages"]:
+        problems = messages_problems(argv[1:], raw_pats)
+    elif argv in (["--tracked"], ["--staged"]) or argv[:1] == ["--history"]:
+        entries = entries_index() if argv == ["--tracked"] else entries_staged() if argv == ["--staged"] else entries_history(argv[1:])
         blobs = read_blobs(sorted({s for s, _ in entries}))
         for sha, path in entries:
             problems += check_blob(path, blobs[sha], raw_pats, value_pats, allow)

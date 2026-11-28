@@ -1,5 +1,7 @@
 # Binary files that scripts/check-db-secrets.py accepts although they are
-# archives or unknown binaries. Format: <glob on the repo path><TAB><reason>.
-# Every entry needs a reason; add an entry only after looking at the file.
-backend/internal/adapters/fdclocal/foods.tsv.gz	embedded nutrition table built from public FoodData Central data, gzip of a TSV, reviewed
-backend/internal/adapters/httpfetch/testdata/robots/malformed.txt	robots.txt parser fixture holding deliberately malformed bytes, no credentials
+# archives or unknown binaries. Format: <SHA-256 of the blob><TAB><reason>. The
+# hash pins the content, never the path: a later commit that swaps the file for
+# other bytes is checked again. Every entry needs a reason; add an entry only
+# after looking at the file (path, for the reader: see the reason).
+d05d29dbcbd901c8bc6e3e991b5153ac7ea8d295d64af88dfcaeee0cea23a16c	backend/internal/adapters/fdclocal/foods.tsv.gz: embedded nutrition table built from public FoodData Central data, gzip of a TSV, reviewed
+bf1aec5f08700b24552f61a42c0a6e471079ab99cc7a51f65663504642873f32	backend/internal/adapters/httpfetch/testdata/robots/malformed.txt: robots.txt parser fixture holding deliberately malformed bytes, no credentials

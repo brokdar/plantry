@@ -68,3 +68,5 @@ __pycache__/
 !backend/internal/spectest/testdata/*.db
 !backend/internal/domain/agent/testdata/*.db
 !backend/internal/adapters/sqlite/testdata/*.db
+__pycache__/
+*.pyc

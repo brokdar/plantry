@@ -172,7 +172,7 @@ For a thorough check, `scripts/deploy-smoke.sh -image ghcr.io/brokdar/plantry:<t
 
 ```bash
 mise install                                              # pinned tools, incl. prek and gitleaks
-prek install --hook-type pre-commit --hook-type pre-push  # secret scan before every commit and push
+scripts/install-hooks.sh                                   # prek pre-commit/commit-msg hooks + the pre-push secret scan
 ```
 
 Never bypass them (`--no-verify`, `SKIP=`); see "Secrets" in `CLAUDE.md`.

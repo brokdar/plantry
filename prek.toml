@@ -101,19 +101,20 @@ hooks = [
     pass_filenames = true,
   },
 
-]
-
-# ── Push stage: scan every commit being pushed (catches --no-verify commits) ──
-[[repos]]
-repo = "local"
-hooks = [
+  # commit message (a pasted key or an error that contains one)
   {
-    id             = "secret-push-scan",
-    name           = "gitleaks + DB check over pushed commits",
+    id             = "secret-commit-msg",
+    name           = "commit message credential scan",
     language       = "system",
-    entry          = "bash scripts/secret-guard.sh push",
-    stages         = ["pre-push"],
+    entry          = "bash scripts/secret-guard.sh msg",
+    stages         = ["commit-msg"],
     always_run     = true,
-    pass_filenames = false,
+    pass_filenames = true,
   },
 ]
+
+# ── Push stage: NOT a prek hook ───────────────────────────────────────────────
+# prek does not forward git's pre-push stdin (the refs and shas being pushed), so
+# the push scan is .git/hooks/pre-push = scripts/pre-push-hook.sh, installed by
+# scripts/install-hooks.sh, which calls `scripts/secret-guard.sh push` with that
+# stdin and chains prek's own pre-push hooks. scripts/gate.sh checks it.
