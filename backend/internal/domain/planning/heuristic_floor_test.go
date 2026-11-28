@@ -1,6 +1,7 @@
 package planning_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -133,4 +134,33 @@ func TestBoardIssues_FloorOnlyForDaysThatCanChange(t *testing.T) {
 	assert.NotContains(t, got, sat, "past days are history")
 	assert.Equal(t, planning.SeverityViolation, got[tue], "a draft day can still be fixed")
 	assert.Equal(t, planning.SeverityWarning, got[mon], "a confirmed day is at most a warning")
+}
+
+// R6 (planner-10, -22): with plate fit on the lift rounds every grown
+// component up to a quarter portion; a day just under its band must not end
+// above the band top because both its dishes took a quarter more. A quarter
+// less on one of them lands inside (lose: band 90-105 %).
+func TestHeuristic_RoundedUpLiftDoesNotCarryADayPastTheBandTop(t *testing.T) {
+	s := baseState()
+	s.Profile.KcalTarget = f64(2000)
+	s.Profile.Goal = profile.GoalLose
+	s.Settings.PlateFit = true
+	a := recipe(chili, "Main", food.RoleMain, "omnivore", 200)
+	a.ReferencePortions = 1
+	b := recipe(rice, "Starch", food.RoleSideStarch, "vegan", 280)
+	b.ReferencePortions = 1
+	s.Foods = map[int64]planning.FoodFacts{chili: a, rice: b}
+	setMode(&s, cell(mon, breakfast), "none")
+	setMode(&s, cell(mon, lunch), "none")
+	tgt := targetCells(cell(mon, dinner))
+
+	p := choose(t, planning.ChooseInput{State: s, Target: tgt})
+
+	ev := planning.Evaluate(planning.Merge(s, tgt, p), tgt)
+	i := slices.IndexFunc(ev.Days, func(d planning.DayEval) bool { return d.Date == mon })
+	if assert.GreaterOrEqual(t, i, 0) && assert.NotNil(t, ev.Days[i].TargetKcal) {
+		d := ev.Days[i]
+		assert.LessOrEqual(t, d.Kcal, *d.TargetKcal*1.05+1, "the day stays at or under the band top")
+		assert.GreaterOrEqual(t, d.Kcal, *d.TargetKcal*0.9-1, "and does not fall under its bottom")
+	}
 }

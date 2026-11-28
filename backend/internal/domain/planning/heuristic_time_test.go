@@ -7,6 +7,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // KIT-1: the time allowance is a soft preference. Of two mains, the favourite
@@ -85,5 +86,37 @@ func TestHeuristic_ChefOnBlocksRecipeOverSlotAllowance(t *testing.T) {
 			p := choose(t, planning.ChooseInput{State: tc.s, Target: targetCells(cell(tc.date, dinner))})
 			assert.Equal(t, tc.placed, len(p.Sessions) == 1)
 		})
+	}
+}
+
+// R6 (planner-13): a time wish leaves two quick mains for three dinners.
+// A third cook would repeat one of them (H8, hard: nothing is saved), so the
+// third dinner eats a batch the plan cooks anyway; the slow main stays out.
+func TestHeuristic_QuickWishFeedsFromABatchBeforeARepeat(t *testing.T) {
+	s := baseState()
+	s.Settings.BatchCooking = true
+	s.Foods = map[int64]planning.FoodFacts{}
+	for id, min := range map[int64]int{chili: 20, curry: 25, soup: 50} {
+		f := recipe(id, "Dish", food.RoleMain, "vegan", 500)
+		f.Minutes, f.ReferencePortions = min, 1
+		s.Foods[id] = f
+	}
+	cells := []plate.CellKey{cell(mon, dinner), cell(tue, dinner), cell(wed, dinner)}
+	s.MaxMinutes = planning.MaxMinutesAtCells(30, cells...)
+	in := planning.ChooseInput{State: s, Target: targetCells(cells...)}
+
+	p := choose(t, in)
+
+	assert.Len(t, p.Plates, 3)
+	assert.Len(t, p.Sessions, 2, "two cooks, the third dinner eats a leftover")
+	seen := map[int64]bool{}
+	for _, ss := range p.Sessions {
+		assert.NotEqual(t, int64(soup), ss.FoodID, "a main over the wish's minutes stays out")
+		assert.False(t, seen[ss.FoodID], "no dish is cooked twice")
+		seen[ss.FoodID] = true
+	}
+	ev := planning.Evaluate(planning.Merge(s, in.Target, p), in.Target)
+	for _, is := range violations(ev.Issues) {
+		assert.NotEqual(t, planning.CodeVarietyRepeat, is.Code)
 	}
 }

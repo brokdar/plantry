@@ -103,6 +103,61 @@ func (h *planner) topUpFloors() {
 		h.liftWeek(false)
 		h.nutritionFill()
 	}
+	h.trimOvershoot()
+}
+
+// trimOvershoot takes back a quarter portion at a time from components the
+// lifts raised on a day that ended above its band top, while the day stays
+// at or above its band bottom: rounding every grown component up to a
+// quarter portion can carry a day past the band although a smaller step
+// lands inside it (R6: days at +6 to +9 % on a 105 % band). A day inside its
+// band, or one that no step of a quarter portion brings inside, stays.
+func (h *planner) trimOvershoot() {
+	_, days := h.dayAccounts()
+	for _, d := range days {
+		for range 16 {
+			dk := h.dayNow(d.Date)
+			if dk == nil || dk.Adjusted <= 0 || dk.Kcal <= dk.Adjusted*h.x.pol.DayHigh+epsilon || !h.trimStep(dk) {
+				break
+			}
+		}
+	}
+}
+
+// trimStep lowers one raised component of dk's day by a quarter portion
+// when that keeps the day at or above its band bottom and brings it closer
+// to the band top; false when no component does.
+func (h *planner) trimStep(dk *DayKcal) bool {
+	sessions := map[string]int{}
+	for i, ss := range h.prop.Sessions {
+		sessions[ss.Key] = i
+	}
+	for pi := range h.prop.Plates {
+		p := &h.prop.Plates[pi]
+		if dayOf(p.Date) != dayOf(dk.Date) {
+			continue
+		}
+		for ci := range p.Components {
+			c := &p.Components[ci]
+			base, seen := h.topUpBase[[2]int{pi, ci}]
+			if !seen || c.Portions-roundPortions < base-epsilon {
+				continue
+			}
+			c.Portions -= roundPortions
+			si, ok := sessions[c.SessionKey]
+			if ok {
+				h.prop.Sessions[si].Portions -= p.eaters(h.s) * roundPortions
+			}
+			if now := h.dayNow(dk.Date); now != nil && now.Kcal >= now.Adjusted*h.x.pol.DayLow-epsilon && now.Kcal < dk.Kcal {
+				return true
+			}
+			c.Portions += roundPortions
+			if ok {
+				h.prop.Sessions[si].Portions += p.eaters(h.s) * roundPortions
+			}
+		}
+	}
+	return false
 }
 
 // nutritionFill is the second filler pass with plate fit on (PLATE-4: hard

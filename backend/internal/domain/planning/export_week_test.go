@@ -180,3 +180,12 @@ var FixVariety = fixVariety
 func MaxMinutesAt(c plate.CellKey, minutes int) map[cellID]int {
 	return map[cellID]int{idOf(c): minutes}
 }
+
+// MaxMinutesAtCells builds a State.MaxMinutes limit for several cells.
+func MaxMinutesAtCells(minutes int, cs ...plate.CellKey) map[cellID]int {
+	out := map[cellID]int{}
+	for _, c := range cs {
+		out[idOf(c)] = minutes
+	}
+	return out
+}
