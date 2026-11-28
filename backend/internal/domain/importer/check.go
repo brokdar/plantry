@@ -570,10 +570,28 @@ func apply(d *Draft, r checkReply, lang string) (*Check, []string) {
 }
 
 // draftLang is the language the draft's own text is in: its recipe language,
-// else the user's.
+// else what its ingredient lines and steps read as, else the user's.
 func draftLang(d *Draft, lang string) string {
 	if d.Language == "de" || d.Language == "en" {
 		return d.Language
+	}
+	text := append([]string{}, d.Instructions...)
+	for _, in := range d.Ingredients {
+		text = append(text, in.Name)
+	}
+	if got := DetectLanguage(text); got != "unknown" {
+		return got
+	}
+	joined := " " + strings.ToLower(strings.Join(d.Instructions, " ")) + " "
+	de := strings.Count(joined, " und ") + strings.Count(joined, " der ") + strings.Count(joined, " die ") +
+		strings.Count(joined, " das ") + strings.Count(joined, " mit ") + strings.Count(joined, " in ")
+	en := strings.Count(joined, " and ") + strings.Count(joined, " the ") + strings.Count(joined, " with ") +
+		strings.Count(joined, " until ") + strings.Count(joined, " for ")
+	switch {
+	case de > en:
+		return "de"
+	case en > de:
+		return "en"
 	}
 	return lang
 }

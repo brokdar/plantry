@@ -522,3 +522,11 @@ func TestCheck_ATranslatedStepKeepsNoSourceLanguageClarityFlag(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, check.Flags, "both steps were translated")
 }
+
+func TestDraftLang_ADraftWithoutLanguageIsReadFromItsOwnText(t *testing.T) {
+	de := &importer.Draft{Instructions: []string{"Hähnchen in der Pfanne braten."}}
+	assert.Equal(t, "de", importer.DraftLang(de, "en"))
+	en := &importer.Draft{Instructions: []string{"Fry the chicken with the rice until done."}}
+	assert.Equal(t, "en", importer.DraftLang(en, "de"))
+	assert.Equal(t, "de", importer.DraftLang(&importer.Draft{}, "de"))
+}
