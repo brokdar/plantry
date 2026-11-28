@@ -159,6 +159,17 @@ test("the three tiles: explain a step, something went wrong, no ingredient", asy
     const answer = page.getByTestId("help-answer")
     await expect(answer).toContainText("Chop the onions small.")
     await expect(answer.locator("li")).toHaveCount(2)
+    // The one-tap verdict is kept and changeable.
+    await page.getByTestId("help-verdict-helped").click()
+    await expect(page.getByTestId("help-verdict-helped")).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    )
+    await page.getByTestId("help-verdict-not_helped").click()
+    await expect(page.getByTestId("help-verdict-not_helped")).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    )
     await page.keyboard.press("Escape")
 
     // Something went wrong: a chip, then the answer.

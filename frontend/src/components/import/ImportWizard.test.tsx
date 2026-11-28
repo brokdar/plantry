@@ -17,6 +17,7 @@ vi.mock("@/lib/api/import", () => ({
   extractRecipe: vi.fn(),
   lookupImportLine: vi.fn(),
   resolveImport: vi.fn(),
+  postImportCheckOutcome: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock("@/lib/api/foods", async (importOriginal) => ({
@@ -33,6 +34,7 @@ vi.mock("sonner", () => ({
 import {
   extractRecipe,
   lookupImportLine,
+  postImportCheckOutcome,
   resolveImport,
 } from "@/lib/api/import"
 import { createFood, getFoodNutrition, listPortions } from "@/lib/api/foods"
@@ -255,6 +257,7 @@ describe("ImportWizard", () => {
       },
       check: {
         ran: true,
+        run_id: 9,
         changes: [
           {
             id: "c1",
@@ -308,6 +311,17 @@ describe("ImportWizard", () => {
       { step_number: 2, text: "Backen." },
       { step_number: 3, text: "Mit Petersilie bestreuen." },
     ])
+    // The outcome goes out with Save, no extra click.
+    await waitFor(() =>
+      expect(postImportCheckOutcome).toHaveBeenCalledWith({
+        run_id: 9,
+        food_id: 5,
+        kept: ["keep"],
+        undone: ["safety_cue"],
+        touch: "added",
+        flags: 1,
+      })
+    )
   })
 
   function stepCheck(instructions: string[]) {

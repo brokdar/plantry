@@ -11,9 +11,14 @@ import {
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import { ApiError } from "@/lib/api/client"
-import { HELP_PROBLEMS, type HelpInput, type HelpProblem } from "@/lib/api/help"
+import {
+  HELP_PROBLEMS,
+  type HelpInput,
+  type HelpProblem,
+  type HelpVerdict,
+} from "@/lib/api/help"
 import type { ScaledIngredient } from "@/lib/api/foods"
-import { useAskHelp } from "@/lib/queries/help"
+import { useAskHelp, useHelpVerdict } from "@/lib/queries/help"
 
 import { SubstituteDialog } from "./SubstituteDialog"
 
@@ -45,7 +50,9 @@ export function HelpButton({
   const [problem, setProblem] = useState<HelpProblem | null>(null)
   const [text, setText] = useState("")
   const [last, setLast] = useState<HelpInput | null>(null)
+  const [verdict, setVerdict] = useState<HelpVerdict | null>(null)
   const ask = useAskHelp()
+  const sendVerdict = useHelpVerdict()
   const choices = (ingredients ?? [])
     .filter((i) => i.kind === "leaf")
     .map((i) => ({ id: i.child_id, name: i.name }))
@@ -55,11 +62,13 @@ export function HelpButton({
     setProblem(null)
     setText("")
     setLast(null)
+    setVerdict(null)
     ask.reset()
   }
 
   function send(input: HelpInput) {
     setLast(input)
+    setVerdict(null)
     setView("answer")
     ask.mutate(input)
   }
@@ -218,14 +227,41 @@ export function HelpButton({
                 </div>
               )}
               {ask.isSuccess && (
-                <ul
-                  className="flex flex-col gap-2 text-h3 text-ink"
-                  data-testid="help-answer"
-                >
-                  {ask.data.answer.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
+                <>
+                  <ul
+                    className="flex flex-col gap-2 text-h3 text-ink"
+                    data-testid="help-answer"
+                  >
+                    {ask.data.answer.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                  <div
+                    role="group"
+                    aria-label={t("help.verdict.label")}
+                    className="flex gap-2"
+                  >
+                    {(["helped", "not_helped"] as const).map((v) => (
+                      <Button
+                        key={v}
+                        type="button"
+                        variant={verdict === v ? "secondary" : "ghost"}
+                        className="h-11 px-4 text-body text-ink-muted"
+                        aria-pressed={verdict === v}
+                        data-testid={`help-verdict-${v}`}
+                        onClick={() => {
+                          setVerdict(v)
+                          sendVerdict.mutate({
+                            runId: ask.data.run_id,
+                            verdict: v,
+                          })
+                        }}
+                      >
+                        {t(`help.verdict.${v}`)}
+                      </Button>
+                    ))}
+                  </div>
+                </>
               )}
               {ask.isError && (
                 <div className="flex flex-col gap-3" role="alert">

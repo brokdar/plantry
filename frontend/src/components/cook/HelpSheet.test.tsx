@@ -10,6 +10,7 @@ import { renderWithRouter } from "@/test/render"
 vi.mock("@/lib/api/help", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/help")>()),
   askHelp: vi.fn(),
+  setHelpVerdict: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock("@/lib/api/substitutions", () => ({
   getSubstitutes: vi.fn().mockResolvedValue({ options: [], session_ids: [7] }),
@@ -19,7 +20,7 @@ vi.mock("@/lib/api/substitutions", () => ({
 vi.mock("@/lib/api/foods", () => ({ revertFoodChange: vi.fn() }))
 vi.mock("@/lib/toast", () => ({ toast: vi.fn(), toastError: vi.fn() }))
 
-import { askHelp } from "@/lib/api/help"
+import { askHelp, setHelpVerdict } from "@/lib/api/help"
 
 import { HelpButton } from "./HelpSheet"
 
@@ -28,6 +29,33 @@ function renderHelp() {
     <HelpButton sessionId={7} step={2} ingredients={mockScaled.ingredients} />
   )
 }
+
+describe("HelpButton verdict", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    await i18n.changeLanguage("en")
+  })
+
+  it("sends one tap per answer, changeable, and clears for the next answer", async () => {
+    vi.mocked(askHelp).mockResolvedValue({ answer: ["Stir."], run_id: 42 })
+    const user = userEvent.setup()
+    renderHelp()
+    await user.click(await screen.findByTestId("help-open"))
+    await user.click(screen.getByTestId("help-tile-explain"))
+    await user.click(await screen.findByTestId("help-verdict-helped"))
+    expect(setHelpVerdict).toHaveBeenLastCalledWith(42, "helped")
+    expect(screen.getByTestId("help-verdict-helped")).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    )
+    await user.click(screen.getByTestId("help-verdict-not_helped"))
+    expect(setHelpVerdict).toHaveBeenLastCalledWith(42, "not_helped")
+    expect(screen.getByTestId("help-verdict-helped")).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    )
+  })
+})
 
 describe("HelpButton", () => {
   beforeEach(async () => {

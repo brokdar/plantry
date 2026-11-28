@@ -132,6 +132,26 @@ export interface ImportCheck {
   flags: ImportFlag[]
   finishing_touch?: string
   cap_warning?: boolean
+  /** The chef_import_check run; sent back with the outcome on Save. */
+  run_id?: number
+}
+
+export interface ImportCheckOutcome {
+  run_id: number
+  food_id: number
+  /** Kinds of the applied changes the user kept / put back. */
+  kept: string[]
+  undone: string[]
+  touch: "none" | "added" | "skipped"
+  flags: number
+}
+
+/** What the user did with the check's findings; sent after Save. */
+export function postImportCheckOutcome(o: ImportCheckOutcome): Promise<void> {
+  return apiFetch(`/import/check/outcome`, {
+    method: "POST",
+    body: JSON.stringify(o),
+  })
 }
 
 export interface ExtractRequest {

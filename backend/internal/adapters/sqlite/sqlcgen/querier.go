@@ -325,6 +325,34 @@ type Querier interface {
 	ReinsertPlate(ctx context.Context, arg ReinsertPlateParams) error
 	RemoveBasicAtHome(ctx context.Context, foodID int64) error
 	RemoveNeverItem(ctx context.Context, foodID int64) error
+	// Capped Chef spend per calendar month from from_month ("2006-01") on.
+	ReportChefSpendByMonth(ctx context.Context, arg ReportChefSpendByMonthParams) ([]ReportChefSpendByMonthRow, error)
+	// The closing plan.evaluation (last 'after' or 'final_proposal' step) of each
+	// generate or regenerate run of the window.
+	ReportClosingEvaluations(ctx context.Context, fromTs string) ([]ReportClosingEvaluationsRow, error)
+	// Accepted finds of the window: still a recipe (food_id is cleared when the
+	// recipe is deleted), cooked at least once, eaten on a rated plate.
+	ReportFindFunnel(ctx context.Context, fromTs string) (ReportFindFunnelRow, error)
+	ReportFindRejectReasons(ctx context.Context, fromTs string) ([]ReportFindRejectReasonsRow, error)
+	ReportFindStates(ctx context.Context, fromTs string) ([]ReportFindStatesRow, error)
+	// Answered help runs of the window by verdict ('none' when not given).
+	ReportHelpVerdicts(ctx context.Context, fromTs string) ([]ReportHelpVerdictsRow, error)
+	ReportImportOutcomes(ctx context.Context, fromTs string) ([]ReportImportOutcomesRow, error)
+	ReportJobs(ctx context.Context, fromTs string) ([]ReportJobsRow, error)
+	// Rated plates of the window by status, split by whether the plate holds a
+	// dish the Chef brought (an accepted find or a trial recipe).
+	ReportRatings(ctx context.Context, fromTs string) ([]ReportRatingsRow, error)
+	ReportRunDurations(ctx context.Context, fromTs string) ([]ReportRunDurationsRow, error)
+	ReportRunErrors(ctx context.Context, fromTs string) ([]ReportRunErrorsRow, error)
+	ReportRunModels(ctx context.Context, fromTs string) ([]ReportRunModelsRow, error)
+	// Read-only aggregates for `plantry report`. from_ts is the window start in
+	// the stored time layout ("2006-01-02 15:04:05", UTC). No free text is
+	// selected: no prompts, no help questions, no recipe text.
+	// Runs of the window by kind, chooser and status, with their cost.
+	ReportRunStats(ctx context.Context, fromTs string) ([]ReportRunStatsRow, error)
+	// Recipes the Chef put on trial (a snapshot, not windowed): still in the
+	// library (not archived), archived, and cooked at least once.
+	ReportTrialFoods(ctx context.Context) (ReportTrialFoodsRow, error)
 	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
 	SaveLibraryReview(ctx context.Context, arg SaveLibraryReviewParams) error
 	SetChefTipState(ctx context.Context, arg SetChefTipStateParams) error
@@ -388,7 +416,12 @@ type Querier interface {
 	UpsertCookSession(ctx context.Context, arg UpsertCookSessionParams) error
 	UpsertFoodAttributes(ctx context.Context, arg UpsertFoodAttributesParams) error
 	UpsertFoodPortion(ctx context.Context, arg UpsertFoodPortionParams) error
+	// Keeps the verdict of a chef_help run with its recipe (from the run's
+	// scope: the cook session) and request kind. No row is written for a run that
+	// is not a chef_help run.
+	UpsertHelpVerdict(ctx context.Context, arg UpsertHelpVerdictParams) (int64, error)
 	UpsertHiddenVariant(ctx context.Context, arg UpsertHiddenVariantParams) error
+	UpsertImportCheckOutcome(ctx context.Context, arg UpsertImportCheckOutcomeParams) error
 	UpsertPlateFeedback(ctx context.Context, arg UpsertPlateFeedbackParams) (PlateFeedback, error)
 	UpsertProfile(ctx context.Context, arg UpsertProfileParams) (UserProfile, error)
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error

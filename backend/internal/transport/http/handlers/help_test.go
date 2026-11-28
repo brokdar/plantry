@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -104,7 +105,9 @@ func newHelpEnvWrapped(t *testing.T, wrap func(*fake.Client) llm.Client, chefOn,
 	}
 	svc := chefhelp.NewService(se.sessions, se.foods, profile.NewService(sqlite.NewProfileRepo(se.db)), set, guard, resolver, rec)
 	r := chi.NewRouter()
-	r.Post("/api/help", handlers.NewHelpHandler(svc).Help)
+	hh := handlers.NewHelpHandler(svc).WithVerdicts(sqlite.NewOutcomeRepo(se.db))
+	r.Post("/api/help", hh.Help)
+	r.Put("/api/chef/help/{runId}/verdict", hh.Verdict)
 	r.Handle("/api/cook-sessions/*", se.api) // the substitution routes
 	se.api = r
 	return &helpEnv{subEnv: se, client: client}
@@ -277,4 +280,35 @@ func TestHelp_PromptUsesTheSubstitutedIngredient(t *testing.T) {
 	prompt := e.client.Requests()[0].Messages[0].Content[0].Text
 	assert.Contains(t, prompt, "Schalotte")
 	assert.NotContains(t, prompt, e.onion.Name)
+}
+
+func TestHelp_VerdictIsKeptWithRecipeAndChangeable(t *testing.T) {
+	t.Parallel()
+	e := newHelpEnv(t, true, true, 0, helpTurn(`{"lines":["Stir."]}`))
+	_, out := e.ask(t, map[string]any{"kind": "explain_step", "step_index": 1})
+	url := fmt.Sprintf("/api/chef/help/%d/verdict", int64(out["run_id"].(float64)))
+
+	code, _ := e.do(t, http.MethodPut, url, map[string]any{"verdict": "helped"})
+	require.Equal(t, http.StatusNoContent, code)
+	code, _ = e.do(t, http.MethodPut, url, map[string]any{"verdict": "not_helped"})
+	require.Equal(t, http.StatusNoContent, code)
+
+	var verdict, kind string
+	var foodID int64
+	var n int
+	require.NoError(t, e.db.QueryRow(`SELECT verdict, kind, food_id FROM chef_help_verdicts`).Scan(&verdict, &kind, &foodID))
+	require.NoError(t, e.db.QueryRow(`SELECT COUNT(*) FROM chef_help_verdicts`).Scan(&n))
+	assert.Equal(t, "not_helped", verdict)
+	assert.Equal(t, "explain_step", kind)
+	assert.NotZero(t, foodID)
+	assert.Equal(t, 1, n)
+}
+
+func TestHelp_VerdictRejectsUnknownRunAndVerdict(t *testing.T) {
+	t.Parallel()
+	e := newHelpEnv(t, true, true, 0, helpTurn(`{"lines":["Stir."]}`))
+	code, _ := e.do(t, http.MethodPut, "/api/chef/help/999/verdict", map[string]any{"verdict": "helped"})
+	assert.Equal(t, http.StatusNotFound, code)
+	code, _ = e.do(t, http.MethodPut, "/api/chef/help/1/verdict", map[string]any{"verdict": "meh"})
+	assert.Equal(t, http.StatusBadRequest, code)
 }

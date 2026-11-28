@@ -43,6 +43,24 @@ const (
 	ChangeTranslate = "translate"
 )
 
+// ValidOutcomeKinds reports whether every entry is a change kind and there
+// are no more than a check can make (one change per kind per recipe is the
+// norm; a few repeats are allowed).
+func ValidOutcomeKinds(kinds []string) bool {
+	if len(kinds) > maxOutcomeKinds {
+		return false
+	}
+	known := []string{ChangeTime, ChangeUnit, ChangeKeep, ChangeSafetyCue, ChangeClarity, ChangeLeadTime, ChangeRole, ChangeAmount, ChangeTranslate}
+	for _, k := range kinds {
+		if !slices.Contains(known, k) {
+			return false
+		}
+	}
+	return true
+}
+
+const maxOutcomeKinds = 50
+
 // Edit fields. The review applies an edit by field and undoes it by putting
 // Before back.
 const (
@@ -104,6 +122,28 @@ type Check struct {
 	// CapWarning: the check ran at the monthly cap because the user asked
 	// for it (COST-2).
 	CapWarning bool `json:"cap_warning,omitempty"`
+	// RunID is the chef_import_check run; the client sends it back with the
+	// outcome when the recipe is saved.
+	RunID int64 `json:"run_id,omitempty"`
+}
+
+// CheckOutcome is what the user did with a check's findings when the recipe
+// was saved. Flags are never applied or dismissed, so Flags counts the ones
+// a saved recipe ignored.
+type CheckOutcome struct {
+	RunID  int64
+	FoodID int64
+	// Kept and Undone are the kinds of the applied changes the user kept and
+	// put back.
+	Kept, Undone []string
+	// Touch is "none" (no suggestion), "added" or "skipped".
+	Touch string
+	Flags int
+}
+
+// OutcomeStore keeps check outcomes (one per run, a resave replaces it).
+type OutcomeStore interface {
+	SaveCheckOutcome(ctx context.Context, o CheckOutcome, now time.Time) error
 }
 
 // CheckPermit is the Chef guard's answer for one import check.
@@ -195,6 +235,7 @@ func (c *Checker) run(ctx context.Context, d *Draft, lang string) (*Check, error
 	out, rejected := apply(d, reply, lang)
 	out.Ran = true
 	out.CapWarning = permit.Warn
+	out.RunID = run.ID()
 	if report, err := json.Marshal(struct {
 		Applied  int      `json:"applied"`
 		Flags    int      `json:"flags"`

@@ -364,3 +364,15 @@ func buildRequest(model string, req Request, recipe *food.Food, portions float64
 func number(v float64) string {
 	return strings.TrimSuffix(strings.TrimRight(fmt.Sprintf("%.2f", v), "0"), ".")
 }
+
+// Verdicts the user gives a help answer (R6 outcomes).
+const (
+	VerdictHelped    = "helped"
+	VerdictNotHelped = "not_helped"
+)
+
+// VerdictStore keeps the one-tap verdict of a chef_help run, changeable. It
+// returns domain.ErrNotFound for a run that is not a chef_help run.
+type VerdictStore interface {
+	SetVerdict(ctx context.Context, runID int64, verdict string, now time.Time) error
+}

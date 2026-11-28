@@ -82,6 +82,13 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "report" {
+		if err := runReport(os.Args[2:], os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "fatal:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "fatal:", err)
 		os.Exit(1)
@@ -129,14 +136,7 @@ func run() error {
 	}
 
 	settingsRepo := sqlite.NewAppSettingsRepo(conn)
-	envSnapshot := settingsdom.NewEnvSnapshot(map[string]string{
-		"PLANTRY_AI_PROVIDER":           cfg.AIProvider,
-		"PLANTRY_AI_MODEL":              cfg.AIModel,
-		"PLANTRY_AI_API_KEY":            cfg.AIAPIKey,
-		"PLANTRY_AI_RATE_LIMIT_PER_MIN": strconvOrEmpty(cfg.AIRateLimitPerMin),
-		"PLANTRY_AI_FAKE_SCRIPT":        cfg.AIFakeScript,
-		"PLANTRY_FDC_API_KEY":           cfg.FDCAPIKey,
-	})
+	envSnapshot := settingsEnv(cfg)
 	settingsSvc := settingsdom.NewService(settingsRepo, envSnapshot, cipher)
 	if err := seedFreshInstall(context.Background(), settingsSvc, fresh); err != nil {
 		return fmt.Errorf("seed fresh install: %w", err)
@@ -475,7 +475,8 @@ func run() error {
 			d, err := matchGuard.Check(ctx, airun.KindChefImportCheck, requested)
 			return importer.CheckPermit{Run: d.Run, Warn: d.Warn}, err
 		}))
-	importHandler := handlers.NewImportHandler(importSvc)
+	outcomeRepo := sqlite.NewOutcomeRepo(conn)
+	importHandler := handlers.NewImportHandler(importSvc).WithOutcomes(outcomeRepo)
 
 	// Discovery (D7): research → verify → annotate → store, one run
 	// at a time in the background. LLM-supplied URLs
@@ -724,7 +725,7 @@ func run() error {
 		Availability:  handlers.NewAvailabilityHandler(availabilitySvc).WithClock(clock.Now),
 		FoodEvents:    handlers.NewFoodEventHandler(foodEventSvc),
 		Substitutions: handlers.NewSubstitutionHandler(substitutionSvc),
-		Help:          handlers.NewHelpHandler(helpSvc),
+		Help:          handlers.NewHelpHandler(helpSvc).WithVerdicts(outcomeRepo),
 		RecipeChanges: handlers.NewRecipeChangeHandler(recipeChangeSvc),
 		Attributes:    handlers.NewAttributeHandler(flavorSvc),
 		Setup:         handlers.NewSetupHandler(setup.NewService(settingsSvc, foodRepo)),
@@ -802,6 +803,18 @@ func loadRecipes(ctx context.Context, repo *sqlite.FoodRepo, ids []int64) (map[i
 		out[id] = f
 	}
 	return out, nil
+}
+
+// settingsEnv is the environment the settings service falls back to.
+func settingsEnv(cfg config.Config) settingsdom.EnvSnapshot {
+	return settingsdom.NewEnvSnapshot(map[string]string{
+		"PLANTRY_AI_PROVIDER":           cfg.AIProvider,
+		"PLANTRY_AI_MODEL":              cfg.AIModel,
+		"PLANTRY_AI_API_KEY":            cfg.AIAPIKey,
+		"PLANTRY_AI_RATE_LIMIT_PER_MIN": strconvOrEmpty(cfg.AIRateLimitPerMin),
+		"PLANTRY_AI_FAKE_SCRIPT":        cfg.AIFakeScript,
+		"PLANTRY_FDC_API_KEY":           cfg.FDCAPIKey,
+	})
 }
 
 // strconvOrEmpty renders a non-negative int as its decimal form, returning

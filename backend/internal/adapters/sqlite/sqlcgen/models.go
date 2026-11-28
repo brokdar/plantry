@@ -149,6 +149,15 @@ type BasicsAtHome struct {
 	Removed int64
 }
 
+type ChefHelpVerdict struct {
+	RunID     int64
+	FoodID    sql.NullInt64
+	Kind      string
+	Verdict   string
+	CreatedAt string
+	UpdatedAt string
+}
+
 type ChefJob struct {
 	ID        int64
 	Kind      string
@@ -327,6 +336,16 @@ type HiddenVariant struct {
 	FoodID     int64
 	BaseFoodID sql.NullInt64
 	SessionID  sql.NullInt64
+}
+
+type ImportCheckOutcome struct {
+	RunID     int64
+	FoodID    sql.NullInt64
+	Kept      string
+	Undone    string
+	Touch     string
+	Flags     int64
+	CreatedAt string
 }
 
 type KitchenQuestionsAsked struct {

@@ -341,6 +341,12 @@ Package `domain/discovery`; migration `00039_recipe_suggestions.sql` (`recipe_su
 
 `plantry backup -out <file>` (`cmd/plantry/backup.go`) opens the configured database, runs `VACUUM INTO` a pre-created 0600 file (safe under WAL while the server runs), copies `secret.key` beside it, refuses an existing target and removes the partial file on failure. `cmd/plantry` also carries `version`/`commit` (ldflags) shown by `GET /api/health` and in Settings → Data & system. The restore steps are in the root `README.md`; `adapters/sqlite/testdata/phase2.db` (with its README) is the committed Phase 2 fixture the migrate test upgrades.
 
+## Outcome signals and `plantry report`
+
+The app sends nothing off the server; feedback is what the DB holds. Two tables beyond the run log keep outcomes (migration 00076, no foreign key to `ai_runs`, which is pruned): `chef_help_verdicts` (`PUT /api/chef/help/{runId}/verdict {verdict: helped|not_helped}`, changeable; recipe and request kind come from the run's `scope_json` in one INSERT...SELECT, so a non-`chef_help` run is a 404) and `import_check_outcomes` (`POST /api/import/check/outcome`, sent by the wizard on Save with the check's `run_id`: kept and undone change kinds, finishing touch none/added/skipped, flags shown; flags are never applied or dismissed, so a saved recipe ignored them). Plan swaps are not tracked.
+
+`plantry report -out <file> [-days N]` (`cmd/plantry/report.go`) opens the DB with `mode=ro` and writes Markdown: `sqlite.ReportRepo.Collect` (queries in `queries/report.sql`, percentiles and the closing `plan.evaluation` issue counts in Go) fills `report.Data`, `internal/report` renders it and picks the Problems. Counts, rates, durations and dish names only: never keys, prompts or typed text. Golden: `cmd/plantry/testdata/report.golden.md` (`go test ./cmd/plantry -run TestReportGolden -update`) over `testhelper.SeedReport`.
+
 ## Setup
 
 Package `domain/setup`. `GET /api/setup` returns `{completed, recipe_count, recipe_target}` (`setup.completed` and the count of composed foods against `setup.RecipeTarget` = 10); `POST /api/setup/complete` sets `setup.completed` and returns the same. Migration 00023 marks existing installs (any time slots) as completed.
