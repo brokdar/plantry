@@ -34,8 +34,11 @@ func TestPrepKind(t *testing.T) {
 		{"dried lentils need no soak", recipe([]string{"Dried red lentils"}), ""},
 		{"marinate step", recipe([]string{"Chicken"}, "Marinate the chicken overnight."), ReminderMarinate},
 		{"marinieren", recipe([]string{"Tofu"}, "Den Tofu 4 Stunden marinieren."), ReminderMarinate},
-		{"frozen spinach", recipe([]string{"Frozen spinach"}), ReminderThaw},
-		{"TK-Erbsen", recipe([]string{"TK-Erbsen"}), ReminderThaw},
+		{"frozen spinach goes straight in", recipe([]string{"Frozen spinach"}), ""},
+		{"TK-Erbsen go straight in", recipe([]string{"TK-Erbsen", "Pasta"}), ""},
+		{"frozen berries", recipe([]string{"Frozen berries"}), ""},
+		{"frozen chicken", recipe([]string{"Frozen chicken breast"}), ReminderThaw},
+		{"TK-Lachsfilet", recipe([]string{"TK-Lachsfilet"}), ReminderThaw},
 		{"soak wins over marinate", recipe([]string{"Dried black beans"}, "Marinate the pork."), ReminderSoak},
 		{"nothing", recipe([]string{"Pasta", "Tomato"}, "Boil the pasta."), ""},
 	} {
@@ -88,7 +91,8 @@ func TestPrepAheadOf(t *testing.T) {
 		{"soak dried chickpeas", []string{"dried chickpeas"}, []string{"Soak the chickpeas."}, &PrepAhead{Kind: "soak"}},
 		{"soak 6 hours", []string{"dried chickpeas"}, []string{"Soak for 6 hours."}, &PrepAhead{Kind: "soak", Hours: 6}},
 		{"soak 30 minutes needs no mark", []string{"dried chickpeas"}, []string{"Soak for 30 minutes."}, nil},
-		{"thaw", []string{"frozen peas"}, []string{"Cook."}, &PrepAhead{Kind: "thaw"}},
+		{"thaw", []string{"frozen salmon fillet"}, []string{"Cook."}, &PrepAhead{Kind: "thaw"}},
+		{"frozen peas need no thaw", []string{"frozen peas"}, []string{"Cook."}, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -57,7 +57,11 @@ var (
 	fruitLeafWords = []string{"apfel", "apple", "banan", "orange", "mandarin", "clementin", "beere", "berry", "berries", "birne", "pear", "kiwi", "mango", "traube", "grape", "pfirsich", "peach", "nektarin", "melon", "ananas", "pineapple", "pflaume", "plum", "kirsch", "cherr", "aprikose", "apricot", "obst", "fruit", "frucht"}
 	tofuWords      = []string{"tofu", "tempeh", "seitan"}
 	eggWords       = []string{"egg", "eggs", "ei", "eier", "omelette", "omelet", "frittata", "ruehrei"}
-	proteinWords   = []string{"tofu", "tempeh", "seitan", "halloumi", "paneer", "omelette", "omelet", "frittata", "ruehrei", "schnitzel", "falafel"}
+	// curedWords and curedParts name cold-cured fish and meat: a topping for
+	// a cold dish, not a protein beside a warm main.
+	curedWords   = []string{"ham", "salami", "speck", "bacon"}
+	curedParts   = []string{"smoked", "geraeuchert", "raeucher", "schinken", "prosciutto"}
+	proteinWords = []string{"tofu", "tempeh", "seitan", "halloumi", "paneer", "omelette", "omelet", "frittata", "ruehrei", "schnitzel", "falafel"}
 )
 
 // Dish kinds of a main, from its kind attribute or else its name.
@@ -196,12 +200,44 @@ func (s State) addFits(p Plate, f FoodFacts, slot string) bool {
 		case hasWholeWord(name, eggWords):
 			return in("salad", "bowl", "curry", "stirfry", "potato")
 		case f.Groups.MeatG > 0 || f.Groups.FishG > 0:
+			if !s.weekHasRoomFor(p, f) {
+				return false
+			}
+			if hasWholeWord(name, curedWords) || containsAny(name, curedParts) {
+				return in("salad", "bowl", "wrap", "bread") && !in("bake", "soup", "pasta", "stew", "curry")
+			}
 			return in("salad", "bowl", "wrap", "bread", "potato") && !in("soup", "pasta", "stew", "curry")
 		default: // a legume
 			return in("salad", "bowl", "wrap", "curry", "stew", "soup") || slices.Contains([]string{"middle_eastern", "indian", "mexican"}, cuisine)
 		}
 	}
 	return true
+}
+
+// weekHasRoomFor reports whether a meat or fish filler f on plate p (which
+// holds no protein yet, so f makes it a fish or meat meal) keeps the window
+// within the DGE limits: at most DGEFishMaxMeals fish meals and the meat
+// limit, counted from the other plates as the
+// evaluator does.
+func (s State) weekHasRoomFor(p Plate, f FoodFacts) bool {
+	fishMeals, meatG := 0, 0.0
+	for _, q := range s.Plates {
+		if q.ID == p.ID || !s.Window.Contains(q.Date) {
+			continue
+		}
+		var g FoodGroups
+		for _, c := range q.Components {
+			g = g.add(s.Foods[c.FoodID].Groups.times(c.Multiplier()))
+		}
+		if g.FishG >= minMealG {
+			fishMeals++
+		}
+		meatG += g.MeatG
+	}
+	if f.Groups.FishG >= minMealG && fishMeals >= DGEFishMaxMeals {
+		return false
+	}
+	return f.Groups.MeatG <= 0 || meatG+f.Groups.MeatG <= DGEMeatMaxG
 }
 
 // savouryMain is plate p's main when it is a savoury lunch or dinner main

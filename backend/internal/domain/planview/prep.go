@@ -28,6 +28,14 @@ var (
 	soakLegumes   = []string{"chickpea", "bean", "kichererbse", "bohne", "erbse", "peas"}
 	marinateWords = []string{"marinate", "marinade", "marinier"}
 	frozenWords   = []string{"frozen", "tiefgekühlt", "tiefgefroren", "gefroren", "tk-", "tk "}
+	// needThaw are the frozen items that must thaw ahead; frozen vegetables,
+	// peas, berries and herbs go straight into the pan.
+	needThaw = []string{
+		"meat", "beef", "pork", "lamb", "chicken", "turkey", "duck", "poultry", "mince", "minced", "sausage", "bacon",
+		"fish", "salmon", "cod", "tuna", "shrimp", "prawn", "seafood", "fillet", "dough", "pastry", "batch", "leftover", "casserole", "lasagne", "lasagna",
+		"fleisch", "rind", "schwein", "lamm", "hähnchen", "hühnchen", "huhn", "pute", "ente", "geflügel", "hack", "wurst", "speck",
+		"fisch", "lachs", "kabeljau", "thunfisch", "garnele", "meeresfrüchte", "filet", "teig", "blätterteig", "auflauf",
+	}
 )
 
 func hasAny(s string, words []string) bool {
@@ -41,7 +49,7 @@ func hasAny(s string, words []string) bool {
 
 // PrepKind is the night-before step a recipe needs: soak for a dried
 // legume that needs soaking (lentils do not), marinate for a marinating
-// step, thaw for a frozen ingredient; "" for none. One kind per recipe, in
+// step, thaw for frozen meat, fish or dough; "" for none. One kind per recipe, in
 // that order.
 func PrepKind(f *food.Food) string {
 	names := make([]string, len(f.Children))
@@ -64,7 +72,7 @@ func PrepKindOf(ingredients, steps []string) string {
 		if hasAny(n, driedWords) && hasAny(n, soakLegumes) {
 			soak = true
 		}
-		if hasAny(n, frozenWords) {
+		if hasAny(n, frozenWords) && hasAny(n, needThaw) {
 			thaw = true
 		}
 	}
