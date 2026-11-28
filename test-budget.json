@@ -203,7 +203,7 @@
           "tests": 6
         },
         "cmd/plantry-eval": {
-          "cpu_s": 18.3,
+          "cpu_s": 11.0,
           "tests": 6
         },
         "db/migrations": {
@@ -212,7 +212,7 @@
         },
         "internal/adapters/anthropic": {
           "cpu_s": 0.1,
-          "tests": 53
+          "tests": 55
         },
         "internal/adapters/crypto": {
           "cpu_s": 0.0,
@@ -232,7 +232,7 @@
         },
         "internal/adapters/imagestore": {
           "cpu_s": 0.2,
-          "tests": 15
+          "tests": 14
         },
         "internal/adapters/jsonld": {
           "cpu_s": 0.0,
@@ -251,8 +251,8 @@
           "tests": 12
         },
         "internal/adapters/sqlite": {
-          "cpu_s": 7.4,
-          "tests": 215
+          "cpu_s": 5.3,
+          "tests": 240
         },
         "internal/config": {
           "cpu_s": 0.0,
@@ -267,12 +267,12 @@
           "tests": 4
         },
         "internal/domain/agent": {
-          "cpu_s": 182.2,
-          "tests": 318
+          "cpu_s": 100.9,
+          "tests": 479
         },
         "internal/domain/airun": {
           "cpu_s": 0.2,
-          "tests": 72
+          "tests": 75
         },
         "internal/domain/availability": {
           "cpu_s": 0.0,
@@ -283,8 +283,8 @@
           "tests": 7
         },
         "internal/domain/discovery": {
-          "cpu_s": 0.5,
-          "tests": 63
+          "cpu_s": 0.3,
+          "tests": 57
         },
         "internal/domain/food": {
           "cpu_s": 0.2,
@@ -299,19 +299,19 @@
           "tests": 6
         },
         "internal/domain/planning": {
-          "cpu_s": 19.2,
-          "tests": 375
+          "cpu_s": 16.5,
+          "tests": 514
         },
         "internal/domain/planview": {
           "cpu_s": 0.0,
           "tests": 23
         },
         "internal/domain/plate": {
-          "cpu_s": 2.9,
-          "tests": 182
+          "cpu_s": 2.1,
+          "tests": 185
         },
         "internal/domain/preset": {
-          "cpu_s": 0.4,
+          "cpu_s": 0.3,
           "tests": 40
         },
         "internal/domain/profile": {
@@ -343,20 +343,20 @@
           "tests": 6
         },
         "internal/eval": {
-          "cpu_s": 29.7,
+          "cpu_s": 14.9,
           "tests": 14
         },
         "internal/testhelper": {
-          "cpu_s": 0.2,
+          "cpu_s": 0.1,
           "tests": 1
         },
         "internal/transport/http": {
           "cpu_s": 0.2,
-          "tests": 1
+          "tests": 4
         },
         "internal/transport/http/handlers": {
-          "cpu_s": 3.1,
-          "tests": 256
+          "cpu_s": 2.7,
+          "tests": 323
         },
         "internal/transport/http/middleware": {
           "cpu_s": 0.0,
@@ -372,8 +372,8 @@
         }
       },
       "go_race": {
-        "cpu_s": 739.2,
-        "tests": 1963
+        "cpu_s": 437.9,
+        "tests": 2670
       },
       "vitest": {
         "tests": 1551,

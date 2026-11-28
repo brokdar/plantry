@@ -142,12 +142,17 @@ func TestFrozenSpare(t *testing.T) {
 
 // B9-AC2: with the fake client scripted per scenario, the LLM chooser's
 // recorded requests carry the scenario's dates (the "nil dates" regression).
+//
+// Only the scenarios that reach a distinct branch run (a plain week, a
+// re-plan, nothing to fill, a partial end, both error ends): the heuristic
+// test already sweeps all of them, and every extra scenario costs a seeded
+// database and a full plan.
 func TestScriptedLLMPromptHasScenarioDates(t *testing.T) {
-	scs, err := LoadScenarios()
+	scs, err := LoadScenarios("family_daily", "replan_one_day", "away_thu_fri", "confirmed_cook_no_surplus", "unreachable_floor", "light_two_meals_floor")
 	require.NoError(t, err)
 	recs, err := Run(context.Background(), Config{Chooser: airun.ChooserLLM, Runs: 1, Parallel: runtime.NumCPU()}, scs)
 	require.NoError(t, err)
-	require.Len(t, recs, len(specScenarios))
+	require.Len(t, recs, len(scs))
 	for _, r := range recs {
 		t.Run(r.Scenario, func(t *testing.T) {
 			if r.Scenario == "unreachable_floor" || r.Scenario == "light_two_meals_floor" {

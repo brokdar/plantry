@@ -31,6 +31,8 @@ export GOWORK=off
 export GOFLAGS="${GOFLAGS:+$GOFLAGS }-trimpath"
 RACE_FLAGS=(-race -short -gcflags=modernc.org/sqlite/...=-race=false)
 CPU_EXEC="$ROOT/scripts/cpu-exec.py"
+CALIB_BIN="$LOG/calibrate" # built by tests_backend, read by cpu-exec.py
+export CALIB_BIN
 BUDGET="$ROOT/scripts/test-budget.py"
 
 "$ROOT/scripts/disk-guard.sh" || exit 1
@@ -76,7 +78,8 @@ checks_backend() {
     step build-armv7 env GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o /dev/null ./cmd/plantry &&
     step sqlc-usage bash scripts/check-sqlc-usage.sh &&
     step deadcode deadcode &&
-    step test-patterns bash "$ROOT/scripts/check-test-patterns.sh"
+    step test-patterns bash "$ROOT/scripts/check-test-patterns.sh" &&
+    step budget-unit python3 -I -m unittest discover -s "$ROOT/scripts" -p test_test_budget.py
 }
 deadcode() {
   local out
@@ -100,6 +103,7 @@ tests_backend() {
     step go-test go test -p 4 ./...
     return
   fi
+  (cd "$ROOT" && go build -o "$CALIB_BIN" scripts/calibrate.go) || rm -f "$CALIB_BIN"
   # The step logs are the -json streams the budget check reads.
   step go-test env GO_TEST_CPU_LOG="$cpu" go test -p 4 -count=1 -json -exec "$CPU_EXEC" ./... || {
     grep -E '"Action":"fail"' "$LOG/go-test.log" | grep -oE '"Package":"[^"]+","Test":"[^"]+"' | sort -u | head -20

@@ -13,6 +13,7 @@ package main
 import (
 	"crypto/sha256"
 	"fmt"
+	"os"
 	"slices"
 	"syscall"
 	"time"
@@ -49,7 +50,11 @@ func work() {
 
 func main() {
 	best := time.Duration(1 << 62)
-	for range 3 {
+	rounds := 3
+	if len(os.Args) > 1 && os.Args[1] == "1" { // scripts/cpu-exec.py: one quick round
+		rounds = 1
+	}
+	for range rounds {
 		start := cpu()
 		work()
 		best = min(best, cpu()-start)
