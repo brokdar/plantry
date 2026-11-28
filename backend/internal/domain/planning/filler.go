@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
@@ -237,7 +238,23 @@ func (s State) weekHasRoomFor(p Plate, f FoodFacts) bool {
 	if f.Groups.FishG >= minMealG && fishMeals >= DGEFishMaxMeals {
 		return false
 	}
-	return f.Groups.MeatG <= 0 || meatG+f.Groups.MeatG <= DGEMeatMaxG
+	return f.Groups.MeatG <= 0 || meatG+f.Groups.MeatG <= DGEMeatMaxG*float64(s.planDays())/weekDays
+}
+
+// planDays is the number of the window's days with a plan cell (the days the
+// meat limit is prorated to, as MeatBudgetOf does); a window without cells
+// counts as a full week.
+func (s State) planDays() int {
+	seen := map[int]bool{}
+	for _, c := range s.Cells {
+		if c.Mode == availability.ModePlan && s.Window.Contains(c.Date) {
+			seen[dayOf(c.Date)] = true
+		}
+	}
+	if len(seen) == 0 {
+		return weekDays
+	}
+	return len(seen)
 }
 
 // savouryMain is plate p's main when it is a savoury lunch or dinner main

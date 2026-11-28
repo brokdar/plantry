@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/flavor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
@@ -210,4 +211,14 @@ func TestFillerFitsWeekLimits(t *testing.T) {
 	s.Foods[50] = m
 	s.Plates = []Plate{plate(1, 4), plate(2, 4), plate(3, 4), plate(4, 4), plate(5, 4)} // 5 x 150 g pork
 	assert.False(t, s.fillerFits(salad, s.Foods[50], "lunch"), "meat limit reached")
+
+	// A short window: 3 plan days prorate the limit to 3/7 of it (128 g).
+	s.Plates = []Plate{plate(1, 4)} // 150 g pork
+	s.Cells = nil
+	for i := 0; i < 3; i++ {
+		s.Cells = append(s.Cells, Cell{Date: day.AddDate(0, 0, i), Mode: availability.ModePlan})
+	}
+	assert.False(t, s.fillerFits(salad, s.Foods[50], "lunch"), "short window: 150 g already past its limit")
+	s.Plates = nil
+	assert.True(t, s.fillerFits(salad, s.Foods[50], "lunch"), "short window: 100 g fits 128 g")
 }
