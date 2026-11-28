@@ -137,7 +137,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout 
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(*out, b, 0o600)
+	if err := os.WriteFile(*out, b, 0o600); err != nil {
+		return err
+	}
+	if a, ok := rep.(interface{ ArtifactFiles() map[string]string }); ok {
+		for name, content := range a.ArtifactFiles() {
+			if err := os.WriteFile(filepath.Join(filepath.Dir(*out), name), []byte(content), 0o600); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // modes are the values of -mode.

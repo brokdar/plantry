@@ -117,13 +117,67 @@ func TestRunImportCheck_ReportsDetectionWrongFixesAndCleanChanges(t *testing.T) 
 	assert.Equal(t, 5, rep.Ran)
 	assert.InDelta(t, 50, metric(t, rep, "detection_rate").Value, 0.01)
 	assert.False(t, *metric(t, rep, "detection_rate").Met)
-	assert.InDelta(t, 100, metric(t, rep, "wrong_fix_rate").Value, 0.01, "the role change is not an allowed kind")
+	assert.Zero(t, metric(t, rep, "wrong_fix_rate").Value, "a role change is a designed change to judge, not a wrong fix")
+	assert.Equal(t, 5.0, metric(t, rep, "changes_to_judge").Value)
+	assert.Contains(t, rep.Artifacts["importcheck-changes.md"], "a-x10: role")
 	assert.Equal(t, 3.0, metric(t, rep, "clean_recipes_changed").Value)
 	assert.Equal(t, 3.0, metric(t, rep, "clean_recipes_flagged").Value)
 	assert.InDelta(t, 100, metric(t, rep, "detection_rate.kind.amount_x10").Value, 0.01)
 	assert.Zero(t, metric(t, rep, "detection_rate.kind.drop_step").Value)
 	assert.True(t, rep.Unpriced)
 	assert.Contains(t, rep.Summary(), "detection_rate")
+}
+
+// A unit planted on line 0 of "a" (g to ml) and a clean recipe "m" with a ml line.
+func unitSet() chefsets.ImportCheckSet {
+	set := tinySet()
+	set.Recipes = []chefsets.CheckRecipe{set.Recipes[0], {
+		ID: "m", Name: "m", Language: "en", Portions: 2, Steps: []string{"Mix."},
+		Ingredients: []chefsets.CheckIngredient{{Text: "100 ml milk", Amount: 100, Unit: "ml", Name: "milk"}},
+	}}
+	set.Planted = []chefsets.Planted{{ID: "a-unit", Base: "a", Kind: chefsets.PlantWrongUnit, Ingredient: 0, ToUnit: "ml"}}
+	return set
+}
+
+func TestRunImportCheck_RestoringThePlantedLineIsACorrectFix(t *testing.T) {
+	// 100 g on line 0 puts the planted line back; on the clean recipe "m" the
+	// same ml-to-g change of a clean line is wrong.
+	e := env(t, toolTurn(importer.CheckTool, `{"amounts":[{"ingredient":0,"kind":"unit","amount":100,"unit":"g"}]}`, 100, 20))
+	rep, err := chefcanary.RunImportCheck(context.Background(), chefcanary.ImportCheckConfig{Env: e, Set: unitSet()})
+	require.NoError(t, err)
+	assert.Equal(t, 1.0, metric(t, rep, "planted_fixed_correctly").Value)
+	assert.InDelta(t, 100.0/3, metric(t, rep, "wrong_fix_rate").Value, 0.01, "only the clean ml line changed wrongly (1 of 3 recipes)")
+	byID := map[string]chefcanary.CaseResult{}
+	for _, r := range rep.Results {
+		byID[r.ID] = r
+	}
+	require.Len(t, byID["a-unit"].Changes, 1)
+	assert.Equal(t, "correct_fix", byID["a-unit"].Changes[0].Verdict)
+	require.Len(t, byID["m-clean"].Changes, 1)
+	assert.Equal(t, "wrong", byID["m-clean"].Changes[0].Verdict)
+}
+
+func TestRunImportCheck_AnotherValueOnThePlantedLineIsWrong(t *testing.T) {
+	e := env(t, toolTurn(importer.CheckTool, `{"amounts":[{"ingredient":0,"kind":"unit","amount":50,"unit":"g"}]}`, 100, 20))
+	rep, err := chefcanary.RunImportCheck(context.Background(), chefcanary.ImportCheckConfig{Env: e, Set: unitSet()})
+	require.NoError(t, err)
+	assert.Zero(t, metric(t, rep, "planted_fixed_correctly").Value)
+	for _, r := range rep.Results {
+		if r.ID == "a-unit" {
+			assert.Equal(t, "wrong", r.Changes[0].Verdict)
+		}
+	}
+}
+
+func TestRunImportCheck_StepRewritesGoToTheJudgeFile(t *testing.T) {
+	e := env(t, toolTurn(importer.CheckTool, `{"step_edits":[{"step":0,"kind":"clarity","text":"Stir the rice well.","reason":"clearer"}]}`, 100, 20))
+	rep, err := chefcanary.RunImportCheck(context.Background(), chefcanary.ImportCheckConfig{Env: e, Set: tinySet()})
+	require.NoError(t, err)
+	assert.Zero(t, metric(t, rep, "wrong_fix_rate").Value)
+	assert.Equal(t, 5.0, metric(t, rep, "changes_to_judge").Value)
+	md := rep.Artifacts["importcheck-changes.md"]
+	assert.Contains(t, md, "Before: Mix.")
+	assert.Contains(t, md, "After: Stir the rice well.")
 }
 
 func TestRunImportCheck_StopsAtTheSpendCap(t *testing.T) {

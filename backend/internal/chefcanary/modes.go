@@ -66,6 +66,8 @@ type CaseResult struct {
 	LatencyMS   int64    `json:"latency_ms"`
 	WebSearches int64    `json:"web_searches,omitempty"`
 	Detail      string   `json:"detail,omitempty"`
+	// Changes are the applied changes of an import check case.
+	Changes []ChangeRecord `json:"changes,omitempty"`
 }
 
 // ModeReport is a mode's outcome.
@@ -83,6 +85,9 @@ type ModeReport struct {
 	Unpriced          bool         `json:"unpriced"`
 	Metrics           []Metric     `json:"metrics"`
 	Results           []CaseResult `json:"results"`
+	// Artifacts are extra files of the mode (name to content) the command
+	// writes beside the result file.
+	Artifacts map[string]string `json:"-"`
 }
 
 // Summary renders one line per metric.
@@ -114,6 +119,9 @@ func (r ModeReport) Summary() string {
 	}
 	return sb.String()
 }
+
+// ArtifactFiles are the extra files to write beside the result file.
+func (r ModeReport) ArtifactFiles() map[string]string { return r.Artifacts }
 
 func (r *ModeReport) add(m Metric) { r.Metrics = append(r.Metrics, m) }
 

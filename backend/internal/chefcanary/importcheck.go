@@ -3,7 +3,9 @@ package chefcanary
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/jsonld"
@@ -33,6 +35,9 @@ type ImportCase struct {
 	Planted *chefsets.Planted
 	Expect  expectation
 	Draft   *importer.Draft
+	// Original is the planted ingredient line before the error was planted:
+	// the value a correct fix puts back.
+	Original *importer.DraftIngredient
 }
 
 // ImportCases builds the clean drafts (one per base recipe) and the planted
@@ -49,6 +54,11 @@ func ImportCases(set chefsets.ImportCheckSet) []ImportCase {
 	for _, p := range set.Planted {
 		d := draftOf(base[p.Base])
 		c := ImportCase{ID: p.ID, Planted: &p, Draft: d}
+		switch p.Kind {
+		case chefsets.PlantAmountX10, chefsets.PlantWrongUnit, chefsets.PlantSwapIngr:
+			orig := d.Ingredients[p.Ingredient]
+			c.Original = &orig
+		}
 		switch p.Kind {
 		case chefsets.PlantAmountX10:
 			in := &d.Ingredients[p.Ingredient]
@@ -103,22 +113,95 @@ func (c ImportCase) found(flags []importer.Flag) bool {
 	})
 }
 
-// wrongChanges are the applied changes that count as a wrong fix: a kind the
-// set does not allow, or an edit of the planted ingredient line.
-func (c ImportCase) wrongChanges(changes []importer.Change, allowed []string) []string {
-	var wrong []string
+// Verdicts of an applied change.
+const (
+	verdictAllowed  = "allowed"     // a kind the set allows
+	verdictCorrect  = "correct_fix" // restores the planted line
+	verdictWrong    = "wrong"
+	verdictToJudge  = "to_judge" // a designed change whose quality needs a reader
+	judgeFileName   = "importcheck-changes.md"
+	amountTolerance = 0.01
+)
+
+// ChangeRecord is one applied change of the check, as the result file keeps it.
+type ChangeRecord struct {
+	Kind    string `json:"kind"`
+	Reason  string `json:"reason,omitempty"`
+	Field   string `json:"field"`
+	Index   int    `json:"index"` // the step or ingredient, -1 for the recipe
+	Before  any    `json:"before"`
+	After   any    `json:"after"`
+	Verdict string `json:"verdict"`
+}
+
+// restores reports whether an ingredient edit puts the planted line back to
+// its original amount and unit.
+func (c ImportCase) restores(e importer.Edit) bool {
+	v, ok := e.After.(importer.IngredientValue)
+	if !ok || c.Original == nil {
+		return false
+	}
+	return v.Unit == c.Original.Unit && math.Abs(v.Amount-c.Original.Amount) <= amountTolerance*c.Original.Amount
+}
+
+// classify records every edit of the applied changes with its verdict. A kind
+// the set allows is fine; clarity rewrites, safety cues and the other designed
+// metadata changes go to the judge file; a change of an ingredient line is a
+// correct fix only when it restores the planted line, any other one is wrong.
+func (c ImportCase) classify(changes []importer.Change, allowed []string) []ChangeRecord {
+	var out []ChangeRecord
 	for _, ch := range changes {
-		bad := !slices.Contains(allowed, ch.Kind)
 		for _, e := range ch.Edits {
-			if c.Planted != nil && e.Field == importer.FieldIngredient && e.Index == c.Expect.Ingredient && !c.Expect.Recipe {
-				bad = true
+			r := ChangeRecord{Kind: ch.Kind, Reason: ch.Reason, Field: e.Field, Index: e.Index, Before: e.Before, After: e.After}
+			switch {
+			case e.Field == importer.FieldIngredient:
+				planted := c.Planted != nil && !c.Expect.Recipe && e.Index == c.Expect.Ingredient
+				r.Verdict = verdictWrong
+				if planted && c.restores(e) {
+					r.Verdict = verdictCorrect
+				}
+			case slices.Contains(allowed, ch.Kind):
+				r.Verdict = verdictAllowed
+			default:
+				r.Verdict = verdictToJudge
 			}
-		}
-		if bad {
-			wrong = append(wrong, ch.Kind)
+			out = append(out, r)
 		}
 	}
-	return wrong
+	return out
+}
+
+func countVerdict(recs []ChangeRecord, verdict string) int {
+	return len(slices.DeleteFunc(slices.Clone(recs), func(r ChangeRecord) bool { return r.Verdict != verdict }))
+}
+
+// judgeFile lists the changes to judge: for each one the recipe step (or field)
+// before and after, so a reader can mark it good or wrong.
+func judgeFile(results []CaseResult) string {
+	var sb strings.Builder
+	sb.WriteString("# Import check changes to judge\n\nMark each change good or wrong; wrong ones count against the 5 % target.\n")
+	n := 0
+	for _, res := range results {
+		for _, r := range res.Changes {
+			if r.Verdict != verdictToJudge {
+				continue
+			}
+			n++
+			fmt.Fprintf(&sb, "\n## %d. %s: %s (%s", n, res.ID, r.Kind, r.Field)
+			if r.Index >= 0 {
+				fmt.Fprintf(&sb, " %d", r.Index)
+			}
+			sb.WriteString(")\n\n")
+			if r.Reason != "" {
+				fmt.Fprintf(&sb, "Reason: %s\n\n", r.Reason)
+			}
+			fmt.Fprintf(&sb, "- Before: %v\n- After: %v\n- Verdict: \n", r.Before, r.After)
+		}
+	}
+	if n == 0 {
+		sb.WriteString("\nNo changes to judge.\n")
+	}
+	return sb.String()
 }
 
 // RunImportCheck runs the check on every case and reports the detection rate
@@ -134,7 +217,7 @@ func RunImportCheck(ctx context.Context, cfg ImportCheckConfig) (ModeReport, err
 
 	cases := ImportCases(cfg.Set)
 	rep := ModeReport{Mode: "importcheck", Cases: len(cases)}
-	var planted, detected, wrongFix, notRun, clean, cleanChanged, cleanFlagged int
+	var planted, detected, wrongFix, notRun, clean, cleanChanged, cleanFlagged, fixed, toJudge, ran int
 	for _, c := range cases {
 		if l.capReached() {
 			rep.StoppedBySpendCap = true
@@ -163,20 +246,26 @@ func RunImportCheck(ctx context.Context, cfg ImportCheckConfig) (ModeReport, err
 			}
 			continue
 		}
-		wrong := c.wrongChanges(chk.Changes, cfg.Set.AllowedChanges)
+		res.Changes = c.classify(chk.Changes, cfg.Set.AllowedChanges)
+		ran++
+		wrong := countVerdict(res.Changes, verdictWrong)
+		toJudge += countVerdict(res.Changes, verdictToJudge)
+		if wrong > 0 {
+			wrongFix++
+		}
 		if c.Planted != nil {
 			planted++
 			res.OK = c.found(chk.Flags)
 			if res.OK {
 				detected++
 			}
-			if len(wrong) > 0 {
-				wrongFix++
+			if countVerdict(res.Changes, verdictCorrect) > 0 {
+				fixed++
 			}
 			res.Outcome = map[bool]string{true: "detected", false: "missed"}[res.OK]
 		} else {
 			clean++
-			res.OK = len(wrong) == 0
+			res.OK = wrong == 0
 			if len(chk.Changes) > 0 {
 				cleanChanged++
 			}
@@ -185,20 +274,23 @@ func RunImportCheck(ctx context.Context, cfg ImportCheckConfig) (ModeReport, err
 			}
 			res.Outcome = map[bool]string{true: "unchanged_or_allowed", false: "wrong_change"}[res.OK]
 		}
-		res.Detail = fmt.Sprintf("changes=%d wrong=%v flags=%d", len(chk.Changes), wrong, len(chk.Flags))
+		res.Detail = fmt.Sprintf("changes=%d wrong=%d to_judge=%d flags=%d", len(res.Changes), wrong, countVerdict(res.Changes, verdictToJudge), len(chk.Flags))
 		rep.Results = append(rep.Results, res)
 	}
 	l.finish(&rep)
+	rep.Artifacts = map[string]string{judgeFileName: judgeFile(rep.Results)}
 
 	rep.add(Metric{Name: "detection_rate", Value: pct(detected, planted), Unit: "%", Note: fmt.Sprintf("%d/%d planted errors", detected, planted)}.target(">= 80 %", true, 80))
-	rep.add(Metric{Name: "wrong_fix_rate", Value: pct(wrongFix, planted), Unit: "%", Note: fmt.Sprintf("%d/%d planted recipes", wrongFix, planted)}.target("<= 5 %", false, 5))
+	rep.add(Metric{Name: "wrong_fix_rate", Value: pct(wrongFix, ran), Unit: "%", Note: fmt.Sprintf("%d/%d checked recipes with a wrong change (an ingredient line changed other than back to the original); judged-wrong designed changes add to it", wrongFix, ran)}.target("<= 5 %", false, 5))
+	rep.add(Metric{Name: "planted_fixed_correctly", Value: float64(fixed), Note: fmt.Sprintf("of %d planted: the planted line was put back to its original", planted)})
+	rep.add(Metric{Name: "changes_to_judge", Value: float64(toJudge), Note: "clarity, safety cue and other designed changes, in " + judgeFileName})
 	byGroup(&rep, "detection_rate.kind.", func(c CaseResult) string {
 		if len(c.Groups) == 0 {
 			return ""
 		}
 		return c.Groups[0]
 	})
-	rep.add(Metric{Name: "clean_recipes_changed", Value: float64(cleanChanged), Note: fmt.Sprintf("of %d clean (allowed kinds %v)", clean, cfg.Set.AllowedChanges)})
+	rep.add(Metric{Name: "clean_recipes_changed", Value: float64(cleanChanged), Note: fmt.Sprintf("of %d clean (any change; allowed kinds %v)", clean, cfg.Set.AllowedChanges)})
 	rep.add(Metric{Name: "clean_recipes_flagged", Value: float64(cleanFlagged), Note: fmt.Sprintf("of %d clean (false alarms)", clean)})
 	rep.add(Metric{Name: "check_not_run", Value: float64(notRun), Note: "calls that failed or were refused"}.target("0", false, 0))
 	return rep, nil
