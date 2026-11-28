@@ -20,9 +20,9 @@ const (
 	JobFailLimit    = 3
 )
 
-// Setting is one setting worth showing. Value is "" when it is not stored in
-// the database (the default or an environment variable applies).
-type Setting struct{ Key, Value string }
+// Setting is one setting worth showing: the value the server would use and
+// where it comes from ("stored", "environment" or "default").
+type Setting struct{ Key, Value, Source string }
 
 // Build is the "Build" section.
 type Build struct {
@@ -98,7 +98,10 @@ type Chef struct {
 	Trial                                    Trial
 	Tips                                     []KeyCount
 	Import                                   ImportChecks
-	Jobs                                     []KeyCount // "kind/status"
+	// HelpNote and ImportNote replace the help and import lines when the
+	// database is too old to hold their tables.
+	HelpNote, ImportNote string
+	Jobs                 []KeyCount // "kind/status"
 }
 
 // Planning is the "Planning" section.
@@ -191,9 +194,9 @@ func renderBuild(b *strings.Builder, x Build) {
 	for _, s := range x.Settings {
 		v := s.Value
 		if v == "" {
-			v = "(not set: default or environment)"
+			v = "(none)"
 		}
-		fmt.Fprintf(b, "- %s: %s\n", s.Key, v)
+		fmt.Fprintf(b, "- %s: %s (%s)\n", s.Key, v, s.Source)
 	}
 }
 
@@ -235,7 +238,9 @@ func renderAI(b *strings.Builder, a AI) {
 
 func renderChef(b *strings.Builder, c Chef) {
 	b.WriteString("\n## Chef outcomes\n\n")
-	if helpTotal := c.HelpHelped + c.HelpNotHelped + c.HelpNoVerdict; helpTotal == 0 {
+	if c.HelpNote != "" {
+		fmt.Fprintf(b, "- Help answers: %s\n", c.HelpNote)
+	} else if helpTotal := c.HelpHelped + c.HelpNotHelped + c.HelpNoVerdict; helpTotal == 0 {
 		b.WriteString("- Help answers: no data\n")
 	} else {
 		fmt.Fprintf(b, "- Help answers: %d (helped %d, didn't help %d, no verdict %d; verdict rate %s)\n",
@@ -252,9 +257,12 @@ func renderChef(b *strings.Builder, c Chef) {
 	}
 	fmt.Fprintf(b, "- Tips by state: %s\n", orNoData(joinCounts(c.Tips, 0)))
 	im := c.Import
-	if im.Checks == 0 && im.Saved == 0 {
+	switch {
+	case c.ImportNote != "":
+		fmt.Fprintf(b, "- Import checks: %s\n", c.ImportNote)
+	case im.Checks == 0 && im.Saved == 0:
 		b.WriteString("- Import checks: no data\n")
-	} else {
+	default:
 		fmt.Fprintf(b, "- Import checks: %d ran, %d ended in a saved recipe (no outcome: %d)\n", im.Checks, im.Saved, max(im.Checks-im.Saved, 0))
 		fmt.Fprintf(b, "  - changes kept: %s; undone: %s\n", orNoData(joinCounts(im.Kept, 0)), orNoData(joinCounts(im.Undone, 0)))
 		fmt.Fprintf(b, "  - finishing touch: added %d, skipped %d; flags ignored: %d\n", im.TouchAdded, im.TouchSkip, im.FlagsIgnored)

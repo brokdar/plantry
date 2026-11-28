@@ -12,6 +12,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/config"
+	settingsdom "github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/report"
 )
 
@@ -50,7 +51,7 @@ func runReport(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	md, err := buildReport(context.Background(), cfg.DBPath, *days, time.Now())
+	md, err := buildReport(context.Background(), cfg.DBPath, *days, time.Now(), settingsEnv(cfg))
 	if err != nil {
 		return err
 	}
@@ -72,7 +73,7 @@ func runReport(args []string, stdout, stderr io.Writer) error {
 }
 
 // buildReport renders the report of the database at path.
-func buildReport(ctx context.Context, path string, days int, now time.Time) (string, error) {
+func buildReport(ctx context.Context, path string, days int, now time.Time, env settingsdom.EnvSnapshot) (string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return "", fmt.Errorf("report: database: %w", err)
@@ -83,7 +84,7 @@ func buildReport(ctx context.Context, path string, days int, now time.Time) (str
 	}
 	defer func() { _ = conn.Close() }()
 	data, err := sqlite.NewReportRepo(conn).Collect(ctx, sqlite.ReportOpts{
-		Now: now, Days: days, Version: version, DBBytes: info.Size(),
+		Now: now, Days: days, Version: version, DBBytes: info.Size(), Env: env,
 	})
 	if err != nil {
 		return "", fmt.Errorf("report: %w", err)

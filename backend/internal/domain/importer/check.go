@@ -43,6 +43,24 @@ const (
 	ChangeTranslate = "translate"
 )
 
+// ValidOutcomeKinds reports whether every entry is a change kind and there
+// are no more than a check can make (one change per kind per recipe is the
+// norm; a few repeats are allowed).
+func ValidOutcomeKinds(kinds []string) bool {
+	if len(kinds) > maxOutcomeKinds {
+		return false
+	}
+	known := []string{ChangeTime, ChangeUnit, ChangeKeep, ChangeSafetyCue, ChangeClarity, ChangeLeadTime, ChangeRole, ChangeAmount, ChangeTranslate}
+	for _, k := range kinds {
+		if !slices.Contains(known, k) {
+			return false
+		}
+	}
+	return true
+}
+
+const maxOutcomeKinds = 50
+
 // Edit fields. The review applies an edit by field and undoes it by putting
 // Before back.
 const (

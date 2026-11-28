@@ -15,15 +15,15 @@ Generated 2026-11-28 12:00 UTC, window: last 30 days.
 - App version: dev
 - Schema version: 76
 - Database size: 0.0 MB
-- chef.enabled: true
-- ai.provider: (not set: default or environment)
-- ai.model: fake-model
-- chef.monthly_cap: (not set: default or environment)
-- ai.run_retention_days: (not set: default or environment)
-- chef.library_review_enabled: (not set: default or environment)
-- chef.new_dishes_per_week: (not set: default or environment)
-- discovery.daily_enabled: (not set: default or environment)
-- ai.programmatic_tools: (not set: default or environment)
+- chef.enabled: true (stored)
+- ai.provider: (none) (default)
+- ai.model: fake-model (stored)
+- chef.monthly_cap: 5 (default)
+- ai.run_retention_days: 180 (default)
+- chef.library_review_enabled: false (default)
+- chef.new_dishes_per_week: 1 (default)
+- discovery.daily_enabled: true (default)
+- ai.programmatic_tools: true (default)
 
 ## AI
 

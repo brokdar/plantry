@@ -175,6 +175,7 @@ type checkOutcomeRequest struct {
 func (h *ImportHandler) CheckOutcome(w http.ResponseWriter, r *http.Request) {
 	var req checkOutcomeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RunID <= 0 || req.Flags < 0 ||
+		!importer.ValidOutcomeKinds(req.Kept) || !importer.ValidOutcomeKinds(req.Undone) ||
 		(req.Touch != "none" && req.Touch != "added" && req.Touch != "skipped") {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return

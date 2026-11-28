@@ -22,7 +22,13 @@ type ReportOpts struct {
 	Days    int
 	Version string
 	DBBytes int64
+	// Env is the environment overrides of the settings (as the server reads them).
+	Env settings.EnvSnapshot
 }
+
+// outcomeSchema is the schema that added the help verdict and import
+// outcome tables; an older database cannot answer those sections.
+const outcomeSchema = 76
 
 // reportSettings are the settings the report shows (none holds a secret).
 var reportSettings = []string{
@@ -62,7 +68,7 @@ func (r *ReportRepo) Collect(ctx context.Context, o ReportOpts) (report.Data, er
 	if d.AI, err = r.collectAI(ctx, q, o, fromTs, capUSD, stats); err != nil {
 		return d, err
 	}
-	if d.Chef, err = r.collectChef(ctx, q, from, o.Now, fromTs, stats); err != nil {
+	if d.Chef, err = r.collectChef(ctx, q, from, o.Now, fromTs, d.Build.SchemaVersion, stats); err != nil {
 		return d, err
 	}
 	if d.Planning, err = r.collectPlanning(ctx, q, fromTs, stats); err != nil {
@@ -91,13 +97,21 @@ func (r *ReportRepo) collectBuild(ctx context.Context, q *sqlcgen.Queries, o Rep
 			stored[s.Key] = s.Value
 		}
 	}
-	for _, k := range reportSettings {
-		b.Settings = append(b.Settings, report.Setting{Key: k, Value: stored[k]})
-	}
 	capUSD := defaultMonthlyCap
-	if raw, ok := stored[settings.KeyChefMonthlyCap]; ok {
-		if c, err := settings.ParseMonthlyCap(raw); err == nil {
-			capUSD = c
+	for _, k := range reportSettings {
+		spec, _ := settings.SpecFor(k)
+		set := report.Setting{Key: k, Value: spec.Default, Source: "default"}
+		if raw, ok := o.Env.Lookup(spec.EnvVar); ok {
+			set.Value, set.Source = raw, "environment"
+		}
+		if raw, ok := stored[k]; ok {
+			set.Value, set.Source = raw, "stored"
+		}
+		b.Settings = append(b.Settings, set)
+		if k == settings.KeyChefMonthlyCap {
+			if c, err := settings.ParseMonthlyCap(set.Value); err == nil {
+				capUSD = c
+			}
 		}
 	}
 	return b, capUSD, nil
@@ -173,10 +187,14 @@ func (r *ReportRepo) collectAI(ctx context.Context, q *sqlcgen.Queries, o Report
 	return a, nil
 }
 
-func (r *ReportRepo) collectChef(ctx context.Context, q *sqlcgen.Queries, from, now time.Time, fromTs string, stats []sqlcgen.ReportRunStatsRow) (report.Chef, error) {
+func (r *ReportRepo) collectChef(ctx context.Context, q *sqlcgen.Queries, from, now time.Time, fromTs string, schema int, stats []sqlcgen.ReportRunStatsRow) (report.Chef, error) {
 	var c report.Chef
-	verdicts, err := q.ReportHelpVerdicts(ctx, fromTs)
-	if err != nil {
+	unavailable := fmt.Sprintf("not available (schema %d; start the server once to update)", schema)
+	var verdicts []sqlcgen.ReportHelpVerdictsRow
+	var err error
+	if schema < outcomeSchema {
+		c.HelpNote = unavailable
+	} else if verdicts, err = q.ReportHelpVerdicts(ctx, fromTs); err != nil {
 		return c, fmt.Errorf("report help verdicts: %w", err)
 	}
 	for _, v := range verdicts {
@@ -226,7 +244,9 @@ func (r *ReportRepo) collectChef(ctx context.Context, q *sqlcgen.Queries, from, 
 	for _, s := range tips {
 		c.Tips = append(c.Tips, report.KeyCount{Key: s.State, N: int(s.N)})
 	}
-	if c.Import, err = r.collectImport(ctx, q, fromTs, stats); err != nil {
+	if schema < outcomeSchema {
+		c.ImportNote = unavailable
+	} else if c.Import, err = r.collectImport(ctx, q, fromTs, stats); err != nil {
 		return c, err
 	}
 	jobs, err := q.ReportJobs(ctx, fromTs)
