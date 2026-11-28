@@ -1007,14 +1007,10 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 			}
 		}
 	}
-	// The plate's cooking time so far: a side that takes it over a wish's
-	// limit or, with the Chef on, the slot's allowance is no choice.
-	plateMin := h.s.Foods[main].Minutes
-	for _, id := range others {
-		if o := h.s.Foods[id]; o.Composed() && o.Minutes > 0 {
-			plateMin += o.Minutes
-		}
-	}
+	// The plate's cooking time so far, counting only what is cooked in c: a
+	// side that takes it over a wish's limit or, with the Chef on, the slot's
+	// allowance is no choice.
+	plateMin := h.cellCookMinutes(c, main, exclude)
 	var cands []candidate
 	for _, f := range h.s.Foods {
 		if f.Composed() && f.Minutes > 0 && h.sideTooLong(plateMin+f.Minutes, main, f, c) {
@@ -1052,6 +1048,28 @@ func (h *planner) pickSide(c plate.CellKey, main int64, others []int64, exclude 
 		)})
 	}
 	return best(cands)
+}
+
+// cellCookMinutes is the cooking time already in cell c for a plate with the
+// given main: every session cooked there (state and proposal; none of the
+// food skip), plus the main's own minutes when it has no session yet (it is
+// cooked here, not a leftover of an earlier cook).
+func (h *planner) cellCookMinutes(c plate.CellKey, main, skip int64) int {
+	total := h.s.cellMinutes(c, skip)
+	cooked := false
+	for _, ss := range h.s.Sessions {
+		cooked = cooked || ss.FoodID == main
+	}
+	for _, ss := range h.prop.Sessions {
+		cooked = cooked || ss.FoodID == main
+		if f := h.s.Foods[ss.FoodID]; ss.FoodID != skip && dayOf(ss.CookDate) == dayOf(c.Date) && ss.CookSlotID == c.SlotID && f.Composed() && f.Minutes > 0 {
+			total += f.Minutes
+		}
+	}
+	if m := h.s.Foods[main]; !cooked && m.Composed() && m.Minutes > 0 {
+		total += m.Minutes
+	}
+	return total
 }
 
 // sideTooLong reports whether a plate cooking minutes in c breaks a wish's

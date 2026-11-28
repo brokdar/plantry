@@ -124,9 +124,16 @@ func quickSide(in ChooseInput, prop Proposal, key string, limit int, skip map[in
 		return cmp.Or(cmp.Compare(math.Abs(a.Macros.Kcal-old.Macros.Kcal), math.Abs(b.Macros.Kcal-old.Macros.Kcal)), cmp.Compare(a.ID, b.ID))
 	})
 	cookDate := cell.Date.Format(time.DateOnly)
+	// A day already under its kcal floor takes no side that lowers its kcal.
+	underFloor := slices.ContainsFunc(before.Issues, func(is Issue) bool {
+		return is.Code == CodeKcalBelowFloor && is.Severity == SeverityViolation && is.Date == cookDate
+	})
 	for tries, f := range append(cands, FoodFacts{}) {
 		if tries >= maxGuardTries*3 {
 			break
+		}
+		if underFloor && f.Macros.Kcal < old.Macros.Kcal {
+			continue
 		}
 		next := cloneProposal(prop)
 		name := "left out"
